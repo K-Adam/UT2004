@@ -32,7 +32,7 @@ target_link_libraries(ut_common INTERFACE legacy_stdio_definitions)
 # Old prebuilt libs request VC6/7 CRT variants by name.
 target_link_options(ut_common INTERFACE /SAFESEH:NO
   /NODEFAULTLIB:libc.lib /NODEFAULTLIB:libcp.lib /NODEFAULTLIB:libcmt.lib
-  /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:libcmtd.lib /NODEFAULTLIB:msvcrtd.lib)
+  /NODEFAULTLIB:libci.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:libcmtd.lib /NODEFAULTLIB:msvcrtd.lib)
 
 # ut_module(<name> SHARED|EXECUTABLE|WIN32 SOURCES ... [PCH hdr create.cpp] [NOPCH files...] [DEPS ...])
 # Sources are relative to <Mod>/Src unless absolute.
@@ -81,3 +81,7 @@ add_subdirectory(Speex)
 
 add_subdirectory(Core)
 add_subdirectory(Engine)
+foreach(m Fire IpDrv UWeb Window Editor WinDrv D3DDrv D3D9Drv OpenGLDrv ALAudio
+          XGame XInterface Onslaught UTV2004 GUIDesigner)
+  add_subdirectory(${m})
+endforeach()
