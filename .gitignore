@@ -1,0 +1,8 @@
+/build/
+# Build outputs. Tracked redist DLLs in System/ are unaffected.
+/System/*.dll
+/System/*.exe
+/System/*.pdb
+/System/*.ilk
+/System/*.exp
+/System/*.lib
