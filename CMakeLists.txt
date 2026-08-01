@@ -74,6 +74,11 @@ endfunction()
 
 set(UT_DX8 ${CMAKE_SOURCE_DIR}/DirectX8)
 set(UT_DX9 ${CMAKE_SOURCE_DIR}/DirectX9)
+# Karma physics only exists as prebuilt VC7.1 libs, see Core/Src/UnLegacyCrt.cpp.
+set(UT_KARMA Mdt MdtKea MdtBcl Mst McdFrame McdCommon McdPrimitives McdConvex
+    McdConvexCreateHull MeGlobals MeAssetFactory MeAssetDB MeAssetDBXMLIO MeXML)
+list(TRANSFORM UT_KARMA PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/win32_single_msvcrt/)
+list(TRANSFORM UT_KARMA APPEND .lib)
 
 add_subdirectory(zlib)
 add_subdirectory(Vorbis)
@@ -82,6 +87,14 @@ add_subdirectory(Speex)
 add_subdirectory(Core)
 add_subdirectory(Engine)
 foreach(m Fire IpDrv UWeb Window Editor WinDrv D3DDrv D3D9Drv OpenGLDrv ALAudio
-          XGame XInterface Onslaught UTV2004 GUIDesigner)
+          XGame XInterface Onslaught UTV2004 GUIDesigner
+          Launch UCC UnrealEd Setup DebuggerLaunch BugReport Benchmark UccDepend)
   add_subdirectory(${m})
 endforeach()
+
+# -NOH keeps the checked-in *Classes.h headers.
+add_custom_target(ucc_make
+  COMMAND $<TARGET_FILE:UCC> make -NOH
+  WORKING_DIRECTORY ${UT_SYSTEM_DIR}
+  DEPENDS UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught UTV2004
+  USES_TERMINAL VERBATIM)

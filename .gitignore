@@ -6,3 +6,9 @@
 /System/*.ilk
 /System/*.exp
 /System/*.lib
+# Runtime-generated in System/.
+/System/*.log
+/System/UT2004.ini
+/System/User.ini
+/System/UnrealEd.ini
+/System/*.u
