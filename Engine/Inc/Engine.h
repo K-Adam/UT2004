@@ -60,6 +60,12 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #define MIN_ORTHOZOOM	250.0		/* Limit of 2D viewport zoom in */
 #define MAX_ORTHOZOOM	16000000.0	/* Limit of 2D viewport zoom out */
 
+// nvDXT only ships as VC7.1 ABI libs that cannot link with modern MSVC. Without it
+// UTexture::Compress returns 0 and lightmaps stay uncompressed, as in the Win64 build.
+#ifndef WITH_NVDXT
+#define WITH_NVDXT 0
+#endif
+
 // Karma Includes
 #if !defined(_XBOX) && !defined(__PSX2_EE__) && !defined(__GCN__) && !defined(__LINUX__) && !defined(MACOSX) && !defined (__FreeBSD__) && !defined(NO_KARMA)
 #ifndef WITH_KARMA

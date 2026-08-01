@@ -1285,7 +1285,7 @@ void UModel::Illuminate(AActor* Owner,UBOOL ChangedOnly)
 //
 //	DXT compress hacks.
 //
-#if _MSC_VER && !_XBOX && !_WIN64
+#if WITH_NVDXT
 #pragma pack (push,8)
 typedef long HRESULT; 
 #include "../../nvDXT/Inc/dxtlib.h"
@@ -1310,7 +1310,7 @@ static HRESULT LightMapCompressionCallback(void* Data,INT MipIndex,DWORD Size,IN
 void UModel::CompressLightmaps()
 {
 	guard(UModel::CompressLightmaps);
-#if !CONSOLE && !__UNIX__ && !_WIN64
+#if WITH_NVDXT
 	GWarn->BeginSlowTask(TEXT("Compressing lightmaps..."),1);
 	for(INT TextureIndex = 0;TextureIndex < LightMapTextures.Num();TextureIndex++)
 	{

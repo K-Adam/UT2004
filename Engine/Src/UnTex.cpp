@@ -14,7 +14,7 @@
 
 #include "EnginePrivate.h"
 
-#if _MSC_VER && !_XBOX && !_WIN64
+#if WITH_NVDXT
 #pragma pack (push,8)
 typedef long HRESULT; 
 #include "../../nvDXT/Inc/dxtlib.h"
@@ -952,7 +952,7 @@ UPalette* UPalette::ReplaceWithExisting()
 -----------------------------------------------------------------------------*/
 
 // Hacks required by nvDXT library...
-#if _MSC_VER && !_XBOX && !_WIN64
+#if WITH_NVDXT
 static UTexture* CurrentTexture = NULL;
 
 static HRESULT CompressionCallback(void * Data, INT MipIndex, DWORD Size, INT Width, INT Height, void* UserData )
@@ -977,7 +977,7 @@ void ReadDTXnFile (DWORD count, void *buffer)
 UBOOL UTexture::Compress( ETextureFormat InFormat, UBOOL Mipmaps, FDXTCompressionOptions* Options )
 {
 	guard(UTexture::Compress);
-#if _MSC_VER && !_XBOX && !_WIN64
+#if WITH_NVDXT
 	// Only compresses to DXTx
 	TextureFormatTypes TextureFormat;
 	switch( InFormat )

@@ -265,33 +265,8 @@ extern "C"
 	Functions.
 ----------------------------------------------------------------------------*/
 
-// __rdtsc is in windows.h, which apparently can't be #included here. --ryan.
-#if _WIN64
-extern "C" QWORD __rdtsc(void);
-#pragma intrinsic(__rdtsc)
-#else
-FORCEINLINE QWORD __rdtsc(void)
-{
-	static union
-	{
-		struct
-		{
-			DWORD LowPart;
-			DWORD HighPart;
-		} lh;
-		QWORD QuadPart;
-	} largeint;
-
-	__asm
-	{
-		rdtsc
-		mov largeint.lh.HighPart, edx
-		mov largeint.lh.LowPart, eax
-	}
-
-	return(largeint.QuadPart);
-}
-#endif
+// Modern MSVC provides __rdtsc as an intrinsic on both x86 and x64.
+#include <intrin.h>
 
 extern CORE_API QWORD GBaseCycles;
 #define DEFINED_appResetTimer 1

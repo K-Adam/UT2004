@@ -13,7 +13,7 @@
 	struct {TCHAR* Name; void(t::*Pointer)(FFrame&,RESULT_DECL);}
 
 #define MAP_NATIVE(cls,name) \
-	{TEXT("int")TEXT(#cls)TEXT(#name), &cls::name},
+	{TEXT("int") TEXT(#cls) TEXT(#name), &cls::name},
 
 #define DECLARE_NATIVE_TYPE(pkg,type) \
 	typedef void (type::*type##Native)( FFrame& TheStack, RESULT_DECL ); \
