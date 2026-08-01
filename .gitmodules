@@ -1,0 +1,6 @@
+[submodule "metoolkit-karma-v1.2"]
+	path = metoolkit-karma-v1.2
+	url = https://github.com/sigmaco/metoolkit-karma-v1.2
+[submodule "metoolkit-karma-decomp"]
+	path = metoolkit-karma-decomp
+	url = https://github.com/10-p/metoolkit-karma-decomp
