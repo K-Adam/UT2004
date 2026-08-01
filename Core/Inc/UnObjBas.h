@@ -410,6 +410,8 @@ public: \
 #endif
 
 // Declare a concrete class.
+// InternalConstructor must default-initialize. "new TClass()" zero-fills classes without
+// a user-provided constructor and wipes the Class, Name and Index set by StaticAllocateObject.
 #define DECLARE_CLASS( TClass, TSuperClass, TStaticFlags, TPackage ) \
 	DECLARE_BASE_CLASS( TClass, TSuperClass, TStaticFlags, TPackage ) \
 	friend FArchive &operator<<( FArchive& Ar, TClass*& Res ) \
@@ -417,7 +419,7 @@ public: \
 	virtual ~TClass() \
 		{ ConditionalDestroy(); } \
 	static void InternalConstructor( void* X ) \
-		{ new( (EInternal*)X )TClass(); } \
+		{ new( (EInternal*)X )TClass; } \
 
 // Declare an abstract class.
 #define DECLARE_ABSTRACT_CLASS( TClass, TSuperClass, TStaticFlags, TPackage ) \
