@@ -445,7 +445,7 @@ typedef QWORD KModelPairType;
 #include "UnMatineeTools.h"		// Matinee tools.
 #include "UnFluidSurface.h"		// Fluid Surface
 #include "UnStatGraph.h"		// Stat drawing utility.
-#include "UnCDKey.h"			// CD key validation.
+#include "UnCDKey.h"			// CD key hashing.
 #include "UnCacheManager.h"		// Cache management.
 
 

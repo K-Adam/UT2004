@@ -1,5 +1,5 @@
 /*=============================================================================
-	UnCDKey.cpp: CD Key validation
+	UnCDKey.cpp: CD key hashing for master server authentication
 	Copyright 1997-2002 Epic Games, Inc. All Rights Reserved.
 
 	Revision history:
@@ -208,56 +208,6 @@ static INT HexDigit( TCHAR c )
 /*-----------------------------------------------------------------------------
 	Global CD Key functions
 -----------------------------------------------------------------------------*/
-#define TEST_CDKEY_VALIDATION_AND_TERMINATE 0
-
-UBOOL ENGINE_API ValidateCDKey()
-{
-	return 1;
-#if DEMOVERSION
-	return 1;
-#else
-
-	#if TEST_CDKEY_VALIDATION_AND_TERMINATE
-        // This is a file with valid cdkeys in ASCII with NO whitespace
-        //  or newlines between them (the '-' chars should be included in,
-        //  the file, though.
-        // This lets me test for portability issues: byte ordering,
-        //  64-bitness, compiler bugs, etc.  --ryan.
-		FILE *fp = fopen("testcdkeysdump.txt", "rb");
-		int keycount = 0;
-		if (fp != NULL)
-		{
-			do
-			{
-				TCHAR tbuf[24];
-				char buf[24];
-				if (fread(buf, 23, 1, fp) == 1)
-				{
-					keycount++;
-					buf[23] = '\0';
-					appFromAnsi(buf, tbuf);
-					if (!ValidateCDKey(tbuf))
-						printf("cdkey: [%s] didn't validate!\n", buf);
-					else
-					{
-						tbuf[3] = '1';  // not that this proves a lot...
-						if (ValidateCDKey(tbuf))
-							printf("cdkey: [%s] validated incorrectly!\n", buf);
-					}
-				}
-			} while (!feof(fp));
-		}
-
-		printf("\n\n\ndone checking %d keys\n", keycount);
-
-		fclose(fp);
-		appRequestExit(0);
-	#endif
-
-	return ValidateCDKey(*GetRealCDKey());
-#endif
-}
-
 FString ENGINE_API GetCDKeyHash()
 {
 	return MD5HashAnsiString(*GetRealCDKey());

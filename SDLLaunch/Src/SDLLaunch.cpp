@@ -965,22 +965,8 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 			SetPropX( *GLogWindow, TEXT("IsBrowser"), (HANDLE)1 );
         #endif
 
-		#if ((MACOSX) && (!DEMOVERSION))
-		extern int IsDiscInserted(void);
-		if( !IsDiscInserted() )
-		{
-		    GIsRequestingExit = 1;
-			//English
-            appMsgf( 0, TEXT("Please insert the UT2004 disc and restart the game") );
-            // German
-			//appMsgf( 0, TEXT("Bitte legen Sie die UT2004-DVD ein und starten Sie das Spiel erneut") );
-		}
-		#endif
-
 		// Init engine.
-		UEngine* Engine = NULL;
-		if (!GIsRequestingExit)
-			Engine = InitEngine();
+		UEngine* Engine = InitEngine();
 
 		if( Engine )
 		{
@@ -1004,13 +990,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 				while (1) _exit(42);
 			}
 #endif
-
-			// Validate cd key
-			if( !ValidateCDKey() )
-			{
-				GIsRequestingExit = 1;
-				appMsgf( 0, LocalizeError(TEXT("InvalidCDKey"),TEXT("Engine")) );
-			}
 
 			// Start main engine loop, including the Windows message pump.
 			if( !GIsRequestingExit )
