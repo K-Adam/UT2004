@@ -22,20 +22,10 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	for (i=0;i<Controls.Length;i++)
 		Controls[i].OnChange=InternalOnChange;
 
-	if(PlayerOwner().Level.IsDemoBuild())
-	{
-		for(i = 0;i < 4;i++)
-			moComboBox(Controls[1]).AddItem(DetailLevels[i]);
-		for(i = 0;i < 4;i++)
-			moComboBox(Controls[2]).AddItem(DetailLevels[i]);
-	}
-	else
-	{
-		for(i = 0;i < ArrayCount(DetailLevels);i++)
-			moComboBox(Controls[1]).AddItem(DetailLevels[i]);
-		for(i = 0;i < ArrayCount(DetailLevels);i++)
-			moComboBox(Controls[2]).AddItem(DetailLevels[i]);
-	}
+	for(i = 0;i < ArrayCount(DetailLevels);i++)
+		moComboBox(Controls[1]).AddItem(DetailLevels[i]);
+	for(i = 0;i < ArrayCount(DetailLevels);i++)
+		moComboBox(Controls[2]).AddItem(DetailLevels[i]);
 	moComboBox(Controls[1]).ReadOnly(True);
 	moComboBox(Controls[2]).ReadOnly(True);
 

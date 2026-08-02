@@ -245,13 +245,6 @@ void UEngine::Serialize( FArchive& Ar )
 	unguardobj;
 }
 
-#if DEMOVERSION
-INT UEngine::DummyFunctionToBreakCompatibility( INT i )
-{
-	return i++;
-}
-#endif	
-
 INT UEngine::AnotherDummyFunctionToBreakCompatibility( INT i )
 {
 	return i++;

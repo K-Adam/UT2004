@@ -883,14 +883,6 @@ AdminInfoHeader.Caption="Menú en juego admin"
 BackButton.Caption="Continuar"
 CongratsHeader.Caption="ENHORABUENA"
 
-[UT2BadCDKeyMsg]
-BadCDOk.Caption="OK"
-BadCDLabel.Caption="La clave del CD no es válida o la está usando otro jugador."
-
-[UT2DemoQuitPage]
-BuyButton.Caption="Comprar"
-QuitButton.Caption="Salir"
-
 [Browser_AddBuddy]
 CancelButton.Caption="CANC."
 OkButton.Caption="OK"

@@ -498,11 +498,7 @@ void ALevelInfo::execIsDemoBuild( FFrame& Stack, RESULT_DECL )
 	guardSlow(ALevelInfo::execIsDemoBuild);
 	P_FINISH;
 
-#if DEMOVERSION
-	*(UBOOL*)Result = 1;
-#else
 	*(UBOOL*)Result = 0;
-#endif
 
 	unguardexecSlow;
 }

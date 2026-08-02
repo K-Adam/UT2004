@@ -382,10 +382,6 @@ DialogText.Caption="Arme - arène"
 OkButton.Caption="OK"
 WeaponSelect.Caption="Choix de l'armement peuplant l'arène"
 
-[UT2K4BadCDKeyMsg]
-BadCDLabel.Caption="Votre clé de CD est incorrecte ou utilisée par un autre joueur"
-OkButton.Caption="OK"
-
 [UT2K4BotConfigPage]
 NoInformation="Pas d'infos disponibles !"
 NoPref="Pas de préférence"

@@ -84,9 +84,7 @@ void UDemoPlayPendingLevel::NotifyReceivedText( UNetConnection* Connection, cons
 					FilesNeeded++;
 					Info.PackageFlags |= PKG_Need;
 
-#if !DEMOVERSION
 					if( DemoRecDriver->ClientRedirectURLs.Num()==0 || !DemoRecDriver->AllowDownloads || !(Info.PackageFlags & PKG_AllowDownload) )
-#endif
 					{
 						if( Engine->Client->Viewports.Num() )
 							Engine->Client->Viewports(0)->Actor->eventClientMessage( *FString::Printf(LocalizeError(TEXT("DemoFileMissing"),TEXT("Engine")), Info.Parent->GetName()), NAME_None );
@@ -102,10 +100,8 @@ void UDemoPlayPendingLevel::NotifyReceivedText( UNetConnection* Connection, cons
 		if( HadMissing )
 			return;
 
-#if !DEMOVERSION
 		// Send first download request.
 		ReceiveNextFile( Connection, 0 );
-#endif
 
 		DemoRecDriver->Time = 0;
 		Success = 1;

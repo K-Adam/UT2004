@@ -64,11 +64,6 @@ static FString GetRealCDKey()
 	if( cdkey != TEXT("") )
 		return cdkey;
 
-#if DEMOVERSION
-	//cdkey = TEXT("UT3DEM-UT3DEM-UT3DEM-UT3DEM");
-	cdkey = TEXT("UT2004-UTDEMO-UTDEMO-UT2004");
-#else
-
 #if _MSC_VER && !_XBOX
 	// Read the cdkey from the registry.
 	TCHAR Temp[256];
@@ -164,8 +159,6 @@ static FString GetRealCDKey()
         newkey += cdkey.Mid(15, 5);
         cdkey = newkey;
     }
-
-#endif	// DEMOVERSION
 
 	return cdkey;
 }

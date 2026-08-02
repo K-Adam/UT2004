@@ -911,10 +911,6 @@ DialogText.Caption="Arme d'arène"
 DialogText2.Caption="Choisir l'arme qui sera dans l'arène."
 WeaponSelect.Caption="Arme"
 
-[UT2BadCDKeyMsg]
-BadCDOk.Caption="OK"
-BadCDLabel.Caption="Votre clé de CD est incorrecte ou utilisée par un autre joueur"
-
 [UT2BotConfigPage]
 NoInformation="Pas d'infos disponibles !"
 OkButton.Caption="OK"
@@ -959,10 +955,6 @@ FontArrayNames=("UT2003Fonts.FontNeuzeit9")
 OkButton.Caption="OK"
 DialogText.Caption="La résolution choisie est inférieure à la résolution minimale des menus."
 DialogText2.Caption="Ceci entrera en vigueur lors de la prochaine partie."
-
-[UT2DemoQuitPage]
-BuyButton.Caption="Acheter"
-QuitButton.Caption="Quitter"
 
 [UT2DraftTeam]
 ClearConfirmMessage="Cette action videra votre liste actuelle. Continuer ?"

@@ -188,23 +188,20 @@ function string Play()
 	local string URL;
 	local bool b;
 
-	if ( !class'LevelInfo'.static.IsDemoBuild() )
+	URL = BuildActiveMutatorString();
+
+	b = URL != LastActiveMutators || URL != default.LastActiveMutators;
+
+	if ( URL != "")
 	{
-		URL = BuildActiveMutatorString();
-
-		b = URL != LastActiveMutators || URL != default.LastActiveMutators;
-
-		if ( URL != "")
-		{
-			LastActiveMutators = URL;
-			URL = "?Mutator=" $ URL;
-		}
-		else
-			LastActiveMutators="";
-
-		if ( b )
-			SaveConfig();
+		LastActiveMutators = URL;
+		URL = "?Mutator=" $ URL;
 	}
+	else
+		LastActiveMutators="";
+
+	if ( b )
+		SaveConfig();
 
 	return url;
 }

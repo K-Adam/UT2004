@@ -889,8 +889,6 @@ void UCacheManager::SaveNewPackages( FCacheTracker* InTracker, FCacheFileManager
 {
 	guard(UCacheManager::SaveNewPackages);
 
-#if !DEMOVERSION
-
 	if ( this == GetClass()->GetDefaultObject() )
 	{
 		GetCache()->SaveNewPackages(InTracker,InFileManager,CacheKey,DestFile);
@@ -986,8 +984,6 @@ void UCacheManager::SaveNewPackages( FCacheTracker* InTracker, FCacheFileManager
 	FileManager = OldFileManager;
 	Tracker = OldTracker;
 
-#endif
-
 	unguard;
 }
 
@@ -995,7 +991,6 @@ void UCacheManager::IntegrateNewPackages( const TCHAR* CacheKey )
 {
 	guard(UCacheManager::IntegrateNewPackages);
 
-#if !DEMOVERSION
 	if ( this == GetClass()->GetDefaultObject() )
 	{
 		GetCache()->IntegrateNewPackages(CacheKey);
@@ -1059,7 +1054,6 @@ void UCacheManager::IntegrateNewPackages( const TCHAR* CacheKey )
 			ParseAnnouncer( *Items(i) );
 	}
 
-#endif
 	unguard;
 }
 
@@ -2470,11 +2464,6 @@ UBOOL FCacheFileManager::LoadCacheFiles()
 
 	FString CacheDir, CacheWildcard;
 
-/*
-#if DEMOVERSION
-	ExportFlags = EXPORT_NoCreate;
-#endif
-*/
 	for (INT i=0;i<GSys->CacheRecordPath.Num(); i++)
 	{
 		if ( GetCacheDirectory( CacheDir, i, &CacheWildcard ) )

@@ -972,12 +972,6 @@ UBOOL ULevel::Listen( FString& Error )
 			debugf(NAME_DevNet, TEXT("Spawning: %s"), Str );
 			UClass* HelperClass = StaticLoadClass( AActor::StaticClass(), NULL, Str, NULL, LOAD_NoFail, NULL );
 
-#if DEMOVERSION
-			UPackage* Package = CastChecked<UPackage>(HelperClass->GetOuter());
-			if ( Package->GetFName() != NAME_UWeb && Package->GetFName() != NAME_IpDrv )
-				appThrowf(TEXT("%s is not allowed in the demo"), HelperClass->GetFullName());
-#endif
-
 			AActor* Actor = SpawnActor( HelperClass );
 			while( Actor && ParseToken(Ptr,Str,ARRAY_COUNT(Str),1) )
 			{

@@ -382,10 +382,6 @@ DialogText.Caption="Arena di armi"
 OkButton.Caption="OK"
 WeaponSelect.Caption="Scegli l'arma da inserire nella tua arena."
 
-[UT2K4BadCDKeyMsg]
-BadCDLabel.Caption="La tua chiave CD non è valida o è usata da un altro giocatore."
-OkButton.Caption="OK"
-
 [UT2K4BotConfigPage]
 NoInformation="Nessuna informazione disponibile!"
 NoPref="Nessuna preferenza"

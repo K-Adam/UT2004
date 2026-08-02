@@ -710,17 +710,9 @@ public:
 		appStrcat( tmp, TEXT("/Application Support") );
 		mkdir(appToAnsi(tmp), S_IRWXU);
 
-		#if DEMOVERSION
-			appStrcat( tmp, TEXT("/Unreal Tournament 2004 Demo") );
-		#else
-			appStrcat( tmp, TEXT("/Unreal Tournament 2004") );
-		#endif
+		appStrcat( tmp, TEXT("/Unreal Tournament 2004") );
 	#else
-		#if DEMOVERSION
-			appStrcat( tmp, TEXT("/.ut2004demo") );
-		#else
-			appStrcat( tmp, TEXT("/.ut2004") );
-		#endif
+		appStrcat( tmp, TEXT("/.ut2004") );
 	#endif
 
         mkdir(appToAnsi(tmp), S_IRWXU);

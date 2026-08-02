@@ -46,7 +46,6 @@ var() noexport transient bool bDecal, bDynLight, bTexture, bCorona, bTrilin,
 var() noexport transient int iColDepth, iTexture, iChar, iPhys, iWorld, iDecal, iShadow, iMeshLOD,
                              iColDepthD, iTextureD, iCharD, iWorldD, iPhysD, iDecalD, iShadowD, iMeshLODD;
 
-var() private noexport editconst transient bool bDemo;
 var() noexport bool bIgnoreResNotice, bInvalidRes, bIgnoreChange;
 var() localized string RelaunchQuestion, InvalidSelectionText;
 
@@ -54,7 +53,6 @@ var() localized string RelaunchQuestion, InvalidSelectionText;
 function InitComponent(GUIController MyController, GUIComponent MyOwner)
 {
 	Super.InitComponent(MyController, MyOwner);
-	bDemo = PlayerOwner().Level.IsDemoBuild();
 
 	InitializeCombos();
 	SetupPositions();
@@ -91,11 +89,8 @@ function InitializeCombos()
 		}
 	}
 
-	if ( !bDemo )
-	{
-		co_Texture.MyComboBox.MaxVisibleItems = 9;
-		co_Char.MyComboBox.MaxVisibleItems = 9;
-	}
+	co_Texture.MyComboBox.MaxVisibleItems = 9;
+	co_Char.MyComboBox.MaxVisibleItems = 9;
 }
 
 function CheckSliders()
@@ -1151,9 +1146,6 @@ final function GetComboOptions(moComboBox Combo, out array<GUIListElem> Ar)
 		case co_Char:
 			for (i = 0; i < ArrayCount(DetailLevels); i++)
 			{
-				if (bDemo && i == 5)
-					break;
-
 				Ar.Length = Ar.Length + 1;
 				Ar[i].Item = DetailLevels[i];
 			}

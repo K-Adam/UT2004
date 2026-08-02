@@ -910,10 +910,6 @@ DialogText.Caption="Waffen-Arena"
 DialogText2.Caption="Wählen Sie die Waffe für Ihre Arena aus."
 WeaponSelect.Caption="Waffe"
 
-[UT2BadCDKeyMsg]
-BadCDOk.Caption="OK"
-BadCDLabel.Caption="CD-Key ist ungültig oder wird von einem anderen Spieler genutzt."
-
 [UT2BotConfigPage]
 NoInformation="Keine Informationen verfügbar!"
 BotAccuracySlider.Caption="Genauigkeit"
@@ -958,10 +954,6 @@ FontArrayNames=("UT2003Fonts.FontNeuzeit9")
 OkButton.Caption="OK"
 DialogText.Caption="Die von Ihnen gewählte Auflösung ist niedriger als die Mindestmenüauflösung."
 DialogText2.Caption="Sie wird beim nächsten Spiel übernommen."
-
-[UT2DemoQuitPage]
-BuyButton.Caption="Kaufen"
-QuitButton.Caption="Beenden"
 
 [UT2DraftTeam]
 ClearConfirmMessage="Dadurch wird Ihr aktueller Spielplan geleert. Sind Sie sicher?"

@@ -258,7 +258,7 @@ function bool ShouldDisplayGameType()
 function bool IsFilterAvailable( out string ButtonCaption )
 {
 	ButtonCaption = FilterCaption;
-	return !class'LevelInfo'.static.IsDemoBuild();
+	return true;
 }
 
 DefaultProperties

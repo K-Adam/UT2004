@@ -85,10 +85,7 @@ static function PrecacheGameTextures(LevelInfo myLevel)
     
     myLevel.AddPrecacheMaterial(Texture'EpicParticles.FlickerFlare2');
 
-	if ( myLevel.IsDemoBuild() )
-		myLevel.AddPrecacheMaterial(Material'DemoPlayerSkins.DemoSkeleton');
-	else
-		myLevel.AddPrecacheMaterial(Texture(DynamicLoadObject("PlayerSkins.Human_Skeleton", class'Material')));
+	myLevel.AddPrecacheMaterial(Texture(DynamicLoadObject("PlayerSkins.Human_Skeleton", class'Material')));
 
 	if ( !Static.NeverAllowTransloc() )
 	{
@@ -117,14 +114,11 @@ static function PrecacheGameTextures(LevelInfo myLevel)
 
 	if ( ((myLevel.NetMode == NM_ListenServer) || (myLevel.NetMode == NM_Client))
 		&& !myLevel.bSkinsPreloaded && 
-		((myLevel.bShouldPreload && myLevel.bDesireSkinPreload && !Default.bForceDefaultCharacter) || myLevel.IsDemoBuild()) )
+		(myLevel.bShouldPreload && myLevel.bDesireSkinPreload && !Default.bForceDefaultCharacter) )
 	{
 		class'xUtil'.static.GetPlayerList(AllPlayerList);
-		if ( !myLevel.IsDemoBuild() )
-		{
-			myLevel.ForceLoadTexture(Texture(DynamicLoadObject("UT2004PlayerSkins.XanMk3V2_abdomen", class'Material')));
-			myLevel.ForceLoadTexture(Texture(DynamicLoadObject("UT2004PlayerSkins.Skaarj_Skeleton_Body", class'Material')));
-		}
+		myLevel.ForceLoadTexture(Texture(DynamicLoadObject("UT2004PlayerSkins.XanMk3V2_abdomen", class'Material')));
+		myLevel.ForceLoadTexture(Texture(DynamicLoadObject("UT2004PlayerSkins.Skaarj_Skeleton_Body", class'Material')));
 		// Filter out 'duplicate' characters - only used in single player
 		// also filter out characters that aren't useable by bots (probably not meant for DM)
 		for(i=0; i<AllPlayerList.Length; i++)

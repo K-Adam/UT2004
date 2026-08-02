@@ -2061,35 +2061,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 		LoadObject<ULevel>( MapParent, TEXT("MyLevel"), *URL.Map, LOAD_Verify | LOAD_Throw | LOAD_NoWarn, NULL );
 		EndLoad();
 
-	#if DEMOVERSION
-			// If we are a demo, prevent third party maps from being loaded.
-			if( !Pending )
-			{
-				FString FileName(FString(TEXT("../Maps/"))+URL.Map);
-				if( FileName.Right(4).Caps() != TEXT(".UT2"))
-					FileName = FileName + TEXT(".ut2");
-				INT FileSize = GFileManager->FileSize( *FileName );
-				//debugf(TEXT("Looking for file: %s %d"), *FileName, FileSize);
-				if( ( FileName.Caps() != TEXT("../MAPS/DM-RANKIN.UT2") || FileSize != 13400320 ) &&
-					( FileName.Caps() != TEXT("../MAPS/ONS-TORLAN.UT2") || FileSize != 7501910 ) &&
-					( FileName.Caps() != TEXT("../MAPS/ONS-PRIMEVAL.UT2") || FileSize != 9934490 ) &&
-					( FileName.Caps() != TEXT("../MAPS/DM-DECK17.UT2") || FileSize != 31831451 ) &&
-					( FileName.Caps() != TEXT("../MAPS/DM-1ON1-IDOMA.UT2") || FileSize != 11895873 ) &&
-					( FileName.Caps() != TEXT("../MAPS/AS-CONVOY.UT2") || FileSize != 10173598 ) &&
-					( FileName.Caps() != TEXT("../MAPS/CTF-BRIDGEOFFATE.UT2") || FileSize != 27970106 ) &&
-					( FileName.Caps() != TEXT("../MAPS/CTF-FACECLASSIC.UT2") || FileSize != 28141678 ) &&
-					( FileName.Caps() != TEXT("../MAPS/CTF-TWINTOMBS.UT2") || FileSize != 26865440 ) &&
-					( FileName.Caps() != TEXT("../MAPS/BR-COLOSSUS.UT2") || FileSize != 18119054 ) &&
-					( FileName.Caps() != TEXT("../MAPS/NVIDIALOGO.UT2") || FileSize != 487891 ) &&
-					( FileName.Caps() != TEXT("../MAPS/NOINTRO.UT2") || FileSize != 334840 ) &&
-					( FileName.Caps() != TEXT("../MAPS/ENTRY.UT2") || FileSize != 336568 ) )
-				{
-					Error = TEXT("Sorry, only the retail version of UT2004 can load third party maps.");
-					SetProgress( *FString::Printf(TEXT("menu:%s"),*DisconnectMenuClass), *Error, TEXT("") );
-					return NULL;
-				}
-			}
-	#endif
 	}
 	#if UNICODE
 	catch( TCHAR* CatchError )

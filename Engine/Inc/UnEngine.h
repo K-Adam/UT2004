@@ -130,10 +130,6 @@ class ENGINE_API UEngine : public USubsystem
 	virtual void EdCallback( DWORD Code, UBOOL Send, DWORD lParam ) {};
 	virtual INT AnotherDummyFunctionToBreakCompatibility( INT i );
 	virtual INT ReallyBreakCompatibility( INT i );
-
-#if DEMOVERSION
-	virtual INT DummyFunctionToBreakCompatibility( INT i );
-#endif	
 };
 
 /*-----------------------------------------------------------------------------

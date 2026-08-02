@@ -69,11 +69,7 @@ INT UTexture::DefaultLOD()
     else
     {
 	    LOD = NormalLOD;
-#if DEMOVERSION
-		// Don't apply negative LOD bias for stripped down content.
-		if( __Client->GetTextureLODBias(ELODSet (LODSet)) > 0 )
-#endif
-		   LOD += __Client->GetTextureLODBias(ELODSet (LODSet));
+	    LOD += __Client->GetTextureLODBias(ELODSet (LODSet));
 
 		// Apply level specific offset.
 		ALevelInfo* LevelInfo = GIsEditor ? NULL : __Client->Viewports.Num() && __Client->Viewports(0) && __Client->Viewports(0)->Actor ? __Client->Viewports(0)->Actor->Level : NULL;

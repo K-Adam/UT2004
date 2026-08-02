@@ -22,16 +22,11 @@ typedef struct FRC4Key
 
 FString GameSpyGameName()
 {
-#if DEMOVERSION
 	return TEXT("ut2004");
-#else
-	return TEXT("ut2004");
-#endif
 }
 
 void GenerateSecretKey( BYTE* key )
 {
-#if DEMOVERSION
 	*key = '0';
 	key++;
 	*key = '0';
@@ -44,20 +39,6 @@ void GenerateSecretKey( BYTE* key )
 	key++;
 	*key = '0';
 	key++;
-#else
-	*key = '0';
-	key++;
-	*key = '0';
-	key++;
-	*key = '0';
-	key++;
-	*key = '0';
-	key++;
-	*key = '0';
-	key++;
-	*key = '0';
-	key++;
-#endif
 	*key = '\0';
 }
 

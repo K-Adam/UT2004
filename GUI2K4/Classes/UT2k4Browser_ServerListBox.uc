@@ -142,8 +142,6 @@ function bool InternalOnOpen(GUIContextMenu Sender)
 	if ( List.IsValid() )
 	{
 		Sender.ContextItems = ContextItems;
-		if ( class'LevelInfo'.static.IsDemoBuild() )
-			RemoveFilterOptions(Sender);
 	}
 	else
 	{
@@ -152,18 +150,6 @@ function bool InternalOnOpen(GUIContextMenu Sender)
 	}
 
 	return True;
-}
-
-function RemoveFilterOptions( GUIContextMenu Menu )
-{
-	local int i;
-
-	for ( i = 0; i < Menu.ContextItems.Length; i++ )
-		if ( Menu.ContextItems[i] == ContextItems[FILTERIDX] )
-		{
-			Menu.ContextItems.Remove(i,4);
-			break;
-		}
 }
 
 function InternalOnClick(GUIContextMenu Sender, int Index)

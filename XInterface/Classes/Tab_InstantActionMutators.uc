@@ -34,20 +34,6 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
     MutList = PlayerOwner().Spawn(class'xMutatorList');
     MutList.Init();
 
-	if( PlayerOwner().Level.IsDemoBuild())
-	{
-		i = 0;	
-		while (i<MutList.MutatorList.Length)
-		{
-			if (MutList.MutatorList[i].ClassName ~= "xgame.mutzoominstagib" || MutList.MutatorList[i].ClassName ~= "unrealgame.mutlowgrav")
-				i++;
-			else
-				MutList.MutatorList.Remove(i,1);
-		}
-			
-	
-	}
-
 	for (i=0;i<MutList.MutatorList.Length;i++)
 		MyAvailMutators.List.Add(MutList.MutatorList[i].FriendlyName,,MutList.MutatorList[i].Description);
 	

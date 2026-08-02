@@ -2581,7 +2581,7 @@ static function bool AllowMutator( string MutatorClassName )
 	if ( !Default.bAllowVehicles && static.IsVehicleMutator(MutatorClassName) )
 		return false;
 
-	return !class'LevelInfo'.static.IsDemoBuild();
+	return true;
 }
 
 static function AddServerDetail( out ServerResponseLine ServerState, string RuleName, coerce string RuleValue )

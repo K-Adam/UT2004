@@ -911,10 +911,6 @@ DialogText2.Caption="Choose the weapon to populate your Arena."
 OkButton.Caption="OK"
 WeaponSelect.Caption="Weapon"
 
-[UT2BadCDKeyMsg]
-BadCDLabel.Caption="Your CD key is invalid or in use by another player"
-BadCDOk.Caption="OK"
-
 [UT2BotConfigPage]
 NoInformation="No Information Available!"
 BotAccuracySlider.Caption="Accuracy"
@@ -959,10 +955,6 @@ FontArrayNames=("UT2003Fonts.FontNeuzeit9")
 DialogText.Caption="The resolution you have chosen is lower than the minimum menu resolution."
 DialogText2.Caption="It will be applied when you next enter gameplay."
 OkButton.Caption="OK"
-
-[UT2DemoQuitPage]
-BuyButton.Caption="Buy"
-QuitButton.Caption="Quit"
 
 [UT2DraftTeam]
 ClearConfirmMessage="This action will empty your current roster.  Are you sure?"

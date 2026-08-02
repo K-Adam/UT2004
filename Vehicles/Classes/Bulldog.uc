@@ -81,13 +81,6 @@ replication
 		HeadlightOn, CurrentTarget;
 }
 
-function PreBeginPlay()
-{
-	Super.PreBeginPlay();
-	if ( Level.IsDemoBuild() )
-		Destroy();
-}
-
 simulated function PostNetBeginPlay()
 {
 	local vector RotX, RotY, RotZ;

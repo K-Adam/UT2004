@@ -12,10 +12,7 @@ function bool InternalOnClick(GUIComponent Sender)
 {
 	if (Sender==Controls[1])
 	{
-		if(PlayerOwner().Level.IsDemoBuild())
-			Controller.ReplaceMenu("XInterface.UT2DemoQuitPage");
-		else
-			PlayerOwner().ConsoleCommand("exit");
+		PlayerOwner().ConsoleCommand("exit");
 	}
 	else
 		Controller.CloseMenu(false);

@@ -83,11 +83,6 @@
 #define ASMKNI 1
 #endif
 
-// Demo version.
-#ifndef DEMOVERSION
-#define DEMOVERSION 0
-#endif
-
 // Whether certain mesh export and conversion restrictions apply.
 #ifndef RESTRICTEXPORT
 #define RESTRICTEXPORT 1

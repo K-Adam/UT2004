@@ -911,10 +911,6 @@ DialogText.Caption="Arena di armi"
 DialogText2.Caption="Scegli l'arma da inserire nella tua arena."
 WeaponSelect.Caption="Arma"
 
-[UT2BadCDKeyMsg]
-BadCDOk.Caption="OK"
-BadCDLabel.Caption="La tua chiave CD non è valida o è usata da un altro giocatore."
-
 [UT2BotConfigPage]
 NoInformation="Nessuna informazione disponibile!"
 OkButton.Caption="OK"
@@ -960,10 +956,6 @@ FontArrayNames=("UT2003Fonts.FontNeuzeit9")
 OkButton.Caption="OK"
 DialogText.Caption="La risoluzione selezionata è inferiore a quella minima ammessa dai menu."
 DialogText2.Caption="Verrà applicata la prossima volta che entrerai nel gioco."
-
-[UT2DemoQuitPage]
-BuyButton.Caption="Compra"
-QuitButton.Caption="Esci"
 
 [UT2DraftTeam]
 ClearConfirmMessage="Questa azione svuoterà la tua rosa attuale. Sei sicuro?"

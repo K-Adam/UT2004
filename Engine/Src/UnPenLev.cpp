@@ -310,9 +310,7 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 					FilesNeeded++;
 					Info.PackageFlags |= PKG_Need;
 
-#if !DEMOVERSION
 					if( !NetDriver->AllowDownloads || !(Info.PackageFlags & PKG_AllowDownload) )
-#endif
 					{
 						Error = FString::Printf( LocalizeError(TEXT("DownloadNotAllowed"),TEXT("Engine")), Info.Parent->GetName() );
 						NetDriver->ServerConnection->State = USOCK_Closed;
@@ -322,10 +320,8 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 			}
 		}
 
-#if !DEMOVERSION
 		// Send first download request.
 		ReceiveNextFile( Connection, 0 );
-#endif
 		// We have successfully connected.
 		Success = 1;
 	}

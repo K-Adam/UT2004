@@ -382,10 +382,6 @@ DialogText.Caption="Arma de estadio"
 OkButton.Caption="OK"
 WeaponSelect.Caption="Escoge arma que poner en estadio"
 
-[UT2K4BadCDKeyMsg]
-BadCDLabel.Caption="La clave del CD no es válida o la está usando otro jugador."
-OkButton.Caption="OK"
-
 [UT2K4BotConfigPage]
 NoInformation="¡No hay información disponible!"
 NoPref="Sin preferencias"
