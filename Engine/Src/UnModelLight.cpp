@@ -1310,7 +1310,7 @@ static HRESULT LightMapCompressionCallback(void* Data,INT MipIndex,DWORD Size,IN
 void UModel::CompressLightmaps()
 {
 	guard(UModel::CompressLightmaps);
-#if WITH_NVDXT
+#if !CONSOLE && !__UNIX__ && !_WIN64
 	GWarn->BeginSlowTask(TEXT("Compressing lightmaps..."),1);
 	for(INT TextureIndex = 0;TextureIndex < LightMapTextures.Num();TextureIndex++)
 	{
@@ -1318,11 +1318,12 @@ void UModel::CompressLightmaps()
 	
 		if( Texture->StaticTexture.Revision != Texture->Revision )
 		{
-			if(GRebuildTools.GetCurrent()->LightmapFormat == TEXF_RGBA8)
+			if(!WITH_NVDXT || GRebuildTools.GetCurrent()->LightmapFormat == TEXF_RGBA8)
 			{
 				Texture->StaticTexture.Data[0].Empty();
 				Texture->StaticTexture.Data[1].Empty();
 			}
+#if WITH_NVDXT
 			else
 			{
 				FColor*				TextureData = new FColor[LIGHTMAP_TEXTURE_WIDTH * LIGHTMAP_TEXTURE_HEIGHT];
@@ -1378,6 +1379,7 @@ void UModel::CompressLightmaps()
 
 				delete [] TextureData;
 			}
+#endif
 		}		
 	}		
 	GWarn->EndSlowTask();

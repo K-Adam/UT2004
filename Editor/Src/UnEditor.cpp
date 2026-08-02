@@ -121,7 +121,7 @@ void UEditorEngine::Init()
 	//!!check(sizeof(*this)==GetClass()->GetPropertiesSize());
 
 	// Init Render Device
-	UClass* RenDevClass = StaticLoadClass( URenderDevice::StaticClass(), NULL, TEXT("D3DDrv.D3DRenderDevice"), NULL, LOAD_NoFail, NULL );
+	UClass* RenDevClass = StaticLoadClass( URenderDevice::StaticClass(), NULL, TEXT("D3D9Drv.D3D9RenderDevice"), NULL, LOAD_NoFail, NULL );
 	GRenDev = ConstructObject<URenderDevice>( RenDevClass );
 	GRenDev->Init();
 

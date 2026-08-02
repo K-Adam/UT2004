@@ -5,4 +5,6 @@ ut_module(Core SHARED
           UnLegacyCrt.cpp
   PCH CorePrivate.h Core.cpp
   NOPCH UnAnsi.cpp UnVcWin32.cpp UnLegacyCrt.cpp
-  DEPS vorbisfile winmm)
+  DEPS Vorbis::vorbisfile winmm)
+target_link_options(Core PRIVATE /EXPORT:fputs=LegacyFputs /EXPORT:fwrite=LegacyFwrite
+  /EXPORT:fgets=LegacyFgets /EXPORT:__stdio_common_vfprintf=LegacyStdioCommonVfprintf)

@@ -1181,8 +1181,8 @@ final function GetComboOptions(moComboBox Combo, out array<GUIListElem> Ar)
 			break;
 
 		case co_RenderDevice:
-			// Win64 has OpenGLDrv and D3D9Drv (NOT D3DDrv!). --ryan.
-			if ( ( PlatformIsWindows() ) && ( PlatformIs64Bit() ) )
+			// Windows ships OpenGLDrv and D3D9Drv only.
+			if ( PlatformIsWindows() )
 			{
 				Ar.Length = 2;
 				Ar[0].Item = RenderModeText[0] @ "9";

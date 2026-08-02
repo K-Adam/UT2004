@@ -13,6 +13,7 @@ endforeach()
 
 # The prebuilt static libs expect the release DLL CRT.
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
+set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
 
 # Flags that reproduce the VS2003 semantics the code relies on.
 add_library(ut_common INTERFACE)
@@ -21,10 +22,10 @@ target_compile_options(ut_common INTERFACE
   /Zp4 /W3 /MP
   /wd4005 /wd4244 /wd4267 /wd4305 /wd4996 /wd4595 /wd4291 /wd4838 /wd4311 /wd4312 /wd4302)
 target_compile_definitions(ut_common INTERFACE
-  WIN32 _WINDOWS UNICODE _UNICODE _WIN32_IE=0x0200 _WIN32_WINNT=0x0601
+  UNICODE _UNICODE _WIN32_IE=0x0200 _WIN32_WINNT=0x0601
   DO_GUARD=1 DO_CHECK=1 DO_STAT=1 DO_CLOCK=1
   DO_GUARD_SLOW=0 DO_STAT_SLOW=0 DO_CLOCK_SLOW=0
-  $<IF:$<CONFIG:Debug>,_DEBUG$<SEMICOLON>DEBUG$<SEMICOLON>DO_CHECK_SLOW=1,NDEBUG$<SEMICOLON>DO_CHECK_SLOW=0>
+  $<IF:$<CONFIG:Debug>,_DEBUG$<SEMICOLON>DEBUG$<SEMICOLON>DO_CHECK_SLOW=1,DO_CHECK_SLOW=0>
   _CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS _WINSOCK_DEPRECATED_NO_WARNINGS
   WINDOWS_IGNORE_PACKING_MISMATCH)  # original code includes windows.h under /Zp4 too
 target_include_directories(ut_common INTERFACE ${CMAKE_SOURCE_DIR}/metoolkit/include)
@@ -34,7 +35,7 @@ target_link_options(ut_common INTERFACE /SAFESEH:NO
   /NODEFAULTLIB:libc.lib /NODEFAULTLIB:libcp.lib /NODEFAULTLIB:libcmt.lib
   /NODEFAULTLIB:libci.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:libcmtd.lib /NODEFAULTLIB:msvcrtd.lib)
 
-# ut_module(<name> SHARED|EXECUTABLE|WIN32 SOURCES ... [PCH hdr create.cpp] [NOPCH files...] [DEPS ...])
+# ut_module(<name> SHARED|EXECUTABLE|WIN32 [OUTPUT name] SOURCES ... [PCH hdr create.cpp] [NOPCH files...] [DEPS ...])
 # Sources are relative to <Mod>/Src unless absolute.
 function(ut_module name type)
   cmake_parse_arguments(A "" "OUTPUT" "SOURCES;PCH;NOPCH;DEPS" ${ARGN})
@@ -55,13 +56,13 @@ function(ut_module name type)
     target_include_directories(${name} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Inc)
   endif()
   target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Src)
-  target_link_libraries(${name} PRIVATE ut_common PUBLIC ${A_DEPS})
+  target_link_libraries(${name} PUBLIC ${A_DEPS} PRIVATE ut_common)
   # Explicit /Yc and /Yu because target_precompile_headers would force-include the header everywhere.
   if(A_PCH)
     list(GET A_PCH 0 hdr)
     list(GET A_PCH 1 create)
     foreach(src ${A_SOURCES})
-      if(src MATCHES "\.cpp$")
+      if(src MATCHES "\\.cpp$")
         set_source_files_properties(${src} TARGET_DIRECTORY ${name} PROPERTIES COMPILE_OPTIONS "/Yu${hdr}")
       endif()
     endforeach()
@@ -72,21 +73,23 @@ function(ut_module name type)
   endif()
 endfunction()
 
-set(UT_DX8 ${CMAKE_SOURCE_DIR}/DirectX8)
-set(UT_DX9 ${CMAKE_SOURCE_DIR}/DirectX9)
 # Karma physics only exists as prebuilt VC7.1 libs, see Core/Src/UnLegacyCrt.cpp.
-set(UT_KARMA Mdt MdtKea MdtBcl Mst McdFrame McdCommon McdPrimitives McdConvex
+# Consumers must list them before Core.lib so their stdio imports resolve to Core's exports.
+set(KARMA_LIBS Mdt MdtKea MdtBcl Mst McdFrame McdCommon McdPrimitives McdConvex
     McdConvexCreateHull MeGlobals MeAssetFactory MeAssetDB MeAssetDBXMLIO MeXML)
-list(TRANSFORM UT_KARMA PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/win32_single_msvcrt/)
-list(TRANSFORM UT_KARMA APPEND .lib)
+list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/win32_single_msvcrt/)
+list(TRANSFORM KARMA_LIBS APPEND .lib)
+list(APPEND KARMA_LIBS legacy_stdio_definitions)
 
-add_subdirectory(zlib)
-add_subdirectory(Vorbis)
+find_package(ZLIB REQUIRED)
+find_package(Vorbis CONFIG REQUIRED)
+find_package(dxsdk-d3dx CONFIG REQUIRED)
+# Speex stays vendored for Epic's 48 kHz mode (EPIC_48K), which upstream lacks.
 add_subdirectory(Speex)
 
 add_subdirectory(Core)
 add_subdirectory(Engine)
-foreach(m Fire IpDrv UWeb Window Editor WinDrv D3DDrv D3D9Drv OpenGLDrv ALAudio
+foreach(m Fire IpDrv UWeb Window Editor WinDrv D3D9Drv OpenGLDrv ALAudio
           XGame XInterface Onslaught UTV2004 GUIDesigner
           Launch UCC UnrealEd Setup DebuggerLaunch BugReport Benchmark UccDepend)
   add_subdirectory(${m})
