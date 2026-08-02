@@ -10,3 +10,5 @@
 /System/User.ini
 /System/UnrealEd.ini
 /System/*.u
+/System/UPlaylists.ini
+/System/*-BP2-*.ucl
