@@ -68,21 +68,6 @@
 #error DO_CLOCK without DO_STAT does not make sense!
 #endif
 
-// Whether to use Intel assembler code.
-#ifndef ASM
-#define ASM 1
-#endif
-
-// Whether to use 3DNow! assembler code.
-#ifndef ASM3DNOW
-#define ASM3DNOW 0
-#endif
-
-// Whether to use Katmai assembler code.
-#ifndef ASMKNI
-#define ASMKNI 1
-#endif
-
 // Whether certain mesh export and conversion restrictions apply.
 #ifndef RESTRICTEXPORT
 #define RESTRICTEXPORT 1

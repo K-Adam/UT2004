@@ -41,8 +41,6 @@ INT UUTVCommandlet::Main( const TCHAR* Parms )
 	if( GConfig->GetString( TEXT("Engine.Engine"), TEXT("Language"), Temp, ARRAY_COUNT(Temp) ) )
 	UObject::SetLanguage( Temp );
 
-    appResetTimer(); // sjs
-
 	//Don't know a way to check version on the rest of the installation, so warn about which one should be used
 	debugf(TEXT("------------------------------"));
 	debugf(TEXT("This version of UTV2004.DLL was compiled for running from"));

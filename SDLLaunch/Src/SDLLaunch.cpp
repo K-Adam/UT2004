@@ -527,7 +527,6 @@ static void MainLoop( UEngine* Engine )
 static UEngine* InitEngine()
 {
 	guard(InitEngine);
-    appResetTimer(); // sjs
 	DOUBLE LoadTime = appSeconds();
 
 	// Set exec hook.
@@ -1045,7 +1044,6 @@ static void SetInitialConfiguration()
 	INT		OnboardVideoMemory	= MAXINT;
 	UBOOL	HardwareTL			= true,
 			DeviceCapsValid		= false;
-	FLOAT	CPUSpeed			= 0.000001 / GSecondsPerCycle;
 	D3DADAPTER_IDENTIFIER8		DeviceIdentifier;
 	D3DCAPS8					DeviceCaps8;
 
@@ -1269,49 +1267,6 @@ static void SetInitialConfiguration()
 
 		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("UseCompressedLightmaps"	),	TEXT("False"	));
 	}
-
-	// Generic CPU defaults.
-	if( CPUSpeed < 700 )
-	{
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Coronas"		),	TEXT("False"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Decals"			),	TEXT("False"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"		),	TEXT("False"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoFractalAnim"	),	TEXT("True"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoDynamicLights"),	TEXT("True"			));
-
-		GConfig->SetString( TEXT("XGame.xPawn")			, TEXT("bPlayerShadows"	),	TEXT("False"	), GUserIni );
-
-		GConfig->SetString( TEXT("Engine.LevelInfo")	, TEXT("PhysicsDetailLevel"		),	TEXT("PDL_Low"	));
-
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("HighDetailActors"		),	TEXT("False"	));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("SuperHighDetailActors"),	TEXT("False"	));
-	}
-	else if( CPUSpeed < 1000 )
-	{
-		if( !HardwareTL )
-		{
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Coronas"		),	TEXT("False"	));
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoFractalAnim"	),	TEXT("True"		));
-
-			GConfig->SetString( TEXT("XGame.xPawn")			, TEXT("bPlayerShadows"	),	TEXT("False"	), GUserIni );
-
-			GConfig->SetString( TEXT("Engine.LevelInfo")	, TEXT("PhysicsDetailLevel"		),	TEXT("PDL_Low"	));
-
-			GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("HighDetailActors"		),	TEXT("False"	));
-			GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("SuperHighDetailActors"),	TEXT("False"	));
-		}
-		else
-			GConfig->SetString( TEXT("Engine.LevelInfo"), TEXT("PhysicsDetailLevel"		),	TEXT("PDL_Medium"	));
-	}
-	else if( CPUSpeed < 1500 )
-	{
-		if( !HardwareTL )
-		{
-			GConfig->SetString( TEXT("XGame.xPawn"), TEXT("bPlayerShadows"		),	TEXT("False"	), GUserIni );
-			GConfig->SetString( TEXT("Engine.LevelInfo"), TEXT("PhysicsDetailLevel"		),	TEXT("PDL_Medium"	));
-		}
-	}
-
 
 	// ATI
 	if( DeviceIdentifier.VendorId==0x1002 )

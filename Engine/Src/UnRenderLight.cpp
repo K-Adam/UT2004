@@ -241,63 +241,8 @@ FColor FDynamicLight::SampleLight(FVector SamplePosition,FVector SampleNormal)
 //	FLightingTables
 //
 
-#define APPROX_MAN_BITS 10		/* Number of bits of approximate square root mantissa, <=23 */
-#define APPROX_EXP_BITS 9		/* Number of bits in IEEE exponent */
-
-static FLOAT	SqrtManTbl[2 << APPROX_MAN_BITS],
-				DivSqrtManTbl[1 << APPROX_MAN_BITS],
-				DivManTbl[1 << APPROX_MAN_BITS],
-				DivSqrtExpTbl[1 << APPROX_EXP_BITS],
-				DivExpTbl[1 << APPROX_EXP_BITS];
-
-#if ASM
-	#define POWER_ASM(ManTbl,ExpTbl)\
-		__asm\
-		{\
-			/* Here we use the identity sqrt(a*b) = sqrt(a)*sqrt(b) to perform\
-			** an approximate floating point square root by using a lookup table\
-			** for the mantissa (a) and the exponent (b), taking advantage of the\
-			** ieee floating point format.\
-			*/\
-			__asm mov  eax,[F]									/* get float as int                   */\
-			__asm shr  eax,(32-APPROX_EXP_BITS)-APPROX_MAN_BITS	/* want APPROX_MAN_BITS mantissa bits */\
-			__asm mov  edx,[F]									/* get float as int                   */\
-			__asm shr  edx,32-APPROX_EXP_BITS					/* want APPROX_EXP_BITS exponent bits */\
-			__asm and  eax,(1<<APPROX_MAN_BITS)-1				/* keep lowest 9 mantissa bits        */\
-			__asm fld  DWORD PTR ManTbl[eax*4]	/* get mantissa lookup                */\
-			__asm fmul DWORD PTR ExpTbl[edx*4]					/* multiply by exponent lookup        */\
-			__asm fstp [F]										/* store result                       */\
-		}\
-		return F;
-
-	//
-	// Fast floating point power routines.
-	// Pretty accurate to the first 10 bits.
-	// About 12 cycles on the Pentium.
-	//
-	inline FLOAT DivSqrtApprox(FLOAT F) {POWER_ASM(DivSqrtManTbl,DivSqrtExpTbl);}
-	inline FLOAT DivApprox    (FLOAT F) {POWER_ASM(DivManTbl,    DivExpTbl    );}
-	inline FLOAT SqrtApprox   (FLOAT F)
-	{
-		__asm
-		{
-			mov  eax,[F]                        // get float as int.
-			shr  eax,(23 - APPROX_MAN_BITS) - 2 // shift away unused low mantissa.
-			mov  edx,[F]						// get float as int.
-			and  eax, ((1 << (APPROX_MAN_BITS+1) )-1) << 2 // 2 to avoid "[eax*4]".
-			and  edx, 0x7F000000				// 7 bit exp., wipe low bit+sign.
-			shr  edx, 1							// exponent/2.
-			mov  eax,DWORD PTR SqrtManTbl [eax]	// index hi bit is exp. low bit.
-			add  eax,edx						// recombine with exponent.
-			mov  [F],eax						// store.
-		}
-		return F;								// compiles to fld [F].
-	}
-#else
-	inline FLOAT DivSqrtApprox(FLOAT F) {return 1.0/appSqrt(F);}
-	inline FLOAT DivApprox    (FLOAT F) {return 1.0/F;}
-	inline FLOAT SqrtApprox   (FLOAT F) {return appSqrt(F);}
-#endif
+inline FLOAT DivSqrtApprox(FLOAT F) {return 1.0/appSqrt(F);}
+inline FLOAT SqrtApprox   (FLOAT F) {return appSqrt(F);}
 
 class FLightingTables
 {
@@ -305,33 +250,6 @@ public:
 
 	FLOAT	LightSqrt[4096];
 	DWORD	FilterTab[128][4];
-
-	// SetupTable
-
-	void SetupTable( FLOAT* ManTbl, FLOAT* ExpTbl, FLOAT Power )
-	{
-		union {FLOAT F; DWORD D;} Temp;
-
-		Temp.F = 1.0;
-		for( DWORD i=0; i<(1<<APPROX_EXP_BITS); i++ )
-		{
-			Temp.D = (Temp.D & 0x007fffff ) + (i << (32-APPROX_EXP_BITS));
-			ExpTbl[ i ] = appPow( Abs(Temp.F), Power );
-			if( appIsNan(ExpTbl[ i ]) )
-				ExpTbl[ i ]=0.0;
-			//debugf("exp [%f] %i = %f",Power,i,ExpTbl[i]);
-		}
-
-		Temp.F = 1.0;
-		for( DWORD i=0; i<(1<<APPROX_MAN_BITS); i++ )
-		{
-			Temp.D = (Temp.D & 0xff800000 ) + (i << (32-APPROX_EXP_BITS-APPROX_MAN_BITS));
-			ManTbl[ i ] = appPow( Abs(Temp.F), Power );
-			if( appIsNan(ManTbl[ i ]) )
-				ManTbl[ i ]=0.0;
-			//debugf("man [%f] %i = %f",i,Power,ManTbl[i]);
-		}
-	}
 
 	// Constructor.
 
@@ -351,20 +269,6 @@ public:
 			//FLOAT Temp = (1.0-S);
 			LightSqrt[i] = Temp/S;
 		}
-
-		// Setup square root tables.
-		for( DWORD D=0; D< (1<< APPROX_MAN_BITS ); D++ )
-		{
-			union {FLOAT F; DWORD D;} Temp;
-			Temp.F = 1.0;
-			Temp.D = (Temp.D & 0xff800000 ) + (D << (23 - APPROX_MAN_BITS));
-			Temp.F = appSqrt(Temp.F);
-			Temp.D = (Temp.D - ( 64 << 23 ) );   // exponent bias re-adjust
-			SqrtManTbl[ D ] = (FLOAT)(Temp.F * appSqrt(2.0)); // for odd exponents
-			SqrtManTbl[ D + (1 << APPROX_MAN_BITS) ] =  (FLOAT) (Temp.F * 2.0);
-		}
-		SetupTable(DivSqrtManTbl,DivSqrtExpTbl,-0.5);
-		SetupTable(DivManTbl,    DivExpTbl,    -1.0);
 
 		// Filtering table.
 		INT FilterWeight[8][8] = 

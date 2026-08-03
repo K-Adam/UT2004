@@ -232,79 +232,11 @@ FBox::FBox( const FVector* Points, INT Count )
 : Min(0,0,0), Max(0,0,0), IsValid(0)
 {
 	guard(FBox::FBox);
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-	if( Count == 2 )
-	{
-		FVector AlignedMax GCC_PACK(16);
-		FVector AlignedMin GCC_PACK(16);
-		FPlane alignedPoint[2];
-		alignedPoint[0].X = Points[0].X;
-		alignedPoint[0].Y = Points[0].Y;
-		alignedPoint[0].Z = Points[0].Z;		
-		alignedPoint[1].X = Points[1].X;
-		alignedPoint[1].Y = Points[1].Y;
-		alignedPoint[1].Z = Points[1].Z;		
-		MaxMinVector( AlignedMax, AlignedMin, alignedPoint, Count );
-		Min = AlignedMin;
-		Max = AlignedMax;
-		return;
-	}
-#endif
 	for( INT i=0; i<Count; i++ )
 		*this += Points[i];
 	unguard;
 }
 
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-FBox FBox::TransformBy(const FMatrix& M) const
-{
-
-		FPlane ResultMin[2] __attribute__((aligned(16)));
-		FPlane InMin[2] __attribute__((aligned(16)));
-
-		// copy the input box into the aligned min and max.
-		InMin[0]=this->Min;
-		InMin[1]=this->Max;
-// Done in macro code now		
-//		InMin[0].W=1.0f;
-//		InMin[1].W=1.0f;
-
-	asm volatile
-	(
-		".set noreorder\n"
-
-		"lqc2		vf1, 0(%0)\n"
-		"lqc2		vf7, 16(%0)\n"
-
-		"lqc2		vf3, 0(%2)\n"
-		"lqc2		vf4, 16(%2)\n"
-		"lqc2		vf5, 32(%2)\n"
-		"lqc2		vf6, 48(%2)\n"
-			
-		"vmulax.xyzw	ACC, vf3, vf1x\n"
-		"vmadday.xyzw ACC, vf4, vf1y\n"
-		"vmaddaz.xyzw ACC, vf5, vf1z\n"
-		"vmaddw.xyzw	vf2, vf6, vf0w\n"
-			
-		"vmulax.xyzw	ACC, vf3, vf7x\n"
-		"vmadday.xyzw ACC, vf4, vf7y\n"
-		"vmaddaz.xyzw ACC, vf5, vf7z\n"
-		"vmaddw.xyzw	vf8, vf6, vf0w\n"
-			
-		"vmini		vf9, vf2, vf8		# pull out min\n"
-		"vmax		vf10, vf2, vf8		# pull out max\n"
-
-		"sqc2		vf9, 0(%1)\n"
-		"sqc2		vf10, 16(%1)\n"
-
-		".set reorder\n"
-		:
-		: "r" (InMin), "r" (ResultMin), "r" (&M)
-	);
-		// copy the result min and max back out to result box.
-		return FBox(ResultMin[0],ResultMin[1]);
-}
-#endif
 
 
 /*-----------------------------------------------------------------------------

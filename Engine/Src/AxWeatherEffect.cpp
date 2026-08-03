@@ -20,55 +20,7 @@ static	FLOAT	tmp_ScaleGlow			= 1.f;
 
 #define LerpInOut( r, x ) (((x) < (r)) ? (x)/(r) : (1.f-(x))/(1.f-(r)))
 
-#define USE_SSE_WEATHER __HAS_SSE__
 
-#if USE_SSE_WEATHER
-const	FLOAT	INV_005					= 1.f / 0.05f;
-const	FLOAT	INV_095					= 1.f / 0.95f;
-static	FLOAT	FLOAT_255				= 255.f;
-static	F32vec4 M00, M10, M20, M30;
-static	F32vec4 SSE_ScaleGlow;
-
-#ifndef _WIN64
-// For some reason this didn't get inlined!
-static FORCEINLINE __m64 _mm_cvtps_pi16_EPIC(__m128 a)
-{
-	return _mm_packs_pi32(_mm_cvtps_pi32(a),_mm_cvtps_pi32(_mm_movehl_ps(a, a)));
-}
-#endif
-
-static FORCEINLINE void TransformFPlaneSSE( FPlane& Plane )
-{
-	F32vec4 P_xxxx, P_yyyy, P_zzzz, P_wwww;
-
-	P_xxxx = _mm_load_ps1( &Plane.X );
-	P_yyyy = _mm_load_ps1( &Plane.Y );
-	P_zzzz = _mm_load_ps1( &Plane.Z );
-	P_wwww = _mm_load_ps1( &Plane.W );
-			
-	_mm_store_ps
-	(
-		&Plane.X
-		,
-		_mm_add_ps
-		(
-			_mm_add_ps
-			(
-				_mm_add_ps
-				( 
-					_mm_mul_ps( M00, P_xxxx )
-					,
-					_mm_mul_ps( M10, P_yyyy )
-				)
-				,
-				_mm_mul_ps( M20, P_zzzz )
-			)
-			,
-			_mm_mul_ps( M30, P_wwww )
-		)
-	);
-}
-#endif
 
 
 static inline DWORD MakeAttenuatedColor( INT Attenuation, INT Alpha )
@@ -146,14 +98,6 @@ public:
 		FWeatherPcl*	p			= &pFx->pcl(0);
 		INT				Rendered	= 0;
 
-#if USE_SSE_WEATHER
-		#ifdef _WIN64
-		const UBOOL UseScalarFallback = 0;
-		M00 = _mm_loadu_ps( &WorldToCamera.M[0][0] );
-		M10 = _mm_loadu_ps( &WorldToCamera.M[1][0] );
-		M20 = _mm_loadu_ps( &WorldToCamera.M[2][0] );
-		M30 = _mm_loadu_ps( &WorldToCamera.M[3][0] );
-
 		int numPcl = pFx->pcl.Num();
 		for( int i=0; i<numPcl && Rendered<Renderable; i++ )
 		{
@@ -165,71 +109,29 @@ public:
 
 			Rendered+=4;
 
-			INT		Col			=	p->frame / tmp_numCols,
-					Row			=	p->frame - tmp_numRows * Col;
+			FLOAT	t	= Clamp( 255.f * LerpInOut( 0.05f, p->Life ) * Max( p->Size * 0.5f, 1.0f ) * p->DistAtten, 0.f, 255.f );
+						
+			INT		Col = p->frame / tmp_numCols,
+					Row = p->frame - tmp_numRows * Col;
+	
+			FLOAT	U1	= Row * tmp_texU,
+					U2	= U1  + tmp_texU,
+					V1	= Col * tmp_texV,
+					V2	= V1  + tmp_texV;
+	
+			INT		Alpha, 
+					Attenuation;
 
-			FLOAT	LifeScale	=	p->Life < 0.05f ? p->Life * INV_005 : (1.f-p->Life) * INV_095,
-					HalfSize	=	p->Size * 127.5f,
-					U1			=	Row * tmp_texU,
-					U2			=	U1  + tmp_texU,
-					V1			=	Col * tmp_texV,
-					V2			=	V1  + tmp_texV;
-		
-			F32vec4	TimeFactor	=	_mm_max_ps
-									(
-										_mm_min_ps
-										(
-											_mm_mul_ps
-											(
-												_mm_mul_ps
-												(
-													_mm_max_ps
-													(
-														_mm_load_ps1( &HalfSize )
-														,
-														_mm_load_ps1( &FLOAT_255 )
-													)
-													,
-													_mm_load_ps1( &p->DistAtten )
-												)
-												,
-												_mm_load_ps1( &LifeScale )
-											)
-											,
-											_mm_load_ps1( &FLOAT_255 )
-										)
-										,
-										_mm_setzero_ps()
-									);
+			Alpha		= appTrunc( t );
+			Attenuation	= appTrunc( t * tmp_ScaleGlow );
 
-
-			DWORD	Color		=	_mm_packus_epi16   // __m128i _mm_packus_epi16 (__m128i a, __m128i b);
-									(
-										_mm_packs_epi32      // __m128i _mm_packs_epi32 (__m128i a, __m128i b);
-										(
-											_mm_cvtps_epi32    // __m128i _mm_cvtps_epi32 (__m128 a);
-											(
-												_mm_mul_ps
-												(
-													SSE_ScaleGlow
-													,
-													TimeFactor
-												)
-											)
-											,
-											_mm_setzero_si128()
-										)
-										,
-										_mm_setzero_si128()
-									).m128i_u32[0];
+			//DWORD Color = Attenuation | (Attenuation << 8) | (Attenuation << 16) | (Alpha << 24);
+			DWORD Color = MakeAttenuatedColor(Attenuation, Alpha);
 
 			if ( pFx->WeatherType == WT_Rain )
 			{
-				__declspec(align(16)) FPlane Start	= FPlane( p->pos, 1.f );
-				__declspec(align(16)) FPlane End	= FPlane( p->pos + p->Vel * 0.03f, 1.f );
-
-				TransformFPlaneSSE( Start );
-				TransformFPlaneSSE( End );
+				FVector Start	= WorldToCamera.TransformFVector(p->pos);
+				FVector End		= WorldToCamera.TransformFVector(p->pos + p->Vel*.03f);
 
 				pVerts->Point.X	= Start.X + p->Size;
 				pVerts->Point.Y	= Start.Y;
@@ -264,11 +166,9 @@ public:
 				pVerts++;
 			}
 			else
-			{
-				__declspec(align(16)) FPlane Center	= FPlane( p->pos, 1.f );
-
-				TransformFPlaneSSE( Center );
-		
+			{				
+				FVector Center	= WorldToCamera.TransformFVector(p->pos);
+	
 				pVerts->Point.X	= Center.X;
 				pVerts->Point.Y	= Center.Y + p->Size;
 				pVerts->Point.Z	= Center.Z;
@@ -303,274 +203,6 @@ public:
 			}
 
 			p++;
-		}
-		#else
-		const UBOOL UseScalarFallback = !GIsSSE;
-		if( GIsSSE )
-		{
-			M00 = _mm_loadu_ps( &WorldToCamera.M[0][0] );
-			M10 = _mm_loadu_ps( &WorldToCamera.M[1][0] );
-			M20 = _mm_loadu_ps( &WorldToCamera.M[2][0] );
-			M30 = _mm_loadu_ps( &WorldToCamera.M[3][0] );
-
-			int numPcl = pFx->pcl.Num();
-			for( int i=0; i<numPcl && Rendered<Renderable; i++ )
-			{
-				if( !p->Visible )
-				{
-					p++;
-					continue;
-				}
-
-				Rendered+=4;
-
-				INT		Col			=	p->frame / tmp_numCols,
-						Row			=	p->frame - tmp_numRows * Col;
-
-				FLOAT	LifeScale	=	p->Life < 0.05f ? p->Life * INV_005 : (1.f-p->Life) * INV_095,
-						HalfSize	=	p->Size * 127.5f,
-						U1			=	Row * tmp_texU,
-						U2			=	U1  + tmp_texU,
-						V1			=	Col * tmp_texV,
-						V2			=	V1  + tmp_texV;
-		
-				F32vec4	TimeFactor	=	_mm_max_ps
-										(
-											_mm_min_ps
-											(
-												_mm_mul_ps
-												(
-													_mm_mul_ps
-													(
-														_mm_max_ps
-														( 
-															_mm_load_ps1( &HalfSize )
-															, 
-															_mm_load_ps1( &FLOAT_255 )
-														)
-														,
-														_mm_load_ps1( &p->DistAtten )
-													)
-													,
-													_mm_load_ps1( &LifeScale )
-												)
-												,
-												_mm_load_ps1( &FLOAT_255 )
-											)
-											,
-											_mm_setzero_ps()
-										);
-
-				DWORD	Color		=	_mm_packs_pu16
-										(
-											_mm_cvtps_pi16_EPIC
-												( 
-													_mm_mul_ps
-													( 
-														SSE_ScaleGlow
-														,
-														TimeFactor
-													)
-												)
-												,
-											_mm_setzero_si64()
-										).m64_u32[0]; 
-										
-				_mm_empty();
-
-				if ( pFx->WeatherType == WT_Rain )
-				{
-					__declspec(align(16)) FPlane Start	= FPlane( p->pos, 1.f );
-					__declspec(align(16)) FPlane End	= FPlane( p->pos + p->Vel * 0.03f, 1.f );
-	
-					TransformFPlaneSSE( Start );
-					TransformFPlaneSSE( End );
-
-					pVerts->Point.X	= Start.X + p->Size;
-					pVerts->Point.Y	= Start.Y;
-					pVerts->Point.Z	= Start.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V1;
-					pVerts++;
-
-					pVerts->Point.X	= Start.X - p->Size;
-					pVerts->Point.Y	= Start.Y;
-					pVerts->Point.Z	= Start.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V1;
-					pVerts++;
-
-					pVerts->Point.X	= End.X - p->Size;
-					pVerts->Point.Y	= End.Y;
-					pVerts->Point.Z	= End.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V2;
-					pVerts++;
-
-					pVerts->Point.X	= End.X + p->Size;
-					pVerts->Point.Y	= End.Y;
-					pVerts->Point.Z	= End.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V2;
-					pVerts++;
-				}
-				else
-				{				
-					__declspec(align(16)) FPlane Center	= FPlane( p->pos, 1.f );
-
-					TransformFPlaneSSE( Center );
-		
-					pVerts->Point.X	= Center.X;
-					pVerts->Point.Y	= Center.Y + p->Size;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V1;
-					pVerts++;
-
-					pVerts->Point.X	= Center.X - p->Size;
-					pVerts->Point.Y	= Center.Y;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V2;
-					pVerts++;
-
-					pVerts->Point.X	= Center.X;
-					pVerts->Point.Y	= Center.Y - p->Size;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V2;
-					pVerts++;
-
-					pVerts->Point.X	= Center.X + p->Size;
-					pVerts->Point.Y	= Center.Y;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V1;
-					pVerts++;
-				}
-
-				p++;
-			}
-		}
-		#endif
-#endif
-
-		if (UseScalarFallback)
-		{
-			int numPcl = pFx->pcl.Num();
-			for( int i=0; i<numPcl && Rendered<Renderable; i++ )
-			{
-				if( !p->Visible )
-				{
-					p++;
-					continue;
-				}
-
-				Rendered+=4;
-
-				FLOAT	t	= Clamp( 255.f * LerpInOut( 0.05f, p->Life ) * Max( p->Size * 0.5f, 1.0f ) * p->DistAtten, 0.f, 255.f );
-							
-				INT		Col = p->frame / tmp_numCols,
-						Row = p->frame - tmp_numRows * Col;
-		
-				FLOAT	U1	= Row * tmp_texU,
-						U2	= U1  + tmp_texU,
-						V1	= Col * tmp_texV,
-						V2	= V1  + tmp_texV;
-		
-				INT		Alpha, 
-						Attenuation;
-
-				Alpha		= appTrunc( t );
-				Attenuation	= appTrunc( t * tmp_ScaleGlow );
-
-				//DWORD Color = Attenuation | (Attenuation << 8) | (Attenuation << 16) | (Alpha << 24);
-				DWORD Color = MakeAttenuatedColor(Attenuation, Alpha);
-
-				if ( pFx->WeatherType == WT_Rain )
-				{
-					FVector Start	= WorldToCamera.TransformFVector(p->pos);
-					FVector End		= WorldToCamera.TransformFVector(p->pos + p->Vel*.03f);
-
-					pVerts->Point.X	= Start.X + p->Size;
-					pVerts->Point.Y	= Start.Y;
-					pVerts->Point.Z	= Start.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V1;
-					pVerts++;
-
-					pVerts->Point.X	= Start.X - p->Size;
-					pVerts->Point.Y	= Start.Y;
-					pVerts->Point.Z	= Start.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V1;
-					pVerts++;
-
-					pVerts->Point.X	= End.X - p->Size;
-					pVerts->Point.Y	= End.Y;
-					pVerts->Point.Z	= End.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V2;
-					pVerts++;
-
-					pVerts->Point.X	= End.X + p->Size;
-					pVerts->Point.Y	= End.Y;
-					pVerts->Point.Z	= End.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V2;
-					pVerts++;
-				}
-				else
-				{				
-					FVector Center	= WorldToCamera.TransformFVector(p->pos);
-		
-					pVerts->Point.X	= Center.X;
-					pVerts->Point.Y	= Center.Y + p->Size;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V1;
-					pVerts++;
-
-					pVerts->Point.X	= Center.X - p->Size;
-					pVerts->Point.Y	= Center.Y;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U1;
-					pVerts->V		= V2;
-					pVerts++;
-
-					pVerts->Point.X	= Center.X;
-					pVerts->Point.Y	= Center.Y - p->Size;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V2;
-					pVerts++;
-
-					pVerts->Point.X	= Center.X + p->Size;
-					pVerts->Point.Y	= Center.Y;
-					pVerts->Point.Z	= Center.Z;
-					pVerts->Color	= Color;
-					pVerts->U		= U2;
-					pVerts->V		= V1;
-					pVerts++;
-				}
-
-				p++;
-			}
 		}
 	}
 
@@ -846,13 +478,6 @@ void AxWeatherEffect::Render( FLevelSceneNode* SceneNode, FRenderInterface* RI )
 	tmp_numCols			= numCols;
 	tmp_numRows			= numRows;
 
-#if USE_SSE_WEATHER
-	if( GIsSSE )
-	{
-		FPlane Dummy	= FPlane( ScaleGlow, ScaleGlow, ScaleGlow, 1.f );
-		appMemcpy( &SSE_ScaleGlow, &Dummy, sizeof(F32vec4) );
-	}
-#endif
 	tmp_ScaleGlow		= ScaleGlow;
 
 	RI->SetMaterial( Skins(0) );

@@ -156,13 +156,6 @@ public:
 #endif
 #endif
 
-// SSE or not?
-#if ((__INTEL__) && (!NO_SSE_SUPPORT))
-  #define __HAS_SSE__ 1
-  #include <fvec.h>
-  #include <emmintrin.h>
-#endif
-
 // Global constants.
 enum {MAXBYTE		= 0xff       };
 enum {MAXWORD		= 0xffffU    };
@@ -188,15 +181,6 @@ enum ERunningOS
 	OS_MAC_OSX_PPC,
 	OS_WIN64_AMD,
 	OS_UNKNOWN	= 255
-};
-
-enum ERunningCPU
-{	
-	CPU_INTEL	= 0,
-	CPU_AMD,
-	CPU_AMD64,
-	CPU_PPC,
-	CPU_UNKNOWN	= 255
 };
 
 // Unicode or single byte character set mappings.
@@ -637,7 +621,6 @@ CORE_API extern	UDebugger*				GDebugger; //DEBUGGER
 CORE_API extern UBOOL                   GTransientNaming; // sjs
 CORE_API extern UBOOL                   GIsSoaking; // gam
 CORE_API extern UBOOL					GIsBenchmarking;
-CORE_API extern QWORD					GBaseCycles; // sjs
 CORE_API extern QWORD					GMakeCacheIDIndex;
 // gam ---
 CORE_API extern TCHAR                   GBuildLabel[1024];
@@ -664,7 +647,6 @@ CORE_API extern	UBOOL					GUseFixedTimeStep;
 CORE_API extern FLOAT					GFixedTimeStep;
 CORE_API extern	UBOOL					GIsRecordingMovie;
 CORE_API extern	DOUBLE					GCurrentTime;
-CORE_API extern ERunningCPU				GRunningCPU;
 CORE_API extern DWORD					GGPUDeviceID;
 CORE_API extern DWORD					GGPUVendorID;
 

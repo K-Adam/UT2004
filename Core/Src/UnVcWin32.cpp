@@ -759,14 +759,14 @@ CORE_API DOUBLE appSeconds()
 #endif
 
 //
-// Return number of CPU cycles passed. Origin is arbitrary.
+// Return performance counter ticks passed. Origin is arbitrary.
 //
-#if !DEFINED_appCycles
 CORE_API DWORD appCycles()
 {
-	return appSeconds();
+	LARGE_INTEGER Counter;
+	QueryPerformanceCounter( &Counter );
+	return Counter.LowPart;
 }
-#endif
 
 //
 // Sleep this thread for Seconds, 0.0 means release the current
@@ -1211,39 +1211,6 @@ CORE_API const TCHAR* appPackage()
 //
 // Platform specific initialization.
 //
-static void DoCPUID( int i, DWORD *A, DWORD *B, DWORD *C, DWORD *D )
-{
-#if ASM
- 	__asm
-	{			
-		mov eax,[i]
-		_emit 0x0f
-		_emit 0xa2
-
-		mov edi,[A]
-		mov [edi],eax
-
-		mov edi,[B]
-		mov [edi],ebx
-
-		mov edi,[C]
-		mov [edi],ecx
-
-		mov edi,[D]
-		mov [edi],edx
-
-		mov eax,0
-		mov ebx,0
-		mov ecx,0
-		mov edx,0
-		mov esi,0
-		mov edi,0
-	}
-#else
-	*A=*B=*C=*D=0;
-#endif
-}
-
 void appPlatformPreInit()
 {
 	guard(appPlatformPreInit);
@@ -1383,112 +1350,14 @@ void appPlatformInit()
 	check(!(GPageSize&(GPageSize-1)));
 	GProcessorCount=SI.dwNumberOfProcessors;
 	debugf( NAME_Init, TEXT("CPU Page size=%i, Processors=%i"), SI.dwPageSize, SI.dwNumberOfProcessors );
-    appSprintf( GMachineCPU, TEXT("%sXBox CPU"), SI.dwNumberOfProcessors > 1 ? TEXT("SMP ") : TEXT("") ); // gam
+    appSprintf( GMachineCPU, TEXT("%i processors"), SI.dwNumberOfProcessors );
 	unguard;
 #endif
 
-	// Check processor version with CPUID.
-	try
-	{
-		DWORD A=0, B=0, C=0, D=0;
-		DoCPUID(0,&A,&B,&C,&D);
-		TCHAR Brand[13], *Model, FeatStr[256]=TEXT("");
-		Brand[ 0] = (ANSICHAR)(B);
-		Brand[ 1] = (ANSICHAR)(B>>8);
-		Brand[ 2] = (ANSICHAR)(B>>16);
-		Brand[ 3] = (ANSICHAR)(B>>24);
-		Brand[ 4] = (ANSICHAR)(D);
-		Brand[ 5] = (ANSICHAR)(D>>8);
-		Brand[ 6] = (ANSICHAR)(D>>16);
-		Brand[ 7] = (ANSICHAR)(D>>24);
-		Brand[ 8] = (ANSICHAR)(C);
-		Brand[ 9] = (ANSICHAR)(C>>8);
-		Brand[10] = (ANSICHAR)(C>>16);
-		Brand[11] = (ANSICHAR)(C>>24);
-		Brand[12] = (ANSICHAR)(0);
-		DoCPUID( 1, &A, &B, &C, &D );
-		switch( (A>>8) & 0x000f )
-		{
-			case 4:  Model=TEXT("486-class processor");        break;
-			case 5:  Model=TEXT("Pentium-class processor");    break;
-			case 6:  Model=TEXT("PentiumPro-class processor"); break;
-			case 7:  Model=TEXT("P7-class processor");         break;
-			default: Model=TEXT("Unknown processor");          break;
-		}
-
-        #ifdef __x86_64__  // Hammer always has these instruction sets.
-		appStrcat( FeatStr, TEXT(" MMX") );
-		appStrcat( FeatStr, TEXT(" SSE") );
-        #else
-		if( (D & 0x00800000) && !ParseParam(appCmdLine(),TEXT("NOMMX")) ) {appStrcat( FeatStr, TEXT(" MMX") ); GIsMMX=1;}
-		if( (D & 0x02000000) && !ParseParam(appCmdLine(),TEXT("NOSSE")) ) {appStrcat( FeatStr, TEXT(" SSE") ); GIsSSE=1;}
-        #endif
-
-		// Print features.
-		debugf( NAME_Init, TEXT("CPU Detected: %s (%s)"), Model, Brand );
-		debugf( NAME_Init, TEXT("CPU Features:%s"), FeatStr );
-		
-        appSprintf( GMachineCPU, TEXT("%s %s"), Brand, Model ); // gam
-
-		if( appStricmp( TEXT("GenuineIntel"), Brand ) == 0 )
-			GRunningCPU = CPU_INTEL;
-		else
-		if( appStricmp( TEXT("AuthenticAMD"), Brand ) == 0 )
-			GRunningCPU = CPU_AMD;
-	}
-	catch( ... )
-	{
-		debugf( NAME_Init, TEXT("Couldn't detect CPU: Probably 486 or non-Intel processor") );
-        appSprintf( GMachineCPU, TEXT("Unknown CPU") ); // gam
-	}
-	
-	// CPU speed.
-	guard(CheckCpuSpeed);
-	FLOAT CpuSpeed;
-	try
-	{
-		GSecondsPerCycle = 1.f;
-
-		for( INT i=0; i<3; i++ )
-		{
-			QWORD StartCycles, EndCycles;
-			volatile DOUBLE	DoubleDummy = 0.0;
-			volatile INT	IntDummy	= 0;
-
-			StartCycles = __rdtsc();
-
-			DWORD	StartMsec	= timeGetTime(),
-					EndMsec		= StartMsec;
-			while( EndMsec-StartMsec < 200 )
-			{
-				DoubleDummy += appSqrt(DoubleDummy) + 3.14;
-				IntDummy	*= ((INT) (DoubleDummy) + 555) / 13;
-				EndMsec = timeGetTime();
-			}
-			
-			EndCycles = __rdtsc();
-
-			DOUBLE	C1	= (DOUBLE)(SQWORD) StartCycles;
-			DOUBLE	C2	= (DOUBLE)(SQWORD) EndCycles;
-
-			GSecondsPerCycle = Min( GSecondsPerCycle, 1.0 / (1000.f * ( C2 - C1 ) / (EndMsec - StartMsec)) );
-		}
-		debugf( NAME_Init, TEXT("CPU Speed=%f MHz"), 0.000001 / GSecondsPerCycle );
-        appStrcat( GMachineCPU, *FString::Printf(TEXT(" @ %d MHz"), appRound(0.000001 / GSecondsPerCycle) ) ); // gam
-	}
-	catch( ... )
-	{
-		debugf( NAME_Init, TEXT("Timestamp not supported (Possibly 486 or Cyrix processor)") );
-        appStrcat( GMachineCPU, TEXT(" Unknown clock") ); // gam
-		GSecondsPerCycle = 1;
-	}
-	if( Parse(appCmdLine(),TEXT("CPUSPEED="),CpuSpeed) )
-	{
-		GSecondsPerCycle = 0.000001/CpuSpeed;
-		debugf( NAME_Init, TEXT("CPU Speed Overridden=%f MHz"), 0.000001 / GSecondsPerCycle );
-        appStrcat( GMachineCPU, *FString::Printf(TEXT(" @ %d MHz"), appRound(0.000001 / GSecondsPerCycle) ) ); // gam
-	}
-	unguard;
+	// Performance counter ticks are the cycle unit for appCycles().
+	LARGE_INTEGER Frequency;
+	QueryPerformanceFrequency( &Frequency );
+	GSecondsPerCycle = 1.0 / (DOUBLE)Frequency.QuadPart;
 
 	// Get memory.
 	guard(GetMemory);

@@ -39,10 +39,6 @@ public:
 	// SphereCheck - Determines whether a sphere is inside of the volume, outside of the volume, or both.  Returns EClippingFlag.
 	BYTE SphereCheck(const FSphere& Sphere);
 
-#if MACOSX // optimized for Altivec by Sanjay Patel at Apple.
-	BYTE BoxCheck_altivec(const FVector &Origin,const FVector &Extent);
-#endif
-
 	// BoxCheck - Determines whether a box is inside of the volume, outside of the volume, or both.  Returns EClippingFlag.
 	BYTE BoxCheck(const FVector& Origin,const FVector& Extent);
 

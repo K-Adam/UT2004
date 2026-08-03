@@ -141,7 +141,7 @@ CORE_API TCHAR					GTrue[64]=TEXT("True");			/* Localized "true" text */
 CORE_API TCHAR					GFalse[64]=TEXT("False");		/* Localized "false" text */
 CORE_API TCHAR					GNone[64]=TEXT("None");			/* Localized "none" text */
 CORE_API TCHAR                  GCdPath[256]=TEXT("");			/* Cd path, if any */
-CORE_API DOUBLE					GSecondsPerCycle=1.0;			/* Seconds per CPU cycle for this PC */
+CORE_API DOUBLE					GSecondsPerCycle=1.0;			/* Seconds per appCycles() tick */
 CORE_API DOUBLE					GTempDouble=0.0;				/* Used during development for timing */
 CORE_API void					(*GTempFunc)(void*)=NULL;		/* Used during development for debug hooks */
 CORE_API QWORD					GTicks=1;						/* Number of non-persistent ticks thus far in this level, for profiling */
@@ -183,7 +183,6 @@ CORE_API UDebugger*				GDebugger=NULL;					//DEBUGGER /* Unrealscript Debugger *
 CORE_API UBOOL                  GTransientNaming=0;             // sjs - enable this to generate unique names for transient objects
 CORE_API UBOOL                  GIsSoaking=0;                   // gam - I like lentils.
 CORE_API UBOOL					GIsBenchmarking=0;				/* Whether we are in benchmark mode or not */
-CORE_API QWORD      		    GBaseCycles=0;                  // sjs - used for appSeconds delta
 CORE_API QWORD					GMakeCacheIDIndex=0;			/* Cache ID */
 // gam ---
 CORE_API TCHAR                  GBuildLabel[1024]				= TEXT("No Label");
@@ -210,7 +209,6 @@ CORE_API UBOOL					GUseFixedTimeStep				= 0;
 CORE_API FLOAT					GFixedTimeStep					= 0;
 CORE_API UBOOL					GIsRecordingMovie				= 0;
 CORE_API DOUBLE					GCurrentTime					= 0;
-CORE_API ERunningCPU			GRunningCPU						= CPU_UNKNOWN;
 CORE_API DWORD					GGPUDeviceID					= 0;
 CORE_API DWORD					GGPUVendorID					= 0;
 
@@ -234,20 +232,6 @@ CORE_API UBOOL GUnicodeOS=0;
 #else
 CORE_API UBOOL GUnicode=0;
 CORE_API UBOOL GUnicodeOS=0;
-#endif
-
-// System identification.
-
-#ifndef GIsMMX
-CORE_API UBOOL GIsMMX=0;
-#endif
-
-#ifndef GIsSSE
-CORE_API UBOOL GIsSSE=0;
-#endif
-
-#ifndef GIsAltivec
-CORE_API UBOOL GIsAltivec=0; // PowerPC only. --ryan.
 #endif
 
 // For development.

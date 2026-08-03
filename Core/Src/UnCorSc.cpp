@@ -4187,7 +4187,7 @@ void UObject::execLog( FFrame& Stack, RESULT_DECL )
 	INT len = 960 - appStrlen(*N);  // Account for colon, space, and \n
 	for (; S.Len() >= len; S = S.Mid(len) )
 		debugf( (EName)N.GetIndex(), TEXT("%s"), *S.Left(len) );
-	debugf( (EName)N.GetIndex(), TEXT("%s%s"), StopWatchTimer != 0.f ? *FString::Printf(TEXT("%lf: "), (DOUBLE)(StopWatchTimer+(appCycles()-12)) * GSecondsPerCycle * 1000.f) : TEXT(""), *S );
+	debugf( (EName)N.GetIndex(), TEXT("%s%s"), StopWatchTimer != 0.f ? *FString::Printf(TEXT("%lf: "), (DOUBLE)(StopWatchTimer+appCycles()) * GSecondsPerCycle * 1000.f) : TEXT(""), *S );
 
 	unguardexecSlow;
 }

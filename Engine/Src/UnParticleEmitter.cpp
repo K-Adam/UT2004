@@ -490,16 +490,6 @@ FLOAT UParticleEmitter::SpawnParticles( FLOAT OldLeftover, FLOAT Rate, FLOAT Del
 
 
 // Tick each individual particle.
-#if __HAS_SSE__
-static FLOAT FLOAT_255 = 255.f;
-#if !defined(_WIN64)
-// For some reason this didn't get inlined!
-static FORCEINLINE __m64 _mm_cvtps_pi16_EPIC(__m128 a)
-{
-	return _mm_packs_pi32(_mm_cvtps_pi32(a),_mm_cvtps_pi32(_mm_movehl_ps(a, a)));
-}
-#endif
-#endif
 
 INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 {
@@ -1081,77 +1071,7 @@ INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 				 Color.Z *= Opacity;
 			}
 		}
-#if __HAS_SSE__
-		#if defined(_WIN64)
-		F32vec4 Dummy	=	_mm_mul_ps
-							(
-								_mm_loadu_ps(&Color.X)
-								,
-								_mm_load_ps1(&FLOAT_255)
-							);
-
-		Particle.Color	=
-							_mm_packus_epi16   // __m128i _mm_packus_epi16 (__m128i a, __m128i b);
-							(
-								_mm_packs_epi32      // __m128i _mm_packs_epi32 (__m128i a, __m128i b);
-								(
-									_mm_cvtps_epi32    // __m128i _mm_cvtps_epi32 (__m128 a);
-									(
-										_mm_max_ps
-										(
-											_mm_min_ps
-											(
-												_mm_shuffle_ps( Dummy, Dummy, _MM_SHUFFLE(3, 0, 1, 2)) //  B G R A
-												,
-												_mm_load_ps1(&FLOAT_255)
-											)
-											,
-											_mm_setzero_ps()
-										)
-									)
-									,
-									_mm_setzero_si128()
-								)
-								,
-								_mm_setzero_si128()
-							).m128i_u32[0];
-		#else  // not Win64...uses MMX registers.
-		if( GIsSSE )
-		{
-			F32vec4 Dummy	=	_mm_mul_ps
-								(
-									_mm_loadu_ps(&Color.X)
-									,
-									_mm_load_ps1(&FLOAT_255)
-								);
-
-			Particle.Color	=	_mm_packs_pu16
-									( 
-									_mm_cvtps_pi16_EPIC
-										( 
-											_mm_max_ps
-											(
-												_mm_min_ps
-												(
-													_mm_shuffle_ps( Dummy, Dummy, _MM_SHUFFLE(3, 0, 1, 2)) //  B G R A
-													,
-													_mm_load_ps1(&FLOAT_255)
-												)
-												,
-												_mm_setzero_ps()
-											)
-										)
-										,
-									_mm_setzero_si64()
-								).m64_u32[0]; 
-			_mm_empty();
-		}
-		else
-			Particle.Color = Color;
-		#endif
-#else  // no MMX or SSE support
 		Particle.Color = Color;
-#endif
 
 		// Bounding box creation.
 		BoundingBox += Particle.Location;

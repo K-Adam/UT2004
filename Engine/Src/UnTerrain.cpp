@@ -3114,66 +3114,6 @@ public:
 				INT gv4 = gv3-1;
 	
 				INT O1, O2, O3, O4;
-#if __HAS_SSE__
-				if( GIsSSE )
-				{
-					O1 = O2 = O3 = O4 = 0;
-
-					F32vec4		dummy0, dummy1,
-								V_xxxx, V_yyyy, V_zzzz;
-					
-					dummy0 = _mm_loadl_pi( dummy0, (__m64*) &Sector->Info->Vertices(gv1).X);	// --- --- V0y V0x
-					dummy0 = _mm_loadh_pi( dummy0, (__m64*) &Sector->Info->Vertices(gv2).X);	// V1y V1x V0y V0x
-					dummy1 = _mm_loadl_pi( dummy1, (__m64*) &Sector->Info->Vertices(gv3).X);	// --- --- V2y V2x
-					dummy1 = _mm_loadh_pi( dummy1, (__m64*) &Sector->Info->Vertices(gv4).X);	// V3y V3x V2y V2x
-			
-					V_xxxx = _mm_shuffle_ps( dummy0, dummy1, _MM_SHUFFLE(2, 0, 2, 0));			// V3x V2x V1x V0x
-					V_yyyy = _mm_shuffle_ps( dummy0, dummy1, _MM_SHUFFLE(3, 1, 3, 1));			// V3y V2y V1y V0y
-
-					dummy0 = _mm_loadl_pi( dummy0, (__m64*) &Sector->Info->Vertices(gv1).Y);	// --- --- V0z V0y
-					dummy0 = _mm_loadh_pi( dummy0, (__m64*) &Sector->Info->Vertices(gv2).Y);	// V1z V1y V0z V0y
-					dummy1 = _mm_loadl_pi( dummy1, (__m64*) &Sector->Info->Vertices(gv3).Y);	// --- --- V2z V2y
-					dummy1 = _mm_loadh_pi( dummy1, (__m64*) &Sector->Info->Vertices(gv4).Y);	// V3z V3y V2z V2y
-	
-					V_zzzz = _mm_shuffle_ps( dummy0, dummy1, _MM_SHUFFLE(3, 1, 3, 1));			// V3z V2z V1z V0z
-					
-					register INT i;
-					for( i=0; i<6; i++ )
-					{
-						F32vec4		F_xxxx, F_yyyy, F_zzzz, F_wwww;
-
-						F_xxxx = _mm_load_ps1( &ProjectorInfo->FrustumPlanes[i].X );			// Fix Fix Fix Fix
-						F_yyyy = _mm_load_ps1( &ProjectorInfo->FrustumPlanes[i].Y );			// Fiy Fiy Fiy Fiy
-						F_zzzz = _mm_load_ps1( &ProjectorInfo->FrustumPlanes[i].Z );			// Fiz Fiz Fiz Fiz
-						F_wwww = _mm_load_ps1( &ProjectorInfo->FrustumPlanes[i].W );			// Fiw Fiw Fiw Fiw
-
-						// PlaneDots.
-						F32vec4 Distance	=	_mm_sub_ps
-												(
-													_mm_add_ps
-													( 
-														_mm_add_ps
-														( 
-															_mm_mul_ps( F_xxxx, V_xxxx ), 
-															_mm_mul_ps( F_yyyy, V_yyyy ) 
-														)
-														,
-														_mm_mul_ps( F_zzzz, V_zzzz )
-													)
-													,
-													F_wwww
-												);
-
-						INT Mask = move_mask( cmple( Distance, _mm_setzero_ps() ) );
-						
-						O1 |= ((Mask & 1) >> 0) << i;
-						O2 |= ((Mask & 2) >> 1) << i;
-						O3 |= ((Mask & 4) >> 2) << i;
-						O4 |= ((Mask & 8) >> 3) << i;
-					}
-				}
-				else
-#endif
 				{
 					const FVector& V1 = Sector->Info->Vertices(gv1);
 					const FVector& V2 = Sector->Info->Vertices(gv2);

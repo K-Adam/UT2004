@@ -2542,8 +2542,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	GLevel->iFirstDynamicActor = 0;
 	if( !Info->bBegunPlay )
 	{
-        appResetTimer(); // sjs
-
 		// fix up level problems
 		FixUpLevel();
 
@@ -2723,8 +2721,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	}
 	else if ( Info->bIsSaveGame )
 	{
-        appResetTimer(); // sjs
-
 		// Update draw distance.
 		if (GIsClient)
 		{

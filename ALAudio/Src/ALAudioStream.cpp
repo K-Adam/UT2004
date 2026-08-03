@@ -509,10 +509,6 @@ FALAudioStreamManager::~FALAudioStreamManager()
 }
 
 
-#if MACOSX
-extern "C" { void _ogg_set_vector_unit(int isOn); }
-#endif
-
 
 //
 //	FALAudioStreamManager::Init
@@ -523,10 +519,6 @@ void FALAudioStreamManager::Init()
 
 #if WITH_MP3
 	ASI_startup();
-#endif
-
-#if MACOSX
-   _ogg_set_vector_unit(GIsAltivec);
 #endif
 
 #if __UNIX__

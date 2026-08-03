@@ -48,7 +48,6 @@ extern __int64  TotalTime4;
 extern __int64  TotalPixels;
 extern INT 	TotalFrames;
 
-INT CycleCount();
 
 /*----------------------------------------------------------------------------
 	UFractalTexture.

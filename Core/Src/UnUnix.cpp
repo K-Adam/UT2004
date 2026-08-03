@@ -91,7 +91,6 @@ extern "C"
     typedef unsigned long OSType;
     typedef signed int OSStatus;
     typedef signed short OSErr;
-    signed int GetCPUSpeed(void);
 
     typedef signed int CFIndex;
     typedef unsigned int CFStringEncoding;
@@ -133,42 +132,7 @@ extern "C"
 
     enum
     {
-        gestaltCPU601                 = 0x0101, /* IBM 601 */
-        gestaltCPU603                 = 0x0103,
-        gestaltCPU604                 = 0x0104,
-        gestaltCPU603e                = 0x0106,
-        gestaltCPU603ev               = 0x0107,
-        gestaltCPU750                 = 0x0108, /* Also 740 - "G3" */
-        gestaltCPU604e                = 0x0109,
-        gestaltCPU604ev               = 0x010A, /* Mach 5, 250Mhz and up */
-        gestaltCPUG4                  = 0x010C, /* Max */
-        gestaltCPUG47450              = 0x0110 /* Vger , Altivec */
-    };
-
-    enum
-    {
-        gestaltNativeCPUType          = 'cput', /* processor type */
-        gestalt68000                  = 1,
-        gestalt68010                  = 2,
-        gestalt68020                  = 3,
-        gestalt68030                  = 4,
-        gestalt68040                  = 5
-    };
-
-    enum
-    {
         gestaltSystemVersion = 'sysv'
-    };
-
-    enum
-    {
-        gestaltPowerPCProcessorFeatures = 'ppcf',
-        gestaltPowerPCHasGraphicsInstructions = 0,
-        gestaltPowerPCHasSTFIWXInstruction = 1,
-        gestaltPowerPCHasSquareRootInstructions = 2,
-        gestaltPowerPCHasDCBAInstruction = 3,
-        gestaltPowerPCHasVectorInstructions = 4,
-        gestaltPowerPCHasDataStreams = 5
     };
 
     enum
@@ -1442,11 +1406,7 @@ void* appGetDllExport( void* DllHandle, const TCHAR* ProcName )
 void appDebugBreak()
 {
 	guard(appDebugBreak);
-#ifdef ASMLINUX
-	asm("int $03");
-#else
 	raise(SIGTRAP);
-#endif
 	unguard;
 }
 
@@ -1712,9 +1672,10 @@ CORE_API DOUBLE appSecondsSlow()
 
 
 #if !DEFINED_appCycles
+// Microseconds, GSecondsPerCycle is set to match in appPlatformInit.
 CORE_API DWORD appCycles()
 {
-	return (DWORD)appSeconds();
+	return (DWORD)(QWORD)(appSeconds() * 1000000.0);
 }
 #endif
 
@@ -2270,73 +2231,10 @@ FScopeCriticalSection::~FScopeCriticalSection()
 }
 
 
-static void DoCPUID( int i, DWORD *A, DWORD *B, DWORD *C, DWORD *D )
-{
-// !!! FIXME: Crashes on Hammer after ASM block!  --ryan.
-#if ((__LINUX_X86__) && (!defined __x86_64__))
-    DWORD buf[4];
-
- 	__asm__ __volatile__ (
-        // the very definition of gay: EBX is used by the caller,
-        //  who won't save it, and won't acknoledge we're clobbering it.
-        //  Do a pushall/popall, just in case.
-        #ifdef __x86_64__
-        "pushq %%rax           \n\t"
-        "pushq %%rbx           \n\t"
-        "pushq %%rcx           \n\t"
-        "pushq %%rdx           \n\t"
-        #else
-        "pushl %%eax           \n\t"
-        "pushl %%ebx           \n\t"
-        "pushl %%ecx           \n\t"
-        "pushl %%edx           \n\t"
-        #endif
-
-        "cpuid                      \n\t"
-        "movl  %%eax,  0("UREG_EDI") \n\t"
-        "movl  %%ebx,  4("UREG_EDI") \n\t"
-        "movl  %%ecx,  8("UREG_EDI") \n\t"
-        "movl  %%edx, 12("UREG_EDI") \n\t"
-
-        #ifdef __x86_64__
-        "popq  %%rdx           \n\t"
-        "popq  %%rcx           \n\t"
-        "popq  %%rbx           \n\t"
-        "popq  %%rax           \n\t"
-        #else
-        "popl  %%edx           \n\t"
-        "popl  %%ecx           \n\t"
-        "popl  %%ebx           \n\t"
-        "popl  %%eax           \n\t"
-        #endif
-
-            : /* output to memory directly. */
-            : "a" (i), "D" (buf)
-            : "memory"
-    );
-
-    *A = buf[0];
-    *B = buf[1];
-    *C = buf[2];
-    *D = buf[3];
-#else
-	*A=*B=*C=*D=0;
-#endif
-}
-
-
-typedef struct
-{
-    DWORD HighPart;
-    DWORD LowPart;
-} LARGE_INTEGER;
-
 #define DESIRED_FILE_HANDLES 1024
 void appPlatformInit()
 {
 	guard(appPlatformInit);
-
-	FLOAT CpuSpeed = 0.0f;
 
 	//printf("GRunningOS is (%d). ENGINE_VERSION is (%d).\n", (int) GRunningOS, (int) ENGINE_VERSION);
 
@@ -2354,255 +2252,23 @@ void appPlatformInit()
 
 	debugf( NAME_Init, TEXT("OS Type=%s"), GMachineOS );
 
-	guard(UnixDetectCPU);
-
-#if ASMLINUX
-	// Check processor version with CPUID.
-	try
-	{
-		TCHAR Brand[13], *Model, FeatStr[256]=TEXT("");
-		DWORD A=0, B=0, C=0, D=0;
-		DoCPUID(0,&A,&B,&C,&D);
-		Brand[ 0] = (ANSICHAR)(B);
-		Brand[ 1] = (ANSICHAR)(B>>8);
-		Brand[ 2] = (ANSICHAR)(B>>16);
-		Brand[ 3] = (ANSICHAR)(B>>24);
-		Brand[ 4] = (ANSICHAR)(D);
-		Brand[ 5] = (ANSICHAR)(D>>8);
-		Brand[ 6] = (ANSICHAR)(D>>16);
-		Brand[ 7] = (ANSICHAR)(D>>24);
-		Brand[ 8] = (ANSICHAR)(C);
-		Brand[ 9] = (ANSICHAR)(C>>8);
-		Brand[10] = (ANSICHAR)(C>>16);
-		Brand[11] = (ANSICHAR)(C>>24);
-		Brand[12] = (ANSICHAR)(0);
-		DoCPUID( 1, &A, &B, &C, &D );
-		switch( (A>>8) & 0x000f )
-		{
-			case 4:  Model=TEXT("486-class processor");        break;
-			case 5:  Model=TEXT("Pentium-class processor");    break;
-			case 6:  Model=TEXT("PentiumPro-class processor"); break;
-			case 7:  Model=TEXT("P7-class processor");         break;
-			default: Model=TEXT("Unknown processor");          break;
-		}
-		if( (D & 0x00008000) ) {appStrcat( FeatStr, TEXT(" CMov") );}
-		if( (D & 0x00000001) ) {appStrcat( FeatStr, TEXT(" FPU") );}
-		if( (D & 0x00000010) ) {appStrcat( FeatStr, TEXT(" RDTSC") );}
-		if( (D & 0x00000040) ) {appStrcat( FeatStr, TEXT(" PAE") );}
-
-        #ifdef __x86_64__  // Hammer always has these instruction sets.
-		appStrcat( FeatStr, TEXT(" MMX") );
-		appStrcat( FeatStr, TEXT(" SSE") );
-        #else
-		if( (D & 0x00800000) && !ParseParam(appCmdLine(),TEXT("NOMMX")) ) {appStrcat( FeatStr, TEXT(" MMX") ); GIsMMX=1;}
-		if( (D & 0x02000000) && !ParseParam(appCmdLine(),TEXT("NOSSE")) ) {appStrcat( FeatStr, TEXT(" SSE") ); GIsSSE=1;}
-        #endif
-
-		// Print features.
-		debugf( NAME_Init, TEXT("CPU Detected: %s (%s)"), Model, Brand );
-		debugf( NAME_Init, TEXT("CPU Features:%s"), FeatStr );
-
-		appSprintf( GMachineCPU, TEXT("%s %s"), Brand, Model ); // gam
-
-		#ifdef __x86_64__
-		GRunningCPU = CPU_AMD64;
-		#else
-		if( appStricmp( TEXT("GenuineIntel"), Brand ) == 0 )
-			GRunningCPU = CPU_INTEL;
-		else
-		if( appStricmp( TEXT("AuthenticAMD"), Brand ) == 0 )
-			GRunningCPU = CPU_AMD;
-		#endif
-	}
-	catch( ... )
-	{
-		debugf( NAME_Init, TEXT("Couldn't detect CPU: Probably 486 or non-Intel processor") );
-		appSprintf( GMachineCPU, TEXT("Unknown CPU") ); // gam
-	}
-
-#elif MACOSX
-	long cputype = 0;
-	const TCHAR *cpuname = TEXT("Unknown CPU");
-
-	OSErr err = Gestalt(gestaltNativeCPUType, &cputype);
-	if (err)
-	{
-		debugf(NAME_Init, TEXT("gestaltNativeCPUType failure: err=%d"), (int) err);
-	}
+#if MACOSX
+	guard(MacPhysicalMemory);
+	GPhysicalMemory = 0;
+	unsigned long ramsize = 0;
+	OSErr err = Gestalt(gestaltPhysicalRAMSize, (long *) &ramsize);
+	if (err != noErr)
+		debugf(NAME_Init, TEXT("gestaltPhysicalRAMSize failure: err=%d"), (int) err);
 	else
 	{
-		typedef struct
-		{
-			int gestaltID;
-			const TCHAR *namestr;
-		} PowerPC_CPU_Info;
-
-		static PowerPC_CPU_Info ppcCPUs[] =
-		{
-			// shouldn't ever be a 680x0 chip, but it's here for completeness.
-			{ gestalt68000,     TEXT("68000")                   },
-			{ gestalt68010,     TEXT("68010")                   },
-			{ gestalt68020,     TEXT("68020")                   },
-			{ gestalt68030,     TEXT("68030")                   },
-			{ gestalt68040,     TEXT("68040")                   },
-			{ gestaltCPU601,    TEXT("PowerPC 601")             },
-			{ gestaltCPU603,    TEXT("PowerPC 603")             },
-			{ gestaltCPU604,    TEXT("PowerPC 604")             },
-			{ gestaltCPU603e,   TEXT("PowerPC 603e")            },
-			{ gestaltCPU603ev,  TEXT("PowerPC 603ev")           },
-			{ gestaltCPU750,    TEXT("PowerPC 740/750/G3")      },
-			{ gestaltCPU604e,   TEXT("PowerPC 604e")            },
-			{ gestaltCPU604ev,  TEXT("PowerPC 604ev")           },
-			{ gestaltCPUG4,     TEXT("PowerPC G4")              },
-			{ gestaltCPUG47450, TEXT("PowerPC G4/Vger/Altivec") },
-			{ 0, NULL }
-		};
-
-		for (int i = 0; ppcCPUs[i].namestr != NULL; i++)
-		{
-			if (ppcCPUs[i].gestaltID == cputype)
-			{
-				cpuname = ppcCPUs[i].namestr;
-				break;
-			}
-		}
-	}
-
-	appStrcpy( GMachineCPU, cpuname );
-	debugf( NAME_Init, TEXT("CPU Type=%s"), GMachineCPU );
-
-	GIsAltivec = 0;
-
-    long cpufeature = 0;
-    err = Gestalt(gestaltPowerPCProcessorFeatures, &cpufeature);
-    if (err != noErr)
-    {
-		debugf(NAME_Init, TEXT("gestaltPowerPCProcessorFeatures failure: err=%d"), (int) err);
-    }
-    else if ((1 << gestaltPowerPCHasVectorInstructions) & cpufeature)
-    {
-	    GIsAltivec = 1;
-    }
-
-    debugf( NAME_Init, TEXT("This CPU %s Altivec support."),
-            GIsAltivec ? TEXT("has") : TEXT("does not have") );
-
-    GPhysicalMemory = 0;
-
-    unsigned long ramsize = 0;
-    err = Gestalt(gestaltPhysicalRAMSize, (long *) &ramsize);
-    if (err != noErr)
-    {
-		debugf(NAME_Init, TEXT("gestaltPhysicalRAMSize failure: err=%d"), (int) err);
-    }
-    else
-    {
-        GPhysicalMemory = (DWORD) ramsize;
+		GPhysicalMemory = (DWORD) ramsize;
 		debugf( NAME_Init, TEXT("Physical RAM: %u bytes (%d megabytes)"),
 		        (unsigned int) ramsize, (int) ((ramsize / 1024.0f) / 1024.0f) );
-    }
-
-	GRunningCPU = CPU_PPC;
-
-#else
-	#warning Need CPU detection for this platform.
-	appStrcpy( GMachineCPU, TEXT("Unknown CPU (no detection code!)") );
-	debugf( NAME_Init, TEXT("No CPU type detection on this platform.") );
-
-#endif
-
-	unguard;
-
-
-	// CPU speed.
-	guard(CheckCpuSpeed);
-
-#if ((ASMLINUX) || (MACOSX))
-	try
-	{
-		GSecondsPerCycle = 1.f;
-
-		for( INT i=0; i<3; i++ )
-		{
-			LARGE_INTEGER	StartCycles, EndCycles;
-			volatile DOUBLE	DoubleDummy = 0.0;
-			volatile INT	IntDummy	= 0;
-
-			#if  MACOSX
-			__asm__ __volatile__( "mftb %0" : "=r" (StartCycles.LowPart) );
-			__asm__ __volatile__( "mftbu %0" : "=r" (StartCycles.HighPart) );
-			#else
-			__asm__ __volatile__
-			(
-				"rdtsc"
-				: "=a" (StartCycles.LowPart), "=d" (StartCycles.HighPart)
-			);
-			#endif
-
-			struct timeval	StartMsec;
-			gettimeofday(&StartMsec, NULL);
-			struct timeval EndMsec		= StartMsec;
-
-			int diff = (((EndMsec.tv_sec - StartMsec.tv_sec) * 1000) +
-			           ((EndMsec.tv_usec - StartMsec.tv_usec) / 1000));
-			while( diff < 200 )
-			{
-				DoubleDummy += appSqrt(DoubleDummy) + 3.14;
-				IntDummy	*= ((INT) (DoubleDummy) + 555) / 13;
-				gettimeofday(&EndMsec, NULL);
-				diff = (((EndMsec.tv_sec - StartMsec.tv_sec) * 1000) +
-				       ((EndMsec.tv_usec - StartMsec.tv_usec) / 1000));
-			}
-
-			#if  MACOSX
-			__asm__ __volatile__( "mftb %0" : "=r" (EndCycles.LowPart) );
-			__asm__ __volatile__( "mftbu %0" : "=r" (EndCycles.HighPart) );
-			#else
-			__asm__ __volatile__
-			(
-				"rdtsc"
-				: "=a" (EndCycles.LowPart), "=d" (EndCycles.HighPart)
-			);
-			#endif
-
-			DOUBLE	C1	= (DOUBLE)(SQWORD)(((QWORD)StartCycles.LowPart) + ((QWORD)StartCycles.HighPart<<32));
-			DOUBLE  C2	= (DOUBLE)(SQWORD)(((QWORD)EndCycles.LowPart) + ((QWORD)EndCycles.HighPart<<32));
-
-			GSecondsPerCycle = Min( GSecondsPerCycle, 1.0 / (1000.f * ( C2 - C1 ) / (diff)) );
-		}
-
-		DOUBLE mhz = 0.0;
-		#if MACOSX
-			mhz = (DOUBLE) GetCPUSpeed();  // (Carbon function.)
-		#else
-			mhz = ((DOUBLE) 0.000001) / ((DOUBLE) GSecondsPerCycle);
-		#endif
-
-		debugf( NAME_Init, TEXT("CPU Speed=%f MHz"), (float) mhz );
-		appStrcat( GMachineCPU, *FString::Printf(TEXT(" @ %d MHz"), appRound(mhz) ) ); // gam
-	}
-	catch( ... )
-	{
-		debugf( NAME_Init, TEXT("Timestamp not supported (Possibly 486 or Cyrix processor)") );
-		appStrcat( GMachineCPU, TEXT(" Unknown clock") ); // gam
-		GSecondsPerCycle = 1;
-	}
-
-#else
-	if( !Parse(appCmdLine(),TEXT("CPUSPEED="),CpuSpeed) )
-	{
-		#warning need CPU speed detection code.
-		appErrorf( TEXT("Please specify CPUSPEED=x on cmdline.") );
-	}
-#endif
-
-	if( Parse(appCmdLine(),TEXT("CPUSPEED="),CpuSpeed) )
-	{
-		GSecondsPerCycle = 0.000001/CpuSpeed;
-		debugf( NAME_Init, TEXT("CPU Speed Overridden=%f MHz"), 0.000001 / GSecondsPerCycle );
-		appStrcat( GMachineCPU, *FString::Printf(TEXT(" @ %d MHz"), appRound(0.000001 / GSecondsPerCycle) ) ); // gam
 	}
 	unguard;
+#endif
+
+	GSecondsPerCycle = 0.000001;
 
 	struct sigaction SigAction;
 

@@ -45,12 +45,10 @@ inline	INT Unfix	(INT A)			{return A>>16;};
 	Global functions.
 -----------------------------------------------------------------------------*/
 
-#if !FAST_FTOL
 FORCEINLINE INT appTrunc( const FLOAT F )
 {
 	return (INT) F;
 }
-#endif
 
 //
 // Snap a value to the nearest grid multiple.
@@ -201,428 +199,6 @@ inline BYTE FloatToRangeByte(FLOAT A)
 }
 
 
-#if defined(__PSX2_EE__) && defined(__MWERKS__)
-
-// FASTER PS2 VU0 MATH
-
-inline float Float_Sqrt_VU0( const float x )
-{
-
-	float result;
-
-	asm volatile
-	(
-		"qmtc2		%1, vf1		\n"
-		"vsqrt		Q, vf1x		\n"
-
-		"vwaitq					\n"
-
-		"vaddq.x	vf1, vf0, Q	\n"
-
-		"qmfc2		$12, vf1	\n"	 
-		"mtc1		$12, %0		\n"
-
-		: "=&f" ( result )
-		: "r" ( x )
-		: "$12"
-	);
-
-	return( result );
-	
-//	return sqrtf( result );
-}
-
-//--------------------------------------------------------------------------------
-// 1 / a 
-inline float Float_Rcp_VU0( const float a ) 
-{
-	float result;
-	asm volatile
-	(
-		"mfc1		$12, %1			\n"
-		"qmtc2		$12, vf4		\n"
-
-		"vdiv		Q, vf0w, vf4x		# 1/a	\n"
-
-		"vwaitq						\n"
-
-		"vaddq.x	vf4, vf0, Q		\n"
-
-		"qmfc2		$12, vf4		\n"
-		"mtc1		$12, %0			\n"
-
-		: "=&f" ( result )
-		: "f" ( a )
-		: "$12"
-	);
-
-	return result;
-
-//	return ( float )( 1.0 / a );
-}
-
-//--------------------------------------------------------------------------------
-// sqrt( ( a * a ) + ( b * b ) + ( c * c ) ) 
-inline float Float_Length3_VU0( const float a, const float b, const float c ) 
-{
-	float result;
-
-	asm volatile
-	(
-		"mfc1		$12, %1		\n"
-		"mfc1		$13, %2		\n"
-		"mfc1		$14, %3		\n"
-
-		"pextlw		$12, $13, $12		#	?	?	b	a	\n"
-		"pcpyld		$12, $14, $12		#	?	c	b	a	\n"
-
-		"qmtc2		$12, vf1	\n"
-
-		"vmul.xyz	vf2, vf1, vf1		#	?	cc	bb	aa	\n"
-
-		"vaddy.x	vf2, vf2, vf2y		#	?	cc	bb	aa+bb		\n"
-		"vaddz.x	vf2, vf2, vf2z		#	?	cc	bb	aa+bb+cc	\n"
-
-		"vsqrt		Q, vf2x		\n"
-
-		"vwaitq					\n"
-	
-		"vaddq.x	vf2, vf0, Q			#	?	?	?	sqrt(aa+bb+cc)	\n"
-
-		"qmfc2		$12, vf2	\n"
-		"mtc1		$12, %0		\n"
-
-		: "=&f" ( result )
-		: "f" ( a ), "f" ( b ), "f" ( c )
-		: "$12", "$13", "$14"
-	);
-
-	return( result );
-
-//	return 
-//	( 
-//		( float )sqrtf ( ( a * a ) + ( b * b ) + ( c * c ) )
-//	);
-}
-
-//--------------------------------------------------------------------------------
-// ( ( a * a ) + ( b * b ) + ( c * c ) ) 
-/*
-inline float Float_Length3Sqrd_VU0( const float a, const float b, const float c ) 
-{
-	float result;
-
-	asm volatile
-	(
-		"mfc1		$12, %1			\n"
-		"mfc1		$13, %2			\n"
-		"mfc1		$14, %3			\n"
-
-		"pextlw		$12, $13, $12		#	?	?	b	a	\n"
-		"pcpyld		$12, $14, $12		#	?	c	b	a	\n"
-
-		"qmtc2		$12, vf1		\n"
-
-		"vmul.xyz	vf2, vf1, vf1		#	?	cc	bb	aa	\n"
-
-		"vaddy.x	vf2, vf2, vf2y		#	?	cc	bb	aa+bb		\n"
-		"vaddz.x	vf2, vf2, vf2z		#	?	cc	bb	aa+bb+cc	\n"
-
-		"qmfc2		$12, vf2		\n"
-		"mtc1		$12, %0			\n"
-
-		: "=&f" ( result )
-		: "f" ( a ), "f" ( b ), "f" ( c )
-		: "$12", "$13", "$14"
-	);
-
-	return( result );
-
-//	return ( ( a * a ) + ( b * b ) + ( c * c ) );
-}
-*/
-
-//--------------------------------------------------------------------------------
-// sqrt( ( a * a ) + ( b * b ) + ( c * c ) + ( d * d ) ) 
-inline float Float_Length4_VU0( const float a, const float b, const float c, const float d ) 
-{
-
-	float result;
-
-	__asm__ volatile
-	(
-		"mfc1		$12, %1		\n"
-		"mfc1		$13, %2		\n"
-		"mfc1		$14, %3		\n"
-		"mfc1		$15, %4		\n"
-
-		"pextlw		$12, $13, $12		#	?	?	b	a	\n"
-		"pextlw		$13, $15, $14		#	?	?	d	c	\n"
-		"pcpyld		$12, $13, $12		#	d	c	b	a	\n"
-
-		"qmtc2		$12, vf1	\n"
-
-		"vmul.xyzw	vf2, vf1, vf1		#	dd	cc	bb	aa	\n"
-
-		"vaddy.x	vf2, vf2, vf2y	\n"
-		"vaddz.x	vf2, vf2, vf2z	\n"
-		"vaddw.x	vf2, vf2, vf2w	\n"
-
-		"vsqrt		Q, vf2x			\n"
-
-		"vwaitq						\n"
-	
-		"vaddq.x	vf2, vf0, Q		\n"
-
-		"qmfc2		$12, vf2		\n"
-		"mtc1		$12, %0			\n"
-
-		: "=&f" ( result )
-		: "f" ( a ), "f" ( b ), "f" ( c ), "f" ( d )
-		: "$12", "$13", "$14", "$15"
-	);
-
-	return result;
-
-//	return sqrtf ( ( a * a ) + ( b * b ) + ( c * c ) + ( d * d ) );
-}
-
-
-//--------------------------------------------------------------------------------
-// ( a * b ) + ( c * d ) 
-inline float Float_Mac2_VU0( const float a, const float b, const float c, const float d ) 
-{
-	float result;
-	asm volatile
-	(
-		"mfc1		$10, %1		\n"
-		"mfc1		$11, %2		\n"
-		"mfc1		$12, %3		\n"
-		"mfc1		$13, %4		\n"
-
-		"pextlw		$14, $12, $10		#	?	?	c	a	\n"
-		"pextlw		$15, $13, $11		#	?	?	d	b	\n"
-
-		"qmtc2		$14, vf1	\n"
-		"qmtc2		$15, vf2	\n"
-
-		"vmul.xy		vf3, vf1, vf2		#	?	?	cd	ab	\n"
-
-		"vaddy.x		vf3, vf3, vf3		#	?	?	cd	ab+cd	\n"
-
-		"qmfc2		$12, vf3	\n"
-		"mtc1		$12, %0		\n"
-
-		: "=&f" ( result )
-		: "f" ( a ), "f" ( b ), "f" ( c ), "f" ( d )
-		: "$10", "$11", "$12", "$13", "$14", "$15"
-	);
-
-	return( result );
-	
-//	return ( ( a * b ) + ( c * d ) );
-}
-
-//--------------------------------------------------------------------------------
-// ( a * b ) + ( c * d ) + ( e * f ) 
-inline float Float_Mac3_VU0( const float a, const float b, const float c, const float d, const float e, const float f ) 
-{
-	float result;
-
-	asm volatile
-	(
-		"mfc1		$10, %1		\n"
-		"mfc1		$11, %2		\n"
-		"mfc1		$12, %3		\n"
-		"mfc1		$13, %4		\n"
-		"mfc1		$14, %5		\n"
-		"mfc1		$15, %6		\n"
-
-		"pextlw		$10, $12, $10		#	?	?	c	a	\n"
-		"pextlw		$11, $13, $11		#	?	?	d	b	\n"
-		"pcpyld		$10, $14, $10		#	?	e	c	a	\n"
-		"pcpyld		$11, $15, $11		#	?	f	d	b	\n"
-
-		"qmtc2		$10, vf1	\n"
-		"qmtc2		$11, vf2	\n"
-
-		"vmul.xyz	vf3, vf1, vf2		#	?	ef	cd	ab	\n"
-
-		"vaddy.x		vf3, vf3, vf3		#	?	ef	cd	ab+cd		\n"
-		"vaddz.x		vf3, vf3, vf3		#	?	ef	cd	ab+cd+ef	\n"
-
-		"qmfc2		$12, vf3	\n"
-		"mtc1		$12, %0		\n"
-
-		: "=&f" ( result )
-		: "f" ( a ), "f" ( b ), "f" ( c ), "f" ( d ), "f" ( e ), "f" ( f )
-		: "$10", "$11", "$12", "$13", "$14", "$15"
-	);
-
-	return( result );
-
-//	return ( ( a * b ) + ( c * d ) + ( e * f ) );
-}
-
-//--------------------------------------------------------------------------------
-// ( a * b ) + ( c * d ) + ( e * f ) + ( g * h ) 
-inline float Float_Mac4_VU0( const float a, const float b, const float c, const float d, const float e, const float f, const float g, const float h ) 
-{
-	float result;
-
-	asm volatile
-	(
-		"mfc1		$8, %1		\n"
-		"mfc1		$9, %2		\n"
-		"mfc1		$10, %3		\n"
-		"mfc1		$11, %4		\n"
-		"mfc1		$12, %5		\n"
-		"mfc1		$13, %6		\n"
-		"mfc1		$14, %7		\n"
-		"mfc1		$15, %8		\n"
-				
-		"pextlw		$8, $10, $8			#	?	?	c	a	\n"
-		"pextlw		$9,	$11, $9			#	?	?	d	b	\n"
-		"pextlw		$10, $14, $12		#	?	?	g	e	\n"
-		"pextlw		$11, $15, $13		#	?	?	h	f	\n"
-		"pcpyld		$12, $10, $8		#	g	e	c	a	\n"
-		"pcpyld		$13, $11, $9		#	h	f	d	b	\n"
-
-		"qmtc2		$12, vf1	\n"
-		"qmtc2		$13, vf2	\n"
-
-		"vmul.xyzw	vf3, vf1, vf2		#	gh	ef	cd	ab	\n"
-
-		"vaddy.x		vf3, vf3, vf3		#	gh	ef	cd	ab+cd		\n"
-		"vaddz.x		vf3, vf3, vf3		#	gh	ef	cd	ab+cd+ef	\n"
-		"vaddw.x		vf3, vf3, vf3		#	gh	ef	cd	ab+cd+ef+gh	\n"
-	
-		"qmfc2		$12, vf3	\n"
-		"mtc1		$12, %0		\n"
-	
-		: "=&f" ( result )
-		: "f" ( a ), "f" ( b ), "f" ( c ), "f" ( d ), "f" ( e ), "f" ( f ), "f" ( g ), "f" ( h )
-		: "$8", "$9", "$10", "$11", "$12", "$13", "$14", "$15"
-	);
-
-	return( result );
-	
-//	return ( ( a * b ) + ( c * d ) + ( e * f ) + ( g * h ) );
-}
-
-
-float inline Determinant2_VU0( const float a, const float b, const float c, const float d )
-{
-	return( Float_Mac2_VU0( a, d, -b, c ) );
-}
-
-float inline Determinant3_VU0( const float a1, const float a2, const float a3, 
-						const float b1, const float b2, const float b3, 
-						const float c1, const float c2, const float c3)
-{
-	return Float_Mac3_VU0( 
-		a1,	Determinant2_VU0( b2, b3, c2, c3 ),
-		-b1, Determinant2_VU0( a2, a3, c2, c3 ),
-		c1,	Determinant2_VU0( a2, a3, b2, b3 )
-	);
-}
-
-
-// Currently assumes they are 16 byte aligned vectors within the box, this is not the 
-// case and such it can not be used as is.// convert loading to mfc1 $13 %2  and transfer to qmtc2 	$12, vf1
-/*
-bool TestAABBs_VU0( FBox * pAABB1, FBox * pAABB2 )
-{
-	bool result;
-//#if __PSX2_EE__
-
-__asm__ volatile
-(
-	".set noreorder	\n"
-
-	"lqc2 vf4, 0(%1)			\n"
-	"lqc2 vf5, 16(%1)			\n"
-	"lqc2 vf6, 0(%2)			\n"
-	"lqc2 vf7, 16(%2)			\n"
-	"vsub.xyz vf9, vf5, vf6		\n"
-	"vsub.xyz vf8, vf7, vf4		\n"
-	"vnop						\n"
-	"vnop						\n"
-	"cfc2 $12, $vi17 #	mac flags	\n"
-	"cfc2 $13, $vi17 #   mac flags	\n"
-	"or $12, $12, $13			\n"
-	"andi $12, $12, 0xE0		\n"
-	"seq %0, $12, $0			\n"
-	
-	".set reorder\n"
-	
-	: "=&r" ( result )
-	: "r" ( pAABB1 ), "r" ( pAABB2 )
-	: "$12", "$13"
-);
-
-//#else // _PSX2_EE__
-
-//	result =
-//	(pAABB1->min.v[X] <= pAABB2->max.v[X]) &&
-//	(pAABB1->max.v[X] >= pAABB2->min.v[X]) &&
-//	(pAABB1->min.v[Y] <= pAABB2->max.v[Y]) &&
-//	(pAABB1->max.v[Y] >= pAABB2->min.v[Y]) &&
-//	(pAABB1->min.v[Z] <= pAABB2->max.v[Z]) &&
-//	(pAABB1->max.v[Z] >= pAABB2->min.v[Z]);
-	
-//#endif // M_ARCH_PS2
-
-	return result;
-}
-*/
-
-
-// Note vectors passed in here have to be 16 byte aligned when declared
-void inline MaxMinVector( FVector & Max, FVector & Min, const FVector * array, int arraySize )
-{
-//	ASSERT( array );
-//	ASSERT( arraySize > 1 );
-
-//	#pragma optimization_level 0
-	__asm__ volatile
-	(
-		".set noreorder		\n"
-		".set noat			\n"
-
-		"lqc2		vf4, 0(%2)			# load quad word 3rd variable passed to function into min vector	\n"
-		"lqc2		vf5, 0(%2)			# load quad word 3rd variable passed to function into max vector	\n"
-		"li			$12, 1				# load one into counter	\n"
-
-"VectorMinMax_next:	\n"
-		"beq			$12, %3, VectorMinMax_exit	# _if that is equal then break loop	\n"
-		"addiu		%2, %2, 16			# add to pointer while waiting for load			\n"
-		"lqc2		vf6, 0(%2)			# add 16 bytes to pointer and load next point	\n"
-		"vmini		vf4, vf4, vf6		# pull out min		\n"
-		"vmax		vf5, vf5, vf6		# pull out max		\n"
-		"addiu		$12, $12, 1			# increment counter in branch delay slot		\n"
-		"b			VectorMinMax_next	# start branch		\n"
-		"nop	\n"
-
-"VectorMinMax_exit:	\n"
-		"sqc2		vf4, 0(%1)			# stuff vector back into main memory Min		\n"
-		"sqc2		vf5, 0(%0)			# stuff vector back into main memory Max		\n"
-
-		".set at		\n"
-		".set reorder	\n"
-
-		:																		
-		: "r" ( &Max ), "r" ( &Min ), "r" ( array ), "r" ( arraySize )	
-		: "$12"
-	);
-//	#pragma optimization_level reset
-		// no output variables
-		// 3 input variables
-		// messed up regs 12, but 12 is a temp fnt regs and do not have to be restored by convention on the return of a calling fnt
-}
-
-
-#endif // __PSX2_EE__
 
 
 /*-----------------------------------------------------------------------------
@@ -663,46 +239,16 @@ public:
 	// Binary math operators.
 	FORCEINLINE FVector operator^( const FVector& V ) const
 	{
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-
-		FVector AlignedThis GCC_PACK(16);
-		FVector AlignedOther GCC_PACK(16);
-		FVector AlignedCross GCC_PACK(16);
-		AlignedThis = *this;
-		AlignedOther = V;
-		
-		asm volatile
-		(
-			"lqc2		vf4, 0(%1)\n"
-			"lqc2		vf5, 0(%2)\n"
-	
-			"vopmula.xyz	ACC, vf4, vf5\n"
-			"vopmsub.xyz	vf6, vf5, vf4\n"
-
-			"sqc2		vf6, 0(%0)\n"
-
-			: 
-			:  "r" ( &AlignedCross ) , "r" ( &AlignedThis ), "r" ( &AlignedOther )
-			:  "$12", "$13"
-		);
-
-		return AlignedCross;
-#else // __PSX2_EE__
 		return FVector
 		(
 			Y * V.Z - Z * V.Y,
 			Z * V.X - X * V.Z,
 			X * V.Y - Y * V.X
 		);
-#endif
 	}
 	FORCEINLINE FLOAT operator|( const FVector& V ) const
 	{
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-		return Float_Mac3_VU0( X, V.X, Y, V.Y, Z, V.Z );
-#else
 		return X*V.X + Y*V.Y + Z*V.Z;
-#endif
 	}
 	FORCEINLINE friend FVector operator*( FLOAT Scale, const FVector& V )
 	{
@@ -802,11 +348,7 @@ public:
 	}
 	FORCEINLINE FLOAT Size() const
 	{
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-			return Float_Length3_VU0( X, Y, Z );
-#else
 		return appSqrt( X*X + Y*Y + Z*Z );
-#endif
 	}
 	FORCEINLINE FLOAT SizeSquared() const
 	{
@@ -833,18 +375,6 @@ public:
 	}
 	FORCEINLINE UBOOL Normalize()
 	{
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-		float scale( Float_Length3_VU0( X, Y, Z ) );
-		if( scale >= SMALL_NUMBER )
-		{
-			scale = Float_Rcp_VU0( scale );
-			X *= scale;
-			Y *= scale;
-			Z *= scale;
-			return 1;
-		}
-		return 0;
-#else
 		FLOAT SquareSum = X*X+Y*Y+Z*Z;
 		if( SquareSum >= SMALL_NUMBER )
 		{
@@ -853,7 +383,6 @@ public:
 			return 1;
 		}
 		else return 0;
-#endif
 	}
 	FORCEINLINE FVector GetNormalized()
 	{
@@ -885,11 +414,7 @@ public:
 	}
 	FORCEINLINE FVector UnsafeNormal() const
 	{
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-		FLOAT Scale = Float_Rcp_VU0( Float_Length3_VU0( X, Y, Z ) );
-#else
 		FLOAT Scale = 1.f/appSqrt(X*X+Y*Y+Z*Z);
-#endif
 		return FVector( X*Scale, Y*Scale, Z*Scale );
 	}
 	FORCEINLINE FVector SafeNormal() const
@@ -2138,267 +1663,7 @@ inline UBOOL FVerticesEqual(const FVector& V1, const FVector& V2)
 	FVector transformation.
 -----------------------------------------------------------------------------*/
 
-//
-// Transformations in optimized assembler format.
-// An adaption of Michael Abrash' optimal transformation code.
-//
-#if ASM
-inline void ASMTransformPoint(const FCoords &Coords, const FVector &InVector, FVector &OutVector)
-{
-	// FCoords is a structure of 4 vectors: Origin, X, Y, Z
-	//				 	  x  y  z
-	// FVector	Origin;   0  4  8
-	// FVector	XAxis;   12 16 20
-	// FVector  YAxis;   24 28 32
-	// FVector  ZAxis;   36 40 44
-	//
-	//	task:	Temp = ( InVector - Coords.Origin );
-	//			Outvector.X = (Temp | Coords.XAxis);
-	//			Outvector.Y = (Temp | Coords.YAxis);
-	//			Outvector.Z = (Temp | Coords.ZAxis);
-	//
-	// About 33 cycles on a Pentium.
-	//
-	__asm
-	{
-		mov     esi,[InVector]
-		mov     edx,[Coords]     
-		mov     edi,[OutVector]
 
-		// get source
-		fld     dword ptr [esi+0]
-		fld     dword ptr [esi+4]
-		fld     dword ptr [esi+8] // z y x
-		fxch    st(2)     // xyz
-
-		// subtract origin
-		fsub    dword ptr [edx + 0]  // xyz
-		fxch    st(1)  
-		fsub	dword ptr [edx + 4]  // yxz
-		fxch    st(2)
-		fsub	dword ptr [edx + 8]  // zxy
-		fxch    st(1)        // X Z Y
-
-		// triplicate X for  transforming
-		fld     st(0)	// X X   Z Y
-        fmul    dword ptr [edx+12]     // Xx X Z Y
-        fld     st(1)   // X Xx X  Z Y 
-        fmul    dword ptr [edx+24]   // Xy Xx X  Z Y 
-		fxch    st(2)    
-		fmul    dword ptr [edx+36]  // Xz Xx Xy  Z  Y 
-		fxch    st(4)     // Y  Xx Xy  Z  Xz
-
-		fld     st(0)			// Y Y    Xx Xy Z Xz
-		fmul    dword ptr [edx+16]     
-		fld     st(1) 			// Y Yx Y    Xx Xy Z Xz
-        fmul    dword ptr [edx+28]    
-		fxch    st(2)			// Y  Yx Yy   Xx Xy Z Xz
-		fmul    dword ptr [edx+40]	 // Yz Yx Yy   Xx Xy Z Xz
-		fxch    st(1)			// Yx Yz Yy   Xx Xy Z Xz
-
-        faddp   st(3),st(0)	  // Yz Yy  XxYx   Xy Z  Xz
-        faddp   st(5),st(0)   // Yy  XxYx   Xy Z  XzYz
-        faddp   st(2),st(0)   // XxYx  XyYy Z  XzYz
-		fxch    st(2)         // Z     XyYy XxYx XzYz
-
-		fld     st(0)         //  Z  Z     XyYy XxYx XzYz
-		fmul    dword ptr [edx+20]     
-		fld     st(1)         //  Z  Zx Z  XyYy XxYx XzYz
-        fmul    dword ptr [edx+32]      
-		fxch    st(2)         //  Z  Zx Zy
-		fmul    dword ptr [edx+44]	  //  Zz Zx Zy XyYy XxYx XzYz
-		fxch    st(1)         //  Zx Zz Zy XyYy XxYx XzYz
-
-		faddp   st(4),st(0)   //  Zz Zy XyYy  XxYxZx  XzYz
-		faddp   st(4),st(0)	  //  Zy XyYy     XxYxZx  XzYzZz
-		faddp   st(1),st(0)   //  XyYyZy      XxYxZx  XzYzZz
-		fxch    st(1)		  //  Xx+Xx+Zx   Xy+Yy+Zy  Xz+Yz+Zz  
-
-		fstp    dword ptr [edi+0]       
-        fstp    dword ptr [edi+4]                               
-        fstp    dword ptr [edi+8]     
-	}
-}
-#elif ASMLINUX
-inline void ASMTransformPoint(const FCoords &Coords, const FVector &InVector, FVector &OutVector)
-{
-	__asm__ __volatile__ (
-		"# Get source.\n"
-		"flds	0("UREG_ESI");			# x\n"
-		"flds	4("UREG_ESI");			# y x\n"
-		"flds	8("UREG_ESI");			# z y x\n"
-		"fxch	%%st(2);\n"
-
-		"# Subtract origin.\n"
-		"fsubs	0(%1);\n"
-		"fxch	%%st(1);\n"
-		"fsubs	4(%1);\n"
-		"fxch	%%st(2);\n"
-		"fsubs	8(%1);\n"
-		"fxch	%%st(1);\n"
-
-		"# Triplicate X for transforming.\n"
-		"fld		%%st(0);\n"
-		"fmuls	12(%1);\n"
-		"fld		%%st(1);\n"
-		"fmuls	24(%1);\n"
-		"fxch	%%st(2);\n"
-		"fmuls	36(%1);\n"
-		"fxch	%%st(4);\n"
-		
-		"fld		%%st(0);\n"
-		"fmuls	16(%1);\n"
-		"fld		%%st(1);\n"
-		"fmuls	28(%1);\n"
-		"fxch	%%st(2);\n"
-		"fmuls	40(%1);\n"
-		"fxch	%%st(1);\n"
-
-		"faddp	%%st(0),%%st(3);\n"
-		"faddp	%%st(0),%%st(5);\n"
-		"faddp	%%st(0),%%st(2);\n"
-		"fxch	%%st(2);\n"
-		
-		"fld		%%st(0);\n"
-		"fmuls	20(%1);\n"
-		"fld		%%st(1);\n"
-		"fmuls	32(%1);\n"
-		"fxch	%%st(2);\n"
-		"fmuls	44(%1);\n"
-		"fxch	%%st(1);\n"
-		
-		"faddp	%%st(0),%%st(4);\n"
-		"faddp	%%st(0),%%st(4);\n"
-		"faddp	%%st(0),%%st(1);\n"
-		"fxch	%%st(1);\n"
-
-		"fstps	0("UREG_EDI");\n"
-		"fstps	4("UREG_EDI");\n"
-		"fstps	8("UREG_EDI");\n"
-	:
-	:	"S" (&InVector),
-		"q" (&Coords),
-		"D" (&OutVector)
-	: "memory"
-	);
-}
-#endif
-
-#if ASM
-inline void ASMTransformVector(const FCoords &Coords, const FVector &InVector, FVector &OutVector)
-{
-	__asm
-	{
-		mov     esi,[InVector]
-		mov     edx,[Coords]     
-		mov     edi,[OutVector]
-
-		// get source
-		fld     dword ptr [esi+0]
-		fld     dword ptr [esi+4]
-		fxch    st(1)
-		fld     dword ptr [esi+8] // z x y 
-		fxch    st(1)             // x z y
-
-		// triplicate X for  transforming
-		fld     st(0)	// X X   Z Y
-        fmul    dword ptr [edx+12]     // Xx X Z Y
-        fld     st(1)   // X Xx X  Z Y 
-        fmul    dword ptr [edx+24]   // Xy Xx X  Z Y 
-		fxch    st(2)    
-		fmul    dword ptr [edx+36]  // Xz Xx Xy  Z  Y 
-		fxch    st(4)     // Y  Xx Xy  Z  Xz
-
-		fld     st(0)			// Y Y    Xx Xy Z Xz
-		fmul    dword ptr [edx+16]     
-		fld     st(1) 			// Y Yx Y    Xx Xy Z Xz
-        fmul    dword ptr [edx+28]    
-		fxch    st(2)			// Y  Yx Yy   Xx Xy Z Xz
-		fmul    dword ptr [edx+40]	 // Yz Yx Yy   Xx Xy Z Xz
-		fxch    st(1)			// Yx Yz Yy   Xx Xy Z Xz
-
-        faddp   st(3),st(0)	  // Yz Yy  XxYx   Xy Z  Xz
-        faddp   st(5),st(0)   // Yy  XxYx   Xy Z  XzYz
-        faddp   st(2),st(0)   // XxYx  XyYy Z  XzYz
-		fxch    st(2)         // Z     XyYy XxYx XzYz
-
-		fld     st(0)         //  Z  Z     XyYy XxYx XzYz
-		fmul    dword ptr [edx+20]     
-		fld     st(1)         //  Z  Zx Z  XyYy XxYx XzYz
-        fmul    dword ptr [edx+32]      
-		fxch    st(2)         //  Z  Zx Zy
-		fmul    dword ptr [edx+44]	  //  Zz Zx Zy XyYy XxYx XzYz
-		fxch    st(1)         //  Zx Zz Zy XyYy XxYx XzYz
-
-		faddp   st(4),st(0)   //  Zz Zy XyYy  XxYxZx  XzYz
-		faddp   st(4),st(0)	  //  Zy XyYy     XxYxZx  XzYzZz
-		faddp   st(1),st(0)   //  XyYyZy      XxYxZx  XzYzZz
-		fxch    st(1)		  //  Xx+Xx+Zx   Xy+Yy+Zy  Xz+Yz+Zz  
-
-		fstp    dword ptr [edi+0]       
-        fstp    dword ptr [edi+4]                               
-        fstp    dword ptr [edi+8]     
-	}
-}
-#endif
-
-#if ASMLINUX
-inline void ASMTransformVector(const FCoords &Coords, const FVector &InVector, FVector &OutVector)
-{
-	asm volatile(
-		"# Get source.\n"
-		"flds	0("UREG_ESI");\n"
-		"flds	4("UREG_ESI");\n"
-		"fxch	%%st(1);\n"
-		"flds	8("UREG_ESI");\n"
-		"fxch	%%st(1);\n"
-
-		"# Triplicate X for transforming.\n"
-		"fld		%%st(0);\n"
-		"fmuls	12(%1);\n"
-		"fld		%%st(1);\n"
-		"fmuls	24(%1);\n"
-		"fxch	%%st(2);\n"
-		"fmuls	36(%1);\n"
-		"fxch	%%st(4);\n"
-
-		"fld		%%st(0);\n"
-		"fmuls	16(%1);\n"
-		"fld		%%st(1);\n"
-		"fmuls	28(%1);\n"
-		"fxch	%%st(2);\n"
-		"fmuls	40(%1);\n"
-		"fxch	%%st(1);\n"
-
-		"faddp	%%st(0),%%st(3);\n"
-		"faddp	%%st(0),%%st(5);\n"
-		"faddp	%%st(0),%%st(2);\n"
-		"fxch	%%st(2);\n"
-
-		"fld		%%st(0);\n"
-		"fmuls	20(%1);\n"
-		"fld		%%st(1);\n"
-		"fmuls	32(%1);\n"
-		"fxch	%%st(2);\n"
-		"fmuls	44(%1);\n"
-		"fxch	%%st(1);\n"
-
-		"faddp	%%st(0),%%st(4);\n"
-		"faddp	%%st(0),%%st(4);\n"
-		"faddp	%%st(0),%%st(1);\n"
-		"fxch	%%st(1);\n"
-
-		"fstps	0("UREG_EDI");\n"
-		"fstps	4("UREG_EDI");\n"
-		"fstps	8("UREG_EDI");\n"
-	:
-	: "S" (&InVector),
-	  "q" (&Coords),
-	  "D" (&OutVector)
-	: "memory"
-	);
-}
-#endif
 
 //
 // Transform a point by a coordinate system, moving
@@ -2406,18 +1671,8 @@ inline void ASMTransformVector(const FCoords &Coords, const FVector &InVector, F
 //
 inline FVector FVector::TransformPointBy( const FCoords &Coords ) const
 {
-#if ASM
-	FVector Temp;
-	ASMTransformPoint( Coords, *this, Temp);
-	return Temp;
-#elif 0 //ASMLINUX
-	static FVector Temp;
-	ASMTransformPoint( Coords, *this, Temp);
-	return Temp;
-#else
 	FVector Temp = *this - Coords.Origin;
 	return FVector(	Temp | Coords.XAxis, Temp | Coords.YAxis, Temp | Coords.ZAxis );
-#endif
 }
 
 //
@@ -2426,17 +1681,7 @@ inline FVector FVector::TransformPointBy( const FCoords &Coords ) const
 //
 inline FVector FVector::TransformVectorBy( const FCoords &Coords ) const
 {
-#if ASM
-	FVector Temp;
-	ASMTransformVector( Coords, *this, Temp);
-	return Temp;
-#elif 0 //ASMLINUX   // (apparently broken. --ryan.)
-	FVector Temp;
-	ASMTransformVector( Coords, *this, Temp);
-	return Temp;
-#else
 	return FVector(	*this | Coords.XAxis, *this | Coords.YAxis, *this | Coords.ZAxis );
-#endif
 }
 
 inline FVector FVector::TransformVectorByTranspose( const FCoords &Coords) const
@@ -3597,11 +2842,7 @@ public:
 	static FMatrix	Identity;
 
 	// Variables.
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-	FLOAT M[4][4] GCC_PACK(16);
-#else
 		FLOAT M[4][4]; 
-#endif 
 
 	// Constructors.
 
@@ -3637,52 +2878,6 @@ public:
 	{
 		FMatrix	Result;
 
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-		asm (
-		"lqc2 vf4, 0x00(%0)\n"
-		"lqc2 vf5, 0x10(%0)\n"
-		"lqc2 vf6, 0x20(%0)\n"
-		"lqc2 vf7, 0x30(%0)\n"
-
-		"lqc2 vf8, 0x00(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf8\n"
-		"vmadday.xyzw ACC, vf5, vf8\n"
-		"vmaddaz.xyzw ACC, vf6, vf8\n"
-		"vmaddw.xyzw vf8, vf7, vf8\n"
-
-		"sqc2 vf8, 0x00(%2)\n"
-
-		"lqc2 vf10, 0x10(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf10\n"
-		"vmadday.xyzw ACC, vf5, vf10\n"
-		"vmaddaz.xyzw ACC, vf6, vf10\n"
-		"vmaddw.xyzw vf10, vf7, vf10\n"
-
-		"sqc2 vf10, 0x10(%2)\n"
-
-		"lqc2 vf9, 0x20(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf9\n"
-		"vmadday.xyzw ACC, vf5, vf9\n"
-		"vmaddaz.xyzw ACC, vf6, vf9\n"
-		"vmaddw.xyzw vf9, vf7, vf9\n"
-
-		"sqc2 vf9, 0x20(%2)\n"
-
-		"lqc2 vf11, 0x30(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf11\n"
-		"vmadday.xyzw ACC, vf5, vf11\n"
-		"vmaddaz.xyzw ACC, vf6, vf11\n"
-		"vmaddw.xyzw vf11, vf7, vf11\n"
-
-		"sqc2 vf11, 0x30(%2)\n"
-
-		: : "r" (&Other.M[0][0]) , "r" (&M[0][0]), "r" (&Result.M[0][0]) : "memory");
-
-#else
 
 		Result.M[0][0] = M[0][0] * Other.M[0][0] + M[0][1] * Other.M[1][0] + M[0][2] * Other.M[2][0] + M[0][3] * Other.M[3][0];
 		Result.M[0][1] = M[0][0] * Other.M[0][1] + M[0][1] * Other.M[1][1] + M[0][2] * Other.M[2][1] + M[0][3] * Other.M[3][1];
@@ -3704,7 +2899,6 @@ public:
 		Result.M[3][2] = M[3][0] * Other.M[0][2] + M[3][1] * Other.M[1][2] + M[3][2] * Other.M[2][2] + M[3][3] * Other.M[3][2];
 		Result.M[3][3] = M[3][0] * Other.M[0][3] + M[3][1] * Other.M[1][3] + M[3][2] * Other.M[2][3] + M[3][3] * Other.M[3][3];
 
-#endif
 
 		return Result;
 	}
@@ -3712,52 +2906,6 @@ public:
 	FORCEINLINE void operator*=(FMatrix Other)
 	{
 
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-		asm (
-		"lqc2 vf4, 0x00(%0)\n"
-		"lqc2 vf5, 0x10(%0)\n"
-		"lqc2 vf6, 0x20(%0)\n"
-		"lqc2 vf7, 0x30(%0)\n"
-
-		"lqc2 vf8, 0x00(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf8\n"
-		"vmadday.xyzw ACC, vf5, vf8\n"
-		"vmaddaz.xyzw ACC, vf6, vf8\n"
-		"vmaddw.xyzw vf8, vf7, vf8\n"
-
-		"sqc2 vf8, 0x00(%1)\n"
-
-		"lqc2 vf10, 0x10(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf10\n"
-		"vmadday.xyzw ACC, vf5, vf10\n"
-		"vmaddaz.xyzw ACC, vf6, vf10\n"
-		"vmaddw.xyzw vf10, vf7, vf10\n"
-
-		"sqc2 vf10, 0x10(%1)\n"
-
-		"lqc2 vf9, 0x20(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf9\n"
-		"vmadday.xyzw ACC, vf5, vf9\n"
-		"vmaddaz.xyzw ACC, vf6, vf9\n"
-		"vmaddw.xyzw vf9, vf7, vf9\n"
-
-		"sqc2 vf9, 0x20(%1)\n"
-
-		"lqc2 vf11, 0x30(%1)\n"
-
-		"vmulax.xyzw ACC, vf4, vf11\n"
-		"vmadday.xyzw ACC, vf5, vf11\n"
-		"vmaddaz.xyzw ACC, vf6, vf11\n"
-		"vmaddw.xyzw vf11, vf7, vf11\n"
-
-		"sqc2 vf11, 0x30(%1)\n"
-
-		: : "r" (&Other.M[0][0]) , "r" (&M[0][0]) );
-
-#else //__PSX2_EE__
 
 		FMatrix Result;
 		Result.M[0][0] = M[0][0] * Other.M[0][0] + M[0][1] * Other.M[1][0] + M[0][2] * Other.M[2][0] + M[0][3] * Other.M[3][0];
@@ -3781,7 +2929,6 @@ public:
 		Result.M[3][3] = M[3][0] * Other.M[0][3] + M[3][1] * Other.M[1][3] + M[3][2] * Other.M[2][3] + M[3][3] * Other.M[3][3];
 		*this = Result;
 
-#endif //__PSX2_EE__
 	}
 
 	// Comparison operators.
@@ -3807,82 +2954,10 @@ public:
 	{
 		FPlane Result;
 
-#if ASM && !_DEBUG
-		__asm
-		{
-			// Setup.
-
-			mov esi, P
-			mov edx, [this]
-			lea edi, Result
-
-			fld dword ptr [esi + 0]		//	X
-			fmul dword ptr [edx + 0]	//	Xx
-			fld dword ptr [esi + 0]		//	X		Xx
-			fmul dword ptr [edx + 4]	//	Xy		Xx
-			fld dword ptr [esi + 0]		//	X		Xy		Xx
-			fmul dword ptr [edx + 8]	//	Xz		Xy		Xx
-			fld dword ptr [esi + 0]		//	X		Xz		Xy		Xx
-			fmul dword ptr [edx + 12]	//	Xw		Xz		Xy		Xx
-
-			fld dword ptr [esi + 4]		//	Y		Xw		Xz		Xy		Xx
-			fmul dword ptr [edx + 16]	//	Yx		Xw		Xz		Xy		Xx
-			fld dword ptr [esi + 4]		//	Y		Yx		Xw		Xz		Xy		Xx
-			fmul dword ptr [edx + 20]	//	Yy		Yx		Xw		Xz		Xy		Xx
-			fld dword ptr [esi + 4]		//	Y		Yy		Yx		Xw		Xz		Xy		Xx
-			fmul dword ptr [edx + 24]	//	Yz		Yy		Yx		Xw		Xz		Xy		Xx
-			fld dword ptr [esi + 4]		//	Y		Yz		Yy		Yx		Xw		Xz		Xy		Xx
-			fmul dword ptr [edx + 28]	//	Yw		Yz		Yy		Yx		Xw		Xz		Xy		Xx
-
-			fxch st(3)					//	Yx		Yz		Yy		Yw		Xw		Xz		Xy		Xx
-			faddp st(7), st(0)			//	Yz		Yy		Yw		Xw		Xz		Xy		XYx
-			faddp st(4), st(0)			//	Yy		Yw		Xw		XYz		Xy		XYx
-			faddp st(4), st(0)			//	Yw		Xw		XYz		XYy		XYx
-			faddp st(1), st(0)			//	XYw		XYz		XYy		XYx
-
-			fld dword ptr [esi + 8]		//	Z		XYw		XYz		XYy		XYx
-			fmul dword ptr [edx + 32]	//	Zx		XYw		XYz		XYy		XYx
-			fld dword ptr [esi + 8]		//	Z		Zx		XYw		XYz		XYy		XYx
-			fmul dword ptr [edx + 36]	//	Zy		Zx		XYw		XYz		XYy		XYx
-			fld dword ptr [esi + 8]		//	Z		Zy		Zx		XYw		XYz		XYy		XYx
-			fmul dword ptr [edx + 40]	//	Zz		Zy		Zx		XYw		XYz		XYy		XYx
-			fld dword ptr [esi + 8]		//	Z		Zz		Zy		Zx		XYw		XYz		XYy		XYx
-			fmul dword ptr [edx + 44]	//	Zw		Zz		Zy		Zx		XYw		XYz		XYy		XYx
-
-			fxch st(3)					//	Zx		Zz		Zy		Zw		XYw		XYz		XYy		XYx
-			faddp st(7), st(0)			//	Zz		Zy		Zw		XYw		XYz		XYy		XYZx
-			faddp st(4), st(0)			//	Zy		Zw		XYw		XYZz	XYy		XYZx
-			faddp st(4), st(0)			//	Zw		XYw		XYZz	XYZy	XYZx
-			faddp st(1), st(0)			//	XYZw	XYZz	XYZy	XYZx
-
-			fld dword ptr [esi + 12]	//	W		XYZw	XYZz	XYZy	XYZx
-			fmul dword ptr [edx + 48]	//	Wx		XYZw	XYZz	XYZy	XYZx
-			fld dword ptr [esi + 12]	//	W		Wx		XYZw	XYZz	XYZy	XYZx
-			fmul dword ptr [edx + 52]	//	Wy		Wx		XYZw	XYZz	XYZy	XYZx
-			fld dword ptr [esi + 12]	//	W		Wy		Wx		XYZw	XYZz	XYZy	XYZx
-			fmul dword ptr [edx + 56]	//	Wz		Wy		Wx		XYZw	XYZz	XYZy	XYZx
-			fld dword ptr [esi + 12]	//	W		Wz		Wy		Wx		XYZw	XYZz	XYZy	XYZx
-			fmul dword ptr [edx + 60]	//	Ww		Wz		Wy		Wx		XYZw	XYZz	XYZy	XYZx
-
-			fxch st(3)					//	Wx		Wz		Wy		Ww		XYZw	XYZz	XYZy	XYZx
-			faddp st(7), st(0)			//	Wz		Wy		Ww		XYZw	XYZz	XYZy	XYZWx
-			faddp st(4), st(0)			//	Wy		Ww		XYZw	XYZWz	XYZy	XYZWx
-			faddp st(4), st(0)			//	Ww		XYZw	XYZWz	XYZWy	XYZWx
-			faddp st(1), st(0)			//	XYZWw	XYZWz	XYZWy	XYZWx
-
-			fxch st(3)					//	XYZWx	XYZWz	XYZWy	XYZWw
-			fstp dword ptr [edi + 0]	//	XYZWz	XYZWy	XYZWw
-			fxch st(1)					//	XYZWy	XYZWz	XYZWw
-			fstp dword ptr [edi + 4]	//	XYZWz	XYZWw
-			fstp dword ptr [edi + 8]	//	XYZWw
-			fstp dword ptr [edi + 12]
-		}
-#else
 		Result.X = P.X * M[0][0] + P.Y * M[1][0] + P.Z * M[2][0] + P.W * M[3][0];
 		Result.Y = P.X * M[0][1] + P.Y * M[1][1] + P.Z * M[2][1] + P.W * M[3][1];
 		Result.Z = P.X * M[0][2] + P.Y * M[1][2] + P.Z * M[2][2] + P.W * M[3][2];
 		Result.W = P.X * M[0][3] + P.Y * M[1][3] + P.Z * M[2][3] + P.W * M[3][3];
-#endif
 
 		return Result;
 	}
@@ -3934,30 +3009,6 @@ public:
 
 	inline FLOAT Determinant() const
 	{
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-	    float a1,a2,a3,a4,b1,b2,b3,b4,c1,c2,c3,c4,d1,d2,d3,d4;
-
-		// Assign to individual variable names to aid selecting
-		// correct elements
-		a1 = M[0][0]; b1 = M[0][1]; 
-		c1 = M[0][2]; d1 = M[0][3];
-
-		a2 = M[1][0]; b2 = M[1][1]; 
-		c2 = M[1][2]; d2 = M[1][3];
-
-		a3 = M[2][0]; b3 = M[2][1]; 
-		c3 = M[2][2]; d3 = M[2][3];
-
-		a4 = M[3][0]; b4 = M[3][1]; 
-		c4 = M[3][2]; d4 = M[3][3];
-
-	    return Float_Mac4_VU0(
-			a1,  Determinant3_VU0( b2, b3, b4, c2, c3, c4, d2, d3, d4),
-			-b1, Determinant3_VU0( a2, a3, a4, c2, c3, c4, d2, d3, d4),
-			c1,  Determinant3_VU0( a2, a3, a4, b2, b3, b4, d2, d3, d4),
-			-d1, Determinant3_VU0( a2, a3, a4, b2, b3, b4, c2, c3, c4)
-		);
-#else //__PSX2_EE__
 		return	M[0][0] * (
 					M[1][1] * (M[2][2] * M[3][3] - M[2][3] * M[3][2]) -
 					M[2][1] * (M[1][2] * M[3][3] - M[1][3] * M[3][2]) +
@@ -3978,80 +3029,14 @@ public:
 					M[1][1] * (M[0][2] * M[2][3] - M[0][3] * M[2][2]) +
 					M[2][1] * (M[0][2] * M[1][3] - M[0][3] * M[1][2])
 					);
-#endif
 	}
 
 	// Inverse.
 
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-	void Adjoint_VU0( FMatrix & matrix )
-	{
-	    float a1, a2, a3, a4, b1, b2, b3, b4;
-	    float c1, c2, c3, c4, d1, d2, d3, d4;
-
-		// Assign to individual variable names to aid
-		// selecting correct values
-		a1 = M[0][0]; b1 = M[0][1]; 
-		c1 = M[0][2]; d1 = M[0][3];
-
-		a2 = M[1][0]; b2 = M[1][1]; 
-		c2 = M[1][2]; d2 = M[1][3];
-
-		a3 = M[2][0]; b3 = M[2][1];
-		c3 = M[2][2]; d3 = M[2][3];
-
-		a4 = M[3][0]; b4 = M[3][1]; 
-		c4 = M[3][2]; d4 = M[3][3];
-
-	    /* row column labeling reversed since we transpose rows & columns */
-	    matrix.M[0][0] =  Determinant3_VU0( b2, b3, b4, c2, c3, c4, d2, d3, d4);
-	    matrix.M[1][0] = -Determinant3_VU0( a2, a3, a4, c2, c3, c4, d2, d3, d4);
-	    matrix.M[2][0] =  Determinant3_VU0( a2, a3, a4, b2, b3, b4, d2, d3, d4);
-	    matrix.M[3][0] = -Determinant3_VU0( a2, a3, a4, b2, b3, b4, c2, c3, c4);
-	        
-	    matrix.M[0][1] = -Determinant3_VU0( b1, b3, b4, c1, c3, c4, d1, d3, d4);
-	    matrix.M[1][1] =  Determinant3_VU0( a1, a3, a4, c1, c3, c4, d1, d3, d4);
-	    matrix.M[2][1] = -Determinant3_VU0( a1, a3, a4, b1, b3, b4, d1, d3, d4);
-	    matrix.M[3][1] =  Determinant3_VU0( a1, a3, a4, b1, b3, b4, c1, c3, c4);
-	        
-	    matrix.M[0][2] =  Determinant3_VU0( b1, b2, b4, c1, c2, c4, d1, d2, d4);
-	    matrix.M[1][2] = -Determinant3_VU0( a1, a2, a4, c1, c2, c4, d1, d2, d4);
-	    matrix.M[2][2] =  Determinant3_VU0( a1, a2, a4, b1, b2, b4, d1, d2, d4);
-	    matrix.M[3][2] = -Determinant3_VU0( a1, a2, a4, b1, b2, b4, c1, c2, c4);
-	        
-	    matrix.M[0][3] = -Determinant3_VU0( b1, b2, b3, c1, c2, c3, d1, d2, d3);
-	    matrix.M[1][3] =  Determinant3_VU0( a1, a2, a3, c1, c2, c3, d1, d2, d3);
-	    matrix.M[2][3] = -Determinant3_VU0( a1, a2, a3, b1, b2, b3, d1, d2, d3);
-	    matrix.M[3][3] =  Determinant3_VU0( a1, a2, a3, b1, b2, b3, c1, c2, c3);
-	}
-#endif //PSX2_EE
 	FMatrix Inverse()
 	{
 		FMatrix Result;
 
-#if defined(__MWERKS__) && defined(__PSX2_EE__)
-		int i, j;
-	    	float det;
-	    	float rdet;
-	
-		// Calculate the adjoint tmatrix
-		Adjoint_VU0( Result );
-
-		// Calculate 4x4 determinant
-		// If the determinant is 0,
-		// the inverse is not unique.
-		det = Determinant();
-
-		if( (det < 0.0001) && (det > -0.0001) )
-			return FMatrix::Identity;
-
-		// Scale adjoint matrix to get inverse
-		rdet = Float_Rcp_VU0(det);
-
-	    	for (i=0; i<4; i++)
-	        	for(j=0; j<4; j++)
-				Result.M[i][j] = Result.M[i][j] * rdet;
-#else
 		FLOAT	Det = Determinant();
 
 		if(Det == 0.0f)
@@ -4142,7 +3127,6 @@ public:
 				M[1][0] * (M[0][1] * M[2][2] - M[0][2] * M[2][1]) +
 				M[2][0] * (M[0][1] * M[1][2] - M[0][2] * M[1][1])
 				);
-#endif
 		return Result;
 	}
 
@@ -4568,7 +3552,6 @@ inline void FQuatToFCoordsFast( FQuat& Q, FVector& P, FCoords& SpaceDest )
 	FBox::TransformBy
 */
 
-#if !defined(__MWERKS__) || !defined(__PSX2_EE__) // This function is faster in the .cpp, probably because of cache gets blown when inlined
 inline FBox FBox::TransformBy(const FMatrix& M) const
 {
 	FBox	NewBox(0);
@@ -4580,7 +3563,6 @@ inline FBox FBox::TransformBy(const FMatrix& M) const
 
 	return NewBox;
 }
-#endif
 
 /*-----------------------------------------------------------------------------
 	FPlane implementation.

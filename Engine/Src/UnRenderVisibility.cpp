@@ -15,11 +15,6 @@
 
 static DWORD	CurrentVisibilityTag = 0;
 
-//WD: added xmmintrin.h for SSE/SSE2 intrinsics
-#if __HAS_SSE__
-#include <xmmintrin.h>
-#endif
-
 static FORCEINLINE float BoxDistanceSqr( FDynamicActor* DynamicActor, FVector& Origin ) // sjs
 {
     FBox box = DynamicActor->BoundingBox;
@@ -1585,14 +1580,6 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 		for(;ActorIndex < Level->Actors.Num();ActorIndex++)
 		{
 			AActor*	Actor = Level->Actors(ActorIndex);
-#if __HAS_SSE__
-				//WD: **NOTE**: the order of prefetching is directly dependent on the data layout in EngineClasses.h (defined by Actor.uc).
-				if( GIsSSE )
-				{
-					// pull the first cache-line of Actor into cache hierarchy
-					_mm_prefetch((char*)&Actor->LightBrightness, _MM_HINT_NTA);       
-				}
-#endif
 
 			if( Actor )
 			{

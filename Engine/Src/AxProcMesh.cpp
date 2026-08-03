@@ -69,27 +69,12 @@ struct WaterRefract
     DWORD dwDiffuse;
 };
 
-#if defined(_X86) && !defined(_WIN64)
-inline static int f2i(float flt) 
-{
-	volatile int n; 
-
-	__asm 
-	{
-		fld flt
-		fistp n
-	}
-
-	return n;
-}
-#else
 inline static int f2i(float flt) 
 {
     // !!! FIXME: There's like 18 million functions that do this!
     // !!! FIXME:  Grep for "FloatToInt".  --ryan.
 	return (int) flt;
 }
-#endif
 
 WaterRefract RefractTable[512];
 bool         RefractInitialized = false;

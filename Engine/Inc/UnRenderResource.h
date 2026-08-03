@@ -82,70 +82,10 @@ public:
 	}
 	void operator+=(FColor C)
 	{
-#if ASM
-		_asm
-		{
-			mov edi, DWORD PTR [this]
-			mov edx, DWORD PTR [C]
-			mov eax, DWORD PTR [edi]
-
-			xor ecx, ecx
-			add al, dl
-			adc ecx, 0xffffffff
-			not ecx
-			or al, cl
-			mov BYTE PTR [edi], al
-			inc edi
-			shr eax, 8
-			shr edx, 8
-
-			xor ecx, ecx
-			add al, dl
-			adc ecx, 0xffffffff
-			not ecx
-			or al, cl
-			mov BYTE PTR [edi], al
-			inc edi
-			shr eax, 8
-			shr edx, 8
-
-			xor ecx, ecx
-			add al, dl
-			adc ecx, 0xffffffff
-			not ecx
-			or al, cl
-			mov BYTE PTR [edi], al
-			inc edi
-			shr eax, 8
-			shr edx, 8
-
-			xor ecx, ecx
-			add al, dl
-			adc ecx, 0xffffffff
-			not ecx
-			or al, cl
-			mov BYTE PTR [edi], al
-		}
-#elif defined(_WIN64)  // AMD engineer claims VS.NET can parallelize this.
-		DWORD temp1 = *((DWORD*) this);
-		DWORD temp2 = *((DWORD*) &C);
-		BYTE* out_ptr = (BYTE*) this;
-		*out_ptr = (BYTE) Min((INT) (temp1 & 255) + (INT) (temp2 & 255), 255);
-		temp1 >>= 8;
-		temp2 >>= 8;
-		*(out_ptr + 1) = (BYTE) Min((INT) (temp1 & 255) + (INT) (temp2 & 255), 255);
-		temp1 >>= 8;
-		temp2 >>= 8;
-		*(out_ptr + 2) = (BYTE) Min((INT) (temp1 & 255) + (INT) (temp2 & 255), 255);
-		temp1 >>= 8;
-		temp2 >>= 8;
-		*(out_ptr + 3) = (BYTE) Min((INT) (temp1 & 255) + (INT) (temp2 & 255), 255);
-#else
 		R = (BYTE) Min((INT) R + (INT) C.R,255);
 		G = (BYTE) Min((INT) G + (INT) C.G,255);
 		B = (BYTE) Min((INT) B + (INT) C.B,255);
 		A = (BYTE) Min((INT) A + (INT) C.A,255);
-#endif
 	}
 	INT Brightness() const
 	{

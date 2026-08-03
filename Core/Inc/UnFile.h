@@ -43,16 +43,7 @@ CORE_API extern DWORD GCRCTable[];
 
     static inline _WORD INTEL_ORDER16(_WORD val)
     {
-        #if MACOSX
-        register _WORD retval;
-        __asm__ volatile("lhbrx %0,0,%1"
-                : "=r" (retval)
-                : "r" (&val)
-                );
-        return retval;
-        #else
         return(INTEL_ORDER16_unsigned(val));
-        #endif
     }
 
     static inline SWORD INTEL_ORDER16(SWORD val)
@@ -64,17 +55,7 @@ CORE_API extern DWORD GCRCTable[];
 
     static inline DWORD INTEL_ORDER32(DWORD val)
     {
-        #if MACOSX
-        register DWORD retval;
-        __asm__ __volatile__ (
-            "lwbrx %0,0,%1"
-                : "=r" (retval)
-                : "r" (&val)
-        );
-        return retval;
-        #else
         return(INTEL_ORDER32_unsigned(val));
-        #endif
     }
 
     static inline INT INTEL_ORDER32(INT val)
@@ -286,7 +267,7 @@ CORE_API void VARARGS appThrowf( const TCHAR* Fmt, ... );
 // gam ---
 #if DO_CLOCK
     #define clock(Timer)   { Timer -= appCycles();}
-    #define unclock(Timer) { Timer += appCycles()-12;}
+    #define unclock(Timer) { Timer += appCycles();}
 #else
     #define clock(Timer) {}
     #define unclock(Timer) {}
@@ -297,7 +278,7 @@ CORE_API void VARARGS appThrowf( const TCHAR* Fmt, ... );
 //
 #if DO_CLOCK_SLOW
 	#define clockSlow(Timer) { if( GIsClocking ) Timer-=appCycles();}
-	#define unclockSlow(Timer) { if( GIsClocking ) Timer+=appCycles()-12;}
+	#define unclockSlow(Timer) { if( GIsClocking ) Timer+=appCycles();}
 #else
 	#define clockSlow(Timer) {}
 	#define unclockSlow(Timer) {}
@@ -363,11 +344,6 @@ CORE_API DWORD appCycles();
 CORE_API DOUBLE appSeconds();
 #endif
 
-// sjs ---
-#if !DEFINED_appResetTimer
-CORE_API void appResetTimer();
-#endif
-// --- sjs
 
 CORE_API void appSystemTime( INT& Year, INT& Month, INT& DayOfWeek, INT& Day, INT& Hour, INT& Min, INT& Sec, INT& MSec );
 CORE_API const TCHAR* appTimestamp();

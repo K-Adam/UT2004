@@ -35,19 +35,11 @@
 		    checking the pointer for null and allocating inside PostLoad, not 
 			in the ctor because that's too early, some needed things like texture 
 			dimensions aren't set yet at ctor time.
-		  - Jump to processor-specific routines by evaluating (GIsPentiumPro) 
-		    and (GIsMMX)
           - Better intelligent in-editor awareness possible. ( UBOOL GIsEditor;)
  
 =============================================================================*/
 
 #include "UnFractal.h"
-
-/* Define these to be either 0 or ASM, never 1 */
-
-#define RANDASM         ASM
-#define WETASM          0     // Crashes on some OS's post-Win2k/ XBOX..
-#define ICEASM          0     // ,,
 
 // Copy palettes rather than refer to them when colorizing Fire and Wave textures.
 #define COPYPALETTE 1 
@@ -85,26 +77,6 @@ __int64  TotalTime4;
 __int64  TotalPixels;
 INT 	TotalFrames;
 
-INT CycleCount()
-{
-#if ASM
-    INT OutCyc;
-    __asm
-   {
-        xor edx,edx
-		xor eax,eax
-        //RDTSC;     // Moves Pentium+ time stamp register to EDX:EAX
-        _emit 0x0F;
-        _emit 0x31;
-        //
-        mov OutCyc,EAX //only low-order 32-bits needed
-    }
-    return (OutCyc);
-#else
-	return 0;
-#endif
-}
-
 /*-----------------------------------------------------------------------------
 	Package implementation.
 -----------------------------------------------------------------------------*/
@@ -122,30 +94,10 @@ IMPLEMENT_PACKAGE(Fire);
 // Period of about 2^63  - tested up to about 2^37.
 
 inline BYTE SpeedRand()
-#if RANDASM
-#pragma warning (disable : 4035) // legalize implied return value EAX/AX/AL
-{
-	__asm
-    {
-		mov ecx,         SpeedRindex
-        mov edx,         SpeedRindex
-        add ecx,         4*(1+31)
-        add edx,         4*(1)
-		and ecx,         0xfc
-		and edx,         0xfc
-        mov eax,         dword ptr SpeedRandArr[ecx]
-        mov SpeedRindex, edx
-        xor dword ptr SpeedRandArr[edx], eax
-	}
-}
-
-#pragma warning (default : 4035)
-#else
 {
     SpeedRindex = (SpeedRindex + 1) & 63;
     return( SpeedRandArr[(SpeedRindex+31)& 63 ] ^= SpeedRandArr[ SpeedRindex ] );
 }
-#endif
 
 
 
@@ -198,12 +150,7 @@ void InitTables()
 
 		// Speedy random number generator: initialize & align the index.
 
-#if     RANDASM
-		//SpeedRindex = ((DWORD)(&SpeedRandArr) +0xFF ) & 0xFFFFFF00;
 		SpeedRindex=0;
-#else
-		SpeedRindex=0;
-#endif
 		StaleRindex=0;
 
 		// Now initialized;
@@ -978,84 +925,6 @@ void UFireTexture::FirePaint( INT MouseX, INT MouseY, DWORD Buttons )
 // Advance a spark stochastically using signed 8-bit speed.
 // Spark->ByteA, ByteB treated as signed (SBYTE) speed == probability of 1-pixel movement.
 
-#if ASM && 0
-inline void UFireTexture::MoveSparkXY( FSpark* Spark, SBYTE Xspeed, SBYTE Yspeed )
-{
-	__asm
-		{
-		mov ecx,SpeedRindex
-		mov esi,Spark
-
-        mov edx,ecx
-        add ecx,4*(1+31)  // Make more PPRO friendly...
-
-        add edx,4*(1)     //
-		and ecx,0xfc
-
-		xor ebx,ebx
-		and edx,0xfc
-
-		mov bl,Xspeed
-        mov eax,dword ptr SpeedRandArr[ecx]
-
-        mov SpeedRindex,edx
-        xor dword ptr SpeedRandArr[edx],eax
-		// Get one huge random number (eax)
-
-		and eax,0x007f007f
-
-		// xor ebx,ebx
-		xor ecx,ecx
-		cmp bl,0x80  // (cmp bl,128) Carry for all non-negative
-
-		adc ecx,ecx  // ECX = 1 for all positives
-		and bl,0x7f  // mask out sign
-
-		xor edx,edx
-		cmp bl,al
-
-		mov ebx, this
-		mov dl,[esi]Spark.X
-
-		sbb edi,edi   // Neg: 0/-1  => 0/-1
-		//and eax,0x7F  // prepare low 7 bits
-		mov ebx,[ebx].UMask
-
-		add edi,ecx   // Pos: 0/-1 =>  1/0 -> needs +1  -> total: 
-		xor ecx,ecx
-
-		nop
-		add edx,edi
-
-		and edx,ebx
-		xor ebx,ebx
-
-		mov [esi]Spark.X,dl
-		mov bl,Yspeed
-
-		xor edx,edx
-		cmp bl,0x80   // Carry for all non-negative.
-
-		adc ecx,ecx   // ECX = 1 for all positives
-		and bl,0x7f
-
-		cmp bl,al
-		mov ebx, this
-
-		mov dl,[esi]Spark.Y
-		sbb edi,edi   // 
-
-		add edi,ecx   // Negative: 0/-1  positive:  1/0
-		mov ebx,[ebx].VMask
-		//
-		add edx,edi
-		and edx,ebx   
-
-		mov [esi]Spark.Y,dl	
-	}
-}
-
-#else
 
 inline void UFireTexture::MoveSparkXY( FSpark* Spark, SBYTE Xspeed, SBYTE Yspeed )
 {
@@ -1081,91 +950,8 @@ inline void UFireTexture::MoveSparkXY( FSpark* Spark, SBYTE Xspeed, SBYTE Yspeed
 			Spark->Y = VMask &(Spark->Y+1);
     }
 }
-#endif
 
 
-#if ASM && 0
-
-inline void UFireTexture::MoveSpark( FSpark* Spark)
-{
-	__asm
-	{
-
-		mov ecx,SpeedRindex
-		mov esi,Spark
-
-        mov edx,ecx
-        add ecx,4*(1+31)  // Make more PPRO friendly...
-
-        add edx,4*(1)     //
-		and ecx,0xfc
-
-		xor ebx,ebx
-		and edx,0xfc
-
-		mov bl,[esi]Spark.ByteA
-        mov eax,dword ptr SpeedRandArr[ecx]
-
-		mov edi,dword ptr SpeedRandArr[edx]
-        mov SpeedRindex,edx
-
-		nop
-		xor eax,edi
-
-        mov dword ptr SpeedRandArr[edx],eax
-		and eax,0x007f007f
-
-		// xor ebx,ebx
-		xor ecx,ecx
-		cmp bl,0x80 // (cmp bl,128) Carry for all non-negative
-
-		adc ecx,ecx  // ECX = 1 for all positives
-		and bl,0x7f // mask out sign
-
-		xor edx,edx
-		cmp bl,al
-
-		mov ebx,this
-		mov dl,[esi]Spark.X
-
-		sbb edi,edi   // Neg: 0/-1  => 0/-1
-		//and eax,0x7F  // prepare low 7 bits
-		mov ebx,[ebx].UMask
-
-		add edi,ecx   // Pos: 0/-1 =>  1/0 -> needs +1  -> total: 
-		xor ecx,ecx
-		//
-		nop
-		add edx,edi
-
-		and edx,ebx
-		xor ebx,ebx
-
-		mov [esi]Spark.X,dl
-		mov bl,[esi]Spark.ByteB
-
-		xor edx,edx
-		cmp bl,0x80   // Carry for all non-negative.
-
-		adc ecx,ecx   // ECX = 1 for all positives
-		and bl,0x7f
-
-		cmp bl,al
-		mov ebx,this
-
-		mov dl,[esi]Spark.Y
-		sbb edi,edi   // 
-
-		add edi,ecx   // Negative: 0/-1  positive:  1/0
-		mov ebx,[ebx].VMask
-		//
-		add edx,edi
-		and edx,ebx   
-		mov [esi]Spark.Y,dl	
-	}
-}
-
-#else
 
 inline void UFireTexture::MoveSpark( FSpark* Spark)
 {
@@ -1191,7 +977,6 @@ inline void UFireTexture::MoveSpark( FSpark* Spark)
 			Spark->Y = VMask &(Spark->Y+1);
     }
 }
-#endif
 
 
 
@@ -2252,7 +2037,6 @@ void UWaterTexture::CalculateWater()
                   
 
 
-    /// Because of way ASM works (saved results) ASM needs only 2 wrappers.
 
     for( INT X = 3; X<(INT)Xdimension  ; X++ ) // Total Xdimension-1 cells
            {
@@ -2345,7 +2129,6 @@ void UWaterTexture::CalculateWater()
                       
 
 
-        /// cuz of way ASM works (saved results) ASM needs only 2 wrappers
 
         for( INT X = 3; X<(INT)Xdimension  ; X++ ) // total Xdimension-1 cells
                {
@@ -2422,7 +2205,6 @@ void UWaterTexture::CalculateWater()
                  
 
 
-    /// cuz of way ASM works (saved results) ASM needs only 2 wrappers
 
     for( INT X = 2; X<(INT)(Xdimension-1)  ; X++ ) // total Xdimension-1 cells
            {
@@ -2520,7 +2302,6 @@ void UWaterTexture::CalculateWater()
                       
 
 
-        /// cuz of way ASM works (saved results) ASM needs only 2 wrappers
 
         for( INT X=2; X<(INT)(Xdimension-1)  ; X++ ) // total Xdimension-1 cells
         {
@@ -2616,79 +2397,6 @@ void UWetTexture::ApplyWetTexture()
 
 	INT UMask = USize - 1;
 
-#if WETASM
-
-    for( INT v=0; v<Ydimension; v++ )
-    {
-		BYTE* LineStart =  BitMapAddr + (v << UBits);
-		BYTE* SourceStart = SourceMapAddr + (v << UBits);
-
-        __asm
-        {
-            mov     esi,LineStart
-            mov     edi,SourceStart
-
-            xor     eax,eax
-            push    ebp
-
-            mov     ecx,UMask
-			mov     ebp,Xdimension
-
-			xor     edx,edx
-            xor     ebx,ebx
-
-			mov     dl,[esi+eax] // move up DL processing - skewed pipe
-			sub     ebp,2  // last 2 texels done separately.
-
-            ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-                                     ;;
-            align 16                 ;;
-            CopyLoop:                ;;
-                                     ;;
-            add     dl,al            ;; Linestart[u]+u
-            mov     bl,[esi+eax+1]   ;; Get linestart[u+1] (= water displ.ment)
-                                     ;;
-            and     dl,cl			 ;;
-			add     bl,al			 ;;
-
-            inc     bl               ;; Linestart[u+1] + u+1
-            add     al,2			 ;;
-
-            mov     dl,[edi+edx]     ;;
-            and     bl,cl			 ;;
-
-            cmp     eax,ebp          ;;
-            mov     [esi+eax-2],dl   ;;
-
-            mov     bl,[edi+ebx]     ;;
-            mov     dl,[esi+eax]     ;; Get linestart[u] -  pixel 2
-                                     ;;
-            mov     [esi+eax-2+1],bl ;;
-            jb      CopyLoop         ;;
-                                     ;;
-            ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-            nop
-			mov     bl,[esi+eax+1]  ;; get pixel 2
-
-			add     dl,al
-			add     bl,al
-
-			inc     bl		// ebx	    	   ;;
-            and     dl,cl	// edx,ecx         ;;
-
-            pop     ebp     //
-            and     bl,cl	// ebx,ecx         ;;
-
-            mov     dl,[edi+edx]    ;; Texel
-            mov     bl,[edi+ebx]    ;; Texel
-
-            mov     [esi+eax],dl    ;; Dest
-            mov     [esi+eax+1],bl  ;; Dest
-        }
-    }
-
-#else
 
     for( INT v=0; v<Ydimension; v++ )
     {
@@ -2708,7 +2416,6 @@ void UWetTexture::ApplyWetTexture()
         }
     }
 
-#endif
 
 	unguard;
 }
@@ -2789,9 +2496,6 @@ void UIceTexture::BlitTexIce()
     INT  Xdimension   = USize;  // Wrap needed for 8-bit counters.
     INT  Ydimension   = VSize;  // 
 
-#if ICEASM
-	INT  TempUMask    = UMask;  //
-#endif
 
 	static	DWORD ESPStorage;   // Temp ESP  storage.
 	static	DWORD EBPStorage;   // Temp EBP  storage.
@@ -2806,371 +2510,6 @@ void UIceTexture::BlitTexIce()
 		BYTE* TexStart    = TexAddr    +    (v << UBits);
 		BYTE* GlassStart  = GlassAddr  +  (((v + VDisp ) & VMask) << UBits);
 
-#if ICEASM
-
-		if( GIsPentiumPro )
-		{  		
-		// Pentium PRO/II version 
-			__asm                        //
-			{                            //
-				mov     esi, LineStart   //
-				mov     edi, TexStart    //
-
-				mov     ecx, [TempUMask] //
-				mov     ebx, Xdimension  //
-				xor     eax, eax         //
-
-				mov     ebx, Xdimension  //
-				sub     ebx, UDisp       //
-
-				test    ebx, ecx 	     //  zero? - no split 
-				jz      ppNoSplit          //
-
-				cmp     ebx, 7           //  
-				ja      ppSkipFirstBit     //  Skip if not in first 8 pixels.
-
-				;; split is in first 8 pixels and Unaligned.
-
-				mov     edx, GlassStart  //
-				call    ppIceMisc8Pixelz   //
-				jmp     ppDoEndChunk       //
-
-			ppNoSplit:                     //
-				mov     ebx, Xdimension  //
-				mov     edx, GlassStart  //
-				jmp     ppDoLastChunk      //
-
-				///////////////////////////
-
-			ppSkipFirstBit:
-
-				and		ebx, 0x0FF-7;     // FF - 3     = stretch before wrapping needed
-				mov		edx, GlassStart   //
-				add		edx, UDisp        //
-				call	ppIce4Npixelz       // 
-
-				mov     ebx, UDisp        //
-				and     ebx, 7            //
-				jz      ppDoEndChunk        // No unaligned Positionment
-
-				mov		edx, GlassStart   //
-				call	ppIceMisc8Pixelz    //
-
-			ppDoEndChunk:                   // 
-				cmp		eax,Xdimension    // Any pixels left to do ? 
-				je		ppEndIceRender      //
-
-				mov     ebx, Xdimension   // Da end marker
-				mov		edx, GlassStart   //
-				add     edx, UDisp        // Need to since we're past the skip
-				sub     edx, ebx          //
-			ppDoLastChunk:
-				Call    ppIce4Npixelz       //
-				jmp     ppEndIceRender      //
-
-				;;  esi = LineStart
-				;;  edi = TexStart
-				;;  edx = GlassStart
-				;;
-				;;  eax = (8bit) proceeding/startpoint
-				;;  ebx = endpoint (compared against eax)
-				;;  ecx = UMask
-
-			align 16
-			ppIce4Npixelz:
-				mov     ESPStorage,esp    //
-				mov     EBPStorage,ebp    //
-				sub     ebx,2             // do last 2 pixels separately
-				mov     ebp,edx           //
-
-				mov     esp,ebx           //
-										  //
-				xor     edx,edx           //
-				xor     ebx,ebx           //
-				mov     dl,[ebp+ eax]    // Preload  dl  
-
-			 align 16 
-			 ppCopyLoop:
-
-				add     dl,al             ;;  Linestart[u]+u
-				mov     bl,[ebp+eax+1]    ;;  Glass
-                                      
-				and     dl,cl			  ;;
-				add     bl,al			  ;;
-                                      
-				inc     bl                ;;  Linestart[u+1] + u+1
-				add     eax,2			  ;;
-										  ;;
-				mov     dl,[edi+edx]      ;;  Texel
-				and     bl,cl			  ;;
-										  ;;
-				cmp     esp,eax           ;;  
-				mov     [esi+eax-2],dl    ;;  Store
-                                      
-				mov     bl,[edi+ebx]      ;;  Texel  // non-Positiond one WILL have Pentium-clash with Glass...
-				mov     dl,[ebp+eax]      ;;  Glass  // (_if still horizontally aligned...) but not usually..
-										  ;;
-				mov     [esi+eax-2+1],bl  ;;  Store
-				jne     ppCopyLoop          ;;
-										  ;;
-				;;;;;;;;;;;;;;;;;;;;;;;;;;;; 8 cyc/2pix...
-
-				mov     esp,ESPStorage    ;;
-				mov     bl,[ebp+eax+1]    ;; get glasspixel 2
-
-				add     dl,al             ;;
-				add     bl,al             ;;
-
-				inc     bl	              ;;
-				and     dl,cl             ;;
-
-				mov     ebp,EBPStorage    ;;
-				and     bl,cl             ;;
-
-				mov     dl,[edi+edx]      ;; Texel
-				mov     bl,[edi+ebx]      ;; Texel
-
-				mov     [esi+eax],dl      ;; Dest
-				mov     [esi+eax+1],bl    ;; Dest
-
-				add     eax,2             ;;
-				retn                      ;;
-
-				;;
-				;;  esi = LineStart
-				;;  edi = TexStart
-				;;  edx = GlassStart
-				;;
-				;;  eax = (8bit) proceeding/startpoint
-				;;  ecx = UMask
-				;;
-
-			align 16
-			ppIceMisc8Pixelz:
-				mov     ebx,[esi+eax] // First destin word - cache warming. 
-				mov     ebx,UDisp
-				push    ebp
-				mov     ESPStorage, esp
-
-				mov		ebp, eax   //
-				add     ebp, 8     // current cntr + nr of pixels to do
-
-				mov     esp, edx   // GlassStart
-				
-				add     ebx, eax
-				xor     edx, edx
-				and     ebx, ecx
-
-			align 16
-			ppCopyLp:
-				mov     dl, [esp+ebx]   ;; GlassStart [edx]
-
-				add     dl, al		    ;;
-				inc     ebx             ;;
-
-				and     dl, cl          ;;
-
-				and     ebx, ecx        ;;
-				mov     dl, [edi+edx]   ;; Texel
-
-				mov     [esi+eax], dl   ;; Destin
-				inc     eax      	    ;;
-
-				cmp     ebp, eax	    ;;
-				jne     ppCopyLp          ;;
-
-				mov		esp, ESPStorage ;;
-				nop
-				pop		ebp             ;;
-				retn
-
-			 ppEndIceRender:
-			}
-		}
-		else
-		{
-			// Regular Pentium version - using cache warming.
-			__asm                        //
-			{                            //
-				mov     esi, LineStart   //
-				mov     edi, TexStart    //
-
-				mov     ecx, [TempUMask] //
-				mov     ebx, Xdimension  //
-				xor     eax, eax         //
-
-				mov     ebx, Xdimension  //
-				sub     ebx, UDisp       //
-
-				test    ebx, ecx 	     //  zero? - no split 
-				jz      NoSplit          //
-
-				cmp     ebx, 7           //  
-				ja      SkipFirstBit     //  Skip if not in first 8 pixels.
-
-				;; split is in first 8 pixels and Unaligned.
-
-				mov     edx, GlassStart  //
-				call    IceMisc8Pixelz   //
-				jmp     DoEndChunk       //
-
-			NoSplit:                     //
-				mov     ebx, Xdimension  //
-				mov     edx, GlassStart  //
-				jmp     DoLastChunk      //
-
-				///////////////////////////
-
-			SkipFirstBit:
-
-				and		ebx, 0x0FF-7;     // FF - 3     = stretch before wrapping needed
-				mov		edx, GlassStart   //
-				add		edx, UDisp        //
-				call	Ice4Npixelz       // 
-
-				mov     ebx, UDisp        //
-				and     ebx, 7            //
-				jz      DoEndChunk        // No unaligned Positionment
-
-				mov		edx, GlassStart   //
-				call	IceMisc8Pixelz    //
-
-			DoEndChunk:                   // 
-				cmp		eax,Xdimension    // Any pixels left to do ? 
-				je		EndIceRender      //
-
-				mov     ebx, Xdimension   // Da end marker
-				mov		edx, GlassStart   //
-				add     edx, UDisp        // Need to since we're past the skip
-				sub     edx, ebx          //
-			DoLastChunk:
-				Call    Ice4Npixelz       //
-				jmp     EndIceRender      //
-
-				;;  esi = LineStart
-				;;  edi = TexStart
-				;;  edx = GlassStart
-				;;
-				;;  eax = (8bit) proceeding/startpoint
-				;;  ebx = endpoint (compared against eax)
-				;;  ecx = UMask
-
-			align 16
-			Ice4Npixelz:
-				mov     ESPStorage,esp    //
-				mov     EBPStorage,ebp    //
-				sub     ebx,2             // do last 2 pixels separately
-				mov     ebp,edx           //
-
-				mov     esp,ebx           //
-										  //
-				xor     edx,edx           //
-				xor     ebx,ebx           //
-				mov     dl,[ebp+ eax]    // Preload  dl
-
-			 align 16 
-			 CopyLoop:
-				// cache warming by loading destination to dummy (bl)
-				nop                       // xor ebx,ebx slightly faster on PII
-				mov     bl,[esi+eax+2]    // This'll prime the cache EVERY 2 bytes - wasteful..
-			
-				add     dl,al             ;;  Linestart[u]+u
-				mov     bl,[ebp+eax+1]    ;;  Glass
-                                      
-				and     dl,cl			  ;;
-				add     bl,al			  ;;
-                                      
-				inc     bl                ;;  Linestart[u+1] + u+1
-				add     eax,2			  ;;
-										  ;;
-				mov     dl,[edi+edx]      ;;  Texel
-				and     bl,cl			  ;;
-										  ;;
-				cmp     esp,eax           ;;  
-				mov     [esi+eax-2],dl    ;;  Store
-                                      
-				mov     bl,[edi+ebx]      ;;  Texel  // non-Positiond one WILL have Pentium-clash with Glass...
-				mov     dl,[ebp+eax]      ;;  Glass  // (_if still horizontally aligned...) but not usually..
-										  ;;
-				mov     [esi+eax-2+1],bl  ;;  Store
-				jne     CopyLoop          ;;
-										  ;;
-				;;;;;;;;;;;;;;;;;;;;;;;;;;;; 8 cyc/2pix...
-
-				mov     esp,ESPStorage    ;;
-				mov     bl,[ebp+eax+1]    ;; get glasspixel 2
-
-				add     dl,al             ;;
-				add     bl,al             ;;
-
-				inc     bl	              ;;
-				and     dl,cl             ;;
-
-				mov     ebp,EBPStorage    ;;
-				and     bl,cl             ;;
-
-				mov     dl,[edi+edx]      ;; Texel
-				mov     bl,[edi+ebx]      ;; Texel
-
-				mov     [esi+eax],dl      ;; Dest
-				mov     [esi+eax+1],bl    ;; Dest
-
-				add     eax,2             ;;
-				retn                      ;;
-
-				;;
-				;;  esi = LineStart
-				;;  edi = TexStart
-				;;  edx = GlassStart
-				;;
-				;;  eax = (8bit) proceeding/startpoint
-				;;  ecx = UMask
-				;;
-
-			align 16
-			IceMisc8Pixelz:
-				mov     ebx,[esi+eax] // First destin word - cache warming. 
-				mov     ebx,UDisp
-				push    ebp
-				mov     ESPStorage, esp
-
-				mov		ebp, eax   //
-				add     ebp, 8     // current cntr + nr of pixels to do
-
-				mov     esp, edx   // GlassStart
-				
-				add     ebx, eax
-				xor     edx, edx
-				and     ebx, ecx
-
-			align 16
-			CopyLp:
-				mov     dl, [esp+ebx]   ;; GlassStart [edx]
-
-				add     dl, al		    ;;
-				inc     ebx             ;;
-
-				and     dl, cl          ;;
-
-				and     ebx, ecx        ;;
-				mov     dl, [edi+edx]   ;; Texel
-
-				mov     [esi+eax], dl   ;; Destin
-				inc     eax      	    ;;
-
-				cmp     ebp, eax	    ;;
-				jne     CopyLp          ;;
-
-				mov		esp, ESPStorage ;;
-				nop
-				pop		ebp             ;;
-				retn
-
-			 EndIceRender:
-			}
-		}
-
-#else
 		for( INT u=0; u<Xdimension; u+=2 )
         {
 			// Coolish effect combining half warped, half original.
@@ -3182,7 +2521,6 @@ void UIceTexture::BlitTexIce()
 			LineStart[u]  =  TexStart[( u +  GlassStart[(u +UDisp) & UMask]) & UMask ] ;
 			LineStart[u2] =  TexStart[( u2 + GlassStart[(u2+UDisp) & UMask]) & UMask ] ;
         }
-#endif
 
 	}
 	unguard;
@@ -3215,9 +2553,6 @@ void UIceTexture::BlitIceTex()
     INT  Xdimension   = USize;  // Wrap needed for 8-bit counters.
     INT  Ydimension   = VSize;  //
 
-#if ICEASM
-	INT  TempUMask    = UMask;
-#endif
 
 	static	DWORD ESPStorage;   // Temp ESP storage
 	static	DWORD EBPStorage;   // Temp EBP storage
@@ -3232,169 +2567,6 @@ void UIceTexture::BlitIceTex()
 		BYTE* TexStart    = TexAddr    + (((v + VDisp) & VMask) << UBits);
 		BYTE* GlassStart  = GlassAddr  +    ( v << UBits );
 
-#if ICEASM
-
-		// PPro-optimized version (no cache warming)
-		if( GIsPentiumPro )
-		{  		
-			__asm                         
-			{                             
-				mov     esi, LineStart    //
-				mov     edi, TexStart     //
-
-				mov     ecx, [TempUMask]  //
-
-				mov     ebx, Xdimension   //
-				mov     edx, GlassStart   //
-
-				mov     eax, UDisp        //
-
-				add		ebx,eax           //  compensate for source-texture X-bias
-				sub     edx,eax           //
-				sub     esi,eax           //
-
-			//Ice4Npixelz:
-
-				mov     ESPStorage,esp    //
-				mov     EBPStorage,ebp    //
-
-				sub     ebx,2             //  Do last 2 pixels separately
-				mov     ebp,edx           //
-				mov     esp,ebx           //
-
-				xor     edx,edx           //
-				xor     ebx,ebx           //
-
-				mov     dl,[ebp+eax]      //  Preload  dl
-
-			 align 16
-			 CopyLoop: 
-				add     dl,al             //  Linestart[u]+u
-				mov     bl,[ebp+eax+1]    //  Glass
-										  //
-				and     dl,cl			  //  wrap using mask
-				add     bl,al			  //
-										  //
-				inc     bl                //  Linestart[u+1] + u+1
-				add     eax,2			  //  // AL not changed itself so no stall
-										  //
-				mov     dl,[edi+edx]      //  Texel
-				and     bl,cl			  //  wrap using mask
-										  //
-				cmp     esp,eax           //
-				mov     [esi+eax-2],dl    //  Store
-										  //
-				mov     bl,[edi+ebx]      //  Texel
-				mov     dl,[ebp+eax]      //  Glass
-										  //
-				mov     [esi+eax-2+1],bl  //  Store
-				jne     CopyLoop          //
-										  //
-				////////////////////////////
-
-				mov     esp,ESPStorage    //
-				mov     bl,[ebp+eax+1]    // get glasspixel 2
-
-				add     dl,al             //
-				add     bl,al             //
-
-				inc     bl	              // ebx	    
-				and     dl,cl             // edx,ecx 
-
-				mov     ebp,EBPStorage
-				and     bl,cl             // ebx,ecx 
-
-				mov     dl,[edi+edx]      // Texel
-				mov     bl,[edi+ebx]      // Texel
-
-				mov     [esi+eax],dl      // Dest
-				mov     [esi+eax+1],bl    // Dest
-
-			}
-		}		
-		else
-
-		// Pentium / Pentium MMX optimized version (WITH cache warming)
-		{
-			__asm                         
-			{                             
-				mov     esi, LineStart    //
-				mov     edi, TexStart     //
-
-				mov     ecx, [TempUMask]  //
-
-				mov     ebx, Xdimension   //
-				mov     edx, GlassStart   //
-
-				mov     eax, UDisp        //
-
-				add		ebx,eax           //  compensate for source-texture X-bias
-				sub     edx,eax           //
-				sub     esi,eax           //
-
-			//Ice4Npixelz:
-
-				mov     ESPStorage,esp    //
-				mov     EBPStorage,ebp    //
-
-				sub     ebx,2             //  Do last 2 pixels separately
-				mov     ebp,edx           //
-				mov     esp,ebx           //
-
-				xor     edx,edx           //
-				xor     ebx,ebx           //
-
-				mov     dl,[ebp+eax]      //  Preload  dl
-
-			 align 16
-    		 CopyLoop2: 
-
-				nop				 		  //  
-				mov     bl,[esi+eax-2]    //  cache-warming load - per word..
-
-				add     dl,al             //  Linestart[u]+u
-				mov     bl,[ebp+eax+1]    //  Glass
-										  //
-				and     dl,cl			  //
-				add     bl,al			  //
-										  //
-				inc     bl                //  Linestart[u+1] + u+1
-				add     eax,2			  //  // AL not changed itself so no stall
-										  //
-				mov     dl,[edi+edx]      //  Texel
-				and     bl,cl			  //
-										  //
-				cmp     esp,eax           //
-				mov     [esi+eax-2],dl    //  Store
-										  //
-				mov     bl,[edi+ebx]      //  Texel
-				mov     dl,[ebp+eax]      //  Glass
-										  //
-				mov     [esi+eax-2+1],bl  //  Store
-				jne     CopyLoop2         //
-										  //
-				////////////////////////////
-
-				mov     esp,ESPStorage    //
-				mov     bl,[ebp+eax+1]    // get glasspixel 2
-
-				add     dl,al             //
-				add     bl,al             //
-
-				inc     bl				  //
-				and     dl,cl			  //
-
-				mov     ebp,EBPStorage    //
-				and     bl,cl		      //
-
-				mov     dl,[edi+edx]      // Texel
-				mov     bl,[edi+ebx]      // Texel
-
-				mov     [esi+eax],dl      // Dest
-				mov     [esi+eax+1],bl    // Dest
-			}
-		}
-#else
 		for( INT u=0; u<Xdimension; u+=2 )
         {
 			// Coolish effect combining half warped, half original.
@@ -3405,7 +2577,6 @@ void UIceTexture::BlitIceTex()
 			LineStart[u]  =  TexStart[(  u + UDisp + GlassStart[ u]) & UMask ] ;
 			LineStart[u2] =  TexStart[( u2 + UDisp + GlassStart[u2]) & UMask ] ;
         }
-#endif
 
 	}
 
@@ -4834,7 +4005,6 @@ void UFluidTexture::CalculateFluid()
                   
 
 
-    /// Because of way ASM works (saved results) ASM needs only 2 wrappers.
 
     for( INT X = 3; X<(INT)Xdimension  ; X++ ) // Total Xdimension-1 cells
            {
@@ -4927,7 +4097,6 @@ void UFluidTexture::CalculateFluid()
                       
 
 
-        /// cuz of way ASM works (saved results) ASM needs only 2 wrappers
 
         for( INT X = 3; X<(INT)Xdimension  ; X++ ) // total Xdimension-1 cells
                {
@@ -5004,7 +4173,6 @@ void UFluidTexture::CalculateFluid()
                  
 
 
-    /// cuz of way ASM works (saved results) ASM needs only 2 wrappers
 
     for( INT X = 2; X<(INT)(Xdimension-1)  ; X++ ) // total Xdimension-1 cells
            {
@@ -5102,7 +4270,6 @@ void UFluidTexture::CalculateFluid()
                       
 
 
-        /// cuz of way ASM works (saved results) ASM needs only 2 wrappers
 
         for( INT X=2; X<(INT)(Xdimension-1)  ; X++ ) // total Xdimension-1 cells
         {

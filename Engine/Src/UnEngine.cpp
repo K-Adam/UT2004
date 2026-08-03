@@ -699,8 +699,6 @@ INT UServerCommandlet::Main( const TCHAR* Parms )
 	if( GConfig->GetString( TEXT("Engine.Engine"), TEXT("Language"), Temp, ARRAY_COUNT(Temp) ) )
 	UObject::SetLanguage( Temp );
 
-	appResetTimer(); // sjs
-
 	// Create the editor class.
 	UClass* EngineClass = UObject::StaticLoadClass( UEngine::StaticClass(), NULL, TEXT("ini:Engine.Engine.GameEngine"), NULL, LOAD_NoFail, NULL );
 	UEngine* Engine = ConstructObject<UEngine>( EngineClass );

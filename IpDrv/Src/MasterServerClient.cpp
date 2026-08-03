@@ -482,10 +482,11 @@ public:
 					FString Language = UObject::GetLanguage();
 					*ArSend << CDKeyHash << Response << ClientType << Version << Platform << Language;
 					
-					INT		CPUSpeed	= appRound(0.00000001 / GSecondsPerCycle), // in 100 MHz
+					// The protocol still carries CPU speed and type, the engine no longer detects them.
+					INT		CPUSpeed	= 0,
 							GPUDeviceID	= GGPUDeviceID,
 							GPUVendorID	= GGPUVendorID;
-					BYTE	CPUType		= GRunningCPU;
+					BYTE	CPUType		= 255;
 					*ArSend << GPUDeviceID << GPUVendorID << CPUSpeed << CPUType;
 
 					ArSend->Flush();

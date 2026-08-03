@@ -590,11 +590,6 @@ void CalcForceAtPoint( ForceData* forces, int numForces, FVector& pt, FVector& a
     }
 }
 
-// !!! FIXME: rcg06022002 Need this header anymore on any platform?
-#if (!defined __GNUC__)
-#include <xmmintrin.h>
-#endif
-
 void ParticleIterator::Update( AxEmitter* pEmitter )
 {
 	guard(ParticleIterator::Update);
