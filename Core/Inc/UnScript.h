@@ -71,11 +71,7 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 // gam ---
 #define P_GET_TARRAY_REF(var,type)    TArray<type> var##T; GPropAddr=0;    Stack.Step( Stack.Object, &var##T ); if( GPropObject )GPropObject->NetDirty(GProperty); TArray<type>* var = GPropAddr ? (TArray<type>*)GPropAddr:&var##T;
 // --- gam
-#if __PSX2_EE__ || __GCN__
-#define P_GET_SKIP_OFFSET(var)        _WORD var; {checkSlow(*Stack.Code==EX_Skip); Stack.Code++; appMemcpy(&var, Stack.Code, sizeof(_WORD)); Stack.Code+=2; }
-#else
 #define P_GET_SKIP_OFFSET(var)        _WORD var; {checkSlow(*Stack.Code==EX_Skip); Stack.Code++; var=*(_WORD*)Stack.Code; Stack.Code+=2; }
-#endif
 //DEBUGGER
 #define P_FINISH                      Stack.Code++; if ( *Stack.Code == EX_DebugInfo ) Stack.Step( Stack.Object, NULL );
 
@@ -133,11 +129,7 @@ FORCEINLINE void FFrame::Step( UObject* Context, RESULT_DECL )
 inline INT FFrame::ReadInt()
 {
 	INT Result;
-#if __PSX2_EE__ || __GCN__
-	appMemcpy(&Result, Code, sizeof(INT));
-#else
 	Result = *(INT*)Code;
-#endif
 	Code += sizeof(INT);
 	return Result;
 }
@@ -150,11 +142,7 @@ inline UObject* FFrame::ReadObject()
 	check(idx < GTotalSerializedPointers);
 	Result = (UObject*) GSerializedPointers[idx];
 #else
-  #if __PSX2_EE__ || __GCN__
-	appMemcpy(&Result, Code, sizeof(INT));
-  #else
 	Result = *(UObject**)Code;
-  #endif
 #endif
 
 	Code += sizeof(INT);
@@ -163,35 +151,21 @@ inline UObject* FFrame::ReadObject()
 inline FLOAT FFrame::ReadFloat()
 {
 	FLOAT Result;
-#if __PSX2_EE__ || __GCN__
-	appMemcpy(&Result, Code, sizeof(FLOAT));
-#else
 	Result = *(FLOAT*)Code;
-#endif
 	Code += sizeof(FLOAT);
 	return Result;
 }
 inline INT FFrame::ReadWord()
 {
 	INT Result;
-#if __PSX2_EE__ || __GCN__
-	_WORD Temporary;
-	appMemcpy(&Temporary, Code, sizeof(_WORD));
-	Result = Temporary;
-#else
 	Result = *(_WORD*)Code;
-#endif
 	Code += sizeof(_WORD);
 	return Result;
 }
 inline FName FFrame::ReadName()
 {
 	FName Result;
-#if __PSX2_EE__ || __GCN__
-	appMemcpy(&Result, Code, sizeof(FName));
-#else
 	Result = *(FName*)Code;
-#endif
 	Code += sizeof(FName);
 	return Result;
 }

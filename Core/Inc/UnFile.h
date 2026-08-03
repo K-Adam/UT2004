@@ -157,7 +157,7 @@ CORE_API FString appClipboardPaste();
 //
 
 #if ((_DEBUG) && (!DO_PORTABLE_GUARD_BLOCKS)) || !DO_GUARD
-  #if __PSX2_EE__ || __GCN__ || __UNIX__
+  #if __UNIX__
     #define guard(func)			{
   #else
     #define guard(func)			{static const TCHAR __FUNC_NAME__[]=TEXT(#func);
@@ -310,8 +310,6 @@ CORE_API void LocalizeBig( const TCHAR* Section, const TCHAR* Key, const TCHAR* 
 	CORE_API const TCHAR* LocalizeQuery( const ANSICHAR* Key, const TCHAR* Package, const TCHAR* LangExt=NULL );
 	CORE_API const TCHAR* LocalizeGeneral( const ANSICHAR* Key, const TCHAR* Package, const TCHAR* LangExt=NULL );
 #endif
-
-CORE_API UBOOL appIsOnConsole(); // gam
 
 /*-----------------------------------------------------------------------------
 	File functions.

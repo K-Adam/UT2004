@@ -1820,15 +1820,6 @@ void AActor::PostLoad()
 	if( Brush && Brush->Polys )
 		Brush->Polys->SetFlags( RF_Transactional );
 
-#ifdef __PSX2_EE__
-	if (StaticMesh && StaticMeshInstance)
-	{
-		extern void PreCachePS2StaticMeshLighting(UStaticMesh*, UStaticMeshInstance*);
-		PreCachePS2StaticMeshLighting(StaticMesh, StaticMeshInstance);
-		// you always have 1 which is the root or base collision primitive
-	}
-#endif
-
 	// check for empty Attached entries
 	for ( INT i=0; i<Attached.Num(); i++ )
 		if ( (Attached(i) == NULL) || (Attached(i)->Base != this) || Attached(i)->bDeleteMe )

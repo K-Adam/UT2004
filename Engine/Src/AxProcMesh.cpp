@@ -962,10 +962,6 @@ void AxProcMesh::Render(FLevelSceneNode* SceneNode,TList<class FDynamicLight*>* 
 			//RI->SetMaterial(pMat);
 			if(Section.NumPrimitives > 0)
 			{
-			#ifdef __PSX2_EE__
-				extern void PSX2Render_RenderStaticMesh(UStaticMesh* StaticMesh, UStaticMeshInstance* Instance, INT SectionIndex);
-				PSX2Render_RenderStaticMesh(StaticMesh, (Section.PolyFlags & PF_Unlit) ? NULL : Owner->Actor->StaticMeshInstance, SectionIndex);
-			#else
 				RI->DrawPrimitive(
 					Section.IsStrip ? PT_TriangleStrip : PT_TriangleList,
 					Section.FirstIndex,
@@ -973,7 +969,6 @@ void AxProcMesh::Render(FLevelSceneNode* SceneNode,TList<class FDynamicLight*>* 
 					Section.MinVertexIndex,
 					Section.MaxVertexIndex
 					);
-			#endif
 			}
 		}
 	}

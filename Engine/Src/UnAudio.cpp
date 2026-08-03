@@ -918,7 +918,7 @@ void FSoundData::Load()
 	TLazyArray<BYTE>::Load();
 	unguard;
 
-	if( Loaded && (Owner->FileType != FName(TEXT("PS2"))) )
+	if( Loaded )
 	{
 		// Calculate our duration.
 		guard(1);
@@ -989,12 +989,6 @@ void FSoundData::Load()
 
 		// Register it.
 		Owner->OriginalSize = Num();
-	} 
-	else if ( Loaded && (Owner->FileType == FName(TEXT("PS2"))) ) 
-	{
-		// Register it.
-		Owner->Duration = GetPeriod();
-		Owner->OriginalSize = Num();
 	}
 	unguard;
 }
@@ -1002,27 +996,18 @@ void FSoundData::Load()
 FLOAT FSoundData::GetPeriod()
 {
 	FLOAT Period = 0.f;
-	if( Owner->FileType != FName(TEXT("PS2")) )
+
+	// Ensure the data is present.
+	TLazyArray<BYTE>::Load();
+
+	// Calculate the sound's duration.
+	FWaveModInfo WaveInfo;
+	if( WaveInfo.ReadWaveInfo(*this) )
 	{
-		// Ensure the data is present.
-		TLazyArray<BYTE>::Load();
-
-		// Calculate the sound's duration.
-		FWaveModInfo WaveInfo;
-		if( WaveInfo.ReadWaveInfo(*this) )
-		{
-			#define DEFAULT_FREQUENCY (22050)
-			INT DurDiv =  *WaveInfo.pChannels * *WaveInfo.pBitsPerSample  * *WaveInfo.pSamplesPerSec;  
-			if ( DurDiv ) Period = *WaveInfo.pWaveDataSize * 8.f / (FLOAT)DurDiv;
-		}	
-		return Period;
-	} else {
-		// Ensure the data is present.
-		TLazyArray<BYTE>::Load();
-
-		// Get the period from the header.
-		appMemcpy( &Period, ((BYTE*) Data) + sizeof(INT), sizeof(FLOAT) );
-	}
+		#define DEFAULT_FREQUENCY (22050)
+		INT DurDiv =  *WaveInfo.pChannels * *WaveInfo.pBitsPerSample  * *WaveInfo.pSamplesPerSec;  
+		if ( DurDiv ) Period = *WaveInfo.pWaveDataSize * 8.f / (FLOAT)DurDiv;
+	}	
 	return Period;
 }
 // gam ---
@@ -1187,146 +1172,6 @@ FLOAT USound::GetVelocityScale() // gam
 }
 
 UAudioSubsystem* USound::Audio = NULL;
-void USound::PS2Convert()
-{
-	guard(USound::PS2Convert);
-
-	#if HAVE_VAG
-
-	/*
-	 * Convert a standard wave sound to PS2 format.
-	 *
-	 * 3 Steps:
-	 * - Promote 8 bit sounds to 16 bit for ADPCM compression.
-	 * - Perform VAG conversion.
-	 */
-
-	Data.Load();
-
-	FWaveModInfo WavData;
-	WavData.ReadWaveInfo( Data );
-
-	// Check loop.
-	INT SoundLoops = WavData.SampleLoopsNum;
-
-	// GWarn->Logf( TEXT("Sound: %s Size: %i Depth: %i Rate: %i"), GetPathName(), WavData.SampleDataSize, *WavData.pBitsPerSample, *WavData.pSamplesPerSec );
-	// Copy the sample data into a working buffer.
-	// Convert 8 bit samples to 16 bit data as we go.
-	TArray<BYTE> WorkData;
-
-	INT NewDataSize = WavData.SampleDataSize;
-	INT SoundRate = *WavData.pSamplesPerSec;
-
-	FLOAT Period = 0.f;
-	INT DurDiv =  *WavData.pChannels * *WavData.pBitsPerSample * *WavData.pSamplesPerSec;  
-	if ( DurDiv )
-		Period = *WavData.pWaveDataSize * 8.f / (FLOAT) DurDiv;
-
-	guard(Promote8to16);
-	if (*WavData.pBitsPerSample == 8)
-	{
-		WorkData.Add( NewDataSize*2 );
-		for (INT i=0; i<NewDataSize; i++)
-		{
-			WorkData(i*2)	= 0;
-			WorkData(i*2+1)	= WavData.SampleDataStart[i] + 128;
-		}
-	} else {
-		WorkData.Add( NewDataSize );
-		for (INT i=0; i<NewDataSize; i++)
-			WorkData(i) = WavData.SampleDataStart[i];
-	}
-	unguard;
-
-	EncVagInit( ENC_VAG_MODE_NORMAL );
-
-	INT WorkSamples = WorkData.Num() / 2;
-	INT NeededBlocks = WorkSamples / 28;
-	if (WorkSamples % 28 != 0)
-		NeededBlocks++;
-
-	// Prepare output data.
-	Data.Empty();
-
-	// Add custom PS2 header.
-	guard(CustomHeader);
-	Data.Add( 16 );
-	appMemcpy( &Data(0), &SoundRate, sizeof(INT) );
-	appMemcpy( &Data(4), &Period, sizeof(FLOAT) );
-	appMemcpy( &Data(8), &SoundLoops, sizeof(INT) );
-	INT Pad=0;
-	appMemcpy( &Data(12), &Pad, sizeof(INT) );
-	unguard;
-
-	// Encode one VAG block per every 28 samples.
-	guard(EncodeVAGBlocks);
-	INT ByteCount = 0;
-	for (INT i=0; i<NeededBlocks; i++)
-	{
-		TArray<BYTE> WorkBlock;
-		WorkBlock.Add( 28*2 ); // Add 28 samples worth of room.
-		for (INT j=0; j<28*2; j++)
-		{
-			if (ByteCount < WorkData.Num())
-				WorkBlock(j) = WorkData(ByteCount++);
-			else
-				WorkBlock(j) = 0; // Pad with zero.
-		}
-		INT BlockAttribute;
-		if (SoundLoops)
-		{
-			if (i == 0)
-				BlockAttribute = ENC_VAG_LOOP_START;
-			else if (i+1 == NeededBlocks)
-				BlockAttribute = ENC_VAG_LOOP_END;
-			else
-				BlockAttribute = ENC_VAG_LOOP_BODY;
-		} else {
-			if (i+1 == NeededBlocks)
-				BlockAttribute = ENC_VAG_1_SHOT_END;
-			else
-				BlockAttribute = ENC_VAG_1_SHOT;
-		}
-
-		TArray<BYTE> EncodedBlock;
-		EncodedBlock.Add( 16 );
-		EncVag( (short*) &WorkBlock(0), (short*) &EncodedBlock(0), BlockAttribute );
-
-		INT StartPosition = Data.Num();
-		Data.Add( 16 );
-		for (j=0; j<16; j++)
-			Data(StartPosition+j) = EncodedBlock(j);
-	}
-	unguard;
-
-	// Finish off the one shot conversion.
-	if (SoundLoops == 0)
-	{
-		guard(FinishOneShot);
-		INT StartPosition = Data.Num();
-		Data.Add( 16 );
-		EncVagFin( (short*) &Data(StartPosition) );
-		unguard;
-	}
-
-	// Set the file type.
-	FileType = FName( TEXT("PS2") );
-
-	/*
-	for (INT i=0; i<Data.Num()/16; i++)
-	{
-		GWarn->Logf( TEXT("%02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x"),
-			Data(0 + i*16),  Data(1 + i*16),  Data(2 + i*16),  Data(3 + i*16),
-			Data(4 + i*16),  Data(5 + i*16),  Data(6 + i*16),  Data(7 + i*16),
-			Data(8 + i*16),  Data(9 + i*16),  Data(10 + i*16), Data(11 + i*16),
-			Data(12 + i*16), Data(13 + i*16), Data(14 + i*16), Data(15 + i*16) );
-	}
-	*/
-
-	#endif
-
-	unguard;
-}
 IMPLEMENT_CLASS(USound);
 
 // WARNING: HACKS AHEAD!
@@ -1464,11 +1309,6 @@ void UProceduralSound::SetDuration(FLOAT Duration)
 	guard(UProceduralSound::SetDuration);
     if (IsValid())
         BaseSound->SetDuration (Duration);
-	unguard;
-}
-void UProceduralSound::PS2Convert()
-{
-	guard(UProceduralSound::PS2Convert);
 	unguard;
 }
 void UProceduralSound::Load()
@@ -1759,11 +1599,6 @@ void USoundGroup::SetDuration(FLOAT Duration)
     RenderedSound->SetDuration (Duration);
 	unguard;
 }
-void USoundGroup::PS2Convert()
-{
-	guard(USoundGroup::PS2Convert);
-	unguard;
-}
 
 void USoundGroup::Serialize( FArchive& Ar )
 {
@@ -1863,86 +1698,6 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 
 	pMasterSize = &RiffHdr->ChunkLen;
 
-	// The appMemcpy indirect accessing is necessary to avoid PSX2 read alignment problems but
-	// somehow causes a crash on PCs in "Look for a 'smpl' chunk."
-
-#if __PSX2_EE__
-
-	FRiffChunkOld RiffChunk;
-	FRiffChunkOld* RiffChunkPtr = (FRiffChunkOld*)&WavData(3*4);
-	appMemcpy( &RiffChunk, RiffChunkPtr, sizeof(FRiffChunkOld) );
-
-	// Look for the 'fmt ' chunk.
-	while( ( ((BYTE*)RiffChunkPtr + 8) < WaveDataEnd)  && ( RiffChunk.ChunkID != mmioFOURCC('f','m','t',' ') ) )
-	{
-		// Go to next chunk.
-		RiffChunkPtr = (FRiffChunkOld*) ( (BYTE*)RiffChunkPtr + Pad16Bit(RiffChunk.ChunkLen) + 8);
-		appMemcpy( &RiffChunk, RiffChunkPtr, sizeof(FRiffChunkOld) );
-	}
-	// Chunk found ?
-	if( RiffChunk.ChunkID != mmioFOURCC('f','m','t',' ') )
-		return 0;
-
-	FmtChunk = (FFormatChunk*)((BYTE*)RiffChunkPtr + 8);
-	pBitsPerSample  = &FmtChunk->wBitsPerSample;
-	pSamplesPerSec  = &FmtChunk->nSamplesPerSec;
-	pAvgBytesPerSec = &FmtChunk->nAvgBytesPerSec;
-	pBlockAlign		= &FmtChunk->nBlockAlign;
-	pChannels       = &FmtChunk->nChannels;
-
-	// re-initalize the RiffChunk pointer
-	RiffChunkPtr = (FRiffChunkOld*)&WavData(3*4);
-	appMemcpy( &RiffChunk, RiffChunkPtr, sizeof(FRiffChunkOld) );
-
-	// Look for the 'data' chunk.
-	while( ( ((BYTE*)RiffChunkPtr + 8) < WaveDataEnd) && ( RiffChunk.ChunkID != mmioFOURCC('d','a','t','a') ) )
-	{
-		// Go to next chunk.
-		RiffChunkPtr = (FRiffChunkOld*) ( (BYTE*)RiffChunkPtr + Pad16Bit(RiffChunk.ChunkLen) + 8); 
-		appMemcpy( &RiffChunk, RiffChunkPtr, sizeof(FRiffChunkOld) );
-	} 
-	// Chunk found ?
-	if( RiffChunk.ChunkID != mmioFOURCC('d','a','t','a') )
-		return 0;
-
-	SampleDataStart = (BYTE*)RiffChunkPtr + 8;
-	pWaveDataSize   = &RiffChunkPtr->ChunkLen;
-	SampleDataSize  =  RiffChunk.ChunkLen;
-	OldBitsPerSample = FmtChunk->wBitsPerSample;
-	SampleDataEnd   =  SampleDataStart+SampleDataSize;
-
-	NewDataSize	= SampleDataSize;
-
-	// Re-initalize the RiffChunk pointer
-	RiffChunkPtr = (FRiffChunkOld*)&WavData(3*4);
-	appMemcpy( &RiffChunk, RiffChunkPtr, sizeof(FRiffChunkOld) );
-
-	// Look for a 'smpl' chunk.
-	while( ( (((BYTE*)RiffChunkPtr) + 8) < WaveDataEnd) && ( RiffChunk.ChunkID != mmioFOURCC('s','m','p','l') ) )
-	{
-		// Go to next chunk.
-		RiffChunkPtr = (FRiffChunkOld*) ( (BYTE*)RiffChunkPtr + Pad16Bit(RiffChunk.ChunkLen) + 8); 
-		appMemcpy( &RiffChunk, RiffChunkPtr, sizeof(FRiffChunkOld) );
-	} 
-
-	// Chunk found ? smpl chunk is optional.
-	// Find the first sample-loop structure, and the total number of them.
-	if( (INT)RiffChunkPtr+4<(INT)WaveDataEnd && RiffChunk.ChunkID == mmioFOURCC('s','m','p','l') )
-	{
-		FSampleChunk pSampleChunk;
-		appMemcpy(&pSampleChunk, (BYTE*)RiffChunkPtr + 8, sizeof(FSampleChunk));
-		SampleLoopsNum = pSampleChunk.cSampleLoops;
-		pSampleLoop = (FSampleLoop*) ((BYTE*)RiffChunkPtr + 8 + sizeof(FSampleChunk)); 
-		/*
-		FSampleChunk* pSampleChunk =  (FSampleChunk*)( (BYTE*)RiffChunk + 8);
-		SampleLoopsNum  = pSampleChunk->cSampleLoops; // Number of tSampleLoop structures.
-		// First tSampleLoop structure starts right after the tSampleChunk.
-		pSampleLoop = (FSampleLoop*) ((BYTE*)pSampleChunk + sizeof(FSampleChunk)); 
-		*/		
-	}
-
-#else
-	
 	FRiffChunkOld* RiffChunk = (FRiffChunkOld*)&WavData(3*4);
 	// Look for the 'fmt ' chunk.
 	while( ( ((BYTE*)RiffChunk + 8) < WaveDataEnd)  && ( INTEL_ORDER32(RiffChunk->ChunkID) != mmioFOURCC('f','m','t',' ') ) )
@@ -2131,7 +1886,6 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 	#if !__INTEL_BYTE_ORDER__
 		*pWaveDataSize = INTEL_ORDER32(*pWaveDataSize);
 	#endif
-#endif
 	
 	return 1;
 	unguard;

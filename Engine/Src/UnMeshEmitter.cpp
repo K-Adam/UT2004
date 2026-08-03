@@ -201,10 +201,6 @@ INT UMeshEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* Scene
 			RI->SetTransform(TT_LocalToWorld,LocalToWorld);
 			RI->SetGlobalColor(Particle->Color);
 
-#ifdef __PSX2_EE__
-			extern void PSX2Render_RenderStaticMesh(UStaticMesh*, UStaticMeshInstance*, INT);
-			PSX2Render_RenderStaticMesh(StaticMesh, NULL, i);
-#else
 			RI->DrawPrimitive(
 				Section.IsStrip ? PT_TriangleStrip : PT_TriangleList,
 				Section.FirstIndex,
@@ -212,7 +208,6 @@ INT UMeshEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* Scene
 				Section.MinVertexIndex,
 				Section.MaxVertexIndex
 				);
-#endif
 
 			Particle++;
 		}

@@ -5,10 +5,6 @@
 #define __IFC__
 #endif
 
-#ifdef _XBOX
-#undef __IFC__
-#endif
-
 // !!! FIXME: Remove this if a Win64 version of IFC ever shows up.  --ryan.
 #if _WIN64
 #undef __IFC__

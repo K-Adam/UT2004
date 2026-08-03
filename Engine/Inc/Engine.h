@@ -67,7 +67,7 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #endif
 
 // Karma Includes
-#if !defined(_XBOX) && !defined(__PSX2_EE__) && !defined(__GCN__) && !defined(__LINUX__) && !defined(MACOSX) && !defined (__FreeBSD__) && !defined(NO_KARMA)
+#if !defined(__LINUX__) && !defined(MACOSX) && !defined (__FreeBSD__) && !defined(NO_KARMA)
 #ifndef WITH_KARMA
 #  define WITH_KARMA
 #endif
@@ -102,7 +102,7 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #include "UnForcePacking_begin.h"
 
 // LIPSinc Includes
-#if !defined(__PSX2_EE__) && !defined(__GCN__) && !defined(__LINUX__)
+#if !defined(__LINUX__)
 #ifndef WITH_LIPSINC
 #//  define WITH_LIPSINC
 #endif

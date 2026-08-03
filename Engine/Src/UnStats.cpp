@@ -8,9 +8,6 @@
 		* Last rewrite by Daniel Vogel for .csv support
 =============================================================================*/
 
-#ifdef _XBOX
-#include <xtl.h>
-#endif
 #include "EnginePrivate.h"
 #include "UnNet.h"
 

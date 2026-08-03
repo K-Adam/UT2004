@@ -1076,73 +1076,6 @@ FConvexVolume FLevelSceneNode::GetViewFrustum()
 	return ViewFrustum;
 }
 
-#ifdef __PSX2_EE__
-//
-//	FLevelSceneNode::GetOverflowFrustum
-//
-FConvexVolume FLevelSceneNode::GetOverflowFrustum()
-{
-	FConvexVolume	ViewFrustum;
-	FLOAT			Determinant = WorldToScreen.Determinant();
-
-	if(Viewport->IsOrtho())
-	{
-		FVector	ViewSides[2][2][2];
-		FLOAT	TempSigns[2] = { -1.0f, 1.0f };
-
-		for(INT X = 0;X < 2;X++)
-			for(INT Y = 0;Y < 2;Y++)
-				for(INT Z = 0;Z < 2;Z++)
-					ViewSides[X][Y][Z] = Deproject(FPlane(TempSigns[X],TempSigns[Y],TempSigns[Z],1.0f));
-
-		if(Determinant < 0.0f)
-		{
-			ViewFrustum.BoundingPlanes[0] = FPlane(ViewSides[0][0][0],ViewSides[0][0][1],ViewSides[1][0][1]);
-			ViewFrustum.BoundingPlanes[1] = FPlane(ViewSides[1][0][0],ViewSides[1][0][1],ViewSides[1][1][1]);
-			ViewFrustum.BoundingPlanes[2] = FPlane(ViewSides[1][1][0],ViewSides[1][1][1],ViewSides[0][1][1]);
-			ViewFrustum.BoundingPlanes[3] = FPlane(ViewSides[0][1][0],ViewSides[0][1][1],ViewSides[0][0][1]);
-		}
-		else
-		{
-			ViewFrustum.BoundingPlanes[0] = FPlane(ViewSides[0][0][0],ViewSides[1][0][1],ViewSides[0][0][1]);
-			ViewFrustum.BoundingPlanes[1] = FPlane(ViewSides[1][0][0],ViewSides[1][1][1],ViewSides[1][0][1]);
-			ViewFrustum.BoundingPlanes[2] = FPlane(ViewSides[1][1][0],ViewSides[0][1][1],ViewSides[1][1][1]);
-			ViewFrustum.BoundingPlanes[3] = FPlane(ViewSides[0][1][0],ViewSides[0][0][1],ViewSides[0][1][1]);
-		}
-
-		ViewFrustum.NumPlanes = 4;
-	}
-	else
-	{
-		FVector	ViewSides[4];
-		FLOAT	TempSigns[2] = { -1.4f, 1.4f };
-//		FLOAT	TempSigns[2] = { -2.8f, 2.8f };
-
-		for(INT X = 0;X < 2;X++)
-			for(INT Y = 0;Y < 2;Y++)
-				ViewSides[X * 2 + Y] = Deproject(FPlane(TempSigns[X],TempSigns[Y],0.0f,NEAR_CLIPPING_PLANE));
-
-		if(Determinant < 0.0f)
-		{
-			ViewFrustum.BoundingPlanes[0] = FPlane(ViewOrigin,ViewSides[1],ViewSides[0]);
-			ViewFrustum.BoundingPlanes[1] = FPlane(ViewOrigin,ViewSides[0],ViewSides[2]);
-			ViewFrustum.BoundingPlanes[2] = FPlane(ViewOrigin,ViewSides[2],ViewSides[3]);
-			ViewFrustum.BoundingPlanes[3] = FPlane(ViewOrigin,ViewSides[3],ViewSides[1]);
-		}
-		else
-		{
-			ViewFrustum.BoundingPlanes[0] = FPlane(ViewOrigin,ViewSides[0],ViewSides[1]);
-			ViewFrustum.BoundingPlanes[1] = FPlane(ViewOrigin,ViewSides[2],ViewSides[0]);
-			ViewFrustum.BoundingPlanes[2] = FPlane(ViewOrigin,ViewSides[3],ViewSides[2]);
-			ViewFrustum.BoundingPlanes[3] = FPlane(ViewOrigin,ViewSides[1],ViewSides[3]);
-		}
-
-		ViewFrustum.NumPlanes = 4;
-	}
-
-	return ViewFrustum;
-}
-#endif // __PSX2_EE__
 //
 //	FLevelSceneNode::FilterActor
 //
@@ -1523,9 +1456,6 @@ void FCameraSceneNode::UpdateMatrices()
 	CameraX = ScreenToWorld.TransformNormal(FVector(2.0f / Viewport->SizeX,0,0));
 	CameraY = ScreenToWorld.TransformNormal(FVector(0,2.0f / Viewport->SizeY,0));
 
-#ifdef __GCN__
-	CameraToScreen  = FMatrix(FPlane(0.0f, ViewFOV, NEAR_CLIPPING_PLANE, FAR_CLIPPING_PLANE), FPlane(), FPlane(), FPlane());
-#endif
 }
 
 

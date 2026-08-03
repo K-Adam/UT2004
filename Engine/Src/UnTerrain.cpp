@@ -17,10 +17,8 @@
 #define MAXSTREAMVERTICES 65535
 #define TERRAINSECTORSIZE (TerrainSectorSize)
 
-#ifndef CONSOLE
 extern ENGINE_API FTerrainTools		GTerrainTools;
 extern ENGINE_API FRebuildTools		GRebuildTools;
-#endif
 
 // Only the modes we need to know about are duplicated here.
 enum EEditorMode
@@ -118,12 +116,6 @@ void UTerrainSector::PostLoad()
 {
 	guard(UTerrainSector::PostLoad);
 	Super::PostLoad();
-
-#ifdef __PSX2_EE__
-	// SL TODO: Don't call UpdateTriangles, if it's possible
-	extern void PreCachePS2Terrain(UTerrainSector* Sector);
-	PreCachePS2Terrain(this);
-#endif //__PSX2_EE__
 
 	unguard;	
 }
@@ -664,9 +656,7 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 	unguard;
 }
 
-#ifndef _XBOX
 inline
-#endif
 INT UTerrainSector::GetGlobalVertex( INT x, INT y )
 {
 	return (x+OffsetX)+(y+OffsetY)*Info->HeightmapX;
@@ -1061,7 +1051,6 @@ void UTerrainPrimitive::Illuminate(AActor* Owner,UBOOL ChangedOnly)
 {
     guard(UTerrainPrimitive::Illuminate);
     
-#ifndef CONSOLE // editor only here
     Info->CheckComputeDataOnLoad();
     
     // If we're only rebuilding visible actors and this terrains owner is hidden, leave.
@@ -1219,7 +1208,6 @@ LightVisible:
    
     Info->SmoothColors(); // sjs
     GWarn->EndSlowTask();
-#endif //!CONSOLE
     unguard;
 }
 
@@ -1469,7 +1457,7 @@ void ATerrainInfo::CalcCoords()
 	ToHeightmap = ToWorld.Inverse();
 }
 
-#if CONSOLE ||  __GNUC__
+#if __GNUC__
 BYTE ATerrainInfo::GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAlphaMap )
 #else
 inline BYTE ATerrainInfo::GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAlphaMap )
@@ -1520,7 +1508,7 @@ inline BYTE ATerrainInfo::GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAl
 	unguard;
 }
 
-#if CONSOLE || __GNUC__
+#if __GNUC__
 FColor ATerrainInfo::GetTextureColor( INT x, INT y, UTexture* Texture )
 #else
 inline FColor ATerrainInfo::GetTextureColor( INT x, INT y, UTexture* Texture )
@@ -1546,7 +1534,7 @@ inline FColor ATerrainInfo::GetTextureColor( INT x, INT y, UTexture* Texture )
 	return Color;
 }
 
-#if CONSOLE || __GNUC__
+#if __GNUC__
 void ATerrainInfo::SetTextureColor( INT x, INT y, UTexture* Texture, FColor& Color )
 #else
 inline void ATerrainInfo::SetTextureColor( INT x, INT y, UTexture* Texture, FColor& Color )
@@ -1574,7 +1562,7 @@ inline void ATerrainInfo::SetTextureColor( INT x, INT y, UTexture* Texture, FCol
 	}
 }
 
-#if CONSOLE || __GNUC__
+#if __GNUC__
 void ATerrainInfo::SetLayerAlpha( FLOAT x, FLOAT y, INT Layer, BYTE Alpha, UTexture* InAlphaMap )
 #else
 inline void ATerrainInfo::SetLayerAlpha( FLOAT x, FLOAT y, INT Layer, BYTE Alpha, UTexture* InAlphaMap )
@@ -2034,12 +2022,6 @@ void ATerrainInfo::UpdateTriangles( INT StartX, INT StartY, INT EndX, INT EndY, 
     Terrain	Collision
 ------------------------------------------------------------------------------*/
 
-//!!vogel: Sep-Feb XDK can't handle this with optimizations enabled
-//!!erik: After reshuffle, .NET ( .. || (defined(_MSC_VER) && _MSC_VER >= 1300) ) at least appears happy.
-#if defined(_XBOX) 
-#pragma DISABLE_OPTIMIZATION
-#endif
-
 // GetTriNormal doesn't waste time calculating the FPlane.W, as done in FPlane's three-vector constructor.
 #define GetTriNormal( A, B, C ) ((((B)-(A))^((C)-(A))).SafeNormal())
 
@@ -2189,9 +2171,6 @@ UBOOL ATerrainInfo::LineCheckWithQuad( INT X, INT Y, FCheckResult &Result, const
 	return ret;
 	unguard;
 }
-#if defined(_XBOX) 
-#pragma ENABLE_OPTIMIZATION
-#endif
 
 
 // quick sector rejection.
@@ -2391,7 +2370,6 @@ UBOOL ATerrainInfo::GetClosestVertex( FVector& InLocation, FVector* InOutput, IN
 
 UBOOL ATerrainInfo::SelectVertexX( INT InX, INT InY )
 {
-#ifndef CONSOLE
 	INT i;
 	for( i=0;i<SelectedVertices.Num();i++ )
 		if( SelectedVertices(i).X==InX && SelectedVertices(i).Y==InY )
@@ -2406,14 +2384,12 @@ UBOOL ATerrainInfo::SelectVertexX( INT InX, INT InY )
 	SelectedVertices(i).Weight = 1.0f * (GTerrainTools.GetStrength()/100.f);
 	SelectedVertices(i).OldHeight = GetHeightmap(InX,InY);
 	SelectedVertices(i).Delta = 0;
-#endif
-    return 1; // sjs moved below #endif
+    return 1;
 }
 
 UBOOL ATerrainInfo::SelectVertex( FVector Location )
 {
 	guard(ATerrainInfo::SelectVertex);
-#ifndef CONSOLE
 	INT X, Y;
 	if( !GetClosestVertex( Location, NULL, &X, &Y ) )
 		return 0;
@@ -2446,7 +2422,6 @@ UBOOL ATerrainInfo::SelectVertex( FVector Location )
 			break;
 	}
 
-#endif
 	return 1;
 	unguard;
 }
@@ -2474,7 +2449,6 @@ void ATerrainInfo::ConvertHeightmapFormat()
 void ATerrainInfo::SoftSelect( FLOAT InnerRadius, FLOAT OuterRadius )
 {
 	guard(ATerrainInfo::SoftSelect);
-#ifndef CONSOLE
 	// Reset deltas
 	for( INT i=0;i<SelectedVertices.Num();i++ )
 	{
@@ -2546,7 +2520,6 @@ void ATerrainInfo::SoftSelect( FLOAT InnerRadius, FLOAT OuterRadius )
 			}
 		}
 	}
-#endif
 	unguard;
 }
 void ATerrainInfo::SoftDeselect()
@@ -2700,7 +2673,6 @@ static inline void DrawCircleOnTerrainX( FRenderInterface* RI, ATerrainInfo* InT
 	unguard;
 }
 
-#ifndef CONSOLE // sjs
 static inline void DrawCircleOnTerrain( FRenderInterface* RI, ATerrainInfo* InTerrainInfo, FVector& InLocation, INT InRadius, FColor InColor )
 {
 	guard(DrawCircleOnTerrain);
@@ -2732,9 +2704,7 @@ static inline void DrawCircleOnTerrain( FRenderInterface* RI, ATerrainInfo* InTe
 
 	unguard;
 }
-#endif
 
-#ifndef CONSOLE
 static void DrawSegmentedLine( FRenderInterface* RI, ATerrainInfo* InTerrainInfo, FVector InStart, FVector InEnd, FColor InColor )
 {
 	guard(DrawSegmentedLine);
@@ -2792,13 +2762,11 @@ static void DrawRectOnTerrain( FRenderInterface* RI, ATerrainInfo* InTerrainInfo
 
 	unguard;
 }
-#endif
 
 // Draws a vertex marker
 static inline void DrawVertex( FSceneNode* SceneNode, FRenderInterface* RI, FVector& InLocation, FColor InColor )
 {
 	guard(DrawVertex);
-#ifndef CONSOLE
 	// Draw the pin.
 
 	FLineBatcher(RI).DrawLine(InLocation,InLocation - FVector(0,0,32),InColor);
@@ -2822,7 +2790,6 @@ static inline void DrawVertex( FSceneNode* SceneNode, FRenderInterface* RI, FVec
 			//!!MAT   PF_Masked,
 			InColor
 			);
-#endif
 	unguard;
 }
 
@@ -3219,19 +3186,6 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 	RI->SetTransform(TT_LocalToWorld,FMatrix::Identity);
 	
 	PUSH_HIT(SceneNode->Viewport,HTerrain(this));
-	
-#ifdef __PSX2_EE__
-	for( INT s=0;s<Sectors.Num();s++ )
-				{
-		UTerrainSector* Sector = Sectors(SectorIndices[s]);
-		for( INT passindex=0;passindex<Sector->RenderPasses.Num();passindex++ )
-		{
-			extern void PSX2Render_RenderTerrainSector(void* PS2Data, INT Layer, INT QuadsX, INT QuadsY, INT OffsetX, INT OffsetY);
-			PSX2Render_RenderTerrainSector(Sector->PS2Data, passindex, Sector->QuadsX + 1, Sector->QuadsY + 1, Sector->OffsetX, Sector->OffsetY);
-			RI->SetIndexBuffer(NULL,0);
-		}
-				}
-#else		
 	
 	if( SceneNode->Viewport->Actor->RendMap == REN_Wire )
 	{		    
@@ -3646,15 +3600,11 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 		// Free the memory used to render terrain.
 		Mark.Pop();
 	}
-#endif
 	
 	POP_HIT(SceneNode->Viewport);
 	
 	RI->PopState();
 	
-#ifdef CONSOLE
-	RI->SetTransform(TT_LocalToWorld,FMatrix::Identity);
-#else // no need to have this code on PS2
 	if( GIsEditor && GTerrainTools.EditorMode == EM_TerrainEdit )
 	{
 		FLOAT W;
@@ -3713,7 +3663,6 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 					DrawRectOnTerrain( RI, this, GTerrainTools.CurrentBrush->GetRect(), FColor(160,160,0) );
 			}
 	}
-#endif
 	
 	unguard;
 }
@@ -4037,10 +3986,6 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 					Color.A *= DecoInfo->TempScale.X;
 					RI->SetGlobalColor(Color);
 
-#ifdef __PSX2_EE__
-					extern void PSX2Render_RenderStaticMesh(UStaticMesh*, UStaticMeshInstance*, INT);
-					PSX2Render_RenderStaticMesh(StaticMesh, NULL, i);
-#else
 					RI->DrawPrimitive(
 						Section.IsStrip ? PT_TriangleStrip : PT_TriangleList,
 						Section.FirstIndex,
@@ -4048,7 +3993,6 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 						Section.MinVertexIndex,
 						Section.MaxVertexIndex
 					);
-#endif
 					DecoInfo++;
 				}
 			}

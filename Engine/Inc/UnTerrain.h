@@ -344,11 +344,6 @@ class ENGINE_API UTerrainSector : public UObject
 	DWORD CompleteMinIndex;
 	DWORD CompleteMaxIndex;
 
-#ifdef __PSX2_EE__
-	// PS2 specific data for this patch
-	void* PS2Data;
-#endif
-
 	// Constructor.
 	UTerrainSector( ATerrainInfo* InInfo, INT InOffsetX, INT InOffsetY, INT QuadsX, INT QuadsY );
 
@@ -360,11 +355,7 @@ class ENGINE_API UTerrainSector : public UObject
 	// UTerrainSector interface
 	void GenerateTriangles( UBOOL CheckLayerBlending=1 );
 	void StaticLight( UBOOL Force );
-#ifdef _XBOX
-	INT GetGlobalVertex( INT x, INT y );
-#else
 	inline INT GetGlobalVertex( INT x, INT y );
-#endif
 	INT GetLocalVertex( INT x, INT y ) { return x + y*(QuadsX+1); }
 	inline UBOOL IsTriangleAll( INT Layer, INT X, INT Y, INT Tri, UBOOL Turned, BYTE AlphaValue );
 	UBOOL IsSectorAll( INT Layer, BYTE AlphaValue );

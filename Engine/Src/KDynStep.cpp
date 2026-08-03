@@ -832,14 +832,6 @@ void MEAPI KWorldStepSafeTime(MdtWorldID w, MeReal stepSize, ULevel* level, UBOO
 
         MdtFlushCache(0);
 
-#ifdef __PSX2_EE__
-        /* On PS2, the lambda vector and constraint forces vector must be accessed
-        in uncached or uncached accelerated mode. */
-        
-        keaCon->force  = ((unsigned int)(keaCon->force)|0x30000000);
-        keaCon->lambda = ((unsigned int)(keaCon->lambda)|0x30000000);
-#endif                
-
         /* Run constraint solver to calculate forces required 
         to satisfy all constraints (in all partitions). */
 

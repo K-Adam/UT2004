@@ -651,11 +651,7 @@ void UObject::execBoolVariable( FFrame& Stack, RESULT_DECL )
 	checkSlow(idx < GTotalSerializedPointers);
 	Property = (UBoolProperty*) GSerializedPointers[idx];
 #else
-  #if __PSX2_EE__ || __GCN__
-	appMemcpy(&Property, Stack.Code, sizeof(INT));
-  #else
 	Property = *(UBoolProperty**)Stack.Code;
-  #endif
 #endif
 
 	(this->*GNatives[B])( Stack, NULL );
@@ -2749,11 +2745,7 @@ IMPLEMENT_FUNCTION( UObject, EX_RotationConst, execRotationConst );
 void UObject::execVectorConst( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execVectorConst);
-#if __PSX2_EE__ || __GCN__
-	appMemcpy(Result, Stack.Code, sizeof(FVector));
-	#else
 	*(FVector*)Result = *(FVector*)Stack.Code;
-	#endif
 	Stack.Code += sizeof(FVector);
 	unguardexecSlow;
 }
@@ -4697,18 +4689,15 @@ void UObject::execStopWatch( FFrame& Stack, RESULT_DECL )
 IMPLEMENT_FUNCTION( UObject, 535, execStopWatch );
 // --- amb
 
-// gam ---
+// Script still declares this native, consoles are no longer supported.
 void UObject::execIsOnConsole( FFrame& Stack, RESULT_DECL )
 {
     guardSlow(UObject::execIsOnConsole);
     P_FINISH;
-    
-    *(UBOOL*)Result = appIsOnConsole();
-        
+    *(UBOOL*)Result = 0;
     unguardexecSlow;
 }
 IMPLEMENT_FUNCTION( UObject, INDEX_NONE, execIsOnConsole );
-// --- gam
 
 void UObject::execPlatformIsMacOS( FFrame& Stack, RESULT_DECL )
 {

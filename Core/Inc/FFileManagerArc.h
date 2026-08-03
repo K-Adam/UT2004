@@ -101,8 +101,6 @@ inline FString FromArcFilename( const TCHAR* Filename )
 	unguard;
 }
 
-#if (!__PSX2_EE__ && !__GCN__)
-
 // File manager.
 class FFileManagerArc : public FFileManager
 {
@@ -174,12 +172,10 @@ public:
 	{
 		FM->Init(Startup);
 
-#ifndef _XBOX
 		// Check size.
 		INT RealSize = FM->FileSize(Wad);
 		if( RealSize<=0 )
 			appErrorf( TEXT("Can't find module %s"), Wad );
-#endif
 
 		// Read the module's header.
 		Ar = FM->CreateFileReader(Wad);
@@ -188,7 +184,6 @@ public:
 		Ar->Seek( HeaderPos );
 		*Ar << Header;
 
-#ifndef _XBOX
 		// Verify the module's correctness.
 		if( Ar->IsError() || Header.Magic!=ARCHIVE_MAGIC || Header.Ver!=ARCHIVE_VERSION || Header.FileSize!=RealSize )
 			appErrorf( TEXT("The module %s is incomplete -- probably due to an incomplete or failed download"), Wad );
@@ -210,7 +205,6 @@ public:
 			if( CRC!=Header.CRC )
 				appErrorf( TEXT("The module %s is corrupt -- probably due to an incomplete or corrupt download"), Wad );
 		}
-#endif
 
 		// Read the module's directory.
 		Ar->Seek( Header.TableOffset );
@@ -304,256 +298,6 @@ public:
 	// --- gam
 };
 
-#else //__PSX2_EE__
-
-// File manager.
-class FFileManagerArc : public FFileManager
-{
-	// File reader.
-	class FFileReaderArc : public FArchive
-	{
-	public:
-		FFileReaderArc(FFileManagerArc* InMgr,INT InBase,INT InSize)
-		: Mgr(InMgr), Base(InBase), Size(InSize), Pos(0)
-		{
-			ArIsLoading = ArIsPersistent = 1;
-		}
-		~FFileReaderArc()
-		{
-			if(Mgr && Mgr->Cur==this)
-				Mgr->Cur = NULL;
-		}
-		INT Tell()
-		{
-			return Pos;
-		}
-		INT TotalSize()
-		{
-			return Size;
-		}
-		void Precache(INT HintCount)
-		{
-			check(Mgr && Mgr->Ar);
-			if(Mgr->Cur==this)
-				Mgr->Ar->Precache(HintCount);
-		}
-		void Seek(INT InPos)
-		{
-			check(Mgr && Mgr->Ar);
-#if DO_CHECK
-			if(InPos<=0 || InPos>Size )
-				appErrorf(TEXT("Arc Pos: %i - %i"),InPos,Size);
-#endif
-			check(InPos>=0 && InPos<=Size);
-			Pos = InPos;
-			if(Mgr->Cur==this)
-				Mgr->Ar->Seek(Base+InPos);
-		}
-		void Serialize(void* V,INT Length)
-		{
-			check(Pos+Length<=Size);
-			check(Mgr && Mgr->Ar);
-			if(Mgr->Cur!=this)
-			{
-				Mgr->Cur=this;
-				Mgr->Ar->Seek(Base+Pos);
-			}
-			Mgr->Ar->Serialize(V,Length);
-			Pos += Length;
-		}
-		FFileManagerArc* Mgr;
-		INT Base, Size, Pos;
-	};
-
-public:
-	FFileManager*    FM;
-	const TCHAR*     Wad;
-	FArchiveHeader   Header;
-	FArchive*        Ar;
-	FFileReaderArc*  Cur;
-	UBOOL            Verify;
-	FFileManagerArc(FFileManager* InFM,const TCHAR* InWad,UBOOL InVerify)
-	: FM(InFM), Wad(InWad), Header(), Ar(NULL), Cur(NULL), Verify(InVerify)
-	{}
-	FArchiveItem* Lookup( const TCHAR* Filename )
-	{
-		FString Find = ToArcFilename( Filename );
-		if( Ar )
-			for( INT i=0; i<Header._Items_.Num(); i++ )
-				if( WildcardMatch(*Find,*Header._Items_(i)._Filename_) )
-					return &Header._Items_(i);
-		return NULL;
-	}
-
-	// FFileManager interface.
-	void CloseAr()
-	{
-		if( Ar )
-			Ar->Close();
-		Ar  = NULL;
-		Cur = NULL;
-	}
-	UBOOL OpenAr()
-	{
-		Cur = NULL;
-		Ar  = GFileManager->CreateFileReader(Wad);
-		return Ar!=NULL;
-	}
-	void Exit()
-	{
-		if( Ar )
-		{
-			delete Ar;
-			Ar=NULL;
-		}
-//		FM->Exit();
-	}
-	void Init(UBOOL Startup)
-	{
-		// Read the module's header.
-		Cur = NULL;
-		if( OpenAr() )
-		{
-			INT RealSize  = Ar->TotalSize();
-			INT HeaderPos = RealSize-ARCHIVE_HEADER_SIZE;
-			Ar->Seek( HeaderPos );
-			*Ar << Header;
-
-			// Verify the module's correctness.
-			debugf(TEXT("Loaded module %s: %i %i/%i %i/%i %i/%i"),
-				Wad,
-				Ar->IsError(),
-				Header.Magic,ARCHIVE_MAGIC,
-				Header.Ver,ARCHIVE_VERSION,
-				Header.FileSize,RealSize);
-			if( Ar->IsError() || Header.Magic!=ARCHIVE_MAGIC || Header.Ver!=ARCHIVE_VERSION || Header.FileSize!=RealSize )
-				appErrorf( TEXT("The module %s is incomplete -- probably due to an incomplete or failed download"), Wad );
-
-			// Verify the module's CRC, unless we're an executable (in which case the sfx already did that).
-			if( Verify && FString(Wad).Right(4)!=TEXT(".exe") )
-			{
-				Ar->Seek( 0 );
-				INT CRC=0;
-				BYTE Buffer[16384];
-				for( INT i=0; i<HeaderPos; i+=sizeof(Buffer) )
-				{
-					INT Count = Min<INT>( HeaderPos-i, sizeof(Buffer) );
-					Ar->Serialize( Buffer, Count );
-					if( Ar->IsError() )
-						appErrorf( TEXT("The module %s can't be read"), Wad );
-					CRC = appMemCrc( Buffer, Count, CRC );
-				}
-				if( CRC!=Header.CRC )
-					appErrorf( TEXT("The module %s is corrupt -- probably due to an incomplete or corrupt download"), Wad );
-			}
-
-			// Read the module's directory.
-			Ar->Seek( Header.TableOffset );
-			*Ar << Header._Items_;
-			check(!Ar->IsError());
-
-#if 0
-			// For debugging.
-			debugf(TEXT("Contents of [%s]:"),Wad);
-			for( INT i=0; i<Header._Items_.Num(); i++ )
-				debugf(TEXT("   %i [%s]"),i,*Header._Items_(i)._Filename_);
-#endif
-		}
-		else debugf( TEXT("Can't find module %s"), Wad );
-
-		// Init next file manager in sequence.
-		FM->Init(Startup);
-	}
-	FArchive* CreateFileReader( const TCHAR* Filename, DWORD Flags=0, FOutputDevice* Error=GLog )
-	{
-		guard(FFileManagerArc::CreateFileReader);
-		FArchiveItem* Item=Lookup(Filename);
-		return
-			Item
-		?	new FFileReaderArc(this,Item->Offset,Item->Size)
-		:	FM->CreateFileReader(Filename,Flags,Error);
-		unguard;
-	}
-	FArchive* CreateFileWriter( const TCHAR* Filename, DWORD Flags, FOutputDevice* Error )
-	{
-		return FM->CreateFileWriter( Filename, Flags, Error );
-	}
-	INT FileSize( const TCHAR* Filename )
-	{
-		guard(FFileManagerArc::FileSize);
-		FArchiveItem* Item=Lookup(Filename);
-		return Item ? Item->Size : FM->FileSize(Filename);
-		unguard;
-	}
-	UBOOL Delete( const TCHAR* Filename, UBOOL RequireExists=0, UBOOL EvenReadOnly=0 )
-	{
-		return FM->Delete( Filename, RequireExists, EvenReadOnly );
-	}
-	DWORD Copy( const TCHAR* Dest, const TCHAR* Src, UBOOL Replace=1, UBOOL EvenIfReadOnly=0, UBOOL Attributes=0, DWORD Compress=FILECOPY_Normal, FCopyProgress* Progress=NULL )
-	{
-		return FM->Copy( Dest, Src, Replace, EvenIfReadOnly, Attributes, Compress, Progress );
-	}
-	UBOOL Move( const TCHAR* Dest, const TCHAR* Src, UBOOL Replace=1, UBOOL EvenIfReadOnly=0, UBOOL Attributes=0 )
-	{
-		return FM->Move( Dest, Src, Replace, EvenIfReadOnly, Attributes );
-	}
-	SQWORD GetGlobalTime( const TCHAR* Filename )
-	{
-		return FM->GetGlobalTime( Filename );
-	}
-	UBOOL SetGlobalTime( const TCHAR* Filename )
-	{
-		return FM->SetGlobalTime( Filename );
-	}
-	UBOOL MakeDirectory( const TCHAR* Path, UBOOL Tree=0 )
-	{
-		return FM->MakeDirectory( Path, Tree );
-	}
-	UBOOL DeleteDirectory( const TCHAR* Path, UBOOL RequireExists=0, UBOOL Tree=0 )
-	{
-		return FM->DeleteDirectory( Path, RequireExists, Tree );
-	}
-	TArray<FString> FindFiles( const TCHAR* Filename, UBOOL Files, UBOOL Directories )
-	{
-		TArray<FString> Result = FM->FindFiles( Filename, Files, Directories );
-		if( Ar )
-		{
-			FString Find = ToArcFilename( Filename );
-			for( INT i=0; i<Header._Items_.Num(); i++ )
-			{
-				FArchiveItem& Item = Header._Items_(i);
-				if( WildcardMatch( *Find, *Item._Filename_ ) )
-				{
-					FString Found = FromArcFilename(*Item._Filename_);
-					if( Result.FindItemIndex(*Found)==INDEX_NONE )
-						new(Result)FString(*Found);
-				}
-			}
-		}
-		return Result;
-	}
-	UBOOL SetDefaultDirectory( const TCHAR* Filename )
-	{
-		return FM->SetDefaultDirectory( Filename );
-	}
-	FString GetDefaultDirectory()
-	{
-		return FM->GetDefaultDirectory();
-	}
-	// gam ---
-	INT CompareFileTimes( const TCHAR* FileA, const TCHAR* FileB )
-	{
-		return FM->CompareFileTimes( FileA, FileB );
-	}
-	// --- gam
-	UBOOL Exec( const TCHAR* Cmd, FOutputDevice& Ar )
-	{
-		return 0;
-//		return FM->Exec(Cmd,Ar);
-	}
-};
-
-#endif //__PSX2_EE__
 /*-----------------------------------------------------------------------------
 	The End.
 -----------------------------------------------------------------------------*/

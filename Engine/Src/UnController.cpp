@@ -793,17 +793,11 @@ void APlayerController::execFindStairRotation( FFrame& Stack, RESULT_DECL )
 
 	// only recommend pitch if controller has a pawn, and frame rate isn't ridiculously low
 
-#ifdef __PSX2_EE__
-	// On the PS2 the frame rate is never high enough for this.
-	*(DWORD*)Result = Rotation.Pitch;
-	return;
-#else
 	if ( !Pawn || (deltaTime > 0.33) )
 	{
 		*(DWORD*)Result = Rotation.Pitch;
 		return;
 	}
-#endif //__PSX2_EE__
 
 	if (Rotation.Pitch > 32768)
 		Rotation.Pitch = (Rotation.Pitch & 65535) - 65536;

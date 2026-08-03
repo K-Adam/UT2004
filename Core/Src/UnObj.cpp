@@ -3935,25 +3935,6 @@ void UObject::EndLoad()
 				//warning: Array may expand during iteration.
 				guard(PreLoadObjects);
 				debugfSlow( NAME_DevLoad, TEXT("Loading objects...") );
-#if __PSX2_EE__ // add the cool endLoad printout
-			for( INT i=0,n=0; i<ObjLoaded.Num(); i++ )
-			{
-				if( i==n )
-				{
-					n=ObjLoaded.Num();
-					debugf(TEXT("endLoad: %i"),n-i);
-				}
-				// Preload.
-				UObject* Obj = ObjLoaded(i);
-				{
-					if( Obj->GetFlags() & RF_NeedLoad )
-					{
-						check(Obj->GetLinker());
-						Obj->GetLinker()->Preload( Obj );
-					}
-				}
-			}
-#else
 			for( INT i=0; i<ObjLoaded.Num(); i++ )
 			{
 				// Preload.
@@ -3966,7 +3947,6 @@ void UObject::EndLoad()
 				}
 			}
 			}
-#endif
 			unguard;
 
 			if(GObjLoaded.Num())
@@ -5040,16 +5020,7 @@ private:
 	{
 		guardSlow(FArchiveTagUsed::Name);
 
-#if __PSX2_EE__ || __GCN__
-		// Name is probably not aligned correctly.
-		// Memcpy workaround copies into aligned temporary then back.
-		FName LocalName;
-		appMemcpy(&LocalName, &Name, sizeof(FName));
-		LocalName.ClearFlags( RF_Unreachable );
-		appMemcpy(&Name, &LocalName, sizeof(FName));
-#else
 		Name.ClearFlags( RF_Unreachable );
-#endif
 
 		return *this;
 		unguardSlow;

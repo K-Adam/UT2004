@@ -87,11 +87,9 @@ void UMatAction::PostEditChange()
 {
 	guard(UMatAction::PostEditChange);
 	Super::PostEditChange();
-#ifndef CONSOLE
 	ASceneManager* SM = GMatineeTools.GetCurrent();
 	if( SM )
 		SM->PreparePath();
-#endif
 	unguard;
 }
 
@@ -125,10 +123,8 @@ void UMatSubAction::PostEditChange()
 {
 	guard(UMatSubAction::PostEditChange);
 	Super::PostEditChange();
-#ifndef CONSOLE
 	if( GMatineeTools.GetCurrent() )
 		GMatineeTools.GetCurrent()->PreparePath();
-#endif
 	unguard;
 }
 
@@ -136,17 +132,14 @@ void AInterpolationPoint::PostEditChange()
 {
 	guard(AInterpolationPoint::PostEditChange);
 	Super::PostEditChange();
-#ifndef CONSOLE
 	if( GMatineeTools.GetCurrent() )
 		GMatineeTools.GetCurrent()->PreparePath();
-#endif
 	unguard;
 }
 void AInterpolationPoint::PostEditMove()
 {
 	guard(AInterpolationPoint::PostEditMove);
 	Super::PostEditMove();
-#ifndef CONSOLE
 	ASceneManager* SM = GMatineeTools.GetCurrent();
 	if( SM )
 	{
@@ -158,7 +151,6 @@ void AInterpolationPoint::PostEditMove()
 		if( MA )
 			MA->PostEditChange();
 	}
-#endif
 	unguard;
 }
 

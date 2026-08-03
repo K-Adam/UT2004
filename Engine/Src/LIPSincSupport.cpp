@@ -25,22 +25,14 @@ void ENGINE_API GLIPSincInitGame( void )
 	debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: LIPSincInitGame"));
 
 	// Iterate over *.lad files in LIPSinc directory
-#ifndef _XBOX
 	TArray<FString> Found = GFileManager->FindFiles( TEXT(".\\LIPSincData\\Controllers\\*.lad"), 1, 0 );
-#else
-	TArray<FString> Found = GFileManager->FindFiles( TEXT("..\\LIPSincData\\Controllers\\*.lad"), 1, 0 );
-#endif
 
 	debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Found files..."));
 
 	for( INT i=0; i<Found.Num(); ++i )
 	{
 		FString Temp = Found(i);
-#ifndef _XBOX	
 		Found(i) = FString( TEXT(".\\LIPSincData\\Controllers\\") );
-#else
-		Found(i) = FString( TEXT("..\\LIPSincData\\Controllers\\") );
-#endif
 		Found(i) += Temp;
 	}
 

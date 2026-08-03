@@ -1056,53 +1056,6 @@ void USkeletalMesh::NormalizeInfluences( INT LodLevel )
 }
 
 
-// Calculate normals - only for PS2.
-void USkeletalMesh::CalculateNormals(TArray <FVector>& Normals, UBOOL Displace )
-{
-	guard(USkeletalMesh::CalculateNormals);
-
-	// Already filled?
-	if( Normals.Num() ) 
-		return;
-
-	TArray <FVector> TempNormals;
-	TempNormals.AddZeroed(Points.Num());
-	
-	// Go over triangles and create face normals (in 'actor' space) by using dot products and accumulate them into the vertices.
-	for( INT i=0; i<Faces.Num(); i++ )
-	{
-		INT V[3]; // Vertex indices.
-		for( INT v=0; v<3; v++)
-		{
-			V[v]= Wedges(Faces(i).iWedge[v]).iVertex;
-		}
-		FVector FaceNormal = (Points(V[0])-Points(V[1])) ^ (Points(V[2])-Points(V[0]));
-
-		// Don't normalize at this point - the surface of the triangle is factored in due to the cross product and
-		// lends appropriate bias to the normal.		
-		// Accumulate into normals of all vertices that make up this face.
-		TempNormals(V[0]) += FaceNormal;
-		TempNormals(V[1]) += FaceNormal;
-		TempNormals(V[2]) += FaceNormal;
-	}
-
-	Normals.Add(Points.Num());
-
-	// Store normalized per-vertex normal.
-	for( INT i=0; i<Normals.Num(); i++)
-	{   			
-		FVector NewNormal = TempNormals(i) / appSqrt(TempNormals(i).SizeSquared() + 0.001f);
-		// Store displaced point when software-skinning.
-		// NOTE - Keep displacement relatively large, otherwise float accuracy problems cause shimmering
-		// lighting despite the fact that DX8 auto-normalizes the final normal lengths in hardware.
-		if( Displace ) NewNormal = ( NewNormal * 1.0f) + Points(i); 
-		Normals(i) = NewNormal;
-	}
-
-	unguard;
-}
-
-
 //
 // Retrieve raw data from mesh either from data on import, or from pre-existing older-version .UKX or even .U mesh data.
 //
@@ -1275,11 +1228,6 @@ INT USkeletalMesh::RenderPreProcess()
 {
 	guard(USkeletalMesh::RenderPreProcess);
 
-#ifdef __PSX2_EE__
-//	void HardwarePreProcess( USkeletalMesh& Mesh );
-//	HardwarePreProcess(*this);
-#endif
-
 	return 1;
 	unguard;
 }
@@ -1322,7 +1270,7 @@ void USkeletalMeshInstance::MeshBuildBounds()
     Mesh->BoundingBox.Max = 2.0f*Temp.Max-(Temp.Min + Temp.Max)*0.5f;
 	*/
 
-	// Tighter: scale up by + S x the distance from the midpoint; conservative bounds for psx2 players/models.
+	// Tighter: scale up by + S x the distance from the midpoint, conservative bounds.
 	FVector MidMesh = 0.5f*(Temp.Min + Temp.Max);
 	Mesh->BoundingBox.Min = Temp.Min + 1.0f*(Temp.Min - MidMesh);  // 0.5 ?
     Mesh->BoundingBox.Max = Temp.Max + 1.0f*(Temp.Max - MidMesh);  //

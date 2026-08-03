@@ -366,11 +366,7 @@ UBOOL UInput::Exec( const TCHAR* Str, FOutputDevice& Ar )
 					*Axis += SpeedBase * Speed * Invert;
 #else
 // amb ---
-#ifdef _XBOX
-					*Axis += SpeedBase * Speed * Invert;
-#else
 					*Axis += GetInputDelta() * SpeedBase * Speed * Invert;
-#endif
 // --- amb
 #endif
 				}
@@ -687,11 +683,7 @@ void UInput::ReadInput( FLOAT DeltaSeconds, FOutputDevice& Ar )
 
 		// Scale the axes.
 // amb ---
-#ifdef _XBOX
-        FLOAT Scale = (DeltaSeconds != -1.f) ? 1.f : 0.f;
-#else
         FLOAT Scale = (DeltaSeconds != -1.f) ? (20.f / DeltaSeconds) : 0.f;
-#endif
 // --- amb
 
 		for( INT i=0; i<Cache->Count; i++ )

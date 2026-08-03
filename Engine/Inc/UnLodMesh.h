@@ -405,7 +405,6 @@ struct FLODMeshSection
 	FAnimMeshVertexStream VertexStream;
 	FRawIndexBuffer       IndexBuffer;
 
-	//TArray<_WORD> BoneIndices;  // Bones active for this chunk - used by PSX2/hardware rendering
 
 	// Serialization.
 	friend FArchive& operator<<(FArchive& Ar,FLODMeshSection& S)

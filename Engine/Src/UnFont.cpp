@@ -58,11 +58,7 @@ void UFont::Serialize( FArchive& Ar )
 	guard(UFont::Serialize);
 	Super::Serialize( Ar );
 	UBOOL GSavedLazyLoad = GLazyLoad;
-#ifdef _XBOX
-	GLazyLoad = 0;
-#else
 	GLazyLoad = 1;
-#endif
 
 	if( Ar.LicenseeVer() < 0x1d )
 	{

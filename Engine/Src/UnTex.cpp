@@ -202,51 +202,19 @@ static void SerializeMips( UTexture* Texture, FArchive& Ar, TArray<FMipmap>& Mip
 		Ar << AR_INDEX(NewNum);
 		Mips.Empty( NewNum );
 		INT LOD = Texture->DefaultLOD();
-#ifdef __PSX2_EE__
-		UBOOL LoadedAtLeastOne = false;
-		INT USize = Texture->USize;
-		INT VSize = Texture->VSize;
-		INT MaxSize = (Texture->Format == TEXF_RGBA8) ? 128 : 256;
-		Texture->PS2NumMips = 0;
-		Texture->PS2FirstMip = -1;
-#endif
 		for( INT i=0; i<NewNum; i++ )
 		{
 			UBOOL SavedLazyLoad = GLazyLoad;
 			// Commented out by Andrew: Never load texture data until texture upload time.
 			// This reduces peak memory usage a lot.
-			//!!vogel: needed for linear loading on XBox (and other consoles).
-			if( !(GUglyHackFlags & 32) || (i<LOD) )
-				GLazyLoad = 1;
-#ifdef __PSX2_EE__
-			// only load small enough mips, and large enough mips, and only the first 4
-			if (USize > MaxSize || VSize > MaxSize || USize < 8 || VSize < 8 || i > 3)
-				GLazyLoad = 1;
-			else
-			{
-				if (LoadedAtLeastOne == false)
-					Texture->PS2FirstMip = i;
-				LoadedAtLeastOne = true;
-				Texture->PS2NumMips++;
-			}
-			USize >>= 2; VSize >>= 1;
-#endif
+			GLazyLoad = 1;
 			//!!vogel: Material duplication hack.
 			if( GUglyHackFlags & 8 )
 				GLazyLoad = 0;
 			Ar << *new(Mips)FMipmap;
 			GLazyLoad = SavedLazyLoad;
 		}
-#ifdef __PSX2_EE__
-		if (LoadedAtLeastOne == false)
-			debugf("Unable to find a suitable texture size! Tex = %s, OrigSize = %d", Texture->GetName(), Texture->VSize);
-#endif
 
-#ifdef __GCN__
-		// Toss non-GCN data, and load in .tpl instead over 
-		Mips.Empty(1);
-		ReadTextureFile(Texture->GetName(), Mips(0).DataArray);
-#endif
 	}
 	else
 	{
@@ -321,35 +289,6 @@ void UTexture::PostLoad()
 	// Handle post editing.
 	UClamp = Clamp(UClamp,0,USize);
 	VClamp = Clamp(VClamp,0,VSize);
-
-#ifdef __PSX2_EE__
-	if (Format == TEXF_DXT1 || Format == TEXF_DXT3 || Format == TEXF_DXT5)
-		debugf("**************** BAD TEXTURE FORMAT FOR PS2! CAN'T USE DXT TEXTURES! USE UCC PSX2CONVERT TO FIX!! ***********");
-	if (Format == TEXF_RGBA8)
-	{
-//		debugf("Mips.Num: %d", Mips.Num());
-		for(INT i=0; i<Mips.Num(); i++)
-		{
-//			debugf("Size: %d %d", Mips(i).USize, Mips(i).VSize);
-			if (Mips(i).VSize > 128 || Mips(i).VSize < 8)
-				continue;
-//			Mips(i).DataArray.Load();
-			BYTE* Data = &Mips(i).DataArray(0);
-//			debugf("Data: %x", Data);
-			if (!Data)
-				continue;
-
-//			debugf("Swapping colors...");
-			for (INT j=0; j<(Mips(i).USize)*(Mips(i).VSize)*4; j+=4)
-			{
-				BYTE Temp = Data[j + 0];
-				Data[j + 0] = Data[j + 2];
-				Data[j + 2] = Temp;
-				Data[j + 3] = Data[j + 3] >> 1;
-			}
-		}
-	}
-#endif
 
 #if 0
     // amb,gam --- calculate the MaxLOD
@@ -1865,15 +1804,11 @@ INT FStaticTexture::GetHeight()
 //
 INT FStaticTexture::GetFirstMip()
 {
-#ifdef __PSX2_EE__
-	return Texture->PS2FirstMip;
-#else
 	INT FirstMip = Texture->DefaultLOD();
 	while( ((GetWidth() >> FirstMip) < 64) && ((GetHeight() >> FirstMip) < 64) && (FirstMip > 0) )
 		FirstMip--;
 
 	return Max( FirstMip, Texture->MinLOD );
-#endif
 }
 
 //
@@ -1881,11 +1816,7 @@ INT FStaticTexture::GetFirstMip()
 //
 INT FStaticTexture::GetNumMips()
 {
-#ifdef __PSX2_EE__
-	return Texture->PS2NumMips;
-#else
 	return Texture->Mips.Num();
-#endif
 }
 
 //

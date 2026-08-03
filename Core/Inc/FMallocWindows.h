@@ -387,14 +387,10 @@ public:
 		MemInit = 1;
 
 		// Get OS page size.
-#ifdef _XBOX
-		GPageSize = 4096;
-#else
 		SYSTEM_INFO SI;
 		GetSystemInfo( &SI );
 		GPageSize = SI.dwPageSize;
 		check(!(GPageSize&(GPageSize-1)));
-#endif
 		// Init tables.
 		OsTable.FirstPool    = NULL;
 		OsTable.ExaustedPool = NULL;

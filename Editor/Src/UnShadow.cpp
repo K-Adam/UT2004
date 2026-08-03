@@ -22,7 +22,7 @@ extern ENGINE_API FRebuildTools GRebuildTools;
 static void CompressLightmaps( UModel* Model )
 {
 	guard(CompressLightmaps);
-#if !CONSOLE && !__LINUX__
+#if !__LINUX__
 	GWarn->BeginSlowTask(TEXT("Compressing lightmaps..."),1);
 	for(INT TextureIndex = 0;TextureIndex < Model->LightMapTextures.Num();TextureIndex++)
 	{

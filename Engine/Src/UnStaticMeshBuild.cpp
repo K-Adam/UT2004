@@ -517,7 +517,7 @@ void UStaticMesh::Build( UBOOL OnlyCollision, FVector* InNormals )
 
 			if(SectionIndices(SectionIndex).Indices.Num())
 			{
-				if(InternalVersion == -1) // HACK: PS2 strip builder
+				if(InternalVersion == -1)
 				{
 					Sections(SectionIndex).IsStrip = 1;
 					Sections(SectionIndex).NumPrimitives = SectionIndices(SectionIndex).Stripify();

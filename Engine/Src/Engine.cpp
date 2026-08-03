@@ -12,10 +12,8 @@
 // Global subsystems in the engine.
 ENGINE_API FMemStack			GEngineMem;
 ENGINE_API FMemCache			GCache;
-#ifndef CONSOLE
 ENGINE_API FTerrainTools		GTerrainTools;
 ENGINE_API FRebuildTools		GRebuildTools;
-#endif
 ENGINE_API FMatineeTools		GMatineeTools;
 
 /*-----------------------------------------------------------------------------

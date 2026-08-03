@@ -140,7 +140,6 @@ DECLARE_NATIVE_TYPE(Editor,UBrushBuilder);
 	USoundLocCommandlet::StaticClass(); \
 	USetNormalLODCommandlet::StaticClass(); \
 	URebuildCommandlet::StaticClass(); \
-	UPS2ConvertCommandlet::StaticClass(); \
 	UPkgCommandlet::StaticClass(); \
 	UBitMatrix::StaticClass(); \
 	UBitArray::StaticClass(); \

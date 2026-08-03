@@ -111,10 +111,8 @@ public:
 	}
 };
 
-#ifndef _XBOX
 BYTE* FCodecBWT::CompressBuffer;
 INT   FCodecBWT::CompressLength;
-#endif
 /*-----------------------------------------------------------------------------
 	RLE compressor.
 -----------------------------------------------------------------------------*/

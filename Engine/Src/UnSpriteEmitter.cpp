@@ -8,10 +8,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef __PSX2_EE__  // I apologize profusely - JA
-#include "../../PSX2Render/Src/VU1Support.h"
-#endif
-
 /*-----------------------------------------------------------------------------
 	USpriteEmitter.
 -----------------------------------------------------------------------------*/
@@ -36,9 +32,6 @@ void USpriteEmitter::Initialize( INT InMaxParticles )
 	Super::Initialize( InMaxParticles );
 	RealProjectionNormal = ProjectionNormal.SafeNormal();
 	UniformSize = UniformSize || (UseDirectionAs == PTDU_None);
-#ifdef __PSX2_EE__
-	PreCachePS2Emitter((void**)&PS2Data, MaxParticles, VerticesPerParticle); // we are doing a mini strip
-#endif
 	unguard;
 }
 

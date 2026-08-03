@@ -8,10 +8,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef __PSX2_EE__  // I apologize profusely - JA
-#include "../../PSX2Render/Src/VU1Support.h"
-#endif
-
 /*-----------------------------------------------------------------------------
 	USparkEmitter.
 -----------------------------------------------------------------------------*/
@@ -38,9 +34,6 @@ void USparkEmitter::Initialize( INT InMaxParticles )
 	PrimitivesPerParticle	= NumSegments;
 	SparkData.Add( InMaxParticles );
 	
-#ifdef __PSX2_EE__
-	PreCachePS2Emitter((void**)&PS2Data, MaxParticles, VerticesPerParticle); // we are doing a mini strip
-#endif
 	unguard;
 }
 
@@ -130,11 +123,6 @@ public:
 		INT				VertexIndex = 0;
 		FLOAT			RNumSegments = 1.0f / Emitter->NumSegments;
 
-#ifdef __PSX2_EE__
-		FVU1ParticleData* PatchData = ((FVU1ParticleData*)Emitter->PS2Data);
-		FVU1ParticlePatch* Patch = PatchData->CurrentBuffer;
-		INT PatchVertexIndex = 0;
-#endif
 		for(INT ParticleIndex = 0;ParticleIndex < Emitter->ActiveParticles;ParticleIndex++)
 		{
 			FParticle*	Particle = &Emitter->Particles(ParticleIndex);
@@ -151,50 +139,6 @@ public:
 				FVector	Location2= Emitter->SparkData(ParticleIndex).StartLocation + Emitter->SparkData(ParticleIndex).StartVelocity*t + Emitter->Acceleration*t*t;
 				FColor  Color    = Particle->Color.RenderColor();
 				
-#ifdef __PSX2_EE__
-				{
-				FVU1ParticleVertex& PVertex = Patch->Vertices[PatchVertexIndex++];
-
-				PVertex.Pos.X = Location.X;
-				PVertex.Pos.Y = Location.Y; 
-				PVertex.Pos.Z = Location.Z;
-				PVertex.Color.ui32[2] = Particle->Color.R>>1;
-				PVertex.Color.ui32[1] = Particle->Color.G>>1;
-				PVertex.Color.ui32[0] = Particle->Color.B>>1;
-				PVertex.Color.ui32[3] = Particle->Color.A>>1;
-				PVertex.UV.X = 0.f;
-				PVertex.UV.Y = RNumSegments * SegmentIndex;
-				}
-
-				{
-				FVU1ParticleVertex& PVertex = Patch->Vertices[PatchVertexIndex++];
-
-				PVertex.Pos.X = Location2.X;
-				PVertex.Pos.Y = Location2.Y; 
-				PVertex.Pos.Z = Location2.Z;
-				PVertex.Color.ui32[2] = Particle->Color.R>>1;
-				PVertex.Color.ui32[1] = Particle->Color.G>>1;
-				PVertex.Color.ui32[0] = Particle->Color.B>>1;
-				PVertex.Color.ui32[3] = Particle->Color.A>>1;
-				PVertex.UV.X = 1.0f;
-				PVertex.UV.Y = RNumSegments * SegmentIndex;
-				}
-
-				if (PatchVertexIndex + 2 > P_MAX_VERTICES_PER_PATCH)
-				{
-					// set the length of this in vertices
-					Patch->Params.ui32[0] = PatchVertexIndex;
-
-					// tell it that we are a "cnt" type of tag, not an "end"
-
-					Patch->DMATag.ui32[0] &= ~0x70000000;
-					Patch->DMATag.ui32[0] |= 0x10000000;
-
-					Patch++;
-					PatchVertexIndex = 0;
-				}
-
-#else
 				Vertices[VertexIndex].Position	= Location;
 				Vertices[VertexIndex].Diffuse	= Color;
 				Vertices[VertexIndex].U			= 0;
@@ -206,27 +150,9 @@ public:
 				Vertices[VertexIndex].U			= 1.f;
 				Vertices[VertexIndex].V			= RNumSegments * SegmentIndex;
 				VertexIndex++;
-#endif
 			}
 		}
 		
-#ifdef __PSX2_EE__
-		// are we at the end of the list?
-		if (PatchVertexIndex == 0)
-			Patch--;
-		else
-			// set the length of this in vertices
-			Patch->Params.ui32[0] = PatchVertexIndex;
-
-#ifdef NO_DEFERRED_RENDERING
-					// tell it that we are a "end" type of tag, not an "cnt"
-		Patch->DMATag.ui32[0] |= 0x70000000;
-#else
-					// tell it that we are a "ret" type of tag, not an "cnt"
-		Patch->DMATag.ui32[0] &= ~0x70000000;
-		Patch->DMATag.ui32[0] |= 0x60000000;
-#endif
-#endif
 	}
 };
 
@@ -290,15 +216,6 @@ INT USparkEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* Scen
 		RI->EnableLighting(0,1);
 		RI->SetMaterial(Owner->ParticleMaterial);
 
-#ifdef __PSX2_EE__
-		// Sort of a weird hack to fill out the PS2Data
-		SparkVertices.GetStreamData(NULL);
-		FVU1ParticleData* PatchData = ((FVU1ParticleData*)PS2Data);
-		
-		extern void PSX2Render_RenderEmitter(FVU1ParticlePatch* Patches, UBOOL LineList, EParticleDrawStyle DrawStyle);
-		PSX2Render_RenderEmitter(PatchData->CurrentBuffer, true, (EParticleDrawStyle)DrawStyle);
-		PatchData->SwapBuffers();
-#else
 		// Set the particle vertex stream and index buffer.
 		// The particle vertices aren't actually generated until now.
 		INT	BaseVertexIndex = RI->SetDynamicStream(VS_FixedFunction,&SparkVertices);
@@ -311,7 +228,6 @@ INT USparkEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* Scen
 			BaseVertexIndex,
 			RenderedParticles * PrimitivesPerParticle
 			);
-#endif
 	}
 
 	return RenderedParticles;

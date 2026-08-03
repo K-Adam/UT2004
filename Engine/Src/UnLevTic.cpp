@@ -1804,13 +1804,11 @@ void ULevel::Tick( ELevelTick TickType, FLOAT DeltaSeconds )
 	EngineMark.Pop();
 
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_CleanupDestroyedCycles));
-#ifndef _XBOX
 	UGameEngine* GameEngine = Cast<UGameEngine>(Engine);
 	if( GameEngine && ( !GameEngine->GLevel || ( GameEngine->GLevel == GameEngine->GEntry ) ) )
     	CleanupDestroyed( 1 );
 	else
     	CleanupDestroyed( 0 );
-#endif
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CleanupDestroyedCycles));
 	unclock(TotalTick);
 	if ( false && NetDriver && (TotalTick * GSecondsPerCycle * 1000.f > 100.f) )

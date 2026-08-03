@@ -281,7 +281,6 @@ class ENGINE_API UTexture : public UBitmapMaterial
 	BYTE		PS2FirstMip;				// using part of the pad space
 	BYTE		PS2NumMips;					// using part of the pad space
 
-	// SL: Made this a pointer because the QWORD in the RenderInterface was screwing up alignment on the PS2 somethin' fierce
 	FStaticTexture*	RenderInterface GCC_PACK(4);		// The interface used to render this texture.
 
 	// Static.
@@ -377,15 +376,9 @@ class ENGINE_API UTexture : public UBitmapMaterial
 		return bAlphaTexture || bMasked;
 	}
 
-#if __PSX2_EE__ || __GCN__
-	INT			__LastUpdateTime[2];// Last time texture was locked for rendering.
-	FTime GetLastUpdateTime() {FTime T; appMemcpy(&T,&__LastUpdateTime,sizeof(FTime)); return T;}
-	void SetLastUpdateTime(FTime T) {appMemcpy(&__LastUpdateTime,&T,sizeof(FTime));}
-#else
 	DOUBLE		__LastUpdateTime GCC_PACK(4);		// Last time texture was locked for rendering.
 	DOUBLE GetLastUpdateTime() { return __LastUpdateTime; }
 	void SetLastUpdateTime(DOUBLE T) { __LastUpdateTime = T; }
-#endif
 };
 
 //

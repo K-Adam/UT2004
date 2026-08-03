@@ -94,11 +94,6 @@ FFeedbackContextAnsi Warn;
 	FFileManagerWindows FileManager;
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
-#elif __PSX2_EE__
-	#include "FFileManagerPSX2.h"
-	FFileManagerPSX2 FileManager;
-	#include "FMallocAnsi.h"
-	FMallocAnsi Malloc;
 #elif ((__LINUX_X86__) || (__FreeBSD__) || (MACOSX))
 	#include "FFileManagerUnix.h"
 	FFileManagerUnix FileManager;
@@ -249,12 +244,6 @@ int main( int argc, char* argv[] )
 #endif
 
 
-		// Set up meta package readers.
-//		for( i=0; i<GSys->MetaPackages.Num(); i++ )
-//		{
-//			printf("%s\n", *GSys->MetaPackages(i));
-//			((FFileManagerPSX2*) GFileManager)->AddMetaArchive( *GSys->MetaPackages(i), &Error );
-//		}
 
 		// Get the ucc stuff going.	
 

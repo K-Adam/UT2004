@@ -266,22 +266,6 @@ FURL::FURL( FURL* Base, const TCHAR* TextURL, ETravelType Type )
 
 	// Copy existing options which aren't in current URL
 
-#ifdef _XBOX // the best e3 hack evar!
-    if( Type==TRAVEL_Absolute && Base && IsInternal() )
-    {
-        debugf(TEXT("Trouncing e3 related URL options!"));
-        const TCHAR* PlayerName = Base->GetOption( TEXT("NAME="), NULL );
-        if( PlayerName )
-            AddOption( *FString::Printf(TEXT("NAME=%s"), PlayerName) );
-        const TCHAR* Team = Base->GetOption( TEXT("TEAM="), NULL );
-        if( Team )
-            AddOption( *FString::Printf(TEXT("Team=%s"), Team) );
-        const TCHAR* Voice = Base->GetOption( TEXT("VoiceMask="), NULL );
-        if( Voice )
-            AddOption( *FString::Printf(TEXT("VoiceMask=%s"), Voice) );
-    }
-#endif
-
 	if( Type==TRAVEL_Absolute && Base && IsInternal())
 	{
 		for( INT i=0; i<Base->Op.Num(); i++ )
@@ -290,9 +274,6 @@ FURL::FURL( FURL* Base, const TCHAR* TextURL, ETravelType Type )
 			(	appStrnicmp(*Base->Op(i),TEXT("Name="),5)==0
 			||	appStrnicmp(*Base->Op(i),TEXT("Team=" ),5)==0
             ||	appStrnicmp(*Base->Op(i),TEXT("Character="),10)==0 // sjs
-#ifdef _XBOX
-            ||	appStrnicmp(*Base->Op(i),TEXT("VoiceMask="),10)==0 // sjs
-#endif
 			||	appStrnicmp(*Base->Op(i),TEXT("Class="),6)==0
 			||	appStrnicmp(*Base->Op(i),TEXT("Skin="),5)==0 
 			||	appStrnicmp(*Base->Op(i),TEXT("Face="),5)==0 

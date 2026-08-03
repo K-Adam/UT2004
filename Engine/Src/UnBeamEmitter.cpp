@@ -11,10 +11,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef __PSX2_EE__  // I apologize profusely - JA
-#include "../../PSX2Render/Src/VU1Support.h"
-#endif
-
 /*-----------------------------------------------------------------------------
 	USpriteEmitter.
 -----------------------------------------------------------------------------*/
@@ -49,10 +45,6 @@ void UBeamEmitter::Initialize( INT InMaxParticles )
 	LFPoints.Add( LowFrequencyPoints*InMaxParticles );
 	UpdateActorHitList();
 	
-#ifdef __PSX2_EE__
-	PreCachePS2Emitter((void**)&PS2Data, MaxParticles, 2 * VerticesPerParticle); // we are doing a mini strip
-#endif
-
 	unguard;
 }
 

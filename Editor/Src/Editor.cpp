@@ -67,7 +67,6 @@ void autoInitializeRegistrantsEditor(INT &Lookup)
 //	USoundLocCommandlet::StaticClass();
 //	USetNormalLODCommandlet::StaticClass();
 //	URebuildCommandlet::StaticClass();
-//	UPS2ConvertCommandlet::StaticClass();
 //	UPkgCommandlet::StaticClass();
 //	UDumpConfigCommandlet::StaticClass();
 //	UChecksumPackageCommandlet::StaticClass();

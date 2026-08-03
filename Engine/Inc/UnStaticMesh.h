@@ -221,11 +221,6 @@ public:
 				NumTriangles,	// The number of raw triangles in this section.
 				NumPrimitives;	// The number of primitives to render, including degenerate triangles used in stripping.
 
-#ifdef __PSX2_EE__
-	// PS2 specific runtime data
-	void*		PS2Data;
-#endif
-
 	// Legacy variables.
 	_WORD	LegacyFirstIndex;
 
@@ -573,11 +568,6 @@ public:
 
 	TArray<FStaticMeshLightInfo>	Lights;
 	FRawColorStream					ColorStream;
-
-#ifdef __PSX2_EE__
-	// memory to hold the PS2 lighting data for this mesh instance
-	void* PS2Data;
-#endif
 
 	// Constructor.
 	UStaticMeshInstance() {}

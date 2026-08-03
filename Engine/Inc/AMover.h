@@ -22,7 +22,6 @@
 	void PostNetReceive();
 	UBOOL ShouldTrace(AActor *SourceActor, DWORD TraceFlags)
 	{
-		// inlined for speed on PS2
 		return (TraceFlags & /*TRACE_Movers*/ 0x002 );
 	}
 	virtual INT AddMyMarker(AActor *S);

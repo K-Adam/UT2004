@@ -399,12 +399,7 @@ class ENGINE_API ULevel : public ULevelBase
 	virtual void UpdateTime( ALevelInfo* Info );
 	virtual UBOOL IsPaused();
     void CheckDefaultGameType(const TCHAR *FileName); // gam
-	// !! PSX2 has a problem with the TCHAR typedef.
-	#if UNICODE
 	virtual void WelcomePlayer( UNetConnection* Connection, TCHAR* Optional=TEXT("") );
-	#else
-	virtual void WelcomePlayer( UNetConnection* Connection, char* Optional = "" );
-	#endif
 
 	// Sound
     void LoadSounds(); //amb

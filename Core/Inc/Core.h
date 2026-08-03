@@ -48,47 +48,7 @@
 // Build options.
 #include "UnBuild.h"
 
-#if !__PSX2_EE__ && !__GCN__
-
 #define FTime DOUBLE
-
-#else
-// Time (needed so that the PS2 doesn't use doubles)
-// Note that this is only used on the PC in UTexture::LastUpdateTime
-#define FIXTIME 4294967296.f
-class FTime
-{
-#if __GNUG__
-#define TIMETYP long long
-#else // __MWERKS__
-#define TIMETYP unsigned long
-#endif
-public:
-
-	        FTime      ()               {v=0;}
-	        FTime      (float f)        {v=(TIMETYP)(f*FIXTIME);}
-//	        FTime      (double d)       {v=(TIMETYP)(d*FIXTIME);}
-	        FTime      (TIMETYP i,int)  {v=i;}
-	float   GetFloat   ()               {return v/FIXTIME;}
-	FTime   operator+  (float f) const  {return FTime(v+(TIMETYP)(f*FIXTIME),0);}
-	float   operator-  (FTime t) const  {return (v-t.v)/FIXTIME;}
-	FTime   operator*  (float f) const  {return FTime(v*f);}
-	FTime   operator/  (float f) const  {return FTime(v/f);}
-	FTime&  operator+= (float f)        {v=v+(TIMETYP)(f*FIXTIME); return *this;}
-	FTime&  operator*= (float f)        {v=(TIMETYP)(v*f); return *this;}
-	FTime&  operator/= (float f)        {v=(TIMETYP)(v/f); return *this;}
-	int     operator== (FTime t)        {return v==t.v;}
-	int     operator!= (FTime t)        {return v!=t.v;}
-	int     operator>  (FTime t)        {return v>t.v;}
-	FTime&  operator=  (const FTime& t) {v=t.v; return *this;}
-	TIMETYP v;
-};
-#endif
-
-// Are we on a console or not?
-#if defined(_XBOX) || defined(__PSX2_EE__) || defined(__GCN__)
-#define CONSOLE 1
-#endif
 
 #if _MSC_VER || __INTEL_COMPILER
 	#define SUPPORTS_PRAGMA_PACK 1
@@ -120,15 +80,7 @@ public:
 
 
 // Compiler specific include.
-#if __GCN__
-	#ifdef EMU
-		typedef char TCHAR;
-		#include "UnGCNEmu.h"
-	#else
-		#include <string.h>
-		#include "UnMWerks.h" // Using UnVcWin32.h for GCN emulator, should be UnGnuG.h or something.
-	#endif
-#elif _MSC_VER
+#if _MSC_VER
 	#include "UnVcWin32.h"
 #elif __GNUG__
 	#include <string.h>
@@ -786,14 +738,6 @@ public:
 };
 
 #include "UnCoreNative.h"
-
-#ifdef __PSX2_EE__
-	#include "UnPSX2.h"
-#endif
-
-#ifdef __GCN__
-	#include "UnGCN.h"
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

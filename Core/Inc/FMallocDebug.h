@@ -45,11 +45,6 @@ public:
 	{
 		guard(FMallocDebug::Malloc);
 		checkSlow(MemInited);
-#ifdef _XBOX
-		//!!vogel: needed as XGAssembleShader uses our overloaded operator.
-		if( Size == 0 )
-			return NULL;
-#endif
 		check((INT)Size>=0);
 		FMemDebug* Ptr = NULL;
 		guard(CallMalloc);
@@ -191,7 +186,7 @@ public:
 		for( FMemDebug** Link = &GFirstDebug; *Link; Link=&(*Link)->Next )
 			check(GIsCriticalError||*(*Link)->PrevLink==*Link);
         // gam ---
-#if (defined _MSC_VER) && (!defined _XBOX || defined _DEBUG) && (!defined __GCN__)
+#if defined _MSC_VER
 		INT Result = _heapchk();
 		check(Result!=_HEAPBADBEGIN);
 		check(Result!=_HEAPBADNODE);

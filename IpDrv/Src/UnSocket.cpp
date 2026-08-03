@@ -35,7 +35,6 @@ void* ResolveThreadEntry( void* Arg )
 DWORD STDCALL ResolveThreadEntry( void* Arg )
 #endif
 {
-#ifndef _XBOX
 	FResolveInfo* Info = (FResolveInfo*)Arg;
 	check(gethostbyname_mutex != NULL);
 	IpSetInt( Info->Addr, 0 );
@@ -72,7 +71,6 @@ DWORD STDCALL ResolveThreadEntry( void* Arg )
 
 #if __UNIX__
 	pthread_exit( NULL );
-#endif
 #endif
 	return 0;
 }
@@ -115,23 +113,6 @@ UBOOL InitSockets( FString& Error )
 	static UBOOL Tried = 0;
 	if( !Tried )
 	{
-#ifdef _XBOX
-		XNetStartupParams xnsp;
-		memset( &xnsp, 0, sizeof( xnsp ) );
-		xnsp.cfgSizeOfStruct = sizeof( XNetStartupParams );
-		xnsp.cfgFlags = XNET_STARTUP_BYPASS_SECURITY;
-		xnsp.cfgPrivatePoolSizeInPages		= 24; //12
-		xnsp.cfgEnetReceiveQueueLength		= 8;
-		xnsp.cfgIpFragMaxSimultaneous		= 4;
-		xnsp.cfgSockMaxSockets				= 64;
-		xnsp.cfgSockDefaultRecvBufsizeInK	= 255; //16
-		xnsp.cfgSockDefaultSendBufsizeInK	= 255; //16
-		xnsp.cfgKeyRegMax					= 4;
-		xnsp.cfgSecRegMax					= 4;
-		xnsp.cfgQosDataLimitDiv4			= 128;
-
-		XNetStartup( &xnsp );
-#endif
 		Tried = 1;
 		WSADATA WSAData;
 		INT Code = WSAStartup( 0x0101, &WSAData );

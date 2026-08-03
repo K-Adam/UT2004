@@ -1166,9 +1166,7 @@ public:
 	explicit FString( INT    Arg, INT Digits=1 );
 	explicit FString( DWORD  Arg, INT Digits=1 );
 	explicit FString( FLOAT  Arg, INT Digits=1, INT RightDigits=0, UBOOL LeadZero=1 );
-#ifndef __PSX2_EE__
 	explicit FString( DOUBLE Arg, INT Digits=1, INT RightDigits=0, UBOOL LeadZero=1 );
-#endif
 	FString& operator=( const TCHAR* Other )
 	{
 		if( (Data == NULL) || (&(*this)(0)!=Other) ) // gam

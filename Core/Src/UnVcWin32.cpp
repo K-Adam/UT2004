@@ -11,12 +11,7 @@
 #pragma warning( disable : 4201 )
 
 #pragma pack(push,8)
-#ifdef _XBOX
-#define DEBUG_KEYBOARD		//!!KEYBOARD HACK
-#include <xtl.h>
-#else
 #include <windows.h>
-#endif
 #pragma pack(pop)
 
 #include <stdio.h>
@@ -38,66 +33,6 @@
 
 #if UNICODE
 
-#ifdef _XBOX
-// XBOX versions of these function just copy and truncate the SHORTs to BYTEs .
-CORE_API ANSICHAR* winToANSI( ANSICHAR* ACh, const TCHAR* InUCh, INT Count )
-{
-	guardSlow(winToANSI);
-	if(InUCh)
-	{
-		for(INT Index = 0;Index < Count;Index++)
-			ACh[Index] = InUCh[Index];
-
-		return ACh;
-	}
-	else
-	{
-		ACh[0] = 0;
-		return ACh;
-	}
-	unguardSlow;
-}
-CORE_API INT winGetSizeANSI( const TCHAR* InUCh )
-{
-	guardSlow(winGetSizeANSI);
-	if(InUCh)
-		return (wcslen(InUCh) + 1) * sizeof(ANSICHAR);
-	else
-		return sizeof(ANSICHAR);
-	unguardSlow;
-}
-CORE_API TCHAR* winToUNICODE( TCHAR* UCh, const ANSICHAR* InACh, INT Count )
-{
-	if(InACh)
-	{
-		for(INT Index = 0;Index < Count;Index++)
-			UCh[Index] = InACh[Index];
-
-		return UCh;
-	}
-	else
-	{
-		UCh[0] = 0;
-		return UCh;
-	}
-}
-CORE_API INT winGetSizeUNICODE( const ANSICHAR* InACh )
-{
-	if(InACh)
-		return (strlen(InACh) + 1) * sizeof(TCHAR);
-	else
-		return sizeof(TCHAR);
-}
-
-CORE_API UNICHAR* winAnsiToTCHAR(char* str)
-{
-	INT iLength = winGetSizeUNICODE(str);
-	UNICHAR* pBuffer = new TCHAR[iLength];
-	appStrcpy(pBuffer,TEXT(""));
-	return winToUNICODE(pBuffer,str,iLength);
-}
-
-#else
 // Windows versions ask Windows to convert UNICODE to ANSI using the current encoding.
 
 CORE_API ANSICHAR* winToANSI( ANSICHAR* ACh, const TCHAR* InUCh, INT Count )
@@ -138,7 +73,6 @@ CORE_API UNICHAR* winAnsiToTCHAR(char* str)
 	return winToUNICODE(pBuffer,str,iLength);
 }
 
-#endif	// XBOX
 #endif	// UNICODE
 
 /*-----------------------------------------------------------------------------
@@ -155,18 +89,12 @@ CORE_API void appRequestExit( UBOOL Force )
 	if( Force )
 	{
 		// Force immediate exit. Dangerous because config code isn't flushed, etc.
-#ifdef _XBOX
-		while(1) {};
-#else
 		ExitProcess( 1 );
-#endif
 	}
 	else
 	{
 		// Tell the platform specific code we want to exit cleanly from the main loop.
-#ifndef _XBOX
 		PostQuitMessage( 0 );
-#endif
 		GIsRequestingExit = 1;
 	}
 	unguard;
@@ -178,9 +106,6 @@ CORE_API void appRequestExit( UBOOL Force )
 CORE_API const TCHAR* appGetSystemErrorMessage( INT Error )
 {
 	guard(appGetSystemErrorMessage);
-#ifdef _XBOX
-	return TEXT("appGetSystemErrorMessage not implemented on X-box");
-#else
 	static TCHAR Msg[1024];
 	*Msg = 0;
 	if( Error==0 )
@@ -202,7 +127,6 @@ CORE_API const TCHAR* appGetSystemErrorMessage( INT Error )
 	if( appStrchr(Msg,'\n') )
 		*appStrchr(Msg,'\n')=0;
 	return Msg;
-#endif
 	unguard;
 }
 
@@ -288,15 +212,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	{
 		debugf( TEXT("Relaunch: %s"), Cmd );
 		GConfig->Flush( 0 );
-#ifdef _XBOX
-		//!!vogel: ?!
-        // sjs --- e3!
-        LAUNCH_DATA ld;
-        int len = appStrlen(Cmd) + 1;
-        appMemcpy(ld.Data, appToAnsi(Cmd), len*sizeof(ANSICHAR)); 
-		XLaunchNewImage("D:\\uc.xbe", &ld);
-        // --- sjs
-#else
 		UBOOL Params = 1;
 		if ( *Cmd )
 		{
@@ -321,7 +236,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 			debugf( TEXT("GetModuleFileName returned %s"), ThisFile );
 			Result = (PTRINT)ShellExecute( NULL, TEXT("open"), ThisFile, Params ? TEXT("COMMAND=ServerCommand.txt") : TEXT(""), appBaseDir(), SW_SHOWNORMAL );
 		}
-#endif
 		debugf(TEXT("ShellExecute result: %i"),(INT) Result);
 		appRequestExit( 0 );
 		return 1;
@@ -413,7 +327,6 @@ IMPLEMENT_CLASS(USystem);
 CORE_API void appClipboardCopy( const TCHAR* Str )
 {
 	guard(appClipboardCopy);
-#ifndef _XBOX
 	if( OpenClipboard(GetActiveWindow()) )
 	{
 		verify(EmptyClipboard());
@@ -444,7 +357,6 @@ CORE_API void appClipboardCopy( const TCHAR* Str )
 		}
 		verify(CloseClipboard());
 	}
-#endif
 	unguard;
 }
 
@@ -455,7 +367,6 @@ CORE_API FString appClipboardPaste()
 {
 	guard(appClipboardPaste);
 	FString Result;
-#ifndef _XBOX
 	if( OpenClipboard(GetActiveWindow()) )
 	{
 		HGLOBAL GlobalMem = NULL;
@@ -493,7 +404,6 @@ CORE_API FString appClipboardPaste()
 		verify(CloseClipboard());
 	}
 	else Result=TEXT("");
-#endif
 	return Result;
 	unguard;
 }
@@ -506,7 +416,6 @@ CORE_API FString appClipboardPaste()
 // Load a library.
 //warning: Intended only to be called by UPackage::BindPackage. Don't call directly.
 //
-#ifndef _XBOX
 static void* GetDllHandleHelper( const TCHAR* Filename )
 {
 #if __STATIC_LINK
@@ -551,15 +460,12 @@ static void* GetDllHandleHelper( const TCHAR* Filename )
 	}
 	return Result;
 }
-#endif
 
-#pragma warning(disable:4700)
 CORE_API void* appGetDllHandle( const TCHAR* Filename )
 {
 	guard(appGetDllHandle);
 	check(Filename);
 
-#ifndef _XBOX
 	void* Result = GetDllHandleHelper( Filename );
 	if( !Result )
 		Result = GetDllHandleHelper( *(FString(Filename) + DLLEXT) );
@@ -567,18 +473,9 @@ CORE_API void* appGetDllHandle( const TCHAR* Filename )
 		Result = GetDllHandleHelper( *(US + TEXT("_") + Filename + DLLEXT) );
 
 	return Result;
-#else
-	#if __STATIC_LINK
-		INT* FalseHandle;
-		return (void*) FalseHandle;
-	#else
-		return NULL;
-	#endif
-#endif
 
 	unguard;
 }
-#pragma warning(default:4700)
 
 //
 // Free a DLL.
@@ -594,9 +491,7 @@ CORE_API void appFreeDllHandle( void* DllHandle )
 
 	check(DllHandle);
 
-#ifndef _XBOX
 	FreeLibrary( (HMODULE)DllHandle );
-#endif
 
 	unguard;
 }
@@ -610,11 +505,7 @@ CORE_API void* appGetDllExport( void* DllHandle, const TCHAR* ProcName )
 	check(DllHandle);
 	check(ProcName);
 
-#ifdef _XBOX
-	return NULL;
-#else
 	return (void*)GetProcAddress( (HMODULE)DllHandle, TCHAR_TO_ANSI(ProcName) );
-#endif
 
 	unguard;
 }
@@ -624,9 +515,7 @@ CORE_API const void appDebugMessagef( const TCHAR* Fmt, ... )
 	TCHAR TempStr[4096]=TEXT("");
 	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
 	guard(appDebugMessagef);
-#ifndef _XBOX
 	MessageBox(NULL,TempStr,TEXT("appDebugMessagef"),MB_OK);
-#endif
 	unguard;
 }
 
@@ -636,7 +525,6 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 	guard(appMsgf);
 	TCHAR TempStr[4096]=TEXT("");
 	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
-#ifndef _XBOX
 	switch( Type )
 	{
 		case 1:
@@ -650,9 +538,6 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 			break;
 	}
 	return 1;
-#else
-	return 1;
-#endif
 	unguard;
 }
 
@@ -662,9 +547,7 @@ CORE_API const void appGetLastError( void )
 	TCHAR TempStr[4096]=TEXT("");
 	appSprintf( TempStr, TEXT("GetLastError : %d\n\n%s"),
 		GetLastError(), appGetSystemErrorMessage() );
-#ifndef _XBOX
 	MessageBox( NULL, TempStr, TEXT("System Error"), MB_OK );
-#endif
 	unguard;
 }
 
@@ -703,9 +586,6 @@ void appDebugBreak()
 //
 UBOOL appIsDebuggerPresent()
 {
-#ifdef _XBOX
-	return 0;
-#else
 	UBOOL Result = 0;
     OSVERSIONINFO WinVersion;
     WinVersion.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
@@ -724,7 +604,6 @@ UBOOL appIsDebuggerPresent()
         }
     }
 	return Result;
-#endif
 }
 
 
@@ -833,7 +712,6 @@ static TCHAR *urlParmsOnExit = NULL;
 void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 {
 	guard(appLaunchURL);
-#ifndef _XBOX
 
     #ifdef _WIN64
     if (!GIsRequestingExit)
@@ -858,7 +736,6 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 	PTRINT Code = (PTRINT)TCHAR_CALL_OS(ShellExecuteW(NULL,TEXT("open"),URL,Parms?Parms:TEXT(""),TEXT(""),SW_SHOWNORMAL),ShellExecuteA(NULL,"open",TCHAR_TO_ANSI(URL),Parms?TCHAR_TO_ANSI(Parms):"","",SW_SHOWNORMAL));
 	if( Error )
 		*Error = Code<=32 ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
-#endif
 	unguard;
 }
 
@@ -866,9 +743,6 @@ void *appCreateProc( const TCHAR* URL, const TCHAR* Parms )
 {
 	guard(appCreateProc);
 
-#ifdef _XBOX
-	return NULL;
-#else
 	debugf( NAME_Log, TEXT("CreateProc %s %s"), URL, Parms );
 
 	TCHAR CommandLine[1024];
@@ -903,7 +777,6 @@ void *appCreateProc( const TCHAR* URL, const TCHAR* Parms )
 			return NULL;
 	}
 	return (void*)ProcInfo.hProcess;
-#endif
 
 	unguard;
 }
@@ -911,11 +784,7 @@ void *appCreateProc( const TCHAR* URL, const TCHAR* Parms )
 UBOOL appGetProcReturnCode( void* ProcHandle, INT* ReturnCode )
 {
 	guard(appGetProcReturnCode);
-#ifdef _XBOX
-	return 0;
-#else
 	return GetExitCodeProcess( (HANDLE)ProcHandle, (DWORD*)ReturnCode ) && *((DWORD*)ReturnCode) != STILL_ACTIVE;
-#endif
 	unguard;
 }
 
@@ -956,7 +825,6 @@ INT GetFileAgeDays( const TCHAR* Filename )
 CORE_API void appCleanFileCache()
 {
 	guard(appCleanFileCache);
-#ifndef _XBOX //!!vogel: cleaning temporary files will be handled differently
 	// Delete all temporary files.
 	guard(DeleteTemps);
 	FString Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("*.tmp"), *GSys->CachePath );
@@ -986,14 +854,12 @@ CORE_API void appCleanFileCache()
 		}
 	}
 	unguard;
-#endif
 	unguard;
 }
 
 /*-----------------------------------------------------------------------------
 	File Streaming.
 -----------------------------------------------------------------------------*/
-#ifndef _XBOX
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,8)
 #endif
@@ -1001,7 +867,6 @@ CORE_API void appCleanFileCache()
 #include "vorbis/vorbisfile.h"
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 #endif
 
 
@@ -1054,9 +919,7 @@ CORE_API FGuid appCreateGuid()
 	guard(appCreateGuid);
 
 	FGuid Result(0,0,0,0);
-#ifndef _XBOX
 	verify( CoCreateGuid( (GUID*)&Result )==S_OK ); // gam
-#endif
 	return Result;
 
 	unguard;
@@ -1070,9 +933,6 @@ CORE_API FGuid appCreateGuid()
 CORE_API const TCHAR* appBaseDir()
 {
 	guard(appBaseDir);
-#ifdef _XBOX
-	return TEXT(""); // sjs - balls D:\\");
-#else
 	static TCHAR Result[256]=TEXT("");
 	if( !Result[0] )
 	{
@@ -1096,7 +956,6 @@ CORE_API const TCHAR* appBaseDir()
 		Result[i]=0;
 	}
 	return Result;
-#endif
 	unguard;
 }
 
@@ -1104,9 +963,6 @@ CORE_API const TCHAR* appBaseDir()
 CORE_API const TCHAR* appComputerName()
 {
 	guard(appComputerName);
-#ifdef _XBOX
-	return TEXT("Xbox");
-#else
 	static TCHAR Result[256]=TEXT("");
 	if( !Result[0] )
 	{
@@ -1130,7 +986,6 @@ CORE_API const TCHAR* appComputerName()
 		*d++ = 0;
 	}
 	return Result;
-#endif
 	unguard;
 }
 
@@ -1138,9 +993,6 @@ CORE_API const TCHAR* appComputerName()
 CORE_API const TCHAR* appUserName()
 {
 	guard(appUserName);
-#ifdef _XBOX
-	return TEXT("Xbox User");
-#else
 	static TCHAR Result[256]=TEXT("");
 	if( !Result[0] )
 	{
@@ -1164,7 +1016,6 @@ CORE_API const TCHAR* appUserName()
 		*d++ = 0;
 	}
 	return Result;
-#endif
 	unguard;
 }
 
@@ -1172,9 +1023,6 @@ CORE_API const TCHAR* appUserName()
 CORE_API const TCHAR* appPackage()
 {
 	guard(appPackage);
-#ifdef _XBOX
-	return TEXT("UC"); // sjs
-#else
 	static TCHAR Result[256]=TEXT("");
 	if( !Result[0] )
 	{
@@ -1200,7 +1048,6 @@ CORE_API const TCHAR* appPackage()
 		appStrcpy( Result, End );
 	}
 	return Result;
-#endif
 	unguard;
 }
 
@@ -1215,15 +1062,9 @@ void appPlatformPreInit()
 {
 	guard(appPlatformPreInit);
 
-#ifndef _XBOX
 	// This also has the undocumented side effect of affecting sleep granularity on current versions of Windows.
 	timeBeginPeriod( 1 );
-#endif
 
-#ifdef _XBOX
-	debugf(NAME_Init,TEXT("Detected: Microsoft X-box"));
-	appStrncpy( GMachineOS, TEXT("X-Box"), ARRAY_COUNT(GMachineOS) ); // gam
-#else
 	// Check Windows version.
 	guard(GetWindowsVersion);
 	DWORD dwPlatformId, dwMajorVersion, dwMinorVersion, dwBuildNumber;
@@ -1294,7 +1135,6 @@ void appPlatformPreInit()
 		GRunningOS = OS_UNKNOWN;
 	}
 	unguard;
-#endif
 
 	unguard;
 }
@@ -1302,9 +1142,7 @@ BOOL WINAPI CtrlCHandler( DWORD dwCtrlType )
 {
 	if( !GIsRequestingExit )
 	{
-#ifndef _XBOX
 		PostQuitMessage( 0 );
-#endif
 		GIsRequestingExit = 1;
 	}
 	else
@@ -1326,10 +1164,8 @@ void appPlatformInit()
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );
 
-#ifndef _XBOX
 	// Ctrl+C handling.
 	SetConsoleCtrlHandler( CtrlCHandler, 1 );
-#endif
 
 	// Randomize.
     if( GUseFixedTimeStep )
@@ -1341,7 +1177,6 @@ void appPlatformInit()
 	debugf( NAME_Init, TEXT("Computer: %s"), appComputerName() );
 	debugf( NAME_Init, TEXT("User: %s"), appUserName() );
  
-#ifndef _XBOX
 	// Get CPU info.
 	guard(GetCpuInfo);
 	SYSTEM_INFO SI;
@@ -1352,7 +1187,6 @@ void appPlatformInit()
 	debugf( NAME_Init, TEXT("CPU Page size=%i, Processors=%i"), SI.dwPageSize, SI.dwNumberOfProcessors );
     appSprintf( GMachineCPU, TEXT("%i processors"), SI.dwNumberOfProcessors );
 	unguard;
-#endif
 
 	// Performance counter ticks are the cycle unit for appCycles().
 	LARGE_INTEGER Frequency;
@@ -1368,14 +1202,12 @@ void appPlatformInit()
     appStrcat( GMachineCPU, *FString::Printf(TEXT(" with %dMB RAM"), M.dwTotalPhys/(1024 * 1024) ) ); // gam
 	unguard;
 
-#ifndef _XBOX
 	// Working set.
 	guard(GetWorkingSet);
 	SIZE_T WsMin=0, WsMax=0;
 	GetProcessWorkingSetSize( GetCurrentProcess(), &WsMin, &WsMax );
 	debugf( NAME_Init, TEXT("Working set: %X / %X"), WsMin, WsMax );
 	unguard;
-#endif
 
 	unguard;
 }
@@ -1391,9 +1223,7 @@ void appPlatformPreExit()
 void appPlatformExit()
 {
 	guard(appPlatformExit);
-#ifndef _XBOX
 	timeEndPeriod( 1 );
-#endif
 
 #ifdef _WIN64
     if (urlOnExit != NULL)

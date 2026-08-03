@@ -440,12 +440,7 @@ void ULinkerLoad::Verify()
 				VerifyImport( i );
 			unguard;
 		}
-		// !! PSX2 gcc doesn't like catch( TCHAR* Error )
-		#if UNICODE
 		catch( TCHAR* Error )
-		#else
-		catch( char* Error )
-		#endif
 		{
 			GObjLoaders.RemoveItem( this );
 			throw( Error );

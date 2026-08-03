@@ -8,8 +8,6 @@
 
 #include "EnginePrivate.h"
 
-#ifndef CONSOLE// code size optimization for console runtime
-
 extern ENGINE_API FRebuildTools	GRebuildTools;
 
 /*---------------------------------------------------------------------------------------
@@ -1070,8 +1068,6 @@ void UModel::Illuminate(AActor* Owner,UBOOL ChangedOnly)
 {
 	guard(UModel::Illuminate);
 
-#if !CONSOLE
-
 	ULevel*	Level = Owner->XLevel;
 
 	if(this == Level->Model && Nodes.Num() > 0)
@@ -1275,9 +1271,6 @@ void UModel::Illuminate(AActor* Owner,UBOOL ChangedOnly)
 
 		debugf(TEXT("UModel::Illuminate: %u rays, %f seconds"),NumRays,appSeconds() - StartSeconds);
 	}
-#else
-	check(0);
-#endif
 
 		unguard;
 	}
@@ -1310,7 +1303,7 @@ static HRESULT LightMapCompressionCallback(void* Data,INT MipIndex,DWORD Size,IN
 void UModel::CompressLightmaps()
 {
 	guard(UModel::CompressLightmaps);
-#if !CONSOLE && !__UNIX__ && !_WIN64
+#if !__UNIX__ && !_WIN64
 	GWarn->BeginSlowTask(TEXT("Compressing lightmaps..."),1);
 	for(INT TextureIndex = 0;TextureIndex < LightMapTextures.Num();TextureIndex++)
 	{
@@ -1386,13 +1379,3 @@ void UModel::CompressLightmaps()
 #endif
 	unguard;
 }
-
-#else // sjs - CONSOLE
-
-void UModel::Illuminate(AActor* Owner,UBOOL ChangedOnly)
-{
-    appErrorf(TEXT("Console called UModel::Illuminate!"));
-}
-
-#endif 
-

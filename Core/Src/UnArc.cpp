@@ -64,13 +64,11 @@ CORE_API FArchive& operator<<( FArchive& Ar, FLOAT& F )
 	return Ar;
 }
 
-#ifndef __PSX2_EE__
 CORE_API FArchive& operator<<( FArchive& Ar, DOUBLE& F )
 {
 	Ar.ByteOrderSerialize( &F, sizeof(F) );
 	return Ar;
 }
-#endif
 
 #ifndef _WIN64   // apparently PTRINT covers this... --ryan.
 CORE_API FArchive& operator<<( FArchive &Ar, QWORD& Q )

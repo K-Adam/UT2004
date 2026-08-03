@@ -21,15 +21,6 @@ struct FVoicePacket;
 struct FVoiceInfo;
 class FAudioCaptureDevice;
 
-/*-----------------------------------------------------------------------------
-	Special Sony VAG Includes.
------------------------------------------------------------------------------*/
-
-#define HAVE_VAG 0 
-#if HAVE_VAG
-	#include "ENCVAG.h"
-#endif
-
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
 #endif
@@ -405,7 +396,6 @@ public:
     virtual FLOAT GetRadius(); // sjs
     virtual FLOAT GetVelocityScale(); // gam
     virtual void SetDuration(FLOAT Duration);
-    virtual void PS2Convert();
     virtual void Load() { GetData().Load(); } //amb
 
     // UObject interface.
@@ -463,7 +453,6 @@ class ENGINE_API UProceduralSound : public USound
         FLOAT GetRadius(); // sjs
         FLOAT GetVelocityScale(); // gam
         void SetDuration(FLOAT Duration);
-        void PS2Convert();
         void Load(); // gam
 
         // UObject interface.
@@ -515,7 +504,6 @@ class ENGINE_API USoundGroup : public USound
         FLOAT GetRadius(); // sjs
         FLOAT GetVelocityScale(); // gam
         void SetDuration(FLOAT Duration);
-        void PS2Convert();
         void Load(); //amb
 
 	// UObject interface.

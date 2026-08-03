@@ -8,7 +8,7 @@
 
 #include "EnginePrivate.h"
 #include "UnOctreePrivate.h"
-#if ((defined _XBOX) || (defined __GNUC__) || (defined __INTEL_COMPILER)) // sjs
+#if defined __GNUC__ || defined __INTEL_COMPILER
 #include <float.h>
 #include <limits.h>
 #endif

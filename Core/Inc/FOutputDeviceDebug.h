@@ -22,11 +22,7 @@ public:
 				if( Event!=NAME_Title )
 				{
 					TCHAR	Temp[1024];
-#ifndef _XBOX
 					appSprintf(Temp,TEXT("%s: %s"),FName::SafeString(Event),Data);
-#else
-					appSprintf(Temp,TEXT("%s: %s\n"),FName::SafeString(Event),Data);
-#endif
 					OutputDebugString(Temp);
 				}
 

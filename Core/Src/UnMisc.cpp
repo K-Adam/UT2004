@@ -228,12 +228,10 @@ FString::FString( FLOAT Arg, INT Digits, INT RightDigits, UBOOL LeadZero )
 : TArray<TCHAR>()
 {
 }
-#ifndef __PSX2_EE__
 FString::FString( DOUBLE Arg, INT Digits, INT RightDigits, UBOOL LeadZero )
 : TArray<TCHAR>()
 {
 }
-#endif
 FString FString::Printf( const TCHAR* Fmt, ... )
 {
 	TCHAR TempStr[4096];
@@ -1545,16 +1543,6 @@ CORE_API const TCHAR* LocalizeGeneral( const ANSICHAR* Key, const TCHAR* Package
 }
 #endif
 
-// gam ---
-CORE_API UBOOL appIsOnConsole()
-{
-    if( appStricmp( UObject::GetLanguage(), TEXT("uce") ) == 0 ) // Unreal Championship English
-        return( 1 );
-    
-    return( 0 );
-}
-// --- gam
-
 /*-----------------------------------------------------------------------------
 	High level file functions.
 -----------------------------------------------------------------------------*/
@@ -2079,9 +2067,7 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 	}}
 
 	// Command line.
-    #ifdef _XBOX // sjs - don't eat the cmdline
-
-	#elif _MSC_VER
+	#if _MSC_VER
 		if( *InCmdLine=='\"' )
 		{
 			InCmdLine++;
@@ -2318,10 +2304,8 @@ void appExit()
 		GConfig = NULL;
 	}
 	FName::StaticExit();
-#ifndef _XBOX
 	if( !GIsCriticalError )
 		GMalloc->DumpAllocs();
-#endif
 
 	delete gethostbyname_mutex;
 

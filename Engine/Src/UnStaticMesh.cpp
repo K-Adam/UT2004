@@ -495,15 +495,6 @@ void UStaticMesh::Serialize(FArchive& Ar)
 		Ar << AuthenticationKey;
 	}
 
-#ifdef __PSX2_EE__
-	// WE can't do this in PostLoad because it MUST happen before that AActor::PostLoad that uses this mesh :(
-	if (Ar.IsLoading())
-	{
-		void PreCachePS2StaticMesh(UStaticMesh* StaticMesh);
-		PreCachePS2StaticMesh(this);
-	}
-#endif //__PSX2_EE__
-
 	if(Ar.LicenseeVer() == 0)
 	{
 		if(InternalVersion >= 6)
@@ -522,7 +513,6 @@ void UStaticMesh::PostLoad()
 
 	Super::PostLoad();
 
-#ifndef __PSX2_EE__ // our data is already loaded and preprocessed on PS2
 	if(InternalVersion == INDEX_NONE)
 	{
 		if(!RawTriangles.Num())
@@ -668,7 +658,6 @@ void UStaticMesh::PostLoad()
 	// Any (older) versions that didn't have a key, get one now. 
 	if( AuthenticationKey == 0 )
 		AuthenticationKey = CreateAuthenticationKey();
-#endif
 	unguard;
 }
 

@@ -10,7 +10,6 @@
 		  - No specific amd3d support.
         * Updated to use Chris Hargrove's mesh instancing concept.
 
-	    *  __PSX2_EE__ : Most PSX2 code temporarily removed from this file to avoid confusion.
 
 		* May 2001
 		  GetFrame Uses GTicks to determine if the bone state is current 
@@ -563,32 +562,6 @@ void USkeletalMeshInstance::PlayLIPSincAnim ( FName LIPSincAnimName, FLOAT Volum
 	debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: PlayLIPSincAnim for %s"), this->GetName());
 
 	USkeletalMesh* Mesh = (USkeletalMesh*)GetMesh();
-
-#ifdef _XBOX
-
-	// due to linear loading on xbox, most skeletal meshes are loaded before the GLIPSincInitGame
-	// call -- therefore the controllers aren't linked up properly at that time.  Just try to
-	// find a link the first time a LIPSinc animation is played on this mesh -- only try once.
-	if( !Mesh->LIPSincController && !Mesh->bAlreadyLookedForController )
-	{
-		debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Looking up controller for mesh %s"), Mesh->GetName());
-
-		Mesh->LIPSincController = GLIPSincDB.FindControllerByName( FString(Mesh->GetName()) );
-
-		if(Mesh->LIPSincController)
-		{
-			debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: NumAnimations = %i"), Mesh->LIPSincController->NumAnimations());
-		}
-
-		if( !Mesh->LinkupLIPSincBones() )
-		{
-			debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: WARNING: LIPSinc bone linkup failed!"));
-		}
-
-		Mesh->bAlreadyLookedForController = 1;
-	}
-
-#endif
 
 	if( Mesh->LIPSincController )
 	{
@@ -1523,7 +1496,7 @@ UBOOL USkeletalMeshInstance::PlayAnim(INT channel,FName SequenceName, FLOAT InRa
 		if ( SeqFrameCount <= 0.f  ) // Valid frame count ?
 			return 0;		
 
-		FLOAT SeqRate = AnimGetRate( InAnim ); // Xbox compiler appeasing..
+		FLOAT SeqRate = AnimGetRate( InAnim );
 
 		if ( (Blend->AnimSequence == SequenceName) && Blend->bAnimLoop && GetActor()->IsAnimating(channel) )
 		{

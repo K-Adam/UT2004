@@ -1012,10 +1012,6 @@ void static DrawStaticMeshSection(FRenderInterface* RI, UStaticMesh* StaticMesh,
 
 	if(Section.NumPrimitives > 0)
 	{
-#ifdef __PSX2_EE__
-		extern void PSX2Render_RenderStaticMesh(UStaticMesh* StaticMesh, UStaticMeshInstance* Instance, INT SectionIndex);
-		PSX2Render_RenderStaticMesh(StaticMesh, (Section.PolyFlags & PF_Unlit) ? NULL : Owner->Actor->StaticMeshInstance, SectionIndex);
-#else
 		RI->DrawPrimitive(
 			Section.IsStrip ? PT_TriangleStrip : PT_TriangleList,
 			Section.FirstIndex,
@@ -1023,7 +1019,6 @@ void static DrawStaticMeshSection(FRenderInterface* RI, UStaticMesh* StaticMesh,
 			Section.MinVertexIndex,
 			Section.MaxVertexIndex
 			);
-#endif
 	}
 	//Owner->GetLevel()->Engine->Stats->StaticMesh_Sections++;
 	//Owner->GetLevel()->Engine->Stats->StaticMesh_Triangles += Section.NumTriangles;

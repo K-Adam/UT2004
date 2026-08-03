@@ -67,7 +67,6 @@ inline UBOOL APawn::ShouldTrace(AActor *SourceActor, DWORD TraceFlags)
 	if ( bStationary )
 		return (TraceFlags & 0x0010 ); // TRACE_Others
 
-	// inlined for speed on PS2
 	return (TraceFlags & 0x0001 /*TRACE_Pawns*/);
 }
 

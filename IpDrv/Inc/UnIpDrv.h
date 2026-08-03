@@ -28,13 +28,9 @@ Revision history:
 // WinSock includes.
 #if __WINSOCK__
 #pragma pack(push,8)
-#ifdef _XBOX
-	#include <xtl.h>
-#else
 	#include <windows.h>
 	#include <winsock.h>
 	#include <conio.h>
-#endif
 #pragma pack(pop)
 #endif
 
@@ -241,13 +237,11 @@ inline int getlocalhostaddr( FOutputDevice& Out, in_addr &HostAddr )
 	int CanBindAll = 0;
 	IpSetInt( HostAddr, INADDR_ANY );
 	TCHAR Home[256]=TEXT("");
-#ifndef _XBOX
 	TCHAR HostName[256]=TEXT("");
 	ANSICHAR AnsiHostName[256]="";
 	if( gethostname( AnsiHostName, 256 ) )
 		Out.Logf( TEXT("%s: gethostname failed (%s)"), SOCKET_API, SocketError() );
 	appStrcpy( HostName, appFromAnsi(AnsiHostName) );
-#endif
 	if( Parse(appCmdLine(),TEXT("MULTIHOME="),Home,ARRAY_COUNT(Home)) )
 	{
 		TCHAR *A, *B, *C, *D;
@@ -265,7 +259,6 @@ inline int getlocalhostaddr( FOutputDevice& Out, in_addr &HostAddr )
 	}
 	else
 	{
-#ifndef _XBOX
 		check(gethostbyname_mutex != NULL);
 		gethostbyname_mutex->Lock();
 		HOSTENT* HostEnt = gethostbyname( appToAnsi(HostName) );
@@ -279,26 +272,15 @@ inline int getlocalhostaddr( FOutputDevice& Out, in_addr &HostAddr )
 				SocketHostError() );
 		}
 		else
-#endif
 		{
-#ifdef _XBOX
-			XNADDR xna;
-			XNetGetTitleXnAddr( &xna );
-			HostAddr = xna.ina;
-#else
 			HostAddr = *(in_addr*)( *HostEnt->h_addr_list );
-#endif
 			if( !ParseParam(appCmdLine(),TEXT("PRIMARYNET")) )
 				CanBindAll = 1;
 			static UBOOL First=0;
 			if( !First )
 			{
 				First = 1;
-#ifndef _XBOX
 				debugf( NAME_Init, TEXT("%s: I am %s (%s)"), SOCKET_API, HostName, *IpString( HostAddr ) );
-#else
-				debugf( NAME_Init, TEXT("%s: XBox doesn't support gethostname() (%s)"), SOCKET_API, *IpString( HostAddr ) );
-#endif
 			}
 		}
 		gethostbyname_mutex->Unlock();

@@ -8,7 +8,7 @@
 
 #include "EnginePrivate.h"
 
-#if !__PSX2_EE__ && !__GCN__ && !__LINUX__ && !__FreeBSD__ && !MACOSX && !_XBOX && !_WIN64
+#if !__LINUX__ && !__FreeBSD__ && !MACOSX && !_WIN64
 #  include "NVTriStrip.h"
 #  ifndef HAS_NVTRISTRIP
 #    define HAS_NVTRISTRIP 1
@@ -595,14 +595,10 @@ FCanvasUtil::FCanvasUtil(FRenderTarget* RenderTarget,FRenderInterface* InRI)
 	FLOAT	SizeX = RenderTarget->GetWidth(),
 			SizeY = RenderTarget->GetHeight();
 
-#ifdef __PSX2_EE__ // we need 1.0 for the Z. maybe DirectX can have the 1.0 also to merge the two lines?2
-	CanvasToScreen = FTranslationMatrix(FVector(-SizeX / 2.0f - 0.5f,-SizeY / 2.0f - 0.5f,1.0f)) * FScaleMatrix(FVector(2.0f / SizeX,-2.0f / SizeY,1.0f));
-#else
 	if( GIsOpenGL )
 		CanvasToScreen = FTranslationMatrix(FVector(-SizeX / 2.0f,-SizeY / 2.0f,0.0f)) * FScaleMatrix(FVector(2.0f / SizeX,-2.0f / SizeY,1.0f));
 	else
 		CanvasToScreen = FTranslationMatrix(FVector(-SizeX / 2.0f - 0.5f,-SizeY / 2.0f - 0.5f,0.0f)) * FScaleMatrix(FVector(2.0f / SizeX,-2.0f / SizeY,1.0f));
-#endif
 	ScreenToCanvas = CanvasToScreen.Inverse();
 
 	CacheId = MakeCacheID(CID_RenderVertices);
@@ -635,15 +631,8 @@ void FCanvasUtil::Flush()
 
 		RI->SetDistanceFog( 0, 0, 0, FColor(0,0,0) );
 		RI->SetTransform(TT_LocalToWorld,FMatrix::Identity);
-#ifdef __GCN__ // wacky ortho fun for GCN
-		static FTranslationMatrix GCNTranslation(FVector(0.0f, 0.0f, 1.0f));
-		static FMatrix GCNOrtho(FPlane(1.0f, 0.0f, 0.0f, 0.0f), FPlane(), FPlane(), FPlane());
-		RI->SetTransform(TT_WorldToCamera,GCNTranslation);
-		RI->SetTransform(TT_CameraToScreen,GCNOrtho);
-#else
 		RI->SetTransform(TT_WorldToCamera,FMatrix::Identity);
 		RI->SetTransform(TT_CameraToScreen,CanvasToScreen);
-#endif
 
 		INT	BaseVertexIndex = RI->SetDynamicStream(VS_FixedFunction,this);
 

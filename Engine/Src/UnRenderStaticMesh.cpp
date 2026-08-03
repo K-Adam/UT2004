@@ -239,10 +239,6 @@ void DrawSection(UStaticMesh* StaticMesh,INT SectionIndex,UMaterial* Material,FR
 
 		// Render the section.
 
-#ifdef __PSX2_EE__
-		extern void PSX2Render_RenderStaticMesh(UStaticMesh* StaticMesh, UStaticMeshInstance* Instance, INT SectionIndex);
-		PSX2Render_RenderStaticMesh(StaticMesh, Owner->Actor->StaticMeshInstance, SectionIndex);
-#else
 		RI->DrawPrimitive(
 			Section->IsStrip ? PT_TriangleStrip : PT_TriangleList,
 			Section->FirstIndex,
@@ -250,7 +246,6 @@ void DrawSection(UStaticMesh* StaticMesh,INT SectionIndex,UMaterial* Material,FR
 			Section->MinVertexIndex,
 			Section->MaxVertexIndex
 			);
-#endif
 	}
 
 	GStats.DWORDStats(GEngineStats.STATS_StaticMesh_UnbatchedUnsortedSections)++;
@@ -285,7 +280,6 @@ void DrawSortedSection(FLevelSceneNode* SceneNode,FDynamicActor* Owner,UStaticMe
 
 		// Render the section.
 
-#ifndef __PSX2_EE__
 		RI->DrawPrimitive(
 			Section->IsStrip ? PT_TriangleStrip : PT_TriangleList,
 			BaseIndex,
@@ -293,10 +287,6 @@ void DrawSortedSection(FLevelSceneNode* SceneNode,FDynamicActor* Owner,UStaticMe
 			Section->MinVertexIndex,
 			Section->MaxVertexIndex
 			);
-#else
-		extern void PSX2Render_RenderStaticMesh(UStaticMesh* StaticMesh, UStaticMeshInstance* Instance, INT SectionIndex);
-		PSX2Render_RenderStaticMesh(StaticMesh, Owner->Actor->StaticMeshInstance, SectionIndex);
-#endif
 	}
 }
 

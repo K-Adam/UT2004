@@ -23,13 +23,11 @@
 #include <errno.h>
 #include <time.h>
 
-#ifndef __GCN__
 #  ifndef MACOSX
 #    include <malloc.h>
 #  endif
 #include <sys/types.h>
 #include <sys/stat.h>
-#endif
 
 #ifdef _WIN32
 #include <io.h>
@@ -44,7 +42,7 @@
 // !! Note to self: Move to UnVcWin32.cpp
 // !! Make Linux version.
 //
-#if _MSC_VER && !__GCN__
+#if _MSC_VER
 CORE_API const TCHAR* appTimestamp()
 {
 	guard(appTimestamp);
@@ -77,8 +75,6 @@ CORE_API const TCHAR* appTimestamp()
 //
 CORE_API FString appGetGMTRef()
 {
-	#if __PSX2_EE__
-	#else
 	guard(appGetGMTRef);
 	struct tm *newtime;
 	TCHAR* GMTRef = appStaticString1024();
@@ -91,7 +87,6 @@ CORE_API FString appGetGMTRef()
 	appSprintf( GMTRef, (diff>0)?TEXT("+%1.1f"):TEXT("%1.1f"), diff );
 	return GMTRef;
 	unguard;
-	#endif
 }
 
 /*-----------------------------------------------------------------------------
@@ -141,11 +136,7 @@ CORE_API DOUBLE appAtan2( DOUBLE Y, DOUBLE X )
 }
 CORE_API DOUBLE appSqrt( DOUBLE Value )
 {
-#ifdef __PSX2_EE__
-	return Float_Sqrt_VU0( Value );
-#else
 	return sqrt(Value);
-#endif
 }
 CORE_API DOUBLE appPow( DOUBLE A, DOUBLE B )
 {

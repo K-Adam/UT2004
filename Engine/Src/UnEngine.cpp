@@ -104,11 +104,7 @@ void UEngine::Init()
 	// Subsystems.
 	FURL::StaticInit();
 	GEngineMem.Init( 65536 );
-#ifdef _XBOX
-	GCache.Init( 1024 * 1024 * 1, 4096 );
-#else
 	GCache.Init( 1024 * 1024 * CacheSizeMegs, 4096 );
-#endif
 	GEngineStats.Init();
 
 	// Initialize random number generator.
@@ -291,12 +287,7 @@ UBOOL UEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 
 	// See if any other subsystems claim the command.
 	if( GSys    && GSys->Exec		(Cmd,Ar) ) return 1;
-#ifdef _XBOX
-	//!!vogel: use xbdbsmon to read output 
-	if( UObject::StaticExec			(Cmd,*GLog) ) return 1;
-#else
 	if( UObject::StaticExec			(Cmd,Ar) ) return 1;
-#endif
 	if( GCache.Exec					(Cmd,Ar) ) return 1;
 	if( GExec   && GExec->Exec      (Cmd,Ar) ) return 1;
 	if( Client  && Client->Exec		(Cmd,Ar) ) return 1;
@@ -452,11 +443,6 @@ UBOOL UEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 			bShowHistograph = !bShowHistograph;
 			Result = 1;
 		}
-		else if(ParseCommand(&Cmd,TEXT("XBOXMEM")))
-		{
-			bShowXboxMemStats = !bShowXboxMemStats;
-			Result = 1;
-		}
 		else if(ParseCommand(&Cmd,TEXT("MATINEE")))
 		{
 			bShowMatineeStats = !bShowMatineeStats;
@@ -592,9 +578,6 @@ UBOOL UEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		else
 		if( ParseCommand(&Cmd,TEXT("gf2")) )
 			GRenDev->SetEmulationMode( HEM_GeForce1 );
-		else
-		if( ParseCommand(&Cmd,TEXT("xbox")) )
-			GRenDev->SetEmulationMode( HEM_XBox );
 		else
 			GRenDev->SetEmulationMode( HEM_None );
 		return 1;

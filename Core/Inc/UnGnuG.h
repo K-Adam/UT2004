@@ -22,39 +22,6 @@
 #elif (defined MACOSX)
 	#define __UNIX__  1
 	#define COMPILER "Compiled with MacOS X GNU g++ ("__VERSION__")"
-#elif __PSX2_EE__
-	#define __UNIX__ 1
-	#define __LINUX__ 1
-	#define __INTEL__ 1
-	#define __INTEL_BYTE_ORDER__ 1
-	#define COMPILER "Compiled with PSX2-EE g++ ("__VERSION__")"
-	// Force use single precision
-	#define tanh(x) tanhf(x)
-	#define ceil(x) ceilf(x)
-	#define fabs(x) fabsf(x)
-	#define floor(x) floorf(x)
-	#define cosh(x) coshf(x)
-	#define sinh(x) sinhf(x)
-	#define exp(x) expf(x)
-	#define ldexp(x,y) ldexpf(x,y)
-	#define log(x) logf(x)
-	#define log10(x) log10f(x)
-	#define pow(x,y) powf(x,y)
-	#define sqrt(x) sqrtf(x)
-	#define fmod(x,y) fmodf(x,y)
-	#define sin( x ) sinf( x )
-	#define cos( x ) cosf( x )
-	#define tan( x ) tanf( x )
-	#define asin( x ) asinf( x )
-	#define acos( x ) acosf( x )
-	#define atan( x ) atanf( x )
-	#define atan2( x, y ) atan2f( x, y )
-#elif __GCN__
-	#define __UNIX__ 1
-	#define __LINUX__ 1
-	#define __INTEL__ 1
-	#define __INTEL_BYTE_ORDER__ 1
-	#define COMPILER "Compiled for GCN ("__VERSION__")"
 #else
 	#error Unsupported platform.
 #endif
@@ -117,11 +84,7 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 
 // Function type macros.
 #define DLL_IMPORT
-#if defined(__PSX2_EE__) || defined(__GCN__)
-#define DLL_EXPORT
-#else
 #define DLL_EXPORT			extern "C"
-#endif
 #define DLL_EXPORT_CLASS
 #define VARARGS
 #define CDECL
@@ -188,11 +151,7 @@ typedef wchar_t             UNICHARU;	// A unicode character.
 // Other base types.
 typedef signed int			UBOOL;		// Boolean 0 (false) or 1 (true).
 typedef float				FLOAT;		// 32-bit IEEE floating point.
-#ifdef __PSX2_EE__
-typedef float				DOUBLE;		// 32-bit IEEE floating point.
-#else
 typedef double				DOUBLE;		// 64-bit IEEE double.
-#endif
 typedef unsigned int        SIZE_T;     // Corresponds to C SIZE_T.
 
 // Bitfield type.
@@ -354,13 +313,8 @@ CORE_API DOUBLE appSecondsSlow();
 #define appRound(x) ((INT)floor(x + 0.5f))
 #define appFractional(x) (x - appFloor(x))
 
-#ifdef __PSX2_EE__
-#define appSqrt(x) Float_Sqrt_VU0(x)
-#define appRecipSqrt(x) (1.0f/Float_Sqrt_VU0(x))
-#else
 #define appSqrt(x) sqrt(x)
 #define appRecipSqrt(x) (1.0/sqrt(x))
-#endif
 
 
 

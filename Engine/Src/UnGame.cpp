@@ -21,7 +21,6 @@ IMPLEMENT_CLASS(UCrosshairPack);
 IMPLEMENT_CLASS(APrecacheHack);
 IMPLEMENT_CLASS(AMaplistManagerBase);
 
-const int XBoxRelaunch = 0; // sjs --- enables rebooting of xbox between level loads
 extern int QueueScreenShot; // sjs - label hack
 
 /*-----------------------------------------------------------------------------
@@ -527,9 +526,6 @@ UBOOL UGameEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		
 		if( Client && Client->Viewports.Num() )
 		{
-#ifdef _XBOX
-            Client->Exec( TEXT("E3-WRITEPLAYER") ); // sjs - E3
-#endif
 			if( GLevel && GLevel->NetDriver && GLevel->NetDriver->ServerConnection && GLevel->NetDriver->ServerConnection->Channels[0] )
 			{
 				GLevel->NetDriver->ServerConnection->Channels[0]->Close();
@@ -1233,17 +1229,6 @@ UBOOL UGameEngine::Browse( FURL URL, const TMap<FString,FString>* TravelInfo, FS
 	{
 		// Local map file.
 		guard(LocalMapURL);
-#ifdef _XBOX // sjs - reboot the Xbox when launching a new map
-		if ( !XBoxRelaunch || appStrnicmp( *URL.Map, TEXT("Entry"), 5 ) == 0 || GLevel == NULL )
-		{
-		return LoadMap( URL, NULL, TravelInfo, Error )!=NULL;
-		}
-		else
-		{
-			FString launch = FString::Printf(TEXT("RELAUNCH %s"), *URL.String() );
-			return Exec( *launch );
-		}
-#else
 		UBOOL MapRet = LoadMap( URL, NULL, TravelInfo, Error )!=NULL;
 
 		// Big Hack #2 - Remove BonusVehicles
@@ -1254,7 +1239,6 @@ UBOOL UGameEngine::Browse( FURL URL, const TMap<FString,FString>* TravelInfo, FS
 			ServerUpdateMD5();
 
 		return MapRet;
-#endif
 		unguard;
 	}
 	else if( URL.IsInternal() && GIsClient )
@@ -2218,24 +2202,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	}
 	unguard;
 
-	// sjs ---
-#ifdef _XBOX
-	guard(CleanupXbox);
-	if( GLevel && appStricmp(GLevel->GetOuter()->GetName(),TEXT("Entry"))!=0 )
-	{
-		Flush(0);
-		{for( TObjectIterator<AActor> It; It; ++It )
-			if( It->IsIn(GLevel->GetOuter()) )
-				It->SetFlags( RF_EliminateObject );}
-		{for( INT i=0; i<GLevel->Actors.Num(); i++ )
-			if( GLevel->Actors(i) )
-				GLevel->Actors(i)->ClearFlags( RF_EliminateObject );}
-		CollectGarbage( RF_Native );
-	}
-	unguard;
-#endif
-	// --- sjs
-
 	// Load the level and all objects under it, using the proper Guid.
 	guard(LoadLevel);
 	GLevel = LoadObject<ULevel>( MapParent, TEXT("MyLevel"), *URL.Map, LOAD_NoFail, NULL );
@@ -2873,9 +2839,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 			URL.SaveURLConfig( TEXT("DefaultPlayer"), TEXT("Name" ), TEXT("User") );
 			URL.SaveURLConfig( TEXT("DefaultPlayer"), TEXT("Team" ), TEXT("User") );
 			URL.SaveURLConfig( TEXT("DefaultPlayer"), TEXT("Character" ), TEXT("User") ); // sjs
-#ifdef _XBOX
-			URL.SaveURLConfig( TEXT("DefaultPlayer"), TEXT("VoiceMask" ), TEXT("User") ); // sjs
-#endif
 			URL.SaveURLConfig( TEXT("DefaultPlayer"), TEXT("Class"), TEXT("User") );
 			URL.SaveURLConfig( TEXT("DefaultPlayer"), TEXT("Skin" ), TEXT("User") );
 			URL.SaveURLConfig( TEXT("DefaultPlayer"), TEXT("Face" ), TEXT("User") );
@@ -3240,13 +3203,6 @@ void UGameEngine::SetClientTravel( UPlayer* Player, const TCHAR* NextURL, UBOOL 
 {
 	guard(UGameEngine::SetClientTravel);
 	check(Player);
-
-    // sjs --- E3
-#ifdef _XBOX 
-    if( Client ) // only do this if we're at entry right now
-		Client->Exec(TEXT("E3-GETPLAYER"), *GLog);
-#endif
-    // --- sjs
 
 	UViewport* Viewport    = CastChecked<UViewport>( Player );
 	Viewport->TravelURL    = NextURL;

@@ -33,16 +33,11 @@ class ENGINE_API FColor
 public:
 	// Variables.
 #if 1 //__INTEL_BYTE_ORDER__
-#ifdef __PSX2_EE__
-	BYTE R GCC_ALIGN(4);
-	BYTE G,B,A;
-#else
 #if _MSC_VER
 	union { struct{ BYTE B,G,R,A; }; DWORD AlignmentDummy; };
 #else
 	BYTE B GCC_ALIGN(4);
 	BYTE G,R,A;
-#endif
 #endif
 #else
 	//!!TODO: handle packing.
@@ -577,11 +572,7 @@ class FColorHack
 public:
 
 #if __INTEL_BYTE_ORDER__
-#ifdef __PSX2_EE__
-	BYTE R,G,B,A;
-#else
 	BYTE B,G,R,A;
-#endif
 #else
 	BYTE A,R,G,B;
 #endif

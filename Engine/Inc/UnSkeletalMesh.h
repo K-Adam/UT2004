@@ -345,7 +345,7 @@ struct VJointPos
 
 
 //
-// 16-byte helper structure (PSX2) VBoneInfluence + Bone index, up to 4, for each vertex.
+// 16-byte helper structure VBoneInfluence + Bone index, up to 4, for each vertex.
 //
 struct VertInfIndex
 {
@@ -1236,7 +1236,7 @@ class ENGINE_API USkeletalMesh : public ULodMesh
 	USkeletalMesh*  DefaultRefMesh; // Optional non-similar mesh for animation adjustment.
 
 	// All LOD/Vertex buffers that aren't unique per instance.
-	FMeshLODChunk LODChunks[4]; // For non-smooth-lod hardware rendering schemes (PSX2)
+	FMeshLODChunk LODChunks[4]; // For non-smooth-lod hardware rendering schemes
 	
 	// Reference skeleton precomputed bases #DEBUG wasteful ?!
 	TArray <FCoords> RefBasesInverse;
@@ -1266,10 +1266,6 @@ class ENGINE_API USkeletalMesh : public ULodMesh
 	// This has the ULodMesh::DrawScale baked in.
 	UKMeshProps*				KPhysicsProps;	
 
-#ifdef __PSX2_EE__
-	void* PS2Data;
-#endif
-
 	// Object interface.
 	void Serialize( FArchive& Ar );
 	virtual void PostLoad();
@@ -1278,11 +1274,6 @@ class ENGINE_API USkeletalMesh : public ULodMesh
 	// Constructor.
 	USkeletalMesh()
 	{
-#ifdef WITH_LIPSINC
-#ifdef _XBOX
-		bAlreadyLookedForController = 0;
-#endif
-#endif
 		DefaultAnim = NULL;
 	}
 
@@ -1297,7 +1288,6 @@ class ENGINE_API USkeletalMesh : public ULodMesh
 	// Convert -existing- smooth skin to rigid parts + smooth parts.	
 	void ExtractRigidParts( INT LODModelIndex, INT PartMinVerts, INT MaxParts, UBOOL bDuplicateVerts );
 	
-	void CalculateNormals(TArray <FVector>& Normals, UBOOL Displace );
 	void NormalizeInfluences( INT LodLevel );
 	INT  RenderPreProcess();
 
@@ -1333,9 +1323,6 @@ class ENGINE_API USkeletalMesh : public ULodMesh
 	virtual UBOOL PointCheck(FCheckResult&	Result, AActor*	Owner, const FVector& Location, const FVector& Extent, DWORD ExtraNodeFlags);
 
 #ifdef WITH_LIPSINC
-#ifdef _XBOX
-	UBOOL	bAlreadyLookedForController;
-#endif
 	TLIPSincController *LIPSincController;
 	UBOOL LinkupLIPSincBones( void );
 #endif

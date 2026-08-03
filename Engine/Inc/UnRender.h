@@ -164,10 +164,6 @@ public:
 	// GetViewFrustum
 	virtual FConvexVolume GetViewFrustum();
 
-#ifdef __PSX2_EE__
-	// GetOverflowFrustum - gets the guard band frustum, only needed for PS2
-	virtual FConvexVolume GetOverflowFrustum();
-#endif
 	// FilterActor
 	virtual UBOOL FilterActor(AActor* Actor);
     virtual UBOOL FilterAttachment(AActor* AttachedActor) { return 1; } // sjs

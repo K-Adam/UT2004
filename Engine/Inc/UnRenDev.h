@@ -78,9 +78,6 @@ enum EPrimitiveType
 	PT_TriangleFan,
 	PT_PointList,
 	PT_LineList,
-#ifdef _XBOX // sjs
-    PT_QuadList,
-#endif
 };
 
 // Vertex shaders for SetVertexStreams.
@@ -129,7 +126,6 @@ enum EHardwareEmulationMode
 {
 	HEM_None		= 0,
 	HEM_GeForce1	= 1,
-	HEM_XBox		= 2,
 };
 
 // Precaching options.

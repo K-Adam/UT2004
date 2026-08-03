@@ -167,9 +167,7 @@ public:
 	CORE_API friend FArchive& operator<<( FArchive &Ar, QWORD& Q );
 	CORE_API friend FArchive& operator<<( FArchive& Ar, FString& A );
 
-#ifndef __PSX2_EE__
 	CORE_API friend FArchive& operator<<( FArchive& Ar, DOUBLE& F );
-#endif
 
 #ifdef __GNUC__
 	CORE_API friend FArchive& operator<<( FArchive& Ar, PTRINT& P );

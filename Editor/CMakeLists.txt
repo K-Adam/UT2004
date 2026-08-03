@@ -8,7 +8,7 @@ ut_module(Editor SHARED
           UnEditor.cpp UnEdLevelStat.cpp UnEdSrv.cpp UnEdSrvExecImporters.cpp UnEdTran.cpp
           UnLightwaveImporter.cpp UnMeshEd.cpp UnMeshLP.cpp UnParams.cpp UnPrefab.cpp
           UnScrCom.cpp UnShadow.cpp UnStaticMesh.cpp UnTopics.cpp UnVisi.cpp
-          UPkgCommandlet.cpp UPS2ConvertCommandlet.cpp URebuildCommandlet.cpp
+          UPkgCommandlet.cpp URebuildCommandlet.cpp
           USetNormalLODCommandlet.cpp USoundLocCommandlet.cpp UStripSourceCommandlet.cpp
           USurfaceTypeCommandlet.cpp UTextureInfoCommandlet.cpp UTextureLODCommandlet.cpp
           UTextureStripCommandlet.cpp xEdInt.cpp xObjExporters.cpp xTextureConversions.cpp
