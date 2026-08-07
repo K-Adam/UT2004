@@ -104,19 +104,10 @@ static inline DWORD MakeColor( FPlane& p )
 	DWORD d;
 	if( GIsOpenGL )
 	{
-#if __INTEL_BYTE_ORDER__
 		d  = (int)(p.X * 255.0f);
 		d |= (int)(p.Y * 255.0f) << 8;
 		d |= (int)(p.Z * 255.0f) << 16;
 		d |= (int)(p.W * 255.0f) << 24;
-#else
-		{
-			d  = (int)(p.X * 255.0f) << 24;
-			d |= (int)(p.Y * 255.0f) << 16;
-			d |= (int)(p.Z * 255.0f) << 8;
-			d |= (int)(p.W * 255.0f);
-		}
-#endif
 	}
 	else
 	{

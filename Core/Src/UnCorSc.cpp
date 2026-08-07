@@ -4930,15 +4930,6 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
 
 			BYTE* Param = NewStack.Locals + Property->Offset;
 			Stack.Step( Stack.Object, Param );
-#if !__INTEL_BYTE_ORDER__
-			if( Property->GetID()==NAME_BoolProperty  )
- 			{
-				if( *(DWORD*)(Param) )
-					*(DWORD*)(Param) = FIRST_BITFIELD;
-				else
-					*(DWORD*)(Param) = 0;
-			}
-#endif
 			if( (Property->PropertyFlags & CPF_OutParm) && GPropAddr )
 			{
 				Out->PropAddr = GPropAddr;

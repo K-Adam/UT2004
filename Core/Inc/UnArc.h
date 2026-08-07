@@ -13,8 +13,7 @@
 -----------------------------------------------------------------------------*/
 
 //
-// Archive class. Used for loading, saving, and garbage collecting
-// in a byte order neutral way.
+// Archive class. Used for loading, saving, and garbage collecting.
 //
 class CORE_API FArchive
 {
@@ -98,21 +97,7 @@ public:
 	// Hardcoded datatype routines that may not be overridden.
 	FArchive& ByteOrderSerialize( void* V, INT Length )
 	{
-#if __INTEL_BYTE_ORDER__
 		Serialize( V, Length );
-#else
-		if( ArIsPersistent )
-		{
-			// Transferring between memory and file, so flip the byte order.
-			for( INT i=Length-1; i>=0; i-- )
-				Serialize( (BYTE*)V + i, 1 );
-		}
-		else
-		{
-			// Transferring around within memory, so keep the byte order.
-			Serialize( V, Length );
-		}
-#endif
 		return *this;
 	}
 

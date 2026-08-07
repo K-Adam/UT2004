@@ -25,14 +25,7 @@ static	FLOAT	tmp_ScaleGlow			= 1.f;
 
 static inline DWORD MakeAttenuatedColor( INT Attenuation, INT Alpha )
 {
-#if __INTEL_BYTE_ORDER__
 	return Attenuation | (Attenuation << 8) | (Attenuation << 16) | (Alpha << 24);
-#else
-	if( GIsOpenGLRevComps )  // !!! FIXME: does rev_comps ever exist on x86 MacOS?
-		return Attenuation | (Attenuation << 8) | (Attenuation << 16) | (Alpha << 24);
-	else
-		return Alpha | (Attenuation << 8) | (Attenuation << 16) | (Attenuation << 24);
-#endif
 }
 
 

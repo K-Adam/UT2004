@@ -436,7 +436,7 @@ UBOOL UClassExporterH::ExportText( UObject* Object, const TCHAR* Type, FOutputDe
 							Ar.Logf( TEXT("        appMemcpy(&Parms.%s,%s,sizeof(Parms.%s));\r\n"), It->GetName(), It->GetName(), It->GetName() );
 						else
 						{
-							if ( It->IsA(UBoolProperty::StaticClass()) )   // need to handle bitfield byte order when passing into UnrealScript...  --ryan.
+							if ( It->IsA(UBoolProperty::StaticClass()) )
 								Ar.Logf( TEXT("        Parms.%s=((%s) ? FIRST_BITFIELD : 0);\r\n"), It->GetName(), It->GetName() );
 							else
 								Ar.Logf( TEXT("        Parms.%s=%s;\r\n"), It->GetName(), It->GetName() );

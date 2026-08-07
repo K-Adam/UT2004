@@ -190,16 +190,7 @@ struct FMeshVert
 	// Serializer.
 	friend FArchive& operator<<( FArchive& Ar, FMeshVert& V )
 	{
-		#if __INTEL_BYTE_ORDER__
 		return Ar << GET_MESHVERT_DWORD(V);
-		#else
-		DWORD val = (V.X & 0x7FF) | ((V.Y & 0x7FF) << 11) | ((V.Z & 0x3FF) << 22);
-		FArchive &retval = Ar << val;
-		V.X = (val >> 00) & 0x7FF;
-		V.Y = (val >> 11) & 0x7FF;
-		V.Z = (val >> 22) & 0x3FF;
-		return retval;
-		#endif
 	}
 };
 
@@ -234,16 +225,7 @@ struct FMeshNorm
 	// Serialize as DWORDs.
 	friend FArchive& operator<<( FArchive& Ar, FMeshNorm& N )
 	{
-		#if __INTEL_BYTE_ORDER__
 		return Ar << GET_MESHNORM_DWORD(N);
-		#else
-		DWORD val = (N.X & 0x3FF) | ((N.Y & 0x3FF) << 10) | ((N.Z & 0x3FF) << 20);
-		FArchive &retval = Ar << val;
-		N.X = (val >> 00) & 0x3FF;
-		N.Y = (val >> 10) & 0x3FF;
-		N.Z = (val >> 20) & 0x3FF;
-		return retval;
-		#endif
 	}
 
 };

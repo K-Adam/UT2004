@@ -13,7 +13,6 @@
 	#define __UNIX__  1
 	#define __LINUX__ 1
 	#define __INTEL__ 1
-	#define __INTEL_BYTE_ORDER__ 1
 	#if __ICC
 		#define COMPILER "Compiled with Intel C++"
 	#else

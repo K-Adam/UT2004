@@ -32,11 +32,7 @@ static void *FileStreamingThread( void* Arg );
 static DWORD STDCALL FileStreamingThread( void* Arg );
 #endif
 
-#if __INTEL_BYTE_ORDER__
 #define VORBIS_BYTE_ORDER 0
-#else
-#define VORBIS_BYTE_ORDER 1
-#endif
 
 /*------------------------------------------------------------------------------------
 	FALAudioStream.

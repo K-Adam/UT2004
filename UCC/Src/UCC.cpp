@@ -265,41 +265,6 @@ while (1)
 }
 #endif
 
-#if 0  // Test byte swapping...
-#if __INTEL_BYTE_ORDER__
-_WORD y = 1;
-y = INTEL_ORDER16(y);
-printf("INTEL_ORDER16() test %s.\n", y == 1 ? "succeeded" : "failed");
-DWORD x = 1;
-x = INTEL_ORDER32(x);
-printf("INTEL_ORDER32() test %s.\n", x == 1 ? "succeeded" : "failed");
-#else
-_WORD y = 1;
-y = INTEL_ORDER16(y);
-printf("INTEL_ORDER16() test %s.\n", y == 0x100 ? "succeeded" : "failed");
-DWORD x = 1;
-x = INTEL_ORDER32(x);
-printf("INTEL_ORDER32() test %s.\n", x == 0x1000000 ? "succeeded" : "failed");
-#endif
-#endif
-
-
-#if 0
-    printf("testing byteswap speed...\n");
-    DOUBLE start = appSeconds();
-    DWORD x = 1;
-    DWORD y;
-    for (int i = 0; i < 1000000; i++)
-    {
-        for (int j = 0; j < 1000; j++)
-        x++;
-        y = INTEL_ORDER32(x);
-    }
-    DOUBLE end = appSeconds() - start;
-    printf("Done in %f seconds\n", end);
-#endif
-
-
 		if( Token==TEXT("") )
 		{
 			ShowBanner( Warn );

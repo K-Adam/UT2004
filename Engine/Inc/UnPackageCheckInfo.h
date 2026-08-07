@@ -35,22 +35,6 @@ public:
 #define BF_NUM_S_BOXES  4
 #define BF_NUM_ENTRIES  256
 
-// #define BIG_ENDIAN
-
-#define LITTLE_ENDIAN
-
-
-#ifdef BIG_ENDIAN
-struct BF_WordByte
-{
-	DWORD zero:8;
-	DWORD one:8;
-	DWORD two:8;
-	DWORD three:8;
-};
-#endif
-
-#ifdef LITTLE_ENDIAN
 struct BF_WordByte
 {
 	DWORD three:8;
@@ -58,7 +42,6 @@ struct BF_WordByte
 	DWORD one:8;
 	DWORD zero:8;
 };
-#endif
 
 union BF_Word
 {

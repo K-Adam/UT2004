@@ -22,58 +22,14 @@ CORE_API extern DWORD GCRCTable[];
 #endif
 
 #ifndef NEXT_BITFIELD
-	#if __INTEL_BYTE_ORDER__
-		#define NEXT_BITFIELD(b) ((b)<<1)
-		#define FIRST_BITFIELD   (1)
-	#else
-		#define NEXT_BITFIELD(b) ((b)>>1)
-		#define FIRST_BITFIELD   (0x80000000)
-	#endif
+	#define NEXT_BITFIELD(b) ((b)<<1)
+	#define FIRST_BITFIELD   (1)
 #endif
 
-#if __INTEL_BYTE_ORDER__
-	#define INTEL_ORDER16(x)   (x)
-	#define INTEL_ORDER32(x)   (x)
-	#define INTEL_ORDER64(x)   (x)
-#else
-
-    // These macros are not safe to use unless data is UNSIGNED!
-	#define INTEL_ORDER16_unsigned(x)   ((((x)>>8)&0xff)+ (((x)<<8)&0xff00))
-	#define INTEL_ORDER32_unsigned(x)   (((x)>>24) + (((x)>>8)&0xff00) + (((x)<<8)&0xff0000) + ((x)<<24))
-
-    static inline _WORD INTEL_ORDER16(_WORD val)
-    {
-        return(INTEL_ORDER16_unsigned(val));
-    }
-
-    static inline SWORD INTEL_ORDER16(SWORD val)
-    {
-        _WORD uval = *((_WORD *) &val);
-        uval = INTEL_ORDER16(uval);
-        return( *((SWORD *) &uval) );
-    }
-
-    static inline DWORD INTEL_ORDER32(DWORD val)
-    {
-        return(INTEL_ORDER32_unsigned(val));
-    }
-
-    static inline INT INTEL_ORDER32(INT val)
-    {
-        DWORD uval = *((DWORD *) &val);
-        uval = INTEL_ORDER32(uval);
-        return( *((INT *) &uval) );
-    }
-
-	static inline QWORD INTEL_ORDER64(QWORD x)
-	{
-		/* Separate into high and low 32-bit values and swap them */
-		DWORD l = (DWORD) (x & 0xFFFFFFFF);
-		DWORD h = (DWORD) ((x >> 32) & 0xFFFFFFFF);
-	    return( (((QWORD) (INTEL_ORDER32(l))) << 32) |
-		         ((QWORD) (INTEL_ORDER32(h))) );
-	}
-#endif
+// All supported platforms are little-endian like the package format.
+#define INTEL_ORDER16(x)   (x)
+#define INTEL_ORDER32(x)   (x)
+#define INTEL_ORDER64(x)   (x)
 
 
 /*-----------------------------------------------------------------------------

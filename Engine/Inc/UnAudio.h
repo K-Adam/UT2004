@@ -530,7 +530,6 @@ class ENGINE_API USoundGroup : public USound
 -----------------------------------------------------------------------------*/
 
 //  Macros to convert 4 bytes to a Riff-style ID DWORD.
-//  Todo: make these endian independent !!!
 
 #undef MAKEFOURCC
 

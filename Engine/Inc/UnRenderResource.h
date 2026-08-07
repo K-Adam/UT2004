@@ -32,16 +32,11 @@ class ENGINE_API FColor
 {
 public:
 	// Variables.
-#if 1 //__INTEL_BYTE_ORDER__
 #if _MSC_VER
 	union { struct{ BYTE B,G,R,A; }; DWORD AlignmentDummy; };
 #else
 	BYTE B GCC_ALIGN(4);
 	BYTE G,R,A;
-#endif
-#else
-	//!!TODO: handle packing.
-	BYTE A,R,G,B;
 #endif
 
 	DWORD& DWColor(void) {return *((DWORD*)this);}
@@ -566,11 +561,7 @@ class FColorHack
 {
 public:
 
-#if __INTEL_BYTE_ORDER__
 	BYTE B,G,R,A;
-#else
-	BYTE A,R,G,B;
-#endif
 
 	DWORD& DWColor(void) {return *((DWORD*)this);}
 	const DWORD& DWColor(void) const {return *((DWORD*)this);}

@@ -578,7 +578,6 @@ CORE_API extern	TCHAR					GUserIni[1024];
 CORE_API extern FLOAT					NEAR_CLIPPING_PLANE;
 CORE_API extern FLOAT					FAR_CLIPPING_PLANE;
 CORE_API extern UBOOL					GIsOpenGL;
-CORE_API extern UBOOL					GIsOpenGLRevComps;
 CORE_API extern UBOOL					GIsPixomatic;
 CORE_API extern ERunningOS				GRunningOS;
 CORE_API extern DWORD					GMemoryTag;

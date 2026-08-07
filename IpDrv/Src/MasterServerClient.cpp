@@ -745,10 +745,6 @@ public:
 								return;
 							}
 
-							// argh...this is in 'host order', which is little
-							//  endian on intel and needs special swapping
-							//  for PowerPC, etc.  --ryan.
-							IP = INTEL_ORDER32(IP);
 
 							*ArRecv << Server.ServerName;
 							if( Server.ServerName.Len() == 25 )

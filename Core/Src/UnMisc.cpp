@@ -612,25 +612,16 @@ CORE_API void appMD5Init( FMD5Context* context )
 
 CORE_API void appMD5Update32( FMD5Context* context, INT val)
 {
-	#if !__INTEL_BYTE_ORDER__
-	val = INTEL_ORDER32(*((DWORD *)&val));
-	#endif
 	appMD5Update(context, (BYTE *) &val, sizeof (val));
 }
 
 CORE_API void appMD5Update32( FMD5Context* context, DWORD val)
 {
-	#if !__INTEL_BYTE_ORDER__
-	val = INTEL_ORDER32(val);
-	#endif
 	appMD5Update(context, (BYTE *) &val, sizeof (val));
 }
 
 CORE_API void appMD5Update16( FMD5Context* context, _WORD val)
 {
-	#if !__INTEL_BYTE_ORDER__
-	val = INTEL_ORDER16(val);
-	#endif
 	appMD5Update(context, (BYTE *) &val, sizeof (val));
 }
 

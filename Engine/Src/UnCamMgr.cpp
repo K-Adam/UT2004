@@ -229,11 +229,7 @@ INT UClient::GetTextureLODBias (ELODSet LODSet)
 	check (LODSet < LODSET_MAX);
 	check (PTextureDetail);
 
-	// This is needed because TextureLODSet is an array of INTs, but we fill
-	//  it with UByteProperties for some reason, so we're writing single bytes
-	//  in there, causing a byte-ordering issue. This is the safest fix for
-	//  the time being.  :(   --ryan.
-	INT LOD = INTEL_ORDER32(TextureLODSet[LODSet]);	
+	INT LOD = TextureLODSet[LODSet];
 	return (LOD - (PTextureDetail->Names.Num() / 2));
 
 	unguard;
