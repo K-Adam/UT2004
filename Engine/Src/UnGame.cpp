@@ -1967,14 +1967,6 @@ void UGameEngine::FixUpLevel()
 }
 
 
-#if MACOSX  // GameRanger support for MacOS players.  --ryan.
-extern "C"
-{
-    extern int GameRangerClientsWaiting;
-    void AlertGameRangerHostReady(void);
-}
-#endif
-
 //
 // Load a map.
 //
@@ -1987,28 +1979,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	Error = TEXT("");
 	debugf( NAME_Init, TEXT("LoadMap: %s"), *URL.String(0,1) );
 	GInitRunaway();
-
-	#if MACOSX  // GameRanger...notify players when 1st real map is loaded.
-	if (GameRangerClientsWaiting)
-	{
-		const TCHAR *ignore[] = { TEXT("entry"), TEXT("nvidialogo"), NULL };
-		INT loc, i;
-		FString map(*URL.String(0,1));
-		loc = map.InStr(TEXT("?"));
-		if (loc >= 0) map = map.Left(loc);
-		loc = map.InStr(TEXT("."));
-		if (loc >= 0) map = map.Left(loc);
-
-		for ( i = 0; ignore[i] != NULL; i++ )
-		{
-			if (appStricmp(*map, ignore[i]) == 0)
-				break;
-		}
-
-		if (ignore[i] == NULL)  // no match? It's a real map.
-			AlertGameRangerHostReady();
-	}
-	#endif
 
 	// Remember current level's stack level.
 	INT SavedHubStackLevel = GLevel ? GLevel->GetLevelInfo()->HubStackLevel : 0;

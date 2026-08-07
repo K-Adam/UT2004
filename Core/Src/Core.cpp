@@ -212,10 +212,6 @@ CORE_API DOUBLE					GCurrentTime					= 0;
 CORE_API DWORD					GGPUDeviceID					= 0;
 CORE_API DWORD					GGPUVendorID					= 0;
 
-#if MACOSX
-CORE_API INT					GMacOSVer						= 0x0000;
-#endif
-
 CORE_API UBOOL					GDemoPlayback					= false;
 
 CORE_API TCHAR					GModName[256]						= TEXT("");

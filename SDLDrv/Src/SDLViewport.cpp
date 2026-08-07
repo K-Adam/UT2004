@@ -76,10 +76,6 @@ USDLViewport::USDLViewport()
 
     TextToSpeechObject = -1;
 
-    #if MACOSX
-    MacTextToSpeechEnabled = 0;
-    #endif
-
 	// Query current bit depth.
 	int depth = SDL_GetVideoInfo()->vfmt->BitsPerPixel;
 	switch (depth)
@@ -198,11 +194,6 @@ USDLViewport::USDLViewport()
 	KeysymMap[SDLK_CAPSLOCK]	= IK_CapsLock;
 	KeysymMap[SDLK_SCROLLOCK]	= IK_ScrollLock;
 
-#if MACOSX  // !!! FIXME: Arguably, a bug in SDL...
-	KeysymMap[SDLK_PRINT]	= IK_F13;
-	KeysymMap[SDLK_INSERT]	= IK_Help;
-#endif
-
 	KeyRepeatKey = 0;
 	KeyRepeatUnicode = 0;
 	LastJoyHat = IK_None;
@@ -227,16 +218,6 @@ void USDLViewport::Destroy()
         close(TextToSpeechObject);
         TextToSpeechObject = -1;
     }
-
-    #if MACOSX
-    if (MacTextToSpeechEnabled)
-    {
-        StopSpeech(MacTextToSpeechChannel);
-        DisposeSpeechChannel(MacTextToSpeechChannel);
-        SpeechQueue.Empty();
-        MacTextToSpeechEnabled = 0;
-    }
-    #endif
 
 	unguard;
 }
@@ -538,26 +519,6 @@ void USDLViewport::OpenWindow( PTRINT InParentWindow, UBOOL IsTemporary, INT New
             }
         }
     }
-
-    #if MACOSX
-    if (!MacTextToSpeechEnabled)
-    {
-        if (C->MacNativeTextToSpeech)
-        {
-            int rc = (int) NewSpeechChannel(NULL, &MacTextToSpeechChannel);
-            if (rc != 0)
-                debugf(TEXT("TTS: NewSpeechChannel() failed! rc==%d"), rc);
-            else
-            {
-                debugf(TEXT("TTS: Native MacOS X text-to-speech enabled."));
-                MacTextToSpeechEnabled = 1;
-            }
-        }
-
-        if (!MacTextToSpeechEnabled)
-            debugf(TEXT("TTS: Native MacOS X text-to-speech is NOT enabled."));
-    }
-    #endif
 
 	if( NewX!=INDEX_NONE )
 		NewX = Align( NewX, 2 );
@@ -883,8 +844,6 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 {
 	guard(USDLViewport::UpdateInput);
 
-    UpdateSpeech();
-
 	USDLClient* Client = GetOuterUSDLClient();
 
     if ((Client->UseJoystick) && (USDLClient::Joystick != NULL))
@@ -943,47 +902,6 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				{
 					Event.key.keysym.unicode = Event.key.keysym.sym;
 				}
-
-                #if MACOSX
-                // !!! FIXME: *LOCK is broken, look at it later. --ryan.
-				if ( (Event.key.keysym.sym == SDLK_NUMLOCK) ||
-                     (Event.key.keysym.sym == SDLK_CAPSLOCK) ||
-                     (Event.key.keysym.sym == SDLK_SCROLLOCK) )
-                    break;
-
-				if ( (Event.key.keysym.sym == SDLK_q) )
-                {
-                    if (Client->AllowCommandQKeys)
-                    {
-                        if (SDL_GetKeyState(NULL)[SDLK_LMETA])
-                        {
-                            debugf(TEXT("Command-Q hit...quitting game!"));
-                            appRequestExit(0);
-                        }
-                    }
-                }
-
-                // !!! FIXME: Should really be a lookup table. --ryan.
-				else if ( (Event.key.keysym.sym >= SDLK_KP0) &&
-                          (Event.key.keysym.sym <= SDLK_KP9) )
-                {
-                    bool num = (SDL_GetKeyState(NULL)[SDLK_NUMLOCK] != 0);
-                    if (Event.key.keysym.mod & KMOD_SHIFT)
-                        num = !num;
-                    if (num)
-                        Event.key.keysym.sym = (SDLKey) ('0' + (((int) Event.key.keysym.sym) - SDLK_KP0));
-                }
-
-                // !!! FIXME: Should really be a lookup table. --ryan.
-                else if (Event.key.keysym.sym == SDLK_KP_PERIOD)
-                {
-                    bool num = (SDL_GetKeyState(NULL)[SDLK_NUMLOCK] != 0);
-                    if (Event.key.keysym.mod & KMOD_SHIFT)
-                        num = !num;
-                    if (num)
-                        Event.key.keysym.sym = SDLK_PERIOD;
-                }
-                #endif
 
 				// vogel: this is a MESS - clean this part up!!!
 				if ( (Event.key.keysym.sym == SDLK_g) && (Event.key.keysym.mod & KMOD_CTRL) )
@@ -1100,14 +1018,6 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				{
 					Event.key.keysym.unicode = Event.key.keysym.sym;
 				}
-
-                #if MACOSX
-                // !!! FIXME: *LOCK is broken, look at it later. --ryan.
-				if ( (Event.key.keysym.sym == SDLK_NUMLOCK) ||
-                     (Event.key.keysym.sym == SDLK_CAPSLOCK) ||
-                     (Event.key.keysym.sym == SDLK_SCROLLOCK) )
-                    break;
-                #endif
 
 				Key = (EInputKey) Event.key.keysym.sym;
 				if ( Event.key.keysym.unicode )
@@ -1569,11 +1479,6 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	INT VideoFlags = 0;
 	INT VideoBPP   = 0;
 
-#if MACOSX
-	// !!! FIXME: Hack. --ryan.
-	VideoBPP = (RenDev->Use16bit) ? 16 : 32;
-#endif
-
 #if 0
 	// Pull current driver string.
 	FString CurrentDriver = RenDev->GetClass()->GetPathName();
@@ -1634,15 +1539,6 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	// Update the window.
 	UpdateWindowFrame();
 
-	// workaround for bugs in OSX's SDL port. Remove this later... --ryan.
-#if MACOSX
-	if (VideoFlags & SDL_FULLSCREEN)
-		SDL_WM_GrabInput(SDL_GRAB_ON);
-	SDL_ShowCursor(0);
-	SDL_ShowCursor(1);
-	SDL_ShowCursor(0);
-#endif
-
 	// Save info.
 	if( RenDev && !GIsEditor && bSaveSize )
 	{
@@ -1684,31 +1580,6 @@ TCHAR * USDLViewport::GetLocalizedKeyName( EInputKey Key )
 }
 
 
-void USDLViewport::UpdateSpeech()
-{
-    #if MACOSX
-    if (MacTextToSpeechEnabled)
-    {
-        if (SpeechQueue.Num())
-        {
-            if (!SpeechBusy())
-            {
-                FString &str = SpeechQueue(0);
-                INT len = str.Len();
-                char *cvt = (char *) appAlloca(len + 2);
-                if (cvt)
-                {
-                    appToAnsi(*str, cvt);
-                    int rc = (int) SpeakText(MacTextToSpeechChannel, cvt, len);
-                    if (rc != 0)
-                        debugf(TEXT("TTS: Failed to speak text! rc==%d"), rc);
-                }
-                SpeechQueue.Remove(0);
-            }
-        }
-    }
-    #endif
-}
 
 
 void USDLViewport::TextToSpeech( const FString& Text, FLOAT Volume )
@@ -1716,14 +1587,6 @@ void USDLViewport::TextToSpeech( const FString& Text, FLOAT Volume )
     INT len = Text.Len();
     if (len == 0)
         return;
-
-    #if MACOSX
-    if (MacTextToSpeechEnabled)
-    {
-        if (SpeechQueue.Num() < 150)  // in case of irc flood...
-			new(SpeechQueue) FString(Text);
-    }
-    #endif
 
     if (TextToSpeechObject != -1)
     {
@@ -1737,12 +1600,10 @@ void USDLViewport::TextToSpeech( const FString& Text, FLOAT Volume )
                 cvt[len] = '\0';
             }
 
-            // !!! FIXME: make non-blocking and use SpeechQueue
+            // !!! FIXME: make non-blocking
             write(TextToSpeechObject, cvt, len);
         }
     }
-
-    UpdateSpeech();
 }
 
 

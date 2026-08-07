@@ -792,19 +792,6 @@ const TCHAR* UInput::GetLocalizedKeyName( EInputKey Key ) const
 
 		return appStrupr(KeyName);
 	}
-#elif MACOSX
-	{
-        // Had to hijack some keys for the Apple Command keys, and
-        //  rename "Alt" to "Option" for the whiny mac users.  --ryan.
-
-		const TCHAR *name = GetKeyName( Key );
-		if (appStricmp(name, TEXT("F24")) == 0)
-			return(TEXT("AppleCmd"));
-		else if (appStricmp(name, TEXT("Alt")) == 0)
-			return(TEXT("Option"));
-		else
-			return name;
-	}
 #else
 	{
 		return GetKeyName( Key );

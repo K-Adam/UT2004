@@ -46,7 +46,7 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 	Engine compiler specific includes.
 -----------------------------------------------------------------------------*/
 
-#if __GNUC__ || __MWERKS__
+#if __GNUC__
 	#include "UnEngineGnuG.h"
 #endif
 
@@ -67,7 +67,7 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #endif
 
 // Karma Includes
-#if !defined(__LINUX__) && !defined(MACOSX) && !defined (__FreeBSD__) && !defined(NO_KARMA)
+#if !defined(__LINUX__) && !defined(NO_KARMA)
 #ifndef WITH_KARMA
 #  define WITH_KARMA
 #endif

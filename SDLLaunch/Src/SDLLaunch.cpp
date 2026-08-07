@@ -38,43 +38,6 @@ extern "C" { void autoInitializeRegistrantsPixoDrv(void); }
 #endif
 
 
-#if MACOSX  // GameRanger stuff...didn't want to include the header... --ryan.
-extern "C"
-{
-    unsigned char GRCheckFileForCmd(void);  // uchar is "Boolean".
-    void GRGetWaitingCmd(void);
-    unsigned char GRIsHostCmd(void);
-    unsigned char GRIsJoinCmd(void);
-    void GRHostReady(void);
-    void GRHostClosed(void);
-    unsigned short GRGetPortNumber(void);
-    char *GRGetJoinAddressStr(void);
-
-    // internal to Unreal:
-    int GameRangerClientsWaiting = 0;
-    void AlertGameRangerHostReady(void);
-}
-
-
-void AlertGameRangerHostReady(void)
-{
-    guard(AlertGameRangerHostReady);
-
-    if (!GameRangerClientsWaiting)
-        return;
-
-    debugf( TEXT("Alerting GameRanger clients that host is ready.") );
-
-	guard(GRHostReady);
-	GRHostReady();
-	unguard;
-
-    GameRangerClientsWaiting = 0;
-    unguard;
-}
-#endif
-
-
 /*-----------------------------------------------------------------------------
 	Global variables.
 -----------------------------------------------------------------------------*/
@@ -713,28 +676,6 @@ int main(int argc, char **argv)
     	}
     }
 
-#if MACOSX  // GameRanger support.  --ryan.
-    if (GRCheckFileForCmd())
-        GRGetWaitingCmd();
-
-    if (GRIsHostCmd())
-    {
-        if (CmdLine[0])
-            appStrcat(CmdLine, TEXT(" "));
-        appStrcat(CmdLine, TEXT("-MainMenu=GUI2K4.UT2K4GamePageMP"));
-        GameRangerClientsWaiting = 1;
-    }
-    else if (GRIsJoinCmd())
-    {
-        TCHAR cmd[64];
-        const TCHAR *addr = appFromAnsi(GRGetJoinAddressStr());
-        appSprintf(cmd, TEXT("%s:%u"), addr, (unsigned int) GRGetPortNumber());
-        if (CmdLine[0])
-            appStrcat(CmdLine, TEXT(" "));
-        appStrcat(CmdLine, cmd);
-    }
-#endif
-
 	// Remember instance.
 	INT ErrorLevel = 0;
 	GIsStarted     = 1;
@@ -798,7 +739,7 @@ int main(int argc, char **argv)
         check( Lookup < ARRAY_COUNT(GNativeLookupFuncs) );
 
 
-//!!! FIXME: linker removes this as deadcode on MacOS X without an explicit reference...
+// The linker drops these as dead code without an explicit reference.
 char blah;
 #if USE_PIXOMATIC
 extern BYTE GLoadedPixoDrv; snprintf(&blah, 1, "%d", (int) GLoadedPixoDrv);
@@ -994,12 +935,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 			if( !GIsRequestingExit )
 				MainLoop( Engine );
 		}
-
-		#if MACOSX
-		guard(GRHostClosed);
-		GRHostClosed();
-		unguard;
-		#endif
 
 		// Clean shutdown.
 		GFileManager->Delete(TEXT("Running.ini"),0,0);

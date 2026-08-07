@@ -116,11 +116,6 @@ public:
 	}
 	FColor RenderColor()
 	{
-		#if MACOSX
-		if( GIsOpenGLRevComps )
-			return FColor( G, B, A, R);
-		#endif
-
 		if( GIsOpenGL )
 			return FColor( B, G, R, A);
 		else

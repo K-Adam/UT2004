@@ -1153,7 +1153,7 @@ INT FOpenGLRenderInterface::SetVertexStreams(EVertexShader Shader,FVertexStream*
 	INT Size		= 0;
 	INT TotalSize	= 0;
 
-	if( RenDev->SUPPORTS_GL_NV_vertex_array_range || RenDev->SUPPORTS_GL_APPLE_vertex_array_range )
+	if( RenDev->SUPPORTS_GL_NV_vertex_array_range )
 	{
 		for(INT StreamIndex = 0;StreamIndex < NumStreams;StreamIndex++)
 			TotalSize += Streams[StreamIndex]->GetSize();
@@ -1174,14 +1174,10 @@ INT FOpenGLRenderInterface::SetVertexStreams(EVertexShader Shader,FVertexStream*
 			if( RenDev->SUPPORTS_GL_ATI_vertex_array_object )
 				OpenGLVertexStream = new(TEXT("FOpenGLVertexStreamATI_VAO")) FOpenGLVertexStreamATI_VAO(RenDev,CacheId,false);
 			else 
-			if( (RenDev->SUPPORTS_GL_NV_vertex_array_range || RenDev->SUPPORTS_GL_APPLE_vertex_array_range )
-				&& !Streams[StreamIndex]->HintDynamic() 
+			if( RenDev->SUPPORTS_GL_NV_vertex_array_range
+				&& !Streams[StreamIndex]->HintDynamic()
 				&& (RenDev->VARIndex + TotalSize) < RenDev->VARSize )
 					OpenGLVertexStream = new(TEXT("FOpenGLVertexStreamNV_VAR")) FOpenGLVertexStreamNV_VAR(RenDev,CacheId,false);
-			else
-			if( RenDev->SUPPORTS_GL_APPLE_vertex_array_object 
-				&& !Streams[StreamIndex]->HintDynamic() )
-				OpenGLVertexStream = new(TEXT("FOpenGLVertexStreamAPPLE_VAO")) FOpenGLVertexStreamAPPLE_VAO(RenDev,CacheId,false);
 			else
 				OpenGLVertexStream = new(TEXT("FOpenGLVertexStreamARB_VA")) FOpenGLVertexStreamARB_VA(RenDev,CacheId,false);
 
@@ -1435,15 +1431,6 @@ void FOpenGLRenderInterface::CommitStreams( INT FirstIndex, INT Pass )
 	if( NoIndexBuffer )
 		IndexBufferBase += FirstIndex;
 
-	if( RenDev->SUPPORTS_GL_APPLE_vertex_array_object )
-	{
-		GLuint VARId = CurrentState->Streams[0]->IsVAR();
-		if( VARId && (CurrentState->NumStreams == 1) )
-			RenDev->glBindVertexArrayAPPLE( VARId );
-		else
-			RenDev->glBindVertexArrayAPPLE( 0 );
-	}
-
 	for( INT StreamIndex=0; StreamIndex<CurrentState->NumStreams; StreamIndex++ )
 	{
 		IsVAR = IsVAR && CurrentState->Streams[StreamIndex]->IsVAR();
@@ -1458,11 +1445,6 @@ void FOpenGLRenderInterface::CommitStreams( INT FirstIndex, INT Pass )
 			RenDev->glBindBufferARB( GL_ARRAY_BUFFER_ARB, BufferATI );
 			VertexBuffer = NULL;
 		}
-
-		#if MACOSX
-		if( RenDev->SUPPORTS_GL_ATI_array_rev_comps_in_4_bytes )
-			RenDev->glVertexArrayParameteriAPPLE( GL_ARRAY_REV_COMPS_IN_4_BYTES_ATI, GL_TRUE );
-		#endif
 
 		INT Offset = 0;
 		for( INT ComponentIndex=0; ComponentIndex<CurrentState->VertexShader->Declaration.Streams[StreamIndex].NumComponents; ComponentIndex++ )
@@ -1617,26 +1599,18 @@ void FOpenGLRenderInterface::CommitStreams( INT FirstIndex, INT Pass )
 		RenDev->glDisableClientState( GL_TEXTURE_COORD_ARRAY );
 	}
 
-	if( RenDev->SUPPORTS_GL_NV_vertex_array_range || RenDev->SUPPORTS_GL_APPLE_vertex_array_range || RenDev->SUPPORTS_GL_APPLE_vertex_array_object )
+	if( RenDev->SUPPORTS_GL_NV_vertex_array_range )
 	{
 		if( !CurrentState->NumStreams )
 			IsVAR = 0;
 
-		if( RenDev->SUPPORTS_GL_APPLE_vertex_array_object && (CurrentState->NumStreams > 1) )
-			IsVAR = 0;
-
-		if( RenDev->SUPPORTS_GL_APPLE_vertex_array_object || (IsVAR != RenDev->IsVAR) )
+		if( IsVAR != RenDev->IsVAR )
 		{
 			RenDev->IsVAR = IsVAR;
-#if MACOSX
-#define GL_VERTEX_ARRAY_RANGE GL_VERTEX_ARRAY_RANGE_APPLE
-#else
-#define GL_VERTEX_ARRAY_RANGE GL_VERTEX_ARRAY_RANGE_WITHOUT_FLUSH_NV
-#endif
 			if( RenDev->IsVAR )
-				RenDev->glEnableClientState( GL_VERTEX_ARRAY_RANGE );
+				RenDev->glEnableClientState( GL_VERTEX_ARRAY_RANGE_WITHOUT_FLUSH_NV );
 			else
-				RenDev->glDisableClientState( GL_VERTEX_ARRAY_RANGE );
+				RenDev->glDisableClientState( GL_VERTEX_ARRAY_RANGE_WITHOUT_FLUSH_NV );
 		}
 	}
 

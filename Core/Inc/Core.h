@@ -85,9 +85,6 @@
 #elif __GNUG__
 	#include <string.h>
 	#include "UnGnuG.h"
-#elif __MWERKS__
-	#include <string.h>
-	#include "UnMWerks.h"
 #elif __ICC
 	#if __LINUX_X86__
 		#include <string.h>
@@ -103,9 +100,7 @@
 // OS specific include.
 #if __UNIX__
 	#include "UnUnix.h"
-#ifndef __MWERKS__
 	#include <signal.h>
-#endif
 #endif
 
 // Global constants.
@@ -128,10 +123,8 @@ enum ERunningOS
 	OS_WINXP,
 	OS_WINNT,
 	OS_LINUX_X86,
-	OS_FREEBSD_X86,
-	OS_LINUX_X86_64,
-	OS_MAC_OSX_PPC,
-	OS_WIN64_AMD,
+	OS_LINUX_X86_64	= 8,
+	OS_WIN64_AMD	= 10,
 	OS_UNKNOWN	= 255
 };
 
@@ -605,11 +598,6 @@ CORE_API extern DWORD					GGPUVendorID;
 CORE_API extern TCHAR					GModName[256];		// Name of the currently active mod
 CORE_API extern TCHAR					GModPath[1024];		// Path to the currently active mod
 CORE_API extern TCHAR					GModDef[1024];		// Full filename of the Definition file for the active mod
-
-#if MACOSX
-// MacOS version (so we can limit detection code to one place in Core.) --ryan.
-CORE_API extern INT						GMacOSVer;
-#endif
 
 // Demo Recording
 

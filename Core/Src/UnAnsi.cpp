@@ -23,9 +23,7 @@
 #include <errno.h>
 #include <time.h>
 
-#  ifndef MACOSX
 #    include <malloc.h>
-#  endif
 #include <sys/types.h>
 #include <sys/stat.h>
 

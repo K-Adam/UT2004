@@ -2125,11 +2125,7 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 
 	// make sure logfile notes if this is a platform-specific patch over the usual revision... --ryan.
 	#ifdef PLATFORM_VERSION_BUMP
-		#if MACOSX
-		const TCHAR *platform = TEXT("MacOSX");
-		#elif FREEBSD
-		const TCHAR *platform = TEXT("FreeBSD");
-		#elif LINUX && PLATFORM_64BITS
+		#if LINUX && PLATFORM_64BITS
 		const TCHAR *platform = TEXT("Linux64");
 		#elif LINUX
 		const TCHAR *platform = TEXT("Linux");

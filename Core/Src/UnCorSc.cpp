@@ -4704,11 +4704,7 @@ void UObject::execPlatformIsMacOS( FFrame& Stack, RESULT_DECL )
     guardSlow(UObject::execPlatformIsMacOS);
     P_FINISH;
     
-    #if MACOSX
-    *(UBOOL*)Result = 1;
-    #else
     *(UBOOL*)Result = 0;
-    #endif
 
     unguardexecSlow;
 }
@@ -4719,7 +4715,7 @@ void UObject::execPlatformIsUnix( FFrame& Stack, RESULT_DECL )
     guardSlow(UObject::execPlatformIsUnix);
     P_FINISH;
     
-    #if ((__UNIX__) && (!MACOSX))
+    #if __UNIX__
     *(UBOOL*)Result = 1;
     #else
     *(UBOOL*)Result = 0;

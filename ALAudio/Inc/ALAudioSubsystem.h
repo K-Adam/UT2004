@@ -64,9 +64,6 @@ typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 #else
 #define AL_DEFAULT_DLL TEXT("DefOpenAL32.dll")
 #endif
-#elif MACOSX
-#define AL_DLL TEXT("./openal.dylib")
-#define AL_DEFAULT_DLL TEXT("./openal.dylib")
 #else
 #define AL_DLL TEXT("libopenal.so")
 #define AL_DEFAULT_DLL TEXT("openal.so")

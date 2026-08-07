@@ -11,11 +11,9 @@ Revision history:
 #include <errno.h>
 #include <sys/stat.h>
 
-#if (!defined MACOSX)
 // !!! FIXME: Do we really need this header?
 // !!! FIXME:  (check Core/Inc/FMallocDebug.h, too.) --ryan.
 #include <malloc.h>
-#endif
 
 #include <fcntl.h>
 #include "Engine.h"

@@ -1047,9 +1047,7 @@ void UModel::BuildRenderData()
 			FLOAT		MaterialUSize = Material->MaterialUSize(),
 						MaterialVSize = Material->MaterialVSize();
 
-			// These sometimes are zero, which causes vertices with NaNs in
-            //  them. Miraculously, this only seems to cause issues on
-            //  the R100 on MacOS.  --ryan.
+			// These sometimes are zero, which causes vertices with NaNs in them.
 			if (MaterialUSize == 0.0f)
 				MaterialUSize = 1.0f;
 			if (MaterialVSize == 0.0f)

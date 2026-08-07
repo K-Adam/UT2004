@@ -1048,7 +1048,6 @@ public:
 	}
 };
 
-// MacOSX linker doesn't like this being in the class's inlined method. --ryan.
 FColor	FLightBitmapBatcher::FrameBuffer[FRAMEBUFFER_SIZE * FRAMEBUFFER_SIZE];
 
 

@@ -942,15 +942,7 @@ void UBoolProperty::Serialize( FArchive& Ar )
 	guard(UBoolProperty::Serialize);
 	Super::Serialize( Ar );
 	if( !Ar.IsLoading() && !Ar.IsSaving() )
-#if __MWERKS__
-	{
-		QWORD Temp = BitMask;
-		Ar << Temp;
-		BitMask = Temp;
-	}
-#else
 		Ar << BitMask;
-#endif
 	unguardobj;
 }
 void UBoolProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const

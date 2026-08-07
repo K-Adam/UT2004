@@ -14,16 +14,14 @@
 -----------------------------------------------------------------------------*/
 
 // !!! FIXME: This should get rid of all these win32 vs. SDL ifdefs. --ryan.
-#if ((__linux__) || (__FreeBSD__) || (MACOSX))
+#if __linux__
 #  define USE_SDL 1
 #endif
 
 #if (defined WIN32)
 #   define GL_DLL (TEXT("OpenGL32.dll"))
-#elif ((__linux__) || (__FreeBSD__))
+#elif __linux__
 #   define GL_DLL (TEXT("libGL.so.1"))
-#elif MACOSX
-#   define GL_DLL (TEXT("libGL.dylib"))   // !!! FIXME: probably wrong.
 #else
 #   error Fill this in for your platform.
 #endif
@@ -81,7 +79,6 @@ void UOpenGLRenderDevice::StaticConstructor()
 
 	new(GetClass(),TEXT("DetailTexMipBias"),    RF_Public)UFloatProperty( CPP_PROPERTY(DetailTexMipBias	   ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("MaxTextureUnits"),     RF_Public)UIntProperty  ( CPP_PROPERTY(MaxTextureUnits	   ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("AppleVA"),             RF_Public)UIntProperty  ( CPP_PROPERTY(AppleVA       	   ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("VARSize"),             RF_Public)UIntProperty  ( CPP_PROPERTY(ConfigVARSize	   ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("UseTrilinear"),        RF_Public)UBoolProperty ( CPP_PROPERTY(UseTrilinear        ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("UseVBO"),				RF_Public)UBoolProperty ( CPP_PROPERTY(UseVBO		       ), TEXT("Options"), CPF_Config );
@@ -615,25 +612,6 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 
 	ConfigVARSize = Max(ConfigVARSize, 0);
 
-#if MACOSX
-	// John Stauffer at Apple says:
-	//   "Just for your info, the actual max single VAR allocation size is
-	//    restricted to 3/4 the allowable GART size.  Max single VAR
-	//    allocation = 0.75 * 0.25 * (system mem size)"
-	if (GPhysicalMemory == 0)
-		debugf( TEXT("OpenGL: Don't know how much RAM you've got to clamp VARsize!") );
-	else
-	{
-		INT MaxVARSize = (INT) (((0.75f * 0.25f * GPhysicalMemory) / 1024.0f) / 1024.0f);
-		if (ConfigVARSize > MaxVARSize)
-		{
-			debugf( TEXT("OpenGL: Clamping VARsize to %d (was %d): not enough physical RAM."),
-			        (int) MaxVARSize, (int) ConfigVARSize );
-			ConfigVARSize = MaxVARSize;
-		}
-	}
-#endif
-
 	appSprintf( GMachineVideo, TEXT("%s"), appFromAnsi((ANSICHAR*)glGetString(GL_RENDERER)) );
 
 	INT DepthBits,
@@ -729,8 +707,6 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 	{
 		SUPPORTS_GL_ATI_element_array			= 0;
 		SUPPORTS_GL_ATI_vertex_array_object		= 0;
-		SUPPORTS_GL_APPLE_vertex_array_range	= 0;
-		SUPPORTS_GL_APPLE_vertex_array_object	= 0;
 		SUPPORTS_GL_NV_vertex_array_range		= 0;
 	}
 	else
@@ -741,33 +717,7 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 
 	// Disable usage if VAR size <= 0.
 	if( ConfigVARSize == 0 )
-	{
 		SUPPORTS_GL_NV_vertex_array_range		= 0;
-		SUPPORTS_GL_APPLE_vertex_array_range	= 0;
-	}
-
-	// Switching between different implementations on Mac.
-	switch( AppleVA )
-	{
-	case 0:
-	default:
-		// Use standard vertex arrays.
-		SUPPORTS_GL_APPLE_vertex_array_range	= 0;
-		SUPPORTS_GL_APPLE_vertex_array_object	= 0;
-		break;
-	case 1:
-		// Use APPLE_VAR
-		SUPPORTS_GL_APPLE_vertex_array_object	= 0;
-		if( SUPPORTS_GL_APPLE_vertex_array_range )
-			debugf( TEXT("OpenGL: Using GL_APPLE_vertex_array_range.") );
-		break;
-	case 2:
-		// Use APPLE_VAR + APPLE_VAO
-		SUPPORTS_GL_APPLE_vertex_array_range	= 0;
-		if( SUPPORTS_GL_APPLE_vertex_array_object )
-			debugf( TEXT("OpenGL: Using GL_APPLE_vertex_array_object.") );
-		break;
-	}
 
 	// ATI Linux drivers claim to support tex compression, but there's no
 	//  glCompressedTexSubImage2DARB entry point...turn off S3TC in this
@@ -881,19 +831,15 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 	VARPointer		= NULL;
 	VARSize			= 0;
 	VARIndex		= 0;
-	if( SUPPORTS_GL_NV_vertex_array_range || SUPPORTS_GL_APPLE_vertex_array_range )
+	if( SUPPORTS_GL_NV_vertex_array_range )
 	{
 		VARSize		= ConfigVARSize * 1024 * 1024;
 		do
 		{
-#if MACOSX
-			VARPointer	= new BYTE[ VARSize ];
-#else
 #ifdef WIN32
 			VARPointer	= (BYTE*) wglAllocateMemoryNV( VARSize, 0.f, 0.0f, 0.5f );
 #else
 			VARPointer	= (BYTE*) glXAllocateMemoryNV( VARSize, 0.f, 0.0f, 0.5f );
-#endif
 #endif
 			if( VARPointer == NULL )
 				VARSize = (INT) (((float) VARSize) / 1.5f);
@@ -908,36 +854,13 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 			debugf( TEXT("WARNING: Couldn't allocate AGP memory - turning off support for GL_NV_vertex_array_range"));
 			debugf( TEXT("WARNING: This has a serious impact on performance."));
 			SUPPORTS_GL_NV_vertex_array_range		= 0;
-			SUPPORTS_GL_APPLE_vertex_array_range	= 0;
 #endif
 		}
 		else
 		{
-#if MACOSX
-			glVertexArrayParameteriAPPLE( GL_VERTEX_ARRAY_STORAGE_HINT_APPLE, 1 ? GL_STORAGE_SHARED_APPLE : GL_STORAGE_CACHED_APPLE );
-#endif
 			debugf( TEXT("OpenGL: allocated %i MByte of AGP memory"), VARSize / 1024 / 1024 );
 		}
 	}
-
-	#if MACOSX
-	if( SUPPORTS_GL_ATI_array_rev_comps_in_4_bytes )
-	{
-		debugf( TEXT("OpenGL: Using GL_ATI_array_rev_comps_in_4_bytes.") );
-		glVertexArrayParameteriAPPLE( GL_ARRAY_REV_COMPS_IN_4_BYTES_ATI, GL_TRUE );
-
-		// Panther (OSX 10.3.x) and beyond require more color byteswapping
-		//  than Jaguar (OSX 10.2.x), so we need to decide which behaviour
-		//  is applicable...  --ryan.
-		const TCHAR *osCodename = TEXT("Jaguar");
-		if (GMacOSVer >= 0x1030)
-		{
-			GIsOpenGLRevComps = 1;
-			osCodename = TEXT("Panther");
-		}
-		debugf( TEXT("OpenGL: ATI_rev_comps has %s-style behaviour."), osCodename );
-	}
-	#endif
 
 	SupportsCubemaps                = SUPPORTS_GL_ARB_texture_cube_map;
 	SupportsZBIAS                   = 1;
@@ -963,18 +886,12 @@ void UOpenGLRenderDevice::UnSetRes( UBOOL RestoreDisplaySettings )
 		glDeleteTextures( 1, &NullTextureID );
 
 	// Vertex array range.
-	if( (SUPPORTS_GL_NV_vertex_array_range || SUPPORTS_GL_APPLE_vertex_array_range) && VARPointer )
+	if( SUPPORTS_GL_NV_vertex_array_range && VARPointer )
 	{
-#if MACOSX
-		if( ValidContext )
-			glVertexArrayRangeAPPLE( 0, 0 );
-		delete [] VARPointer;
-#else
 #ifdef WIN32
 		wglFreeMemoryNV( VARPointer );
 #else
 		glXFreeMemoryNV( VARPointer );
-#endif
 #endif
 	}
 	VARPointer	= NULL;

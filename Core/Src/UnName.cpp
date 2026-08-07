@@ -21,9 +21,6 @@ TArray<INT>         FName::Available;
 /*-----------------------------------------------------------------------------
 	FName implementation.
 -----------------------------------------------------------------------------*/
-#if __MWERKS__
-#pragma auto_inline off
-#endif
 
 //
 // Hardcode a name.
@@ -48,9 +45,6 @@ void FName::Hardcode( FNameEntry* AutoName )
 
 	unguard;
 }
-#if __MWERKS__
-#pragma auto_inline reset
-#endif
 
 //
 // FName constructor.
@@ -257,9 +251,6 @@ CORE_API FArchive& operator<<( FArchive& Ar, FNameEntry& E )
 	unguard;
 }
 
-#if __MWERKS__
-#pragma auto_inline off
-#endif
 CORE_API FNameEntry* AllocateNameEntry( const TCHAR* Name, DWORD Index, DWORD Flags, FNameEntry* HashNext )
 {
 	guard(AllocateNameEntry);
@@ -273,9 +264,6 @@ CORE_API FNameEntry* AllocateNameEntry( const TCHAR* Name, DWORD Index, DWORD Fl
 
 	unguard;
 }
-#if __MWERKS__
-#pragma auto_inline reset
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

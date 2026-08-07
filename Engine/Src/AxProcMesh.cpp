@@ -8,13 +8,6 @@
 #include "UnRenDev.h"
 #include <math.h>
 
-#if MACOSX  // !!! FIXME: Is there a better way to do this?  --ryan.
-#define sinf sin
-#define asinf asin
-#define cosf cos
-#define acosf acos
-#endif
-
 const DWORD ProcMesh_VF_Flags = VF_Position | VF_Normal | VF_Diffuse | VF_Tex1;
 const float RIGID_WEIGHT = -1.0f;
 const float StandardWeight = 4.0f;

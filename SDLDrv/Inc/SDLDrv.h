@@ -12,26 +12,6 @@ Revision history:
 #ifndef _INC_SDLDRV
 #define _INC_SDLDRV
 
-#if MACOSX
-//#include <SpeechSynthesis.h>
-// OSX system headers conflict with several Unreal symbols (FVector, verify,
-//  etc...), so hardcode the predeclarations we need here...)  --ryan.
-extern "C" {
-    struct SpeechChannelRecord {
-      long                data[1];
-    };
-    typedef struct SpeechChannelRecord      SpeechChannelRecord;
-    typedef SpeechChannelRecord *           SpeechChannel;
-
-    typedef signed short OSErr;
-    OSErr NewSpeechChannel(void *dummy, SpeechChannel *chan);
-    OSErr SpeakText(SpeechChannel chan, const void *buf, unsigned long len);
-    OSErr StopSpeech(SpeechChannel chan);
-    short SpeechBusy(void);
-    OSErr DisposeSpeechChannel(SpeechChannel chan);
-}
-#endif
-
 /*----------------------------------------------------------------------------
 	API.
 ----------------------------------------------------------------------------*/
@@ -79,10 +59,6 @@ class USDLClient : public UClient, public FNotifyHook
 	UBOOL               IgnoreHat;
 	UBOOL               IgnoreUngrabbedMouse;
 	UBOOL               AllowUnicodeKeys;
-	UBOOL               AllowCommandQKeys;
-	UBOOL               MacFakeMouseButtons;
-	UBOOL               MacKeepAllScreensOn;
-	UBOOL               MacNativeTextToSpeech;
 	FStringNoInit       TextToSpeechFile;
 
 	// Variables.
@@ -158,12 +134,6 @@ class USDLViewport : public UViewport
 	UBOOL				MouseIsGrabbed;
 	INT					TextToSpeechObject;  // file descriptor for named pipe.
 
-	#if MACOSX
-    UBOOL				MacTextToSpeechEnabled;
-    SpeechChannel		MacTextToSpeechChannel;
-    TArrayNoInit<FString> SpeechQueue;
-	#endif
-
 	// Constructor.
 	USDLViewport();
 
@@ -200,7 +170,6 @@ class USDLViewport : public UViewport
 
 	TCHAR* GetLocalizedKeyName( EInputKey Key );
 	void TextToSpeech( const FString& Text, FLOAT Volume );
-	void UpdateSpeech();  // call once a frame from UpdateInput().
 };
 
 

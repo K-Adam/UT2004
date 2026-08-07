@@ -110,16 +110,6 @@ static inline DWORD MakeColor( FPlane& p )
 		d |= (int)(p.Z * 255.0f) << 16;
 		d |= (int)(p.W * 255.0f) << 24;
 #else
-		#if MACOSX
-		if( GIsOpenGLRevComps )
-		{
-			d  = (int)(p.X * 255.0f);
-			d |= (int)(p.Y * 255.0f) << 8;
-			d |= (int)(p.Z * 255.0f) << 16;
-			d |= (int)(p.W * 255.0f) << 24;
-		}
-		else
-		#endif
 		{
 			d  = (int)(p.X * 255.0f) << 24;
 			d |= (int)(p.Y * 255.0f) << 16;

@@ -30,12 +30,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 
-#if MACOSX
-#  include <mach-o/dyld.h>
-#  include "dlfcn_macosx.h"
-#else
-#  include <dlfcn.h>
-#endif
+#include <dlfcn.h>
 
 #include <netdb.h>
 //#include <fpu_control.h>
@@ -49,12 +44,7 @@
 #endif
 
 // Stack traces via C runtime...
-#if ((MACOSX) || (__FreeBSD__))
-#  define HAVE_EXECINFO_H 0
-#else
-#  define HAVE_EXECINFO_H 1
-#  include <execinfo.h>
-#endif
+#include <execinfo.h>
 
 // Core includes.
 #include "CorePrivate.h"
@@ -68,115 +58,8 @@
 #endif
 
 #if UNICODE
-#  include <locale.h>
-#  if !MACOSX
-#    include <langinfo.h>
-#  endif
-#endif
-
-#if MACOSX  // Carbon includes.  --ryan.
-   // Carbon's headers define "check" and "verify", which we do, too,
-   //  so just predeclare functions and types we need here.
-extern "C"
-{
-    #define noErr 0
-    typedef unsigned char Str255[256];
-    typedef unsigned char Str63[64];
-    typedef unsigned char Str32[33];
-    typedef unsigned char Str31[32];
-    typedef unsigned char Str27[28];
-    typedef unsigned char Str15[16];
-    typedef Str63 StrFileName;
-    typedef const unsigned char *ConstStr255Param;
-    typedef unsigned long OSType;
-    typedef signed int OSStatus;
-    typedef signed short OSErr;
-
-    typedef signed int CFIndex;
-    typedef unsigned int CFStringEncoding;
-                
-    // (This isn't accurate, but will do for our purposes...)
-    typedef void *CFURLRef;
-    typedef void *CFStringRef;
-    typedef void *CFAllocatorRef;
-
-    typedef enum {
-        kCFStringEncodingMacRoman = 0,
-        kCFStringEncodingWindowsLatin1 = 0x0500, /* ANSI codepage 1252 */
-        kCFStringEncodingISOLatin1 = 0x0201, /* ISO 8859-1 */
-        kCFStringEncodingNextStepLatin = 0x0B01, /* NextStep encoding*/
-        kCFStringEncodingASCII = 0x0600, /* 0..127 (in creating CFString, values greater than 0x7F are treated as corresponding Unicode value) */
-        kCFStringEncodingUnicode = 0x0100, /* kTextEncodingUnicodeDefault  + kTextEncodingDefaultFormat (aka kUnicode16BitFormat) */
-        kCFStringEncodingUTF8 = 0x08000100, /* kTextEncodingUnicodeDefault + kUnicodeUTF8Format */
-        kCFStringEncodingNonLossyASCII = 0x0BFF /* 7bit Unicode variants used by Cocoa & Java */
-    } CFStringBuiltInEncodings;
-
-    CFURLRef CFURLCreateWithBytes(CFAllocatorRef allocator,
-                                  const unsigned char *URLBytes,
-                                  CFIndex length,
-                                  CFStringEncoding encoding,
-                                  CFURLRef baseURL);
-    void LSOpenCFURLRef(CFURLRef urlref, void *something);
-
-    CFStringRef CFStringCreateWithBytes (
-        CFAllocatorRef alloc,
-        const BYTE /*UInt8*/ *bytes,
-        CFIndex numBytes,
-        CFStringEncoding encoding,
-        unsigned char /*Boolean*/ isExternalRepresentation
-    );
-
-    void CFRelease(void *ref);
-
-    OSErr Gestalt(OSType selector, long *response);
-
-    enum
-    {
-        gestaltSystemVersion = 'sysv'
-    };
-
-    enum
-    {
-        gestaltPhysicalRAMSize = 'ram '
-    };
-
-    enum
-    {
-        kAlertStopAlert = 0,
-        kAlertNoteAlert = 1,
-        kAlertCautionAlert = 2,
-        kAlertPlainAlert = 3
-    };
-
-    OSErr StandardAlert (
-       signed short inAlertType,
-       ConstStr255Param inError,
-       ConstStr255Param inExplanation,
-       void *inAlertParam,
-       signed short *outItemHit
-    );
-
-    OSStatus CreateStandardAlert (
-        signed short /*AlertType*/ alertType,
-        CFStringRef error,
-        CFStringRef explanation,
-        void /*const AlertStdCFStringAlertParamRec*/ * param,
-        void * /*DialogRef*/ * outAlert
-    );
-
-    OSStatus RunStandardAlert (
-        void * /*DialogRef*/ inAlert,
-        void * /*ModalFilterUPP*/ filterProc,
-        SWORD /*DialogItemIndex*/ * outItemHit
-    );
-}
-
-#if UNICODE
-    #define TCHAR_MAC_ENCODING kCFStringEncodingUnicode
-#else
-    #define TCHAR_MAC_ENCODING kCFStringEncodingISOLatin1
-#endif
-
+#include <locale.h>
+#include <langinfo.h>
 #endif
 
 #include "vorbis/codec.h"
@@ -193,11 +76,6 @@ ANSICHAR GModule[32];
 extern char **environ;
 
 TCHAR *GUnixSpawnOnExit = NULL;
-
-#if MACOSX
-TCHAR *GMacOSAlertBoxOnExit = NULL;
-TCHAR *GMacOSLaunchURLOnExit = NULL;
-#endif
 
 // filler.  --ryan.
 HINSTANCE hInstance = 0;
@@ -316,9 +194,6 @@ CORE_API void unixDetectUNICODE( void )
             GUnicode = GUnicodeOS = 1;
         else
         {
-            #if MACOSX
-                debugf(TEXT("No locale detection on OS X at this moment."));
-            #else
                 encoding = nl_langinfo(_NL_CTYPE_CODESET_NAME);
                 char *unicode_encodings[] = { "UTF-8", "UTF8", NULL };
                 for (INT i = 0; unicode_encodings[i]; i++)
@@ -328,7 +203,6 @@ CORE_API void unixDetectUNICODE( void )
                         GUnicode = GUnicodeOS = 1;
                     }
                 }
-            #endif
         }
 
         debugf(TEXT("Your locale: [%s].\n"), ANSI_TO_TCHAR(encoding));
@@ -982,18 +856,8 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 
 	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
 
-#if MACOSX
-    guard(MacOSX_appMsgf);
-    debugf( TEXT("appMsgf: %s"), TempStr );
-    INT len = appStrlen(TempStr);
-    GMacOSAlertBoxOnExit = new TCHAR[len + 1];
-    appStrcpy(GMacOSAlertBoxOnExit, TempStr);
-    appRequestExit(0);
-    unguard;
-#else
     printf("appMsgf(): %s\n", TCHAR_TO_ANSI(TempStr));
     appDebugBreak();
-#endif
 
     return 1;
 }
@@ -1111,25 +975,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
         INT arraylen = RELAUNCH_ARRAY + 128;
         FString xterm(TEXT(""));
 
-        #if MACOSX
-            char cwdbuf[MAXPATHLEN];
-            getcwd(cwdbuf, sizeof (cwdbuf));
-            cwdbuf[sizeof (cwdbuf) - 1] = '\0';
-
-            xterm = TEXT("./osxterminal.sh --title '");
-            xterm += LocalizeGeneral("Product", appPackage());
-            xterm += TEXT(" Dedicated Server'");  // !!! FIXME: localize!
-            xterm += TEXT(" --showshell false --showsize false");
-            xterm += TEXT(" --showfile false --showdevice false");
-            xterm += TEXT(" --activate -e 'cd \"");
-            xterm += appFromAnsi(cwdbuf);
-            xterm += TEXT("\" ; ./ucc-bin server \"");
-            xterm += Arg0;
-            xterm += TEXT("\" ; exit'");
-
-            GUnixSpawnOnExit = new TCHAR[xterm.Len() + 128];
-            appStrcpy(GUnixSpawnOnExit, *xterm);
-        #else
             xterm = TEXT("xterm");
             if (FindBinaryInPath(xterm))
             {
@@ -1145,7 +990,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
             appStrcpy(GUnixSpawnOnExit, *xterm);
             appStrcat(GUnixSpawnOnExit, TEXT("./ucc-bin server "));
             appStrcat(GUnixSpawnOnExit, Arg0);
-        #endif
 
         appRequestExit( 0 );
 #else
@@ -1265,41 +1109,14 @@ void* appGetDllHandle( const TCHAR* Filename )
 	TCHAR* Cur;
 	TCHAR* Test = appStaticString1024();
 
-#if MACOSX
-    #define SYMPREPEND TEXT("_")
-#else
-    #define SYMPREPEND TEXT("")
-#endif
-
 	// Get GLoadedPackage symbol name from full path.
  	while( (Cur = appStrchr( PackageName, '/' )) != NULL )
 		PackageName = Cur + 1;
  	while( (Cur = appStrchr( PackageName, '\\' )) != NULL )
 		PackageName = Cur + 1;
-	appSprintf( Test, TEXT("%sGLoaded%s"), SYMPREPEND, PackageName );
+	appSprintf( Test, TEXT("GLoaded%s"), PackageName );
 	if( (Cur = appStrchr( Test, '.' )) != NULL )
 		*Cur = '\0';
-
-#if MACOSX
-    // written with guidance from OpenDarwin.org's "dlcompat".
-    //   http://opendarwin.org/cgi-bin/cvsweb.cgi/proj/dlcompat/
-
-    check(appStrlen(Filename) < 1000);
-
-    if (NSIsSymbolNameDefined(appToAnsi(Test)))
-        Result = (void *) -1;  // it's in the main binary.
-    else
-    {
-        char *path = appAnsiStaticString1024();
-        appToAnsi(Filename, path);
-
-        if (strstr(path, ".dylib") == NULL)
-            strcat(path, ".dylib");
-
-	Result = dlopen(path, RTLD_GLOBAL | RTLD_NOW);
-   }
-
-#else
 
 	const char* Error;
 	dlerror();	// Clear any error condition.
@@ -1331,8 +1148,6 @@ void* appGetDllHandle( const TCHAR* Filename )
     		debugf( "dlerror(): %s", Error );
         #endif
 	}
-
-#endif // MACOSX vs. Linux
 
 	if (Result != NULL)
 	{
@@ -1368,8 +1183,6 @@ void appFreeDllHandle( void* DllHandle )
 	if (DllHandle == (void *) -1)
 		return;
 
-	// remember that you can unload bundles,
-	//  but not .dylib files on Darwin! --ryan.
 	dlclose( DllHandle );
 
 	unguard;
@@ -1537,7 +1350,6 @@ static void HandleSignal( int Signal )
 			printf( "Aborting.\n\n" );
 			printf( "\nCrash information will be saved to your logfile.\n" );
 
-			#if HAVE_EXECINFO_H
 				void *aTrace[64];
 				char **tString;
 				int size = backtrace(aTrace, ARRAY_COUNT(aTrace));
@@ -1545,7 +1357,6 @@ static void HandleSignal( int Signal )
 				debugf(TEXT("\nDeveloper Backtrace:"));
 				for (int i = 0; i < size; i++)
 					debugf(TEXT("[%2.i]  %s"), i+1, appFromAnsi(tString[i]));
-  			#endif
 
 			#if DO_PORTABLE_GUARD_BLOCKS
 				FString GuardBackTrace;
@@ -1691,53 +1502,6 @@ CORE_API DOUBLE appSeconds()
 #endif
 
 
-CORE_API void appArgv0(const char *argv0)
-{
-#if MACOSX
-    // MacOS X has this concept of "Application Bundles" which makes the whole
-    //  install tree look like a single icon in the Finder, which, when
-    //  launched, loads the game binary. They, however, totally fuck up your
-    //  game's filesystem...best thing to do is see if the binary is running
-    //  in a dir that appears to be embedded in an Application Bundle and
-    //  chdir to the game's System dir...  --ryan.
-    //
-    //  (FIXME: There _are_ Carbon APIs to determine this via process info...)
-
-    char buf[MAXPATHLEN];
-    if ((argv0 != NULL) && (strchr(argv0, '/') != NULL)) // no path specifed?
-        strncpy(buf, argv0, sizeof (buf));
-    else
-    {
-        // From the Finder, current working directory is "/", which sucks.
-        if ((getcwd(buf, sizeof (buf)) == NULL) || (strcmp(buf, "/") == 0))
-            return;  // hail mary...probably fail elsewhere.
-    }
-
-    buf[sizeof (buf) - 1] = '\0';  // null terminate, just in case.
-
-    char realbuf[MAXPATHLEN];
-    if (realpath(buf, realbuf) == NULL)
-        return;
-
-    char *ptr = strstr(realbuf, "/Contents/MacOS/");
-    if (ptr != NULL)
-    {
-        *ptr = '\0';  // chop off bundle bin dirs...
-        strcat(realbuf, "/System");   // add system dir to path...
-    }
-    else
-    {
-        // not an application bundle, but might be a symlink to elsewhere,
-        //  so chdir to there, just in case.
-        ptr = strrchr(realbuf, '/');  // chop off binary name.
-        if (ptr != NULL)
-            *ptr = '\0';
-    }
-
-    if (chdir(realbuf) == -1)  // go there.
-        return;
-#endif
-}
 
 
 //
@@ -1846,19 +1610,6 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 {
 	guard(appLaunchURL);
 
-#if MACOSX
-
-    // DO NOT MERGE INTO WARFARE    
-    // change hardcoded URL from Infogrames to MacSoft for Mac version...
-    if (appStrcmp(URL, TEXT("http://www.unrealtournament.com/")) == 0)
-        URL = TEXT("http://store.yahoo.com/boldgames/");
-    // DO NOT MERGE INTO WARFARE
-
-    GMacOSLaunchURLOnExit = new TCHAR[appStrlen(URL) + 1];
-    appStrcpy(GMacOSLaunchURLOnExit, URL);
-
-#else
-
     const char *_envr = getenv("BROWSER");
     if (!_envr)
     {
@@ -1932,8 +1683,6 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
         fprintf(stderr, "Couldn't find any browser to launch!\n");
         fprintf(stderr, "Please set the environment variable BROWSER next time.\n");
     }
-
-#endif
 
 	appRequestExit(0);
 
@@ -2122,25 +1871,6 @@ void appPlatformPreInit()
         appSprintf(GMachineOS, TEXT("x86 Linux"));
     #endif
 
-#elif (defined __FreeBSD__)
-    #error determine if x86 or Alpha or whatnot...
-    GRunningOS = OS_FREEBSD_X86;
-    appSprintf(GMachineOS, TEXT("x86 FreeBSD"));
-
-#elif (defined MACOSX)
-    GRunningOS = OS_MAC_OSX_PPC;
-
-    long osver = 0x0000;
-	OSErr err = Gestalt(gestaltSystemVersion, &osver);
-    TCHAR verstr[16];
-    appSprintf(verstr, TEXT("%X"), osver);
-
-    appSprintf(GMachineOS, TEXT("MacOS %c%c.%c.%c"),
-                verstr[0], verstr[1], verstr[2], verstr[3]);
-
-    GMacOSVer = (INT) osver;
-    check((long) GMacOSVer == osver);
-
 #else
     // (more to come. --ryan.)
     #error fill in your platform.
@@ -2150,7 +1880,6 @@ void appPlatformPreInit()
 }
 
 
-// bleh, no recursive mutexes on MacOSX.  :(  --ryan.
 typedef struct
 {
     pthread_mutex_t mutex;
@@ -2251,22 +1980,6 @@ void appPlatformInit()
 	ExitCodeMap = new TMap<pid_t,int>;
 
 	debugf( NAME_Init, TEXT("OS Type=%s"), GMachineOS );
-
-#if MACOSX
-	guard(MacPhysicalMemory);
-	GPhysicalMemory = 0;
-	unsigned long ramsize = 0;
-	OSErr err = Gestalt(gestaltPhysicalRAMSize, (long *) &ramsize);
-	if (err != noErr)
-		debugf(NAME_Init, TEXT("gestaltPhysicalRAMSize failure: err=%d"), (int) err);
-	else
-	{
-		GPhysicalMemory = (DWORD) ramsize;
-		debugf( NAME_Init, TEXT("Physical RAM: %u bytes (%d megabytes)"),
-		        (unsigned int) ramsize, (int) ((ramsize / 1024.0f) / 1024.0f) );
-	}
-	unguard;
-#endif
 
 	GSecondsPerCycle = 0.000001;
 
@@ -2380,83 +2093,11 @@ void appPlatformPreExit()
 }
 
 
-static void ShowAlertDialogOnExit(void)
-{
-    guard(ShowAlertDialogOnExit);
-
-#if MACOSX
-    if (GMacOSAlertBoxOnExit == NULL)
-        return;
-
-    bool failed = true;
-
-    CFStringRef msg = CFStringCreateWithBytes(NULL,
-                              (const BYTE *) GMacOSAlertBoxOnExit,
-                              appStrlen(GMacOSAlertBoxOnExit) * sizeof (TCHAR),
-                              TCHAR_MAC_ENCODING, 0);
-
-    FString str = LocalizeGeneral("Product", appPackage());
-    CFStringRef title = CFStringCreateWithBytes(NULL, (const BYTE *) *str,
-                                                str.Len() * sizeof (TCHAR),
-                                                TCHAR_MAC_ENCODING, 0);
-    if ((msg != NULL) && (title != NULL))
-    {
-        SWORD val = 0;  // Should be "DialogItemIndex".
-        void *dlg = NULL;  // Should be "DialogRef".
-
-        if (CreateStandardAlert(kAlertStopAlert, title, msg, NULL, &dlg) == noErr)
-        {
-            if (RunStandardAlert(dlg, NULL, &val) == noErr)
-                failed = false;
-        }
-    }
-
-    if (failed)  // oh well.
-        printf("\n\nMacOS Alert Box: %s\n\n\n", appToAnsi(GMacOSAlertBoxOnExit));
-
-    if (msg != NULL)
-        CFRelease(msg);
-
-    if (title != NULL)
-        CFRelease(title);
-
-    delete[] GMacOSAlertBoxOnExit;
-    GMacOSAlertBoxOnExit = NULL;
-#endif
-
-    unguard;
-}
-
-
-static void LaunchURLOnExit(void)
-{
-    guard(LaunchURLOnExit);
-
-#if MACOSX
-    if (GMacOSLaunchURLOnExit == NULL)
-        return;
-
-    CFURLRef cfurl = CFURLCreateWithBytes(NULL,
-                            (const unsigned char *) GMacOSLaunchURLOnExit,
-                            appStrlen(GMacOSLaunchURLOnExit) * sizeof (TCHAR),
-                            TCHAR_MAC_ENCODING, NULL);
-
-    LSOpenCFURLRef(cfurl, NULL);
-    CFRelease(cfurl);
-    delete[] GMacOSLaunchURLOnExit;
-    GMacOSLaunchURLOnExit = NULL;
-#endif
-
-    unguard;
-}
 
 
 #define DEBUG_HACKY_CMDLINE_PARSER 0
 void appPlatformExit()
 {
-    ShowAlertDialogOnExit();
-    LaunchURLOnExit();
-
     if (GUnixSpawnOnExit != NULL)
     {
         FString fstrcmd(GUnixSpawnOnExit);

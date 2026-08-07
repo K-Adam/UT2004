@@ -6,9 +6,7 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#if !MACOSX
 #include <malloc.h>
-#endif
 
 // Tags.
 enum {MEM_PreTag =0xf0ed1cee};

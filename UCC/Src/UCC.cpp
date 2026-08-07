@@ -53,15 +53,6 @@ void autoInitializeRegistrantsEditor(INT &Lookup);
 
 INT GFilesOpen, GFilesOpened;
 
-#if MACOSX  // stubbed GameRanger stuff...  --ryan.
-extern "C"
-{
-    int GameRangerClientsWaiting = 0;
-    void AlertGameRangerHostReady(void) { /* do nothing. */ }
-}
-#endif
-
-
 /*-----------------------------------------------------------------------------
 	Global variables.
 -----------------------------------------------------------------------------*/
@@ -94,7 +85,7 @@ FFeedbackContextAnsi Warn;
 	FFileManagerWindows FileManager;
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
-#elif ((__LINUX_X86__) || (__FreeBSD__) || (MACOSX))
+#elif __LINUX_X86__
 	#include "FFileManagerUnix.h"
 	FFileManagerUnix FileManager;
 	#include "FMallocAnsi.h"

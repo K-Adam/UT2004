@@ -8,7 +8,7 @@
 
 #include "EnginePrivate.h"
 
-#if !__LINUX__ && !__FreeBSD__ && !MACOSX && !_WIN64
+#if !__LINUX__ && !_WIN64
 #  include "NVTriStrip.h"
 #  ifndef HAS_NVTRISTRIP
 #    define HAS_NVTRISTRIP 1

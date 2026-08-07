@@ -19,9 +19,6 @@ Revision history:
 	#define SOCKET_API TEXT("WinSock")
 #else
 	#define __BSD_SOCKETS__ 1
-	#if ((MACOSX) || (defined __FreeBSD__))
-		#define __BSD_SOCKETS_TRUE_BSD__ 1
-	#endif
 	#define SOCKET_API TEXT("Sockets")
 #endif
 
@@ -183,7 +180,7 @@ inline int bindnextport( SOCKET s, struct sockaddr_in* addr, int portcount, int 
     // seconds and then continue as normal...the blocking sucks, but
     // tends to fix things, too. Oh well.
     //
-    // The MacOS X and Win32 TCP/IP stacks do not exhibit this problem.
+    // The Win32 TCP/IP stack does not exhibit this problem.
     //
     //    --ryan.
 

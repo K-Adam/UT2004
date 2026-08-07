@@ -703,17 +703,7 @@ public:
     	appStrcpy( tmp, appFromAnsi(Home) );
 
 	// !!! FIXME: abstract game.
-	#if MACOSX
-		// Make sure these two parent folders exist...
-		appStrcat( tmp, TEXT("/Library") );
-		mkdir(appToAnsi(tmp), S_IRWXU);
-		appStrcat( tmp, TEXT("/Application Support") );
-		mkdir(appToAnsi(tmp), S_IRWXU);
-
-		appStrcat( tmp, TEXT("/Unreal Tournament 2004") );
-	#else
 		appStrcat( tmp, TEXT("/.ut2004") );
-	#endif
 
         mkdir(appToAnsi(tmp), S_IRWXU);
         appStrcat( tmp, TEXT("/System") );

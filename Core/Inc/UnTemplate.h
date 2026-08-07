@@ -497,9 +497,6 @@ public:
 		return INDEX_NONE;
 		unguardSlow;
 	}
-#if __MWERKS__
-	friend FArchive& operator<<( FArchive& Ar, TArray& A );
-#else
 	friend FArchive& operator<<( FArchive& Ar, TArray& A )
 	{
 		guard(TArray<<);
@@ -539,7 +536,6 @@ public:
 		return Ar;
 		unguard;
 	}
-#endif
 	void CountBytes( FArchive& Ar )
 	{
 		guardSlow(TArray::CountBytes);
@@ -690,77 +686,6 @@ public:
 	};
 };
 
-#if __MWERKS__
-template< class T > inline FArchive& operator<<( FArchive& Ar, TArray<T>& A )
-{
-	guard(TArray<<);
-	A.CountBytes( Ar );
-	if( sizeof(T)==1 )
-	{
-		// Serialize simple bytes which require no construction or destruction.
-		Ar << AR_INDEX(A.ArrayNum);
-		if( Ar.IsLoading() )
-		{
-			A.ArrayMax = A.ArrayNum;
-			A.Realloc( sizeof(T) );
-		}
-		Ar.Serialize( &A(0), A.Num() );
-	}
-	else if( Ar.IsLoading() )
-	{
-		// Load array.
-		INT NewNum;
-		Ar << AR_INDEX(NewNum);
-		A.Empty( NewNum );
-		for( INT i=0; i<NewNum; i++ )
-			Ar << *new(A)T;
-	}
-	else
-	{
-		// Save array.
-		Ar << AR_INDEX(A.ArrayNum);
-		for( INT i=0; i<A.ArrayNum; i++ )
-			Ar << A( i );
-	}
-	return Ar;
-	unguard;
-}
-
-// Since the above doesn't seem to actually do anything, I'm also including this
-// handy macro to make manually instantiating these things easier.
-
-#define INSTANTIATE_TEMPLATE(TypeName) \
-	FArchive& operator<<( FArchive& Ar, TArray<TypeName>& A ) \
-	{ \
-		A.CountBytes( Ar ); \
-		if( sizeof(TypeName)==1 ) \
-		{ \
-			Ar << AR_INDEX(A.ArrayNum); \
-			if( Ar.IsLoading() ) \
-			{ \
-				A.ArrayMax = A.ArrayNum; \
-				A.Realloc( sizeof(TypeName) ); \
-			} \
-			Ar.Serialize( &A(0), A.Num() ); \
-		} \
-		else if( Ar.IsLoading() ) \
-		{ \
-			INT NewNum; \
-			Ar << AR_INDEX(NewNum); \
-			A.Empty( NewNum ); \
-			for( INT i=0; i<NewNum; i++ ) \
-				Ar << *new(A)TypeName; \
-		} \
-		else \
-		{ \
-			Ar << AR_INDEX(A.ArrayNum); \
-			for( INT i=0; i<A.ArrayNum; i++ ) \
-				Ar << A(i); \
-		} \
-		return Ar; \
-	}
-
-#endif
 template<class T> class TArrayNoInit : public TArray<T>
 {
 public:
@@ -1684,25 +1609,17 @@ protected:
 		INT HashNext;
 		TK Key;
 		TI Value;
-#if __MWERKS__
-		TPair( struct TTypeInfo<TK>::ConstInitType InKey, struct TTypeInfo<TI>::ConstInitType InValue )
-#else
 		TPair( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
-#endif
 		: Key( InKey ), Value( InValue )
 		{}
 		TPair()
 		{}
-#if __MWERKS__
-		friend FArchive& operator<<( FArchive& Ar, TPair& F );
-#else
 		friend FArchive& operator<<( FArchive& Ar, TPair& F )
 		{
 			guardSlow(TMapBase::TPair<<);
 			return Ar << F.Key << F.Value;
 			unguardSlow;
 		}
-#endif
 		// rjp --
 		UBOOL operator==( const TPair& Other ) const
 		{
@@ -1749,11 +1666,7 @@ protected:
 		Rehash();
 		unguardSlow;
 	}
-#if __MWERKS__
-	TI& Add( struct TTypeInfo<TK>::ConstInitType InKey, struct TTypeInfo<TI>::ConstInitType InValue )
-#else
 	TI& Add( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
-#endif
 	{
 		guardSlow(TMapBase::Add);
 		TPair& Pair   = *new(Pairs)TPair( InKey, InValue );
@@ -1836,11 +1749,7 @@ public:
 		unguardSlow;
 	}
 
-#if __MWERKS__
-	TI& Set( struct TTypeInfo<TK>::ConstInitType InKey, struct TTypeInfo<TI>::ConstInitType InValue )
-#else
 	TI& Set( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
-#endif
 	{
 		guardSlow(TMap::Set);
 		for( INT i=Hash[(GetTypeHash(InKey) & (HashCount-1))]; i!=INDEX_NONE; i=Pairs(i).HashNext )
@@ -1849,11 +1758,7 @@ public:
 		return Add( InKey, InValue );
 		unguardSlow;
 	}
-#if __MWERKS__
-	INT Remove( struct TTypeInfo<TK>::ConstInitType InKey )
-#else
 	INT Remove( typename TTypeInfo<TK>::ConstInitType InKey )
-#endif
 	{
 		guardSlow(TMapBase::Remove);
 		INT Count=0;
@@ -2027,15 +1932,6 @@ public:
 	friend class TConstIterator;
 };
 
-#if __MWERKS__
-template< class TK, class TI > inline FArchive& operator<<( FArchive& Ar, TMapBase<TK,TI>::TPair& F )
-{
-	guardSlow(TMapBase::TPair<<);
-	return Ar << F.Key << F.Value;
-	unguardSlow;
-}
-#endif
-
 template< class TK, class TI > class TMap : public TMapBase<TK,TI>
 {
 public:
@@ -2094,19 +1990,11 @@ public:
 				new(Values)TI(this->Pairs(i).Value);
 		unguardSlow;
 	}
-#if __MWERKS__
-	TI& Add( struct TTypeInfo<TK>::ConstInitType InKey, TTypeInfo<TI>::ConstInitType InValue )
-#else
 	TI& Add( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
-#endif
 	{
 		return TMapBase<TK,TI>::Add( InKey, InValue );
 	}
-#if __MWERKS__
-	TI& AddUnique( struct TTypeInfo<TK>::ConstInitType InKey, struct TTypeInfo<TI>::ConstInitType InValue )
-#else
 	TI& AddUnique( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
-#endif
 	{
 		for( INT i=this->Hash[(GetTypeHash(InKey) & (this->HashCount-1))]; i!=INDEX_NONE; i=Pairs(i).HashNext )
 			if( this->Pairs(i).Key==InKey && this->Pairs(i).Value==InValue )
@@ -2126,11 +2014,7 @@ public:
 		return Count;
 		unguardSlow;
 	}
-#if __MWERKS__
-	INT RemovePair( struct TTypeInfo<TK>::ConstInitType InKey, struct TTypeInfo<TI>::ConstInitType InValue )
-#else
 	INT RemovePair( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
-#endif
 	{
 		guardSlow(TMap::Remove);
 		INT Count=0;

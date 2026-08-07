@@ -13,19 +13,7 @@
 
 TCHAR* SocketHostError( INT Code )
 {
-#if __WINSOCK__
 	return(SocketError(Code));
-#elif __BSD_SOCKETS__
-	// True BSD systems (like OS X) use "h_errno" instead of
-	//  "errno" for gethostbyname() failures, so we need to
-	//  catch this here.  --ryan.
-#if __BSD_SOCKETS_TRUE_BSD__
-	if (Code == -1)
-		Code = h_errno;  // This is "errno" on Linux.
-#endif
-
-	return(SocketError(Code));
-#endif
 }
 
 // Resolution thread entrypoint.

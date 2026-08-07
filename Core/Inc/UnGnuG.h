@@ -9,7 +9,7 @@
 #ifndef _INCL_UNGNUG_H_
 #define _INCL_UNGNUG_H_
 
-#if ((defined __LINUX_X86__) || (defined __FreeBSD__))
+#if defined __LINUX_X86__
 	#define __UNIX__  1
 	#define __LINUX__ 1
 	#define __INTEL__ 1
@@ -19,9 +19,6 @@
 	#else
 		#define COMPILER "Compiled with GNU g++ ("__VERSION__")"
 	#endif
-#elif (defined MACOSX)
-	#define __UNIX__  1
-	#define COMPILER "Compiled with MacOS X GNU g++ ("__VERSION__")"
 #else
 	#error Unsupported platform.
 #endif
@@ -168,7 +165,7 @@ typedef unsigned int		BITFIELD;	// For bitfields.
 typedef unsigned long PTRINT;
 
 // !!! FIXME: This should really just include a header.
-#if ((!defined MACOSX) && (!defined __x86_64__))
+#if !defined __x86_64__
 typedef unsigned int size_t;
 #endif
 
@@ -318,28 +315,8 @@ CORE_API DOUBLE appSecondsSlow();
 
 
 
-// Sanjay Patel from Apple says this gives a tiny performance boost. --ryan.
-#if MACOSX
-inline CORE_API INT appFloor( FLOAT Value )
-{
-	float zero = Value - Value;
-	if(Value < zero)
-	{
-		// negative values need to handled properly
-		return (INT)floor(Value);
-	}
-	else
-	{
-		// positive values just get rounded down to the nearest integer
-		return (INT)(Value);
-	}
-}
-#else
 #define appFloor(x) ((INT)floor(x))
-#endif
 
-#define DEFINED_appArgv0 1
-CORE_API void appArgv0(const char *argv0);  // defined in UnUnix.cpp ...
 
 //
 // Memory copy.

@@ -575,12 +575,6 @@ enum EDetailMode
 //
 class CORE_API UObject : public FUnknown
 {
-#if __MWERKS__
-public:
-	static UPackage* GetTransientPackage();
-protected:
-#endif
-
 	// Declarations.
 	DECLARE_BASE_CLASS(UObject,UObject,CLASS_Abstract,Core)
 	typedef UObject WithinClass;
@@ -735,9 +729,7 @@ public:
 	static void GetRegistryObjects( TArray<FRegistryObjectInfo>& Results, UClass* Class, UClass* MetaClass, UBOOL ForceRefresh );
 	static void GetPreferences( TArray<FPreferencesInfo>& Results, const TCHAR* Category, UBOOL ForceRefresh );
 	static UBOOL GetInitialized();
-#ifndef __MWERKS__
 	static UPackage* GetTransientPackage();
-#endif
 	static void VerifyLinker( ULinkerLoad* Linker );
 	static void ProcessRegistrants();
 	static void BindPackage( UPackage* Pkg );

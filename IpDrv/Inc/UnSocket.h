@@ -19,10 +19,6 @@
 
 // Provide WinSock definitions for BSD sockets.
 #if __BSD_SOCKETS__
-	#if __BSD_SOCKETS_TRUE_BSD__
-		typedef int socklen_t;
-	#endif
-
 	typedef int			SOCKET;
 	typedef struct hostent		HOSTENT;
 	typedef in_addr			IN_ADDR;
@@ -51,12 +47,7 @@
 	#define closesocket		close
 	#define ioctlsocket		ioctl
 	#define WSAGetLastError()	errno
-
-	#if __BSD_SOCKETS_TRUE_BSD__
-		#define WSAGetLastHostError()	errno
-	#else
-		#define WSAGetLastHostError()	h_errno
-	#endif
+	#define WSAGetLastHostError()	h_errno
 
 	#define GCC_OPT_INT_CAST	(DWORD*)
 #endif

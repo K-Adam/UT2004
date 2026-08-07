@@ -313,7 +313,7 @@ UBOOL UALAudioSubsystem::Init()
 	}
 
 	guard(alGetError);
-	alGetError();  // clear errors in case we didn't reload DLL (MacOSX) --ryan.
+	alGetError();  // clear errors in case we didn't reload DLL
 	unguard;
 
         guard(alcMakeContextCurrent);

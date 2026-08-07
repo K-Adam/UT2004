@@ -652,10 +652,6 @@ void FOpenGLVertexStreamARB_VA::Cache(FVertexStream* SourceStream)
 	// !!warning: relies on data layout not changing
 	if( !SourceStream->HintDynamic() )
 	{
-		UBOOL RevCompsOrig = GIsOpenGLRevComps;
-		if( RenDev->SUPPORTS_GL_ATI_array_rev_comps_in_4_bytes )
-			GIsOpenGLRevComps = 1;  // RenderColor always byteswaps in here...
-
 		FVertexComponent Components[MAX_VERTEX_COMPONENTS];
 		INT NumComponents = SourceStream->GetComponents( Components );
 		INT Offset = 0;
@@ -690,7 +686,6 @@ void FOpenGLVertexStreamARB_VA::Cache(FVertexStream* SourceStream)
 			}
 		}
 
-		GIsOpenGLRevComps = RevCompsOrig;
 	}
 
 	CachedRevision	= SourceStream->GetRevision();
@@ -754,7 +749,7 @@ INT FOpenGLVertexStreamARB_VA::AddVertices(FVertexStream* Stream)
 
 
 //
-// NV_VAR & APPLE_VAR implemention.
+// NV_VAR implemention.
 //
 
 //
@@ -785,10 +780,6 @@ void FOpenGLVertexStreamNV_VAR::Cache(FVertexStream* SourceStream)
 
 	// D3D -> OpenGL color conversion for static data.
 	// !!warning: relies on data layout not changing
-
-	UBOOL RevCompsOrig = GIsOpenGLRevComps;
-	if( RenDev->SUPPORTS_GL_ATI_array_rev_comps_in_4_bytes )
-		GIsOpenGLRevComps = 1;  // RenderColor always byteswaps in here...
 
 	FVertexComponent Components[MAX_VERTEX_COMPONENTS];
 	INT NumComponents = SourceStream->GetComponents( Components );
@@ -824,23 +815,15 @@ void FOpenGLVertexStreamNV_VAR::Cache(FVertexStream* SourceStream)
 		}
 	}
 
-	GIsOpenGLRevComps = RevCompsOrig;
-
 	if( CachedSize != Size )
 	{
 		VertexData = RenDev->VARPointer + RenDev->VARIndex;
 		RenDev->VARIndex += Size;
 	}
 
-#if MACOSX
-	appMemcpy( VertexData, Data, Size );
-	RenDev->glVertexArrayRangeAPPLE( RenDev->VARSize, RenDev->VARPointer );
-	RenDev->glFlushVertexArrayRangeAPPLE( Size, VertexData );
-#else
 	RenDev->glVertexArrayRangeNV( 0, 0 );
 	appMemcpy( VertexData, Data, Size );
 	RenDev->glVertexArrayRangeNV( RenDev->VARSize, RenDev->VARPointer );
-#endif
 
 	CachedRevision	= SourceStream->GetRevision();
 	CachedSize		= Size;
@@ -972,10 +955,6 @@ void FOpenGLVertexStreamARB_VBO::Cache(FVertexStream* SourceStream)
 	// !!warning: relies on data layout not changing
 	if( !SourceStream->HintDynamic() )
 	{
-		UBOOL RevCompsOrig = GIsOpenGLRevComps;
-		if( RenDev->SUPPORTS_GL_ATI_array_rev_comps_in_4_bytes )
-			GIsOpenGLRevComps = 1;  // RenderColor always byteswaps in here...
-
 		FVertexComponent Components[MAX_VERTEX_COMPONENTS];
 		INT NumComponents = SourceStream->GetComponents( Components );
 		INT Offset = 0;
@@ -1010,7 +989,6 @@ void FOpenGLVertexStreamARB_VBO::Cache(FVertexStream* SourceStream)
 			}
 		}
 
-		GIsOpenGLRevComps = RevCompsOrig;
 	}
 
 	if( SourceStream->HintDynamic() )
@@ -1134,10 +1112,6 @@ void FOpenGLVertexStreamATI_VAO::Cache(FVertexStream* SourceStream)
 	// !!warning: relies on data layout not changing
 	if( !SourceStream->HintDynamic() )
 	{
-		UBOOL RevCompsOrig = GIsOpenGLRevComps;
-		if( RenDev->SUPPORTS_GL_ATI_array_rev_comps_in_4_bytes )
-			GIsOpenGLRevComps = 1;  // RenderColor always byteswaps in here...
-
 		FVertexComponent Components[MAX_VERTEX_COMPONENTS];
 		INT NumComponents = SourceStream->GetComponents( Components );
 		INT Offset = 0;
@@ -1172,7 +1146,6 @@ void FOpenGLVertexStreamATI_VAO::Cache(FVertexStream* SourceStream)
 			}
 		}
 
-		GIsOpenGLRevComps = RevCompsOrig;
 	}
 
 	if( RenDev->SUPPORTS_GL_ATI_map_object_buffer && SourceStream->HintDynamic() )
@@ -1254,149 +1227,6 @@ void FOpenGLVertexStreamATI_VAO::Reallocate(INT NewSize)
 	
 	CachedSize	= NewSize;
 	Tail		= 0;
-
-	unguard;
-}
-
-
-//
-// APPLE_VAO implemention.
-//
-
-//
-//	FOpenGLVertexStreamAPPLE_VAO::~FOpenGLVertexStreamAPPLE_VAO
-//
-FOpenGLVertexStreamAPPLE_VAO::~FOpenGLVertexStreamAPPLE_VAO()
-{
-	guard(FOpenGLVertexStreamAPPLE_VAO::~FOpenGLVertexStreamAPPLE_VAO);
-	
-	if( Initialized )
-	{
-		RenDev->glBindVertexArrayAPPLE( 0 );	
-		RenDev->glDeleteVertexArraysAPPLE( 1, &Buffer );
-		delete [] VertexData;
-	}
-	Initialized = 0;
-	
-	unguard;
-}
-
-//
-// FOpenGLVertexStreamAPPLE_VAO::Cache
-//
-void FOpenGLVertexStreamAPPLE_VAO::Cache(FVertexStream* SourceStream)
-{
-	guard(FOpenGLVertexStreamAPPLE_VAO::Cache);
-
-	check(!IsDynamicVB);
-
-	INT Size	= Abs(SourceStream->GetSize()),
-		Stride	= SourceStream->GetStride();
-
-	if( !Initialized || CachedSize != Size )
-	{
-		if( Initialized )
-		{
-			RenDev->glBindVertexArrayAPPLE( 0 );	
-			RenDev->glDeleteVertexArraysAPPLE( 1, &Buffer );
-			delete [] VertexData;
-		}
-		VertexData = new BYTE[Size];
-		RenDev->glGenVertexArraysAPPLE( 1, &Buffer );
-		Initialized = 1;
-	}
-
-	check( VertexData );
-
-	// Copy the stream data.
-	SourceStream->GetStreamData( VertexData );
-
-	// D3D -> OpenGL color conversion for static data.
-	// !!warning: relies on data layout not changing
-	if( !SourceStream->HintDynamic() )
-	{
-		UBOOL RevCompsOrig = GIsOpenGLRevComps;
-		if( RenDev->SUPPORTS_GL_ATI_array_rev_comps_in_4_bytes )
-			GIsOpenGLRevComps = 1;  // RenderColor always byteswaps in here...
-
-		FVertexComponent Components[MAX_VERTEX_COMPONENTS];
-		INT NumComponents = SourceStream->GetComponents( Components );
-		INT Offset = 0;
-		BYTE* DataEnd = VertexData + Size - 4;
-		for( INT i=0; i<NumComponents; i++ )
-		{
-			switch( Components[i].Type )
-			{
-			case CT_Float4:
-				Offset += 4*4;
-				break;
-			case CT_Float3:
-				Offset += 3*4;
-				break;
-			case CT_Float2:
-				Offset += 2*4;
-				break;
-			case CT_Float1:
-				Offset += 1*4;
-				break;
-			case CT_Color:
-				{	
-					FColor* Colors = (FColor*) (VertexData + Offset);
-					while( (BYTE*) Colors <= DataEnd )
-					{
-						*Colors = (*Colors).RenderColor();
-						Colors = (FColor*) ((BYTE*) Colors + Stride);
-					}
-					Offset += 1*4;
-					break;
-				}
-			}
-		}
-
-		GIsOpenGLRevComps = RevCompsOrig;
-	}
-
-	RenDev->glBindVertexArrayAPPLE( Buffer );
-	RenDev->glVertexArrayParameteriAPPLE( GL_VERTEX_ARRAY_STORAGE_HINT_APPLE, GL_STORAGE_SHARED_APPLE );
-	RenDev->glVertexArrayRangeAPPLE( Size, VertexData );
-	RenDev->glEnableClientState( GL_VERTEX_ARRAY );
-	RenDev->glFlushVertexArrayRangeAPPLE( Size, VertexData );
-	
-	RenDev->glBindVertexArrayAPPLE( 0 );
-
-	CachedRevision	= SourceStream->GetRevision();
-	CachedSize		= Size;
-	
-	unguard;
-}
-
-//
-// FOpenGLVertexStreamAPPLE_VAO::AddVertices
-//
-INT FOpenGLVertexStreamAPPLE_VAO::AddVertices(FVertexStream* Stream)
-{
-	guard(FOpenGLVertexStreamATI_VAO::AddVertices);
-
-	check(IsDynamicVB);
-	
-	appErrorf(TEXT("APPLE_VAO::AddVertices is not implemented"));
-
-	return 0;
-
-	unguard;
-}
-
-
-//
-// FOpenGLVertexStreamAPPLE_VAO::Reallocate
-//
-void FOpenGLVertexStreamAPPLE_VAO::Reallocate(INT NewSize)
-{
-	guard(FOpenGLVertexStreamATI_VAO::Reallocate);
-
-	check(IsDynamicVB);
-
-	appErrorf(TEXT("APPLE_VAO::Reallocate is not implemented"));
 
 	unguard;
 }

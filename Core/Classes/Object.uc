@@ -459,14 +459,11 @@ native(535) static final function StopWatch(optional bool bStop);   //amb: for s
 native final function bool IsOnConsole();   // for console specific stuff
 native final function bool IsSoaking();
 
-// These report basic truths about the target OS. You should only use them for
-//  basic things (MacOS? Don't report Direct3D support, etc). MacOSX is a Unix
-//  of sorts, but does not report PlatformIsUnix()==true. PlatformIsWindows()
-//  is for Win32 and Win64. PlatformIs64Bit() may be true in conjunction with
-//  any other platform function if the binary is 64-bit native (not 32-bit on
-//  a 64-bit platform).  --ryan.
-native final function bool PlatformIsMacOS();  // MacOS X.
-native final function bool PlatformIsUnix();  // Linux, FreeBSD, etc (NOT OSX!)
+// These report basic truths about the target OS. PlatformIsWindows() is for
+//  Win32 and Win64. PlatformIs64Bit() may be true in conjunction with any other
+//  platform function if the binary is 64-bit native.
+native final function bool PlatformIsMacOS();  // Always false, Mac OS X is no longer supported.
+native final function bool PlatformIsUnix();  // Linux.
 native final function bool PlatformIsWindows();  // Win32, Win64.
 native final function bool PlatformIs64Bit();  // Linux64, Win64.
 
