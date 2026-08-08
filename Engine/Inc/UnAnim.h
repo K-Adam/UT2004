@@ -6,9 +6,7 @@
 		* Moved FMeshAnimNotify/FMeshAnimSeq from UnMesh.h to UnAnim.h
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,4)
-#endif
 
 
 /*-----------------------------------------------------------------------------
@@ -97,9 +95,7 @@ struct FAnimRep
 };
 
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 /*----------------------------------------------------------------------------
 	The End.

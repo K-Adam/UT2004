@@ -1,7 +1,5 @@
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 class AFluidSurfaceInfo;
 
@@ -242,6 +240,4 @@ public:
 	virtual void GetContents(void* Data);
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif

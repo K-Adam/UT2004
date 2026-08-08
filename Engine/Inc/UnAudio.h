@@ -21,9 +21,7 @@ struct FVoicePacket;
 struct FVoiceInfo;
 class FAudioCaptureDevice;
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 /*-----------------------------------------------------------------------------
 	UAudioSubsystem.
@@ -650,9 +648,7 @@ public:
 	void NoiseGateFilter(); 
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

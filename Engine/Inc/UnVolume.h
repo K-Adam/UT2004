@@ -7,9 +7,7 @@
 =============================================================================*/
 
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 struct FDecorationType
 {
@@ -22,9 +20,7 @@ struct FDecorationType
 	UBOOL				bRandomRoll;
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*----------------------------------------------------------------------------
 	The End.

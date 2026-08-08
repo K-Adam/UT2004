@@ -6,9 +6,7 @@
 		* Created by Andrew Scheidecker
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 // sjs - moved to cpp #define STATICMESH_VERSION 8
 
@@ -574,7 +572,5 @@ public:
 	virtual void Serialize(FArchive& Ar);
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 

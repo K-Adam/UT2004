@@ -184,9 +184,7 @@ public:
 };
 
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 
 //
 //	FStaticMeshOldVertex
@@ -221,9 +219,7 @@ struct FStaticMeshOldVertex
 	}
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 INT FindMaterialIndex(TArray<FStaticMeshMaterial>& Materials,UMaterial* Material) // sjs - from editor project
 {

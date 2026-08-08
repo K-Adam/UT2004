@@ -68,9 +68,7 @@ void USparkEmitter::SpawnParticle( INT Index, FLOAT SpawnTime, INT Flags, INT Sp
 }
 
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 
 struct FSparkVertex
 {
@@ -92,9 +90,7 @@ struct FSparkVertex
 	}
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 
 class FSparkVertexStream : public FParticleVertexStream<FSparkVertex>

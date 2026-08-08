@@ -9,9 +9,7 @@
 #ifndef _UNRENDER_H_
 #define _UNRENDER_H_
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 //
 //  Defines.
@@ -607,9 +605,7 @@ struct ENGINE_API HMaterialTree : public HHitProxy
 extern ENGINE_API DWORD CalcBlendFlags( BYTE Style, AActor* pActor ); // In AxEmitter.cpp
 // --- sjs
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 #endif
 

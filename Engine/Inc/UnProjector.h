@@ -3,9 +3,7 @@
 	Copyright 2000 Epic Games, Inc. All Rights Reserved.
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 #define DECALREMOVETIME 1.f
 
@@ -142,9 +140,7 @@ class ENGINE_API UProjectorPrimitive : public UPrimitive
 	virtual FVector GetEncroachCenter(AActor* Owner) { return GetCollisionBoundingBox(Owner).GetCenter(); }
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

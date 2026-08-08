@@ -11,9 +11,7 @@ Revision history:
 */
 #include "Engine.h"
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 #ifndef ENGINE_API
 #define ENGINE_API DLL_IMPORT
@@ -509,8 +507,6 @@ VERIFY_CLASS_SIZE_NODIE(UCacheManager)
 #undef AUTOGENERATE_NAME
 #endif
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 //#endif // __CACHEMANAGER_H__

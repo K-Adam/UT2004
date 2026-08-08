@@ -16,7 +16,7 @@
 // Speex is built from source on every platform but win32 right now,
 //  so the packing only needs to be forced if we're trying to match a
 //  precompiled binary package.  --ryan.
-#if ( (SUPPORTS_PRAGMA_PACK) && ((defined WIN32) && (!defined _WIN64)) )
+#if defined WIN32 && !defined _WIN64
 #define PACK_SPEEX_TO_EIGHT_BYTES 1
 #endif
 

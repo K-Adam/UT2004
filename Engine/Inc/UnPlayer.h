@@ -6,9 +6,7 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 /*-----------------------------------------------------------------------------
 	UPlayer.
@@ -52,9 +50,7 @@ class ENGINE_API UPlayer : public UObject, public FOutputDevice, public FExec
 	virtual void ReadInput( FLOAT DeltaSeconds )=0;
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 
 /*-----------------------------------------------------------------------------

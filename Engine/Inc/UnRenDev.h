@@ -11,9 +11,7 @@
 #ifndef _UNRENDEV_H_
 #define _UNRENDEV_H_
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 FORCEINLINE INT GetResourceHashIndex(QWORD CacheId)
 {
@@ -292,9 +290,7 @@ class ENGINE_API URenderDevice : public USubsystem
 	virtual FRenderCaps* GetRenderCaps() = 0;
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 #endif
 /*------------------------------------------------------------------------------------

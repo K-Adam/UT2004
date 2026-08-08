@@ -1696,9 +1696,7 @@ INT appCreateBitmap( const TCHAR* Pattern, INT Width, INT Height, DWORD* Data, F
 		if( Ar )
 		{
 			// Types.
-			#if SUPPORTS_PRAGMA_PACK
 			#pragma pack (push,1)
-			#endif
 			struct BITMAPFILEHEADER
 			{
 				_WORD   bfType GCC_PACK(1);
@@ -1721,9 +1719,7 @@ INT appCreateBitmap( const TCHAR* Pattern, INT Width, INT Height, DWORD* Data, F
 				DWORD  biClrUsed GCC_PACK(1);
 				DWORD  biClrImportant GCC_PACK(1); 
 			} IH;
-			#if SUPPORTS_PRAGMA_PACK
 			#pragma pack (pop)
-			#endif
 
 			// File header.
 			FH.bfType       = INTEL_ORDER16((_WORD) ('B' + 256*'M'));

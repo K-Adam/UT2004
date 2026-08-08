@@ -9,9 +9,7 @@ Revision history:
 
 #include "Engine.h"
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,4)
-#endif
 
 #ifndef UWEB_API
 #define UWEB_API 
@@ -104,9 +102,7 @@ public:
     NO_DEFAULT_CONSTRUCTOR(UWebRequest)
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

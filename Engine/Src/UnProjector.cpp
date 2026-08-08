@@ -650,9 +650,7 @@ public:
 		PCC_MaxZ = 0x20
 	};
 
-    #if SUPPORTS_PRAGMA_PACK
     #pragma pack(push,1)
-    #endif
 	struct FUnclippedVertex
 	{
 		FVector	WorldPosition GCC_PACK(1);
@@ -666,9 +664,7 @@ public:
 		INT		SourceVertices[2] GCC_PACK(1);
 		BYTE	ClipAxis GCC_PACK(1);
 	};
-    #if SUPPORTS_PRAGMA_PACK
     #pragma pack(pop)
-    #endif
 
 	AActor*						Actor;
 	TArray<FUnclippedVertex>	UnclippedVertices;

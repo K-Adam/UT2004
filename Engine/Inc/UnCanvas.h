@@ -6,9 +6,7 @@
 		* Created by Andrew Scheidecker
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 
 class FCanvasUtil; // sjs
@@ -126,7 +124,5 @@ private:
 	void WrappedPrint( ERenderStyle Style, INT& XL, INT& YL, UFont* Font, FLOAT ScaleX, FLOAT ScaleY, UBOOL Center, const TCHAR* Text ); // gam
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 

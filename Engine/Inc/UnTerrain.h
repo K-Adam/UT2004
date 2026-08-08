@@ -6,9 +6,7 @@
 		* Created by Jack Porter
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 /*------------------------------------------------------------------------------
     Misc stuff.
@@ -579,9 +577,7 @@ class ENGINE_API ATerrainInfo : public AInfo
 	DECLARE_FUNCTION(execPokeTerrain)
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*----------------------------------------------------------------------------
 	The End.

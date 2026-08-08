@@ -14,9 +14,7 @@ Revision history:
 	Dependencies.
 ------------------------------------------------------------------------------------*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,8)
-#endif
 
 #include "altypes.h"
 #include "alctypes.h"
@@ -34,9 +32,7 @@ typedef ALenum (*EAXSet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 #endif
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 /*------------------------------------------------------------------------------------
 	Helpers

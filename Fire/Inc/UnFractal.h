@@ -12,9 +12,7 @@
 #include "Engine.h"
 #include "UnFireNative.h"
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 /*----------------------------------------------------------------------------
 	General structures.
@@ -546,9 +544,7 @@ private:
 	void BlitIceTex();
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*-----------------------------------------------------------------------------
     The End.

@@ -860,14 +860,10 @@ CORE_API void appCleanFileCache()
 /*-----------------------------------------------------------------------------
 	File Streaming.
 -----------------------------------------------------------------------------*/
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,8)
-#endif
 #include "vorbis/codec.h"
 #include "vorbis/vorbisfile.h"
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 
 FCriticalSection::FCriticalSection()

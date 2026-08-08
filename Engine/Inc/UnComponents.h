@@ -11,9 +11,7 @@
 
 class ENGINE_API APlayerController;
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 enum ETestMoveResult
 {
@@ -49,9 +47,7 @@ struct FFireProperties
 	BITFIELD bInitialized:1;
 };
  
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 #endif
 

@@ -8,9 +8,7 @@ Revision history:
 #ifndef UHTTPDownload_H
 #define UHTTPDownload_H
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,4)
-#endif
 
 enum EHTTPState
 {
@@ -63,9 +61,7 @@ class UHTTPDownload : public UDownload
 	UBOOL FetchData();
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 #endif
 /*-----------------------------------------------------------------------------

@@ -26,9 +26,7 @@ enum {ALIAS_MAX=40};
 //
 // An input alias.
 //
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 struct FAlias
 {
 	FName Alias GCC_PACK(1);
@@ -38,9 +36,7 @@ struct FAlias
 	, Command( E_NoInit )
 	{}
 };
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 //
 // The input system base class.

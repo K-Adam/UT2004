@@ -6,9 +6,7 @@
 		* Created by Andrew Scheidecker
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 //
 //	UCameraEffect
@@ -94,6 +92,4 @@ public:
 	virtual FString GetStatString();
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif

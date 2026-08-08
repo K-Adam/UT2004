@@ -16,9 +16,7 @@
 
 #define LODMESH_VERSION 4
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 // Forward declarations.
 class ULodMesh;
@@ -577,6 +575,4 @@ class ENGINE_API ULodMesh : public UMesh
 	
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif

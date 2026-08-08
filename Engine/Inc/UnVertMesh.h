@@ -8,9 +8,7 @@
 
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 //
 // TODO: 
@@ -186,6 +184,4 @@ class ENGINE_API UVertMesh : public ULodMesh
 	
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif

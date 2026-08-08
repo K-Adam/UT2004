@@ -74,17 +74,13 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #endif
 
 #ifdef WITH_KARMA
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,8)
-#endif
     #include "MePrecision.h"
     #include "Mst.h"
     #include "McdTriangleList.h"
     #include "MeAssetDB.h"
     #include "MeAssetFactory.h"
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
     // These need to be public for UnrealEd etc.
     const MeReal K_ME2UScale = (MeReal)50;
@@ -95,9 +91,7 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #endif
 
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 // LIPSinc Includes
 #if !defined(__LINUX__)
@@ -386,9 +380,7 @@ struct FBatchReference
 
 typedef QWORD KModelPairType;
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 
 /*-----------------------------------------------------------------------------
@@ -466,9 +458,7 @@ typedef QWORD KModelPairType;
 #undef NAMES_ONLY
 #endif
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 /*-----------------------------------------------------------------------------
 	Hit proxies.
@@ -536,9 +526,7 @@ enum ETerrainBrush
 	TB_EdgeTurn			= 11,	// Turns edges of terrain triangulation
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

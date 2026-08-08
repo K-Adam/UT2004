@@ -6,9 +6,7 @@
 		* Created by Andrew Scheidecker
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 //
 //  EClippingFlag
@@ -1122,7 +1120,5 @@ public:
 
 #endif
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 

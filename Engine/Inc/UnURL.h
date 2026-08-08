@@ -6,9 +6,7 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 /*-----------------------------------------------------------------------------
 	FURL.
@@ -67,9 +65,7 @@ public:
 	UBOOL operator==( const FURL& Other ) const;
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

@@ -17,9 +17,7 @@
 
 #define MESHANIM_VERSION 1
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 #ifdef WITH_LIPSINC
 #include "LIPSincSupport.h"
@@ -1443,9 +1441,7 @@ class ENGINE_API UMeshAnimation : public UObject
 
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*----------------------------------------------------------------------------
 	The End.

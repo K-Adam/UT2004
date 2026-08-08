@@ -50,9 +50,6 @@
 
 #define FTime DOUBLE
 
-// MSVC and GCC both support #pragma pack(push).
-#define SUPPORTS_PRAGMA_PACK 1
-
 #ifdef _WIN64
   #if 1 //!!! FIXME: Where is this defined? ((defined _AMD64) || (defined AMD64))
     #ifndef __x86_64__

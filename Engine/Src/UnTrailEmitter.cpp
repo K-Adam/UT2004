@@ -273,9 +273,7 @@ void UTrailEmitter::UpdateParticle( FLOAT DeltaTime, INT Index )
 }
 
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 
 struct FTrailVertex
 {
@@ -297,9 +295,7 @@ struct FTrailVertex
 	}
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 
 class FTrailVertexStream : public FParticleVertexStream<FTrailVertex>

@@ -1,13 +1,9 @@
 #ifndef _KDEBUGDRAW_H_
 #define _KDEBUGDRAW_H_
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,8)
-#endif
 #include "MeDebugDraw.h"
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 typedef enum
 {

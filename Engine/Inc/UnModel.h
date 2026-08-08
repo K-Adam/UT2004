@@ -6,9 +6,7 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 //
 //	Definitions.
@@ -559,9 +557,7 @@ class ENGINE_API UModel : public UPrimitive
 	void AttachProjector( INT iNode, FProjectorRenderInfo* RenderInfo, FPlane* FrustumPlanes );
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*----------------------------------------------------------------------------
 	The End.

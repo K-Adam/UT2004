@@ -9,17 +9,13 @@ Revision history:
 
 #include "ALAudioPrivate.h"
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,8)
-#endif
 #include "vorbis/codec.h"
 #include "vorbis/vorbisfile.h"
 #if WITH_MP3
 #include "../MP3/mp3dec.h"
 #endif
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 #if __UNIX__
 #undef clock   // !!! FIXME: Stupid macro!  --ryan.

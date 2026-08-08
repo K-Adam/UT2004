@@ -87,9 +87,7 @@ public:
 //	FProjectorBatchVertex
 //
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 
 struct FProjectorBatchVertex
 {
@@ -98,9 +96,7 @@ struct FProjectorBatchVertex
 	FVector	ProjectedPosition GCC_PACK(1);
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 //
 //	FProjectorRenderPrimitive

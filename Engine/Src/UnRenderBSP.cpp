@@ -774,9 +774,7 @@ public:
 	virtual UTexture* GetUTexture() { return NULL; }
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 
 //
 //	FBspLightVertex
@@ -792,9 +790,7 @@ struct FBspLightVertex
 	FLOAT	V2 GCC_PACK(1);
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 
 //

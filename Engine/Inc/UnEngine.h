@@ -9,9 +9,7 @@
 #ifndef _INCL_UNENGINE_H_
 #define _INCL_UNENGINE_H_
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,4)
-#endif
 
 /*-----------------------------------------------------------------------------
 	Unreal engine.
@@ -230,9 +228,7 @@ class UGlobalTempObjects : public UObject
 	}
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 #endif   // include-once blocker.
 

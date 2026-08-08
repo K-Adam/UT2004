@@ -6,9 +6,7 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 /*-----------------------------------------------------------------------------
 	Network notification sink.
@@ -508,9 +506,7 @@ protected:
 	INT		    Index;
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

@@ -9,9 +9,7 @@
 #ifndef _UNRENDERRESOURCE_H_
 #define _UNRENDERRESOURCE_H_
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 //
 // Forward declarations.
@@ -711,9 +709,7 @@ class ENGINE_API UVertexStreamPosNormTex : public UVertexStreamBase
 			D3DVSD_REG(   , D3DVSDT_RGBA4 ),   // Weight 0, 1, 2, 3
 			D3DVSD_REG(   , D3DVSDT_FLOAT4 ),  // Index  0, 1, 2, 3
 */
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 //!!vogel: TODO: GCC_PACK
 struct FSkinVertex
 {
@@ -747,9 +743,7 @@ struct FSkinVertex
 			<< V.Weight[3];			
 	}
 };
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 class ENGINE_API USkinVertexBuffer : public URenderResource
 {
@@ -778,9 +772,7 @@ class ENGINE_API UIndexBuffer : public URenderResource
 	virtual void Serialize(FArchive& Ar);
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 #endif
 

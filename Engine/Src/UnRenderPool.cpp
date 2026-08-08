@@ -13,9 +13,7 @@
 //	FVertexPools
 //
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,1)
-#endif
 
 struct FVertexPools
 {
@@ -33,9 +31,7 @@ struct FVertexPools
 	}
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 static FVertexPools	VertexPools;
 

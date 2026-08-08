@@ -6,9 +6,7 @@
 		* Created by Daniel Vogel
 =============================================================================*/
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,4)
-#endif
 
 enum EParticleFlags
 {
@@ -180,9 +178,7 @@ public:
 	}
 };
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
-#endif
 
 /*----------------------------------------------------------------------------
 	The End.

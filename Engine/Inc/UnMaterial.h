@@ -1,7 +1,5 @@
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(push,4)
-#endif
 
 //
 // Forward declarations
@@ -175,9 +173,7 @@ class ENGINE_API UTexCoordMaterial : public URenderedMaterial
 };
 
 
-#if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
-#endif
 
 /*-----------------------------------------------------------------------------
 	The End.
