@@ -841,7 +841,13 @@ void UClass::Register()
 	Super::Register();
 
 	// Get stashed registration info.
+#if SERIAL_POINTER_INDEX
+	INT idx = *(INT*)&ClassConfigName;
+	check(idx < GTotalSerializedPointers);
+	const TCHAR* InClassConfigName = (const TCHAR*)GSerializedPointers[idx];
+#else
 	const TCHAR* InClassConfigName = *(TCHAR**)&ClassConfigName;
+#endif
 	ClassConfigName = InClassConfigName;
 
 	// Init default object.
@@ -1134,7 +1140,12 @@ UClass::UClass
 ,   IsACount(0)
 #endif
 {
+	// FName cannot hold a 64-bit pointer, stash a pointer index like UObject does with Name.
+#if SERIAL_POINTER_INDEX
+	*(INT*)&ClassConfigName = SerialPointerIndex((void*)InConfigName);
+#else
 	*(const TCHAR**)&ClassConfigName = InConfigName;
+#endif
 }
 
 // Called when statically linked.
@@ -1166,7 +1177,11 @@ UClass::UClass
 ,   IsACount(0)
 #endif
 {
+#if SERIAL_POINTER_INDEX
+	*(INT*)&ClassConfigName = SerialPointerIndex((void*)InConfigName);
+#else
 	*(const TCHAR**)&ClassConfigName = InConfigName;
+#endif
 }
 
 IMPLEMENT_CLASS(UClass);

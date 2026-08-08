@@ -148,8 +148,6 @@ int main( int argc, char* argv[] )
         setbuf(stderr, NULL);
     #endif
 
-    appArgv0(argv[0]);
-
 #if CATCH_SIGSEGV
     signal(SIGSEGV, sigcatch);
 #endif

@@ -1,5 +1,9 @@
+# TrueType import rasterizes through GDI.
+if(WIN32)
+  set(EDITOR_PLATFORM_SRC TTFontImport.cpp)
+endif()
 ut_module(Editor SHARED
-  SOURCES Editor.cpp TTFontImport.cpp UAnalyzeBuild.cpp UAnalyzeContentCommandlet.cpp
+  SOURCES ${EDITOR_PLATFORM_SRC} Editor.cpp UAnalyzeBuild.cpp UAnalyzeContentCommandlet.cpp
           UBatchExportCommandlet.cpp UBrushBuilder.cpp UConformCommandlet.cpp
           UContentCommandlets.cpp UConvertMaterialCommandlet.cpp UCutdownContentCommandlet.cpp
           UDumpIntCommandlet.cpp UDXTConvertCommandlet.cpp UGroupRepairCommandlet.cpp
@@ -13,5 +17,5 @@ ut_module(Editor SHARED
           USurfaceTypeCommandlet.cpp UTextureInfoCommandlet.cpp UTextureLODCommandlet.cpp
           UTextureStripCommandlet.cpp xEdInt.cpp xObjExporters.cpp xTextureConversions.cpp
   PCH EditorPrivate.h Editor.cpp
-  DEPS Window)
+  DEPS Engine $<$<PLATFORM_ID:Windows>:Window>)
 target_compile_definitions(Editor PRIVATE _EDITOR_)

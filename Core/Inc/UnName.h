@@ -49,6 +49,7 @@ struct CORE_API FNameEntry
 	CORE_API friend FArchive& operator<<( FArchive& Ar, FNameEntry& E );
 	CORE_API friend FNameEntry* AllocateNameEntry( const TCHAR* Name, DWORD Index, DWORD Flags, FNameEntry* HashNext );
 };
+CORE_API FNameEntry* AllocateNameEntry( const TCHAR* Name, DWORD Index, DWORD Flags, FNameEntry* HashNext );
 template <> struct TTypeInfo<FNameEntry*> : public TTypeInfoBase<FNameEntry*>
 {
 	static UBOOL NeedsDestructor() {return 0;}

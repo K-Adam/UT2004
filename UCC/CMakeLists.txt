@@ -1,1 +1,1 @@
-ut_module(UCC EXECUTABLE SOURCES UCC.cpp DEPS Engine ZLIB::ZLIB)
+ut_module(UCC EXECUTABLE OUTPUT $<IF:$<PLATFORM_ID:Windows>,UCC,ucc-bin> SOURCES UCC.cpp DEPS Engine ZLIB::ZLIB)

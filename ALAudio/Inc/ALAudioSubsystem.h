@@ -65,8 +65,9 @@ typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 #define AL_DEFAULT_DLL TEXT("DefOpenAL32.dll")
 #endif
 #else
-#define AL_DLL TEXT("libopenal.so")
-#define AL_DEFAULT_DLL TEXT("openal.so")
+// Linux has no bundled default implementation, both use the system OpenAL.
+#define AL_DLL TEXT("libopenal.so.1")
+#define AL_DEFAULT_DLL TEXT("libopenal.so.1")
 #endif
 
 class UALAudioSubsystem;

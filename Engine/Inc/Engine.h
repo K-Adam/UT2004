@@ -67,7 +67,7 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #endif
 
 // Karma Includes
-#if !defined(__LINUX__) && !defined(NO_KARMA)
+#if !defined(NO_KARMA)
 #ifndef WITH_KARMA
 #  define WITH_KARMA
 #endif
@@ -399,6 +399,11 @@ typedef QWORD KModelPairType;
 	Engine public includes.
 -----------------------------------------------------------------------------*/
 
+// Same 4-byte packing as Core.h gives the core classes.
+#ifdef __GNUC__
+#pragma pack(push,4)
+#endif
+
 #include "UnRebuildTools.h"		// Tools used by UnrealEd for rebuilding the level.
 #include "Bezier.h"				// Class for computing bezier curves
 #include "UnStats.h"			// Performance stat gathering.
@@ -447,6 +452,10 @@ typedef QWORD KModelPairType;
 #include "UnStatGraph.h"		// Stat drawing utility.
 #include "UnCDKey.h"			// CD key hashing.
 #include "UnCacheManager.h"		// Cache management.
+
+#ifdef __GNUC__
+#pragma pack(pop)
+#endif
 
 
 #if __STATIC_LINK

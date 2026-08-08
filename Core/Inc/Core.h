@@ -50,13 +50,8 @@
 
 #define FTime DOUBLE
 
-#if _MSC_VER || __INTEL_COMPILER
-	#define SUPPORTS_PRAGMA_PACK 1
-#else
-    #ifndef SUPPORTS_PRAGMA_PACK
-	    #define SUPPORTS_PRAGMA_PACK 0
-    #endif
-#endif
+// MSVC and GCC both support #pragma pack(push).
+#define SUPPORTS_PRAGMA_PACK 1
 
 #ifdef _WIN64
   #if 1 //!!! FIXME: Where is this defined? ((defined _AMD64) || (defined AMD64))
@@ -73,11 +68,6 @@
 #else
     #define PLATFORM_32BITS 1
 #endif
-
-#if ((PLATFORM_64BITS) && (!SUPPORTS_PRAGMA_PACK))
-#error You really need SUPPORTS_PRAGMA_PACK on 64-bit systems.
-#endif
-
 
 // Compiler specific include.
 #if _MSC_VER
@@ -608,6 +598,11 @@ CORE_API extern TCHAR					GCPUType[255]; // Obscured: Make sure the DLL name is 
 extern "C" DLL_EXPORT TCHAR GPackage[];
 
 // Normal includes.
+// MSVC lays out every class with /Zp4, GCC needs the same member alignment for classes script mirrors.
+// GCC_PACK(4) on the first member of a script class keeps GCC from reusing the base's tail padding.
+#ifdef __GNUC__
+#pragma pack(push,4)
+#endif
 #include "UnFile.h"			// Low level utility code.
 #include "UnObjVer.h"		// Object version info.
 #include "UnArc.h"			// Archive class.
@@ -725,6 +720,10 @@ public:
 };
 
 #include "UnCoreNative.h"
+
+#ifdef __GNUC__
+#pragma pack(pop)
+#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

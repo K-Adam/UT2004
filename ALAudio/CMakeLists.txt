@@ -4,4 +4,6 @@ ut_module(ALAudio SHARED
   PCH ALAudioPrivate.h ALAudio.cpp
   DEPS Engine speex)
 target_include_directories(ALAudio PRIVATE ${CMAKE_SOURCE_DIR}/OpenAL/Inc)
-target_link_libraries(ALAudio PRIVATE dsound dxguid)
+if(WIN32)
+  target_link_libraries(ALAudio PRIVATE dsound dxguid)
+endif()

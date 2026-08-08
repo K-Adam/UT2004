@@ -70,21 +70,11 @@ CORE_API FArchive& operator<<( FArchive& Ar, DOUBLE& F )
 	return Ar;
 }
 
-#ifndef _WIN64   // apparently PTRINT covers this... --ryan.
 CORE_API FArchive& operator<<( FArchive &Ar, QWORD& Q )
 {
 	Ar.ByteOrderSerialize( &Q, sizeof(Q) );
 	return Ar;
 }
-#endif
-
-#if ((!defined _WIN32) || (defined _WIN64))
-CORE_API FArchive& operator<<( FArchive& Ar, PTRINT& P )
-{
-	Ar.ByteOrderSerialize( &P, sizeof(P) );
-	return Ar;
-}
-#endif
 
 
 #ifdef __GNUC__

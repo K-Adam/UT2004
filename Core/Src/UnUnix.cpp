@@ -161,7 +161,7 @@ CORE_API INT unixGetSizeUNICODE( const ANSICHAR* InACh )
 		return (strlen(InACh) + 1) * sizeof(UNICHAR);
 	else
 		return sizeof(UNICHAR);
-    unguard;
+    unguardSlow;
 }
 
 
@@ -2356,7 +2356,8 @@ int strnicmp( const char* s, const char* t, int n )
 	return s[i] - t[i];
 }
 
-char* strupr( char* s )
+// C linkage because the Karma libraries call it too.
+extern "C" char* strupr( char* s )
 {
 	int	i;
 	for( i = 0; s[i] != '\0'; i++ )

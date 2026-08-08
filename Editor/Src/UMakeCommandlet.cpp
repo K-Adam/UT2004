@@ -32,8 +32,9 @@ class UMakeCommandlet : public UCommandlet
 	{
 		guard(UMakeCommandlet::Main);
 
-		#if !WIN32
-			GWarn->Log( TEXT("'ucc make' is broken on Unix/Mac right now.") );
+		// The script compiler writes raw pointers into bytecode, 64-bit builds expect pointer indices.
+		#if SERIAL_POINTER_INDEX
+			GWarn->Log( TEXT("'ucc make' is not supported on 64-bit builds, compile the scripts with the Win32 build.") );
 			GIsRequestingExit=1;
 			return 0;
 		#endif

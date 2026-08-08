@@ -663,8 +663,6 @@ static UEngine* InitEngine()
 //
 int main(int argc, char **argv)
 {
-    appArgv0(argv[0]);
-
 	TCHAR CmdLine[1024] = TEXT("");
     if (argc >= 2)
     {

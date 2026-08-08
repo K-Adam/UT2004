@@ -178,13 +178,6 @@ CORE_API FLOAT appFractional( FLOAT Value )
 }
 #endif  // !DEFINED_appMathIntrinsics
 
-#if !DEFINED_appArgv0
-CORE_API void appArgv0( const char *argv0 )
-{
-	// no-op.
-}
-#endif
-
 static INT		SRandSeed = 0;
 static FLOAT	SRandTemp = 1.f;
 

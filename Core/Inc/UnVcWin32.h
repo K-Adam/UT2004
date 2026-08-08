@@ -278,8 +278,6 @@ extern "C" void* __cdecl _alloca(size_t);
 #define appRound(x) ((INT)floor(x + 0.5f))
 #define appFractional(x) (x - floor(x))
 
-#define DEFINED_appArgv0 1
-#define appArgv0(x)
 
 
 /*----------------------------------------------------------------------------

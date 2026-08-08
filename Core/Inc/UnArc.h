@@ -155,7 +155,6 @@ public:
 	CORE_API friend FArchive& operator<<( FArchive& Ar, DOUBLE& F );
 
 #ifdef __GNUC__
-	CORE_API friend FArchive& operator<<( FArchive& Ar, PTRINT& P );
 	CORE_API friend FArchive& operator<<( FArchive& Ar, UNICHAR& C );
 #endif
 

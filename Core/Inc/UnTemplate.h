@@ -702,30 +702,21 @@ public:
 //
 // Array operator news.
 //
-// !!! FIXME: This...is scary.  --ryan.
-#if __GNUC__
-#define GNUSTATIC static
-#else
-#define GNUSTATIC
-#endif
-template <class T> GNUSTATIC inline void* operator new( size_t Size, TArray<T>& Array )
+template <class T> inline void* operator new( size_t Size, TArray<T>& Array )
 {
 	guardSlow(TArray::operator new);
 	INT Index = Array.FArray::Add(1,sizeof(T));
 	return &Array(Index);
 	unguardSlow;
 }
-template <class T> GNUSTATIC inline void* operator new( size_t Size, TArray<T>& Array, INT Index )
+template <class T> inline void* operator new( size_t Size, TArray<T>& Array, INT Index )
 {
 	guardSlow(TArray::operator new);
 	Array.FArray::Insert(Index,1,sizeof(T));
 	return &Array(Index);
 	unguardSlow;
 }
-#undef GNUSTATIC
 
-
-template void* operator new( size_t Size, TArray<FString>& Array );
 
 
 //
@@ -1969,13 +1960,13 @@ public:
 		guardSlow(TMultiMap::Num);
 		Keys.Empty();
 
-		for( INT i=0;i<Pairs.Num();i++ )
+		for( INT i=0;i<this->Pairs.Num();i++ )
 		{
-			INT j=Keys.FindItemIndex(Pairs(i).Key);
+			INT j=Keys.FindItemIndex(this->Pairs(i).Key);
 			if (j==INDEX_NONE)
 			{
 				j=Keys.AddZeroed();
-				Keys(j)=Pairs(i).Key;
+				Keys(j)=this->Pairs(i).Key;
 			}
 		}
 		return Keys.Num();
@@ -1996,7 +1987,7 @@ public:
 	}
 	TI& AddUnique( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
 	{
-		for( INT i=this->Hash[(GetTypeHash(InKey) & (this->HashCount-1))]; i!=INDEX_NONE; i=Pairs(i).HashNext )
+		for( INT i=this->Hash[(GetTypeHash(InKey) & (this->HashCount-1))]; i!=INDEX_NONE; i=this->Pairs(i).HashNext )
 			if( this->Pairs(i).Key==InKey && this->Pairs(i).Value==InValue )
 				return this->Pairs(i).Value;
 		return Add( InKey, InValue );
@@ -2029,9 +2020,9 @@ public:
 	TI* FindPair( const TK& Key, const TK& Value )
 	{
 		guardSlow(TMap::Find);
-		for( INT i=this->Hash[(GetTypeHash(Key) & (this->HashCount-1))]; i!=INDEX_NONE; i=Pairs(i).HashNext )
-			if( Pairs(i).Key==Key && Pairs(i).Value==Value )
-				return &Pairs(i).Value;
+		for( INT i=this->Hash[(GetTypeHash(Key) & (this->HashCount-1))]; i!=INDEX_NONE; i=this->Pairs(i).HashNext )
+			if( this->Pairs(i).Key==Key && this->Pairs(i).Value==Value )
+				return &this->Pairs(i).Value;
 		return NULL;
 		unguardSlow;
 	}

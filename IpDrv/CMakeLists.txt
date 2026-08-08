@@ -3,4 +3,4 @@ ut_module(IpDrv SHARED
           MasterServerUplink.cpp TcpLink.cpp TcpNetDriver.cpp UCompressCommandlet.cpp
           UdpLink.cpp UnIpDrvNative.cpp UnSocket.cpp
   PCH UnIpDrv.h IpDrv.cpp
-  DEPS Engine wsock32)
+  DEPS Engine $<$<PLATFORM_ID:Windows>:wsock32>)

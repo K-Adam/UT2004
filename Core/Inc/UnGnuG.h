@@ -22,14 +22,24 @@
 	#error Unsupported platform.
 #endif
 
-// alloca
+// System headers the engine headers use, included before Core.h and Engine.h switch to 4-byte packing.
+#include <stddef.h>
+#include <stdint.h>
+#include <assert.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <math.h>
 
 // va_list
 #include <stdarg.h>
 
 // FLT_MAX
 #include <float.h>
+
+// Must be parsed before UnFile.h defines its clock() macro.
+#include <time.h>
 
 
 /*----------------------------------------------------------------------------
@@ -62,17 +72,12 @@
 enum {DEFAULT_ALIGNMENT = 8 }; // Default boundary to align memory allocations on.
 enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 
-#if __GNUG__
-#define GCC_PACK(n)  __attribute__((packed,aligned(n)))
+// Every use sits under #pragma pack(n) or has natural alignment <= n, where aligned(n)
+// gives the same layout as packed,aligned(n). Packed fields could not be bound to references.
+#define GCC_PACK(n)  __attribute__((aligned(n)))
 #define GCC_ALIGN(n) __attribute__((aligned(n)))
-#define GCC_MOVE_ALIGN(n) 
-#else
-#define GCC_PACK(n) 
-#define GCC_ALIGN(n) 
-#define GCC_MOVE_ALIGN(n) 
-#endif
+#define GCC_MOVE_ALIGN(n)
 
-//#define GCC_MOVE_ALIGN(n) __attribute__((aligned(n))) __attribute__((section (".bss")))
 
 // Optimization macros
 #define DISABLE_OPTIMIZATION  
@@ -157,11 +162,12 @@ typedef BYTE                BITFIELD;	// For bitfields.
 typedef unsigned int		BITFIELD;	// For bitfields.
 #endif
 
-// !!! FIXME: This is currently true on all supported 64 and 32 bit platforms,
-// !!! FIXME:  but it may not be universal. PTRINT should be an integer that
-// !!! FIXME:  is the same size as a pointer, so casting can be (ahem) safely
-// !!! FIXME:  done between them.  --ryan.
-typedef unsigned long PTRINT;
+// Pointer sized, and one of the types Parse() and the serializers have overloads for.
+#if __x86_64__
+typedef QWORD PTRINT;
+#else
+typedef DWORD PTRINT;
+#endif
 
 // !!! FIXME: This should really just include a header.
 #if !defined __x86_64__

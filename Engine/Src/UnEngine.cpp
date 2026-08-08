@@ -759,8 +759,8 @@ INT UServerCommandlet::Main( const TCHAR* Parms )
 				if (rc > 0)  // partial string...
 					stdincmd += stdinbuf;
 			}
-			unguard;
 		}
+		unguard;
 		#endif
 
 		// Update the world.
