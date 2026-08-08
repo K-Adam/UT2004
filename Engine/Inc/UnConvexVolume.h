@@ -3,8 +3,6 @@
 	Copyright 1997-2001 Epic Games, Inc. All Rights Reserved.
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 //
 //	FConvexVolumeEdge
 //
@@ -87,7 +85,5 @@ public:
 	virtual FBox GetCollisionBoundingBox(const AActor* Owner) const;
 	virtual UBOOL LineCheck(FCheckResult& Result,AActor* Owner,const FVector& End,const FVector& Start,const FVector& Extent,DWORD ExtraNodeFlags,DWORD TraceFlags);
 };
-
-#include "UnForcePacking_end.h"
 
 

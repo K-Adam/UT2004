@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	Unreal game engine.
 -----------------------------------------------------------------------------*/
@@ -102,8 +100,6 @@ class ENGINE_API UGameEngine : public UEngine
 	FString InitSpecial(const TCHAR* Special);	// Performs a full MD5 on a given filename
 
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

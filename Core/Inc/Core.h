@@ -228,8 +228,6 @@ CORE_API extern class FOutputDevice* GNull;
 // EName definition.
 #include "UnNames.h"
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	Abstract interfaces.
 -----------------------------------------------------------------------------*/
@@ -483,8 +481,6 @@ CORE_API extern FCriticalSection *gethostbyname_mutex;
 
 
 class FEdLoadError;
-
-#include "UnForcePacking_end.h"
 
 /*----------------------------------------------------------------------------
 	Global variables.

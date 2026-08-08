@@ -3,7 +3,6 @@
 
 #include "UnIpDrv.h"
 #include "UnNet.h"
-#include "UnForcePacking_begin.h"
 
 //
 // A channel for exchanging voice properties.
@@ -29,7 +28,5 @@ class /*ENGINE_API*/ UtvVoiceChannel : public UVoiceChannel
 	void ReceivedBunch( FInBunch& Bunch );
 	void DistributeVoicePacket(FVoiceInfo* VoiceInfo);
 };
-
-#include "UnForcePacking_end.h"
 
 #endif

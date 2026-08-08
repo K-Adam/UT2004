@@ -13,8 +13,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 //
 // Forward declarations.
 //
@@ -779,8 +777,6 @@ class ENGINE_API UIndexBuffer : public URenderResource
 	// UObject interface.
 	virtual void Serialize(FArchive& Ar);
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

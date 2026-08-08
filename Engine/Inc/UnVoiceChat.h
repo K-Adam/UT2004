@@ -6,15 +6,11 @@
 		* Created by Daniel Vogel
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 struct FVoiceChatterInfo
 {
 	class AController*	Controller;
 	DWORD				IpAddr;
 	INT					Handle;
 };
-
-#include "UnForcePacking_end.h"
 
 

@@ -3,8 +3,6 @@
 	Copyright 1997-1999 Epic Games, Inc. All Rights Reserved.
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	UPackage.
 -----------------------------------------------------------------------------*/
@@ -154,8 +152,6 @@ class CORE_API USystem : public USubsystem
 	// FExec interface.
 	UBOOL Exec( const TCHAR* Cmd, FOutputDevice& Ar=*GLog );
 };
-
-#include "UnForcePacking_end.h"
 
 /*----------------------------------------------------------------------------
 	The End.

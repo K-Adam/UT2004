@@ -15,8 +15,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 FORCEINLINE INT GetResourceHashIndex(QWORD CacheId)
 {
 	return ((DWORD) CacheId & 0xfff) ^ (((DWORD) CacheId & 0xff00) >> 4) + (((DWORD) CacheId & 0xf0000) >> 16);
@@ -293,8 +291,6 @@ class ENGINE_API URenderDevice : public USubsystem
 	virtual void SetEmulationMode(EHardwareEmulationMode Mode) = 0;
 	virtual FRenderCaps* GetRenderCaps() = 0;
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

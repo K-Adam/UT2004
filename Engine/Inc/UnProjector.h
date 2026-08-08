@@ -7,8 +7,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 #define DECALREMOVETIME 1.f
 
 class AProjector;
@@ -143,8 +141,6 @@ class ENGINE_API UProjectorPrimitive : public UPrimitive
 	virtual FVector GetEncroachExtent(AActor* Owner) { return GetCollisionBoundingBox(Owner).GetExtent(); }
 	virtual FVector GetEncroachCenter(AActor* Owner) { return GetCollisionBoundingBox(Owner).GetCenter(); }
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

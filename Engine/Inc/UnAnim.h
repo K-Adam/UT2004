@@ -6,9 +6,7 @@
 		* Moved FMeshAnimNotify/FMeshAnimSeq from UnMesh.h to UnAnim.h
 =============================================================================*/
 
-#if FORCE_EXTREME_PACKING
-#include "UnForcePacking_begin.h"
-#elif SUPPORTS_PRAGMA_PACK
+#if SUPPORTS_PRAGMA_PACK
 #pragma pack (push,4)
 #endif
 
@@ -99,9 +97,7 @@ struct FAnimRep
 };
 
 
-#if FORCE_EXTREME_PACKING
-#include "UnForcePacking_end.h"
-#elif SUPPORTS_PRAGMA_PACK
+#if SUPPORTS_PRAGMA_PACK
 #pragma pack (pop)
 #endif
 

@@ -6,8 +6,6 @@ Revision history:
 	* Created by Jack Porter.
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	UDemoPlayPendingLevel.
 -----------------------------------------------------------------------------*/
@@ -37,8 +35,6 @@ class UDemoPlayPendingLevel : public UPendingLevel
 	void SendJoin() { SentJoin = 1; }
 	UBOOL TrySkipFile() { return 0; }
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

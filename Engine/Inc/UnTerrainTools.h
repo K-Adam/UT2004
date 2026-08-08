@@ -6,8 +6,6 @@
 		* Created by Warren Marshall
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 enum ETerrainMirrorAxis
 {
 	MIRRORAXIS_NONE		= 0,
@@ -285,8 +283,6 @@ private:
 		Adjust;				// The base amount to adjust layers by when using paint tools.
 	INT MirrorAxis;			// Which axis we should mirror editing effects across (MIRRORAXIS_)
 };
-
-#include "UnForcePacking_end.h"
 
 /*----------------------------------------------------------------------------
 	The End.

@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 
 class FCanvasUtil; // sjs
 
@@ -127,8 +125,6 @@ private:
 	// Internal functions.
 	void WrappedPrint( ERenderStyle Style, INT& XL, INT& YL, UFont* Font, FLOAT ScaleX, FLOAT ScaleY, UBOOL Center, const TCHAR* Text ); // gam
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

@@ -6,8 +6,6 @@ Revision history:
 	* Created by Jack Porter
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	FArchiveTcpSocket
 -----------------------------------------------------------------------------*/
@@ -249,7 +247,5 @@ public:
 	virtual void OnClosed() {}
 	virtual void OnDataReceived() {}
 };
-
-#include "UnForcePacking_end.h"
 
 

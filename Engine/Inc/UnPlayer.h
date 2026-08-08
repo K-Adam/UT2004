@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	UPlayer.
 -----------------------------------------------------------------------------*/
@@ -53,8 +51,6 @@ class ENGINE_API UPlayer : public UObject, public FOutputDevice, public FExec
 	// UPlayer interface.
 	virtual void ReadInput( FLOAT DeltaSeconds )=0;
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

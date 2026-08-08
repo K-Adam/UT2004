@@ -10,8 +10,6 @@
 	UnPackageCheckInfo - Stores allowable MD5 info a given package
 */
 
-#include "UnForcePacking_begin.h"
-
 class ENGINE_API UPackageCheckInfo : public UObject
 {
 	DECLARE_CLASS(UPackageCheckInfo,UObject,0,Engine);
@@ -343,6 +341,4 @@ public:
 };
 
 
-
-#include "UnForcePacking_end.h"
 

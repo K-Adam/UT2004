@@ -9,13 +9,6 @@
 #include "CorePrivate.h"
 
 
-#if FORCE_EXTREME_PACKING  // --ryan.
-#warning Forcing UnrealScript-mirrored structs to 1-byte packing!
-#warning This is suboptimal, and just for aid in initial porting!
-#warning DO NOT SHIP WITH THIS OPTION! You Have Been Warned!
-#endif
-
-
 //!!fix hardcoded lengths
 /*-----------------------------------------------------------------------------
 	Helpers.
@@ -309,11 +302,7 @@ void UByteProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UByteProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(BYTE);
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), sizeof(BYTE) );
-#endif
 	unguardobj;
 }
 void UByteProperty::CopySingleValue( void* Dest, void* Src, UObject* SuperObject, UBOOL InstanceSubobjects ) const
@@ -435,11 +424,7 @@ void UIntProperty::Link( FArchive& Ar, UProperty* Prev )
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(INT);
 
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), sizeof(INT) );
-#endif
 	unguardobj;
 }
 void UIntProperty::CopySingleValue( void* Dest, void* Src, UObject* SuperObject, UBOOL InstanceSubobjects ) const
@@ -524,12 +509,8 @@ void UPointerProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UPointerProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(PTRINT);
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
     // FIXME: These must be aligned to four in current scheme. I think.  --ryan.
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), 4);  //sizeof(PTRINT) );
-#endif
 
     PropertyFlags |= CPF_Transient;
 
@@ -617,11 +598,7 @@ void UDelegateProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UDelegateProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(FScriptDelegate);
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), sizeof(INT) );
-#endif
 	PropertyFlags |= CPF_NeedCtorLink;
 	unguardobj;
 }
@@ -925,11 +902,7 @@ void UBoolProperty::Link( FArchive& Ar, UProperty* Prev )
 	}
 	else
 	{
-#if FORCE_EXTREME_PACKING
-	    Offset      = GetOuterUField()->GetPropertiesSize();
-#else
 		Offset  = Align(GetOuterUField()->GetPropertiesSize(),sizeof(BITFIELD));
-#endif
 		BitMask = FIRST_BITFIELD;
 	}
 
@@ -1042,11 +1015,7 @@ void UFloatProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UFloatProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(FLOAT);
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), sizeof(FLOAT) );
-#endif
 	unguardobj;
 }
 void UFloatProperty::CopySingleValue( void* Dest, void* Src, UObject* SuperObject, UBOOL InstanceSubobjects ) const
@@ -1148,12 +1117,8 @@ void UObjectProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UObjectProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(UObject*);
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
     // FIXME: These must be aligned to four in current scheme. I think.  --ryan.
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), 4); //sizeof(UObject*) );
-#endif
 	if( ((PropertyFlags & CPF_EditInline) && (PropertyFlags & CPF_ExportObject)) || (PropertyFlags & CPF_Automated) )
 		PropertyFlags |= CPF_NeedCtorLink;
 	unguardobj;
@@ -1381,11 +1346,7 @@ void UNameProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UNameProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(FName);
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), sizeof(FName) );
-#endif
 	unguardobj;
 }
 void UNameProperty::CopySingleValue( void* Dest, void* Src, UObject* SuperObject, UBOOL InstanceSubobjects ) const
@@ -1479,11 +1440,7 @@ void UStrProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UStrProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize    = sizeof(FString);
-#if FORCE_EXTREME_PACKING
-	Offset      = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset         = Align( GetOuterUField()->GetPropertiesSize(), PROPERTY_ALIGNMENT );
-#endif
 	if( !(PropertyFlags & CPF_Native) )
 		PropertyFlags |= CPF_NeedCtorLink;
 	unguardobj;
@@ -1597,11 +1554,7 @@ void UFixedArrayProperty::Link( FArchive& Ar, UProperty* Prev )
 	Ar.Preload( Inner );
 	Inner->Link( Ar, NULL );
 	ElementSize    = Inner->ElementSize * Count;
-#if FORCE_EXTREME_PACKING
-	Offset         = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset         = Align( GetOuterUField()->GetPropertiesSize(), PROPERTY_ALIGNMENT );
-#endif
 	if( !(PropertyFlags & CPF_Native) )
 		PropertyFlags |= (Inner->PropertyFlags & CPF_NeedCtorLink);
 	unguardobj;
@@ -1751,11 +1704,7 @@ void UArrayProperty::Link( FArchive& Ar, UProperty* Prev )
 	Ar.Preload( Inner );
 	Inner->Link( Ar, NULL );
 	ElementSize    = sizeof(FArray);
-#if FORCE_EXTREME_PACKING
-	Offset         = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset         = Align( GetOuterUField()->GetPropertiesSize(), PROPERTY_ALIGNMENT );
-#endif
 	if( !(PropertyFlags & CPF_Native) )
 		PropertyFlags |= CPF_NeedCtorLink;
 	unguardobj;
@@ -2027,11 +1976,7 @@ void UMapProperty::Link( FArchive& Ar, UProperty* Prev )
 	Ar.Preload( Value );
 	Value->Link( Ar, NULL );
 	ElementSize    = sizeof(TMap<BYTE,BYTE>);
-#if FORCE_EXTREME_PACKING
-	Offset         = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset         = Align( GetOuterUField()->GetPropertiesSize(), PROPERTY_ALIGNMENT );
-#endif
 	if( !(PropertyFlags&CPF_Native) )
 		PropertyFlags |= CPF_NeedCtorLink;
 	unguardobj;
@@ -2235,11 +2180,7 @@ void UStructProperty::Link( FArchive& Ar, UProperty* Prev )
 	Super::Link( Ar, Prev );
 	Ar.Preload( Struct );
 	ElementSize    = Struct->PropertiesSize;
-#if FORCE_EXTREME_PACKING
-	Offset         = GetOuterUField()->GetPropertiesSize();
-#else
 	Offset         = Align( GetOuterUField()->GetPropertiesSize(), ElementSize==2 ? 2 : ElementSize>=4 ? 4 : 1 );
-#endif
 	if( Struct->ConstructorLink && !(PropertyFlags & CPF_Native) )
 		PropertyFlags |= CPF_NeedCtorLink;
 	unguardobj;

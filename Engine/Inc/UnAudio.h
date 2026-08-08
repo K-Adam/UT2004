@@ -25,8 +25,6 @@ class FAudioCaptureDevice;
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	UAudioSubsystem.
 -----------------------------------------------------------------------------*/
@@ -651,8 +649,6 @@ public:
 	// Filters.
 	void NoiseGateFilter(); 
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

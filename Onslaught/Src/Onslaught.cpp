@@ -63,9 +63,7 @@ struct FOnslaughtInitManager
 
 #include "UnNet.h"
 
-#if !FORCE_EXTREME_PACKING   // with this #define, BITFIELD is BYTE. --ryan.
 static inline UBOOL NEQ(BITFIELD A,BITFIELD B,UPackageMap* Map,UActorChannel* Channel) {return A!=B;}
-#endif
 
 static inline UBOOL NEQ(BYTE A,BYTE B,UPackageMap* Map,UActorChannel* Channel) {return A!=B;}
 static inline UBOOL NEQ(INT A,INT B,UPackageMap* Map,UActorChannel* Channel) {return A!=B;}

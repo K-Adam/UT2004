@@ -15,8 +15,6 @@
 
 #include <string.h>
 
-#include "UnForcePacking_begin.h"
-
 //
 // Type information for initialization.
 //
@@ -2188,8 +2186,6 @@ union CORE_API FRainbowPtr
 	FRainbowPtr() {}
 	FRainbowPtr( void* Ptr ) : PtrVOID(Ptr) {};
 };
-
-#include "UnForcePacking_end.h"
 
 #endif // _INCL_UNTEMPLATE_H_
 

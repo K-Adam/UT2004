@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	Constants.
 -----------------------------------------------------------------------------*/
@@ -472,8 +470,6 @@ struct ENGINE_API FDXTCompressionOptions
 	FColor		FadeToColor;
 	INT			FadeAmount;
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

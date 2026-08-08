@@ -367,11 +367,7 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 		if( GetInheritanceSuper() )
 		{
 			Ar.Preload( GetInheritanceSuper() );
-			#if FORCE_EXTREME_PACKING
-				PropertiesSize = GetInheritanceSuper()->GetPropertiesSize();
-			#else
-				PropertiesSize = Align(GetInheritanceSuper()->GetPropertiesSize(),4);
-			#endif
+			PropertiesSize = Align(GetInheritanceSuper()->GetPropertiesSize(),4);
 		}
 		UProperty* Prev = NULL;
 		for( UField* Field=Children; Field; Field=Field->Next )
@@ -388,9 +384,7 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 			}
 		}
 
-		#if !FORCE_EXTREME_PACKING
-			PropertiesSize = Align(PropertiesSize,4);
-		#endif
+		PropertiesSize = Align(PropertiesSize,4);
 	}
 	else
 	{

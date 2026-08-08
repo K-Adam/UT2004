@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	Network notification sink.
 -----------------------------------------------------------------------------*/
@@ -509,8 +507,6 @@ protected:
 	ULevel*		Level;
 	INT		    Index;
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

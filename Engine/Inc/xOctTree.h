@@ -7,8 +7,6 @@
 #ifndef xOctTree_H
 #define xOctTree_H
 
-#include "UnForcePacking_begin.h"
-
 const int INVALID = -1;
 
 bool ContainsBox( const FBox& a, const FBox& b )
@@ -204,7 +202,5 @@ public:
 	TArray<T>	contents;
 	float		t_marked;
 };
-
-#include "UnForcePacking_end.h"
 
 #endif//xOctTree_H

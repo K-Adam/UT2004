@@ -6,8 +6,6 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 class UNetDriver;
 
 /*-----------------------------------------------------------------------------
@@ -225,8 +223,6 @@ class ENGINE_API UNetConnection : public UPlayer
 
 	static const TCHAR* StaticConfigName() {return TEXT("User");}
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

@@ -10,8 +10,6 @@
 	Forward declarations.
 ----------------------------------------------------------------------------*/
 
-#include "UnForcePacking_begin.h"
-
 // All engine classes.
 class		UPrimitive;
 class			UMesh;
@@ -529,8 +527,6 @@ public:
 		unguard;
 	}
 };
-
-#include "UnForcePacking_end.h"
 
 /*----------------------------------------------------------------------------
 	The End.

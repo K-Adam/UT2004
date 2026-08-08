@@ -11,8 +11,6 @@ Todo:
 	  (allows for custom queries)
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 class UCompressCommandlet : public UCommandlet
 {
 	DECLARE_CLASS(UCompressCommandlet, UCommandlet, CLASS_Transient,IpDrv);
@@ -26,8 +24,6 @@ class UDecompressCommandlet : public UCommandlet
 
 	INT Main( const TCHAR* Parms );
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

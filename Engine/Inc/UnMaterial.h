@@ -3,8 +3,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 //
 // Forward declarations
 //
@@ -176,8 +174,6 @@ class ENGINE_API UTexCoordMaterial : public URenderedMaterial
 	virtual INT MaterialVSize() { return Texture ? Texture->MaterialVSize() : 0; }
 };
 
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

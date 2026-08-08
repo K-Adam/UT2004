@@ -3,8 +3,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 class AFluidSurfaceInfo;
 
 class ENGINE_API UFluidSurfacePrimitive : public UPrimitive
@@ -243,8 +241,6 @@ public:
 	virtual INT GetSize();
 	virtual void GetContents(void* Data);
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

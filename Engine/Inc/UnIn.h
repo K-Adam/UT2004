@@ -10,8 +10,6 @@ Revision history:
 	* Created by Tim Sweeney
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	Enums.
 -----------------------------------------------------------------------------*/
@@ -102,8 +100,6 @@ protected:
 	virtual void ExecInputCommands( const TCHAR* Cmd, FOutputDevice& Ar );
 	static const TCHAR* StaticConfigName() {return TEXT("User");}
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

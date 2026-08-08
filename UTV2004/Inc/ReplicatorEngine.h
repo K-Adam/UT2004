@@ -4,8 +4,6 @@
 #include "UtvChannel.h"
 #include "UTVUplink.h"
 
-#include "UnForcePacking_begin.h"
-
 class UUTVPackageMap;
 class UtvChannel;
 class UNetConnection;
@@ -277,7 +275,5 @@ public:
 	void InitListenDriver();
 };
 extern UReplicatorEngine* UtvEngine;
-
-#include "UnForcePacking_end.h"
 
 #endif

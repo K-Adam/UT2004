@@ -99,8 +99,6 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 // LIPSinc Includes
 #if !defined(__LINUX__)
 #ifndef WITH_LIPSINC
@@ -388,8 +386,6 @@ struct FBatchReference
 
 typedef QWORD KModelPairType;
 
-#include "UnForcePacking_end.h"
-
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)
 #endif
@@ -474,8 +470,6 @@ typedef QWORD KModelPairType;
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	Hit proxies.
 -----------------------------------------------------------------------------*/
@@ -541,8 +535,6 @@ enum ETerrainBrush
 	TB_Color			= 10,	// Paints color into the RGB channels of layers
 	TB_EdgeTurn			= 11,	// Turns edges of terrain triangulation
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

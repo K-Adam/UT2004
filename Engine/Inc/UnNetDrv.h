@@ -9,8 +9,6 @@
 #ifndef _UNNETDRV_H_
 #define _UNNETDRV_H_
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	UPackageMapLevel.
 -----------------------------------------------------------------------------*/
@@ -89,8 +87,6 @@ class ENGINE_API UNetDriver : public USubsystem
 	virtual void NotifyActorDestroyed( AActor* Actor );
     virtual UBOOL IsDemoDriver() { return 0; } // sjs
 };
-
-#include "UnForcePacking_end.h"
 
 #endif
 /*-----------------------------------------------------------------------------

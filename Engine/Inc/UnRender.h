@@ -13,8 +13,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 //
 //  Defines.
 //
@@ -608,8 +606,6 @@ struct ENGINE_API HMaterialTree : public HHitProxy
 // sjs --- refactoring!
 extern ENGINE_API DWORD CalcBlendFlags( BYTE Style, AActor* pActor ); // In AxEmitter.cpp
 // --- sjs
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

@@ -13,8 +13,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "UnForcePacking_begin.h"
-
 class ENGINE_API FBezier
 {
 public:
@@ -78,8 +76,6 @@ public:
 		return Length;
 	}
 };
-
-#include "UnForcePacking_end.h"
 
 #endif
 /*-----------------------------------------------------------------------------

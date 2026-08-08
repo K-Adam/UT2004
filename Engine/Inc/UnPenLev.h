@@ -6,8 +6,6 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	UPendingLevel.
 -----------------------------------------------------------------------------*/
@@ -64,8 +62,6 @@ class UNetPendingLevel : public UPendingLevel
 	UNetDriver* GetDriver() { return NetDriver; }
 	void SendJoin();
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 //
 //	UCameraEffect
 //
@@ -95,8 +93,6 @@ public:
 	virtual UBOOL Update(FLOAT Percent,class ASceneManager* SceneManager);
 	virtual FString GetStatString();
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

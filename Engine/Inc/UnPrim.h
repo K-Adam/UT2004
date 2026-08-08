@@ -13,8 +13,6 @@
 	FCheckResult.
 -----------------------------------------------------------------------------*/
 
-#include "UnForcePacking_begin.h"
-
 //
 // Results of an actor check.
 //
@@ -121,8 +119,6 @@ class ENGINE_API UPrimitive : public UObject
 	virtual FVector GetEncroachExtent(AActor* Owner);
 	virtual FVector GetEncroachCenter(AActor* Owner);
 };
-
-#include "UnForcePacking_end.h"
 
 #endif
 

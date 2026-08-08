@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	FURL.
 -----------------------------------------------------------------------------*/
@@ -68,8 +66,6 @@ public:
 	// Operators.
 	UBOOL operator==( const FURL& Other ) const;
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

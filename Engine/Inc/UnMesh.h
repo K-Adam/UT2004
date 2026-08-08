@@ -10,8 +10,6 @@
 #ifndef _INC_UNMESH
 #define _INC_UNMESH
 
-#include "UnForcePacking_begin.h"
-
 // Forward declaration
 class UMesh;
 class UMeshInstance;
@@ -189,8 +187,6 @@ class ENGINE_API UMeshInstance : public UPrimitive
 	virtual void MeshBuildBounds(){};
 	
 };
-
-#include "UnForcePacking_end.h"
 
 /*----------------------------------------------------------------------------
 	The End.

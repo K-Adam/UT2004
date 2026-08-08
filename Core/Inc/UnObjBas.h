@@ -7,7 +7,6 @@
 =============================================================================*/
 
 #include "Core.h"
-#include "UnForcePacking_begin.h"
 
 // This is a hack, but MUST be defined for 64-bit platforms right now! --ryan.
 #ifdef PLATFORM_64BITS
@@ -1358,8 +1357,6 @@ public:
 	UStruct::StaticClass(); \
 	UExporter::StaticClass(); \
 	UObjectExporterT3D::StaticClass();
-
-#include "UnForcePacking_end.h"
 
 
 /*----------------------------------------------------------------------------

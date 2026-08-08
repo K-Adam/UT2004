@@ -6,8 +6,6 @@
 		* Created by Steven Polge 3/97
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 // OBSOLETE - replaced by UReachSpec (see UReachSpec.h)
 class ENGINE_API FReachSpec
 {
@@ -33,6 +31,4 @@ public:
 		unguard;
 	};
 };
-
-#include "UnForcePacking_end.h"
 

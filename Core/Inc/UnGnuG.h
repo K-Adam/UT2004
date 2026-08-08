@@ -156,11 +156,7 @@ typedef double				DOUBLE;		// 64-bit IEEE double.
 typedef unsigned int        SIZE_T;     // Corresponds to C SIZE_T.
 
 // Bitfield type.
-#if FORCE_EXTREME_PACKING
-typedef BYTE                BITFIELD;	// For bitfields.
-#else
 typedef unsigned int		BITFIELD;	// For bitfields.
-#endif
 
 // Pointer sized, and one of the types Parse() and the serializers have overloads for.
 #if __x86_64__

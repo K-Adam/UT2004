@@ -6,8 +6,6 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 //
 // Information about a field.
 //
@@ -150,8 +148,6 @@ struct FPropertyRetirement
 	,	InPacketId	( INDEX_NONE )
 	{}
 };
-
-#include "UnForcePacking_end.h"
 
 /*----------------------------------------------------------------------------
 	The End.

@@ -10,8 +10,6 @@
 
 #include "AxEmitter.h"
 
-#include "UnForcePacking_begin.h"
-
 #define MAX_VERTS_PER_NODE	12		// ie: a frame morphed sprite would be 12 verts
 #define MAX_SYSTEMS			150
 #define MAX_PARTICLES_PER	400		// change this in iterators also
@@ -229,7 +227,5 @@ public:
 };
 
 extern ParticlePoolMgr gPclPool; // global singleton
-
-#include "UnForcePacking_end.h"
 
 #endif//xParticleMgr_H

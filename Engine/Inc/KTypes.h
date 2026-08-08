@@ -2,8 +2,6 @@
 	KTypes.h
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 #define KTRILIST_SIZE (1024)
 
 /////////////////  Script Structs /////////////////
@@ -275,6 +273,4 @@ void			ENGINE_API KUpdateMassProps(UKMeshProps* mp);
 void			ENGINE_API KCopyMassPropsToClipboard(UKMeshProps* mp);
 
 #endif
-
-#include "UnForcePacking_end.h"
 

@@ -3,8 +3,6 @@
 
 #include "EpicInclude.h"
 
-#include "UnForcePacking_begin.h"
-
 #define UTV2004C TEXT("UTV2004C")
 #define UTVVERSION TEXT("1.00b21")
 
@@ -49,7 +47,5 @@ protected:
 	INT ExtraNames;
 	bool IsRead;
 };
-
-#include "UnForcePacking_end.h"
 
 #endif

@@ -16,15 +16,8 @@ CORE_API extern DWORD GCRCTable[];
 
 // Bitfields.
 
-#if FORCE_EXTREME_PACKING   // --ryan.
-	#define NEXT_BITFIELD(b) ((BYTE) (((BYTE) b)<<1))
-	#define FIRST_BITFIELD   (1)
-#endif
-
-#ifndef NEXT_BITFIELD
-	#define NEXT_BITFIELD(b) ((b)<<1)
-	#define FIRST_BITFIELD   (1)
-#endif
+#define NEXT_BITFIELD(b) ((b)<<1)
+#define FIRST_BITFIELD   (1)
 
 // All supported platforms are little-endian like the package format.
 #define INTEL_ORDER16(x)   (x)

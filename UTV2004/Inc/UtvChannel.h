@@ -2,7 +2,6 @@
 #define UTVCHANNEL
 
 #include "EpicInclude.h"
-#include "UnForcePacking_begin.h"
 
 //
 // A channel for exchanging actor properties.
@@ -37,7 +36,5 @@ class /*ENGINE_API*/ UtvChannel : public UChannel
 public:
 	void UtvClose(void);
 };
-
-#include "UnForcePacking_end.h"
 
 #endif

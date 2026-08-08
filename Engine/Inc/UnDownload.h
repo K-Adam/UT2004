@@ -6,8 +6,6 @@ Revision history:
 	* Created by Jack Porter.
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 class ENGINE_API UDownload : public UObject
 {
 	DECLARE_ABSTRACT_CLASS(UDownload,UObject,CLASS_Transient|CLASS_Config,Engine);
@@ -62,8 +60,6 @@ class ENGINE_API UChannelDownload : public UDownload
 	void ReceiveFile( UNetConnection* InConnection, INT PackageIndex, const TCHAR *Params, UBOOL InCompression, INT InAttempt );
 	UBOOL TrySkipFile();
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

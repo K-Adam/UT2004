@@ -6,8 +6,6 @@ Revision history:
 	* Created by Jack Porter.
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 class UDemoRecDriver;
 class UDemoRecConnection;
 
@@ -88,8 +86,6 @@ class ENGINE_API UDemoRecDriver : public UNetDriver
 	void SpawnDemoRecSpectator( UNetConnection* Connection );
 	UBOOL UpdateDemoTime( FLOAT* DeltaTime, FLOAT TimeDilation );
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

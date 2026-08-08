@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 //
 //	Definitions.
 //
@@ -560,8 +558,6 @@ class ENGINE_API UModel : public UPrimitive
 	INT ConvexVolumeMultiCheck( FBox& Box, FPlane* Planes, INT NumPlanes, FVector Normal, TArray<INT>& Result );
 	void AttachProjector( INT iNode, FProjectorRenderInfo* RenderInfo, FPlane* FrustumPlanes );
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

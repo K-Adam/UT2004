@@ -10,8 +10,6 @@
 #endif
 // vogel: alignment of a member was sensitive to packing
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	Constants.
 -----------------------------------------------------------------------------*/
@@ -619,8 +617,6 @@ class CORE_API UConst : public UField
 		unguardSlow;
 	}
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.

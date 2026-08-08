@@ -20,8 +20,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 // Forward declarations.
 class ULodMesh;
 class ULodMeshInstance;
@@ -578,8 +576,6 @@ class ENGINE_API ULodMesh : public UMesh
 	virtual INT MemFootprint(UBOOL RenderDataOnly=0){ return 0; }	
 	
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

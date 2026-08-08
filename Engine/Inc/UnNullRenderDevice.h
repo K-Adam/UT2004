@@ -3,8 +3,6 @@
 
 #include "EnginePrivate.h"
 
-#include "UnForcePacking_begin.h"
-
 // Package implementation.
 class UNullRenderDevice;
 
@@ -117,7 +115,5 @@ public:
 		return &RenderCaps;
 	}
 };
-
-#include "UnForcePacking_end.h"
 
 #endif

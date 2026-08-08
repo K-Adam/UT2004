@@ -12,8 +12,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 //
 // TODO: 
 //
@@ -187,8 +185,6 @@ class ENGINE_API UVertMesh : public ULodMesh
 	FSphere GetRenderBoundingSphere( const AActor* Owner );
 	
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

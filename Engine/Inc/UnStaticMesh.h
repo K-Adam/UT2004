@@ -10,8 +10,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 // sjs - moved to cpp #define STATICMESH_VERSION 8
 
 //
@@ -575,8 +573,6 @@ public:
 	// Serialize
 	virtual void Serialize(FArchive& Ar);
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

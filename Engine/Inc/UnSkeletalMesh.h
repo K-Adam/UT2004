@@ -21,8 +21,6 @@
 #pragma pack(push,4)
 #endif
 
-#include "UnForcePacking_begin.h"
-
 #ifdef WITH_LIPSINC
 #include "LIPSincSupport.h"
 #endif
@@ -1444,8 +1442,6 @@ class ENGINE_API UMeshAnimation : public UObject
 	virtual INT MoveSequenceByIndex( INT SourceIdx, INT DestIdx );
 
 };
-
-#include "UnForcePacking_end.h"
 
 #if SUPPORTS_PRAGMA_PACK
 #pragma pack(pop)

@@ -3,8 +3,6 @@
 
 #include "EpicInclude.h"
 
-#include "UnForcePacking_begin.h"
-
 class UDemoPassthroughDriver : public UDemoRecDriver
 {
 	DECLARE_CLASS(UDemoPassthroughDriver,UDemoRecDriver,CLASS_Config|CLASS_Transient,utv2003)
@@ -22,7 +20,5 @@ class UDemoPassthroughDriver : public UDemoRecDriver
 	void SetCloak(UBOOL cloak);
 	void SetPaused(UBOOL pause);
 };
-
-#include "UnForcePacking_end.h"
 
 #endif

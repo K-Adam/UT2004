@@ -6,8 +6,6 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-#include "UnForcePacking_begin.h"
-
 /*-----------------------------------------------------------------------------
 	UChannel base class.
 -----------------------------------------------------------------------------*/
@@ -252,8 +250,6 @@ class ENGINE_API UVoiceChannel : public UChannel
 		
 	UBOOL AllowVoiceTransmission( APlayerController* Dest, FVoiceInfo& VoiceInfo ) const;
 };
-
-#include "UnForcePacking_end.h"
 
 /*-----------------------------------------------------------------------------
 	The End.
