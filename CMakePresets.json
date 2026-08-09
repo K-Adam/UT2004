@@ -17,6 +17,18 @@
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/linux",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux32",
+      "inherits": "linux",
+      "binaryDir": "${sourceDir}/build/linux32",
+      "cacheVariables": {
+        "CMAKE_C_FLAGS": "-m32",
+        "CMAKE_CXX_FLAGS": "-m32"
+      },
+      "environment": {
+        "PKG_CONFIG_LIBDIR": "/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig"
+      }
     }
   ],
   "buildPresets": [
@@ -38,6 +50,16 @@
     {
       "name": "linux-release",
       "configurePreset": "linux",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux32-debug",
+      "configurePreset": "linux32",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux32-release",
+      "configurePreset": "linux32",
       "configuration": "Release"
     }
   ]

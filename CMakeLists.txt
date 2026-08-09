@@ -6,8 +6,8 @@ if(WIN32)
   if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(FATAL_ERROR "Windows builds are Win32 (x86) only: cmake --preset win32")
   endif()
-elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(FATAL_ERROR "Only Win32 and x64 Linux are supported: cmake --preset win32|linux")
+elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|i.86")
+  message(FATAL_ERROR "Only Windows and x86 or x64 Linux are supported: cmake --preset win32|linux|linux32")
 endif()
 
 # The engine loads its modules and inis from System/.
@@ -53,8 +53,13 @@ else()
   target_compile_options(ut_common INTERFACE
     -fshort-wchar -fsigned-char -fno-strict-aliasing -fno-delete-null-pointer-checks -w
     $<$<COMPILE_LANGUAGE:CXX>:-fpermissive -fno-lifetime-dse>)
-  target_compile_definitions(ut_common INTERFACE __LINUX_X86__ LINUX=1 __FILE_NOCASE=1)
+  # 32-bit stat fails with EOVERFLOW on large inode numbers (WSL drives, XFS) without 64-bit file offsets.
+  target_compile_definitions(ut_common INTERFACE __LINUX_X86__ LINUX=1 __FILE_NOCASE=1 _FILE_OFFSET_BITS=64)
   target_link_libraries(ut_common INTERFACE dl pthread)
+  if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    # x87 math loads maps three times slower. MSVC uses SSE2 for Win32 too.
+    target_compile_options(ut_common INTERFACE -msse2 -mfpmath=sse)
+  endif()
 endif()
 
 # ut_module(<name> SHARED|EXECUTABLE|WIN32 [OUTPUT name] SOURCES ... [PCH hdr create.cpp] [NOPCH files...] [DEPS ...])
@@ -118,7 +123,12 @@ if(WIN32)
   list(TRANSFORM KARMA_LIBS APPEND .lib)
   list(APPEND KARMA_LIBS legacy_stdio_definitions)
 else()
-  list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/linux_hx_single/lib)
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(KARMA_DIR linux_hx_single)
+  else()
+    set(KARMA_DIR linux_single_gcc3.2)
+  endif()
+  list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/${KARMA_DIR}/lib)
   list(TRANSFORM KARMA_LIBS APPEND .a)
   # Whole archives because only Engine.so references them, and ld does not pull archive
   # members for undefined symbols of shared libraries.
@@ -134,7 +144,13 @@ else()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(VORBISFILE REQUIRED IMPORTED_TARGET GLOBAL vorbisfile)
   add_library(Vorbis::vorbisfile ALIAS PkgConfig::VORBISFILE)
-  pkg_check_modules(SDL REQUIRED IMPORTED_TARGET GLOBAL sdl)
+  # Debian and Ubuntu cannot install the SDL 1.2 dev package for two architectures at once,
+  # so the runtime library is accepted when the dev symlink is missing.
+  find_path(SDL_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL REQUIRED)
+  find_library(SDL_LIBRARY NAMES SDL libSDL-1.2.so.0 REQUIRED)
+  add_library(SDL::SDL INTERFACE IMPORTED GLOBAL)
+  target_include_directories(SDL::SDL INTERFACE ${SDL_INCLUDE_DIR})
+  target_link_libraries(SDL::SDL INTERFACE ${SDL_LIBRARY})
 endif()
 # Speex stays vendored for Epic's 48 kHz mode (EPIC_48K), which upstream lacks.
 add_subdirectory(Speex)
