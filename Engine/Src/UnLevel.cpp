@@ -149,7 +149,7 @@ void ULevel::DetailChange( EDetailMode NewDetailMode )
 {
 	guard(ULevel::DetailChange);
     GCoronaRender.Reset(); // flag corona rendering to reset, it will have dandling ptrs now
-	GetLevelInfo()->DetailMode = GIsPixomatic ? DM_Low : NewDetailMode;
+	GetLevelInfo()->DetailMode = NewDetailMode;
 	if( GetLevelInfo()->Game )
 		GetLevelInfo()->Game->eventDetailChange();
 	for(INT ActorIndex = 0;ActorIndex < Actors.Num();ActorIndex++)
@@ -265,7 +265,7 @@ void ULevel::BuildRenderData()
 
 		UseStaticMeshBatching = 1;
 
-		if( !GIsPixomatic && Engine->DetectedVideoMemory && Engine->UseStaticMeshBatching && !GIsUCC && GIsClient )
+		if( Engine->DetectedVideoMemory && Engine->UseStaticMeshBatching && !GIsUCC && GIsClient )
 		{
 			INT VertexBytes	= 0,
 				IndexBytes	= 0;

@@ -749,7 +749,7 @@ void AVehicle::PostRender(FLevelSceneNode* SceneNode, FRenderInterface* RI)
 				color,
 				FPlane(0.0f,0.0f,0.0f,0.0f));
 		}
-		if ( !GIsPixomatic && (actorDist < 2.f*pc->TeamBeaconPlayerInfoMaxDist) && (SceneNode->Viewport->Canvas->ClipX > 600) )
+		if ( (actorDist < 2.f*pc->TeamBeaconPlayerInfoMaxDist) && (SceneNode->Viewport->Canvas->ClipX > 600) )
 		{
 			if ( PlayerReplicationInfo->bBot )
 				info +=(PlayerReplicationInfo->eventGetNameCallSign());

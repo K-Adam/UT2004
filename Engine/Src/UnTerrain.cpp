@@ -420,7 +420,7 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 			// non-texture or alphatexture: render with alphamap
 			UTexture* LayerTexture = Cast<UTexture>(Info->Layers[SectorLayers(i)].Texture);
 			//!!vogel: OPENGL TODO
-			if( ForceAlphaMap || !LayerTexture || LayerTexture->IsTransparent() || GIsOpenGL || GIsPixomatic )
+			if( ForceAlphaMap || !LayerTexture || LayerTexture->IsTransparent() || GIsOpenGL )
 			{
 				PassLayers.AddItem( SectorLayers(i) );
 
@@ -3216,26 +3216,6 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 	    }
 	}
 	else
-	if( CollapsedLayers && SceneNode->Viewport->RenDev->LowQualityTerrain )
-	{
-		for( INT s=0;s<Sectors.Num();s++ )
-		{
-			UTerrainSector* Sector = Sectors(s);
-			if(VI && !VI->Visible(Sector->BoundingBox))
-				continue;
-			
-			if( Sector->CompleteNumTriangles )
-			{
-			    FVertexStream*	Streams[1] = { &VertexStreams(Sector->VertexStreamNum) };
-			    RI->SetVertexStreams(VS_FixedFunction,Streams,1);
-			    RI->EnableLighting(0,0);
-			    RI->SetMaterial(CollapsedLayers);								
-			    RI->SetIndexBuffer(&Sector->CompleteIndexBuffer,0);
-			    RI->DrawPrimitive(PT_TriangleList,0,Sector->CompleteNumTriangles,Sector->CompleteMinIndex,Sector->CompleteMaxIndex);
-		    }
-	    }
-	}
-	else
 	{
 		// Get list of everything we need to render in its own pass
 		FMemMark Mark(GMem);
@@ -3410,7 +3390,7 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 				
 				if( SceneNode->Viewport->Actor->RendMap==REN_LightingOnly )
 				{
-					RI->EnableLighting(!GIsPixomatic, 1, 1, NULL, 1, FSphere(FVector(0,0,0),-1.0f));
+					RI->EnableLighting(1, 1, 1, NULL, 1, FSphere(FVector(0,0,0),-1.0f));
 					RI->SetMaterial(TerrainMaterial);
 				}
 				else if(	SceneNode->Viewport->Actor->RendMap==REN_PlainTex )
@@ -3420,13 +3400,12 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 				}
 				else
 				{
-					RI->EnableLighting(!GIsPixomatic, 1, 1, NULL, 0, FSphere(FVector(0,0,0),-1.0f)); // sjs
+					RI->EnableLighting(1, 1, 1, NULL, 0, FSphere(FVector(0,0,0),-1.0f)); // sjs
 					RI->SetMaterial(TerrainMaterial);
 				}
 
-				if( !GIsPixomatic )
-	           		for( int i=0; i<8; i++ )
-               			RI->SetLight( i, RenderThings[t].DynLights[i] );
+				for( int i=0; i<8; i++ )
+					RI->SetLight( i, RenderThings[t].DynLights[i] );
 				
 				RI->DrawPrimitive(PT_TriangleList,BaseIndex,IndexBuffer.NumTriangles,IndexBuffer.MinIndex,IndexBuffer.MaxIndex);			
 				GStats.DWORDStats( GEngineStats.STATS_Terrain_Triangles ) += IndexBuffer.NumTriangles;

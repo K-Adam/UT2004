@@ -1341,7 +1341,6 @@ UBOOL USDLViewport::TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY,
 	UClass* RenderClass = UObject::StaticLoadClass( URenderDevice::StaticClass(), NULL, ClassName, NULL, 0, NULL );
 	if( RenderClass  )
 	{
-//!!FIXME Clean up when we remove Softdrv.
 		if( RenderClass == GetOuterUSDLClient()->Engine->GRenDev->GetClass() )
 		{
 			RenDev = GetOuterUSDLClient()->Engine->GRenDev;
@@ -1478,33 +1477,6 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 
 	INT VideoFlags = 0;
 	INT VideoBPP   = 0;
-
-#if 0
-	// Pull current driver string.
-	FString CurrentDriver = RenDev->GetClass()->GetPathName();
-
-	// Checking whether to use Glide specific settings or OpenGL.
-	if ( !appStrcmp( *CurrentDriver, TEXT("GlideDrv.GlideRenderDevice") ) ) 
-	{
-		// Don't use DGA in conjunction with Glide unless user overrides it.
-		if ( getenv( "SDL_VIDEO_X11_DGAMOUSE" ) == NULL )
-			putenv( "SDL_VIDEO_X11_DGAMOUSE=0" );
-		NewBlitFlags |= BLIT_Fullscreen;
-		debugf( TEXT("GlideDrv.GlideRenderDevice") );	
-	} 
-	else if ( !appStrcmp( *CurrentDriver, TEXT("SDLSoftDrv.SDLSoftwareRenderDevice") ) )
-	{		
-		debugf( TEXT("SDLSoftDrv.SDLSoftwareRenderDevice") );
-		VideoBPP = 16;
-		ColorBytes = 2;
-		Caps |= CC_RGB565;
-	}
-	else
-	{
-		VideoFlags |= SDL_OPENGL;
-		debugf( TEXT("OpenGL") );
-	}
-#endif
 
 	if( NewBlitFlags & BLIT_OpenGL )
 	{

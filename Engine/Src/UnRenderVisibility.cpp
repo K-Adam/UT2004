@@ -1970,7 +1970,7 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 
 
 	// Render child scene nodes first if not using stencil.
-	if( !(GIsPixomatic && SceneNode->Viewport->RenDev->SkyboxHack) && !(GIsEditor || SceneNode->Viewport->RenDev->UseStencil ) )
+	if( !(GIsEditor || SceneNode->Viewport->RenDev->UseStencil ) )
 	{
 		UBOOL RequiresClear = 0;
 		for(TList<FLevelSceneNode*>* Child = RenderState.ChildSceneNodes;Child;Child = Child->Next)
@@ -2001,54 +2001,6 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 					if((TerrainInfo->bHighDetail && TerrainInfo->Level->DetailMode == DM_Low) || (TerrainInfo->bSuperHighDetail && TerrainInfo->Level->DetailMode != DM_SuperHigh))
 						continue;
 						
-					if( GIsPixomatic && (TerrainInfo->bHighDetail || TerrainInfo->bSuperHighDetail) )
-						continue;
-
-					if( !TerrainInfo->CollapsedLayers && GIsPixomatic && SceneNode->Viewport->RenDev->LowQualityTerrain )
-					{					
-						SceneNode->Viewport->RenDev->TerrainLOD = Clamp<DWORD>( SceneNode->Viewport->RenDev->TerrainLOD, 3, 11 );
-						INT TextureSize = 1 << SceneNode->Viewport->RenDev->TerrainLOD;
-
-						FAuxRenderTarget TempRenderTarget(TextureSize,TextureSize,TEXF_RGBA8);
-
-						RI->PushState();
-						if( RI->SetRenderTarget(&TempRenderTarget) )
-						{
-							RI->Clear(1,FColor(0,0,0,255));
-							RI->SetDistanceFog(0,0,0,0);
-							RI->SetCullMode( CM_None );
-											
-							FVector Extent = TerrainInfo->Vertices( TerrainInfo->GetGlobalVertex( TerrainInfo->HeightmapX-1, TerrainInfo->HeightmapY-1 ) )
-											-TerrainInfo->Vertices( TerrainInfo->GetGlobalVertex( 0, 0 ) );
-							Extent *= 0.5f;
-
-							FVector ViewOrigin		= TerrainInfo->Location + FVector( 0, 0, 20000 );
-							FMatrix WorldToCamera	= FTranslationMatrix(-ViewOrigin) * FMatrix(FPlane( Extent.X > 0 ? 1 : -1,			0,								0,							0),
-																								FPlane(0,								Extent.Y < 0 ? 1 : -1,			0,							0),
-																								FPlane(0,								0,								-1,							0),
-																								FPlane(0,								0,								-ViewOrigin.Z,				1));
-							FMatrix	CameraToScreen	= FOrthoMatrix( Abs(Extent.X), Abs(Extent.Y), 0.5f / HALF_WORLD_MAX, HALF_WORLD_MAX );
-
-							RI->SetTransform( TT_WorldToCamera, WorldToCamera );
-							RI->SetTransform( TT_CameraToScreen, CameraToScreen );
-
-							RI->PixoSetHint( PIXOHINT_Bilinear );
-							TerrainInfo->Render(
-								SceneNode,
-								RI,
-								NULL,
-								NULL,
-								0,
-								NULL,
-								0
-							);
-							RI->PixoResetHint( PIXOHINT_Bilinear );
-						}
-						RI->PopState();
-						
-						TerrainInfo->CollapsedLayers = RI->PixoCreateTexture( &TempRenderTarget, 1 );
-					}
-
 					RI->PushState();
 
 					if( TerrainInfo->Inverted )
@@ -2148,19 +2100,6 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 			Child->Element->Render(RI);
 			delete Child->Element;
 		}
-	}
-
-	// The below assumes that there is only one level of child scenenodes, but then again, we already assume that 
-	// there are no mirrors and warp portals so it's not really a restriction.
-	if( (GIsPixomatic && SceneNode->Viewport->RenDev->SkyboxHack) && !SceneNode->Parent )
-	{
-		RI->PixoSetHint( PIXOHINT_Skybox );
-		for(TList<FLevelSceneNode*>* Child = RenderState.ChildSceneNodes;Child;Child = Child->Next)
-		{
-			Child->Element->Render(RI);
-			delete Child->Element;
-		}
-		RI->PixoResetHint( PIXOHINT_Skybox );
 	}
 
 	// Render translucent actors.

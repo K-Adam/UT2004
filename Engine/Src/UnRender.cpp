@@ -1102,9 +1102,6 @@ UBOOL FLevelSceneNode::FilterActor(AActor* Actor)
 		if((Actor->bHighDetail && Actor->Level->DetailMode == DM_Low) || (Actor->bSuperHighDetail && Actor->Level->DetailMode != DM_SuperHigh))
 			return 0;
 
-		if( GIsPixomatic && (Actor->bHighDetail || Actor->bSuperHighDetail) )
-			return 0;
-
 		if(Actor->bCorona)
 		{
 			Actor->DrawType = DT_None;
@@ -1748,8 +1745,6 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
 			);
 	    }
     } 
-
-	RI->PixoSetHint( PIXOHINT_HUD );
 
 	// Center HUD if scaled for multimon support.
 	FLOAT ScaleHUDX = Viewport->GetOuterUClient()->ScaleHUDX;

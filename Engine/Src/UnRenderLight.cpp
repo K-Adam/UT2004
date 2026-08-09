@@ -1094,7 +1094,7 @@ void* FStaticLightMapTexture::GetRawTextureData(INT MipIndex)
 {
 	guard(FStaticLightMapTexture::GetRawTextureData);
 
-	check( GIsEditor || GIsOpenGL || GIsPixomatic );
+	check( GIsEditor || GIsOpenGL );
 
 	if( !Data[MipIndex].Num() )
 		Data[MipIndex].Load();

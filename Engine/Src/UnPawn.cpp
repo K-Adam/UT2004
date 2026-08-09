@@ -2522,7 +2522,7 @@ void APawn::PostRender(FLevelSceneNode* SceneNode, FRenderInterface* RI)
 		color,
 		FPlane(0.0f,0.0f,0.0f,0.0f));
 
-	if ( !GIsPixomatic && (actorDist < pc->TeamBeaconPlayerInfoMaxDist) && (SceneNode->Viewport->Canvas->ClipX > 600) )
+	if ( (actorDist < pc->TeamBeaconPlayerInfoMaxDist) && (SceneNode->Viewport->Canvas->ClipX > 600) )
     {
         FLOAT xL, yL;
 		FString info;

@@ -254,7 +254,7 @@ UBitmapMaterial* UShadowBitmapMaterial::Get(FTime Time,UViewport* Viewport)
 {
 	guard(UShadowBitmapMaterial::Get);
 
-	if( bBlobShadow || Invalid || !Viewport->RenDev->SupportsRenderToTextureRGBA8888 || GIsPixomatic )
+	if( bBlobShadow || Invalid || !Viewport->RenDev->SupportsRenderToTextureRGBA8888 )
 		return BlobShadow;
 
 	if(Dirty && ShadowActor) // gam

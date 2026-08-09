@@ -30,11 +30,6 @@ Revision history:
 #include "OnslaughtPrivate.h"
 void autoInitializeRegistrantsEditor(INT &Lookup);
 
-#if USE_PIXOMATIC
-extern "C" { void autoInitializeRegistrantsPixoDrv(void); }
-#define AUTO_INITIALIZE_REGISTRANTS_PIXODRV autoInitializeRegistrantsPixoDrv();
-#endif
-
 #endif
 
 
@@ -720,9 +715,6 @@ int main(int argc, char **argv)
         AUTO_INITIALIZE_REGISTRANTS_FIRE;
         AUTO_INITIALIZE_REGISTRANTS_ALAUDIO;
         AUTO_INITIALIZE_REGISTRANTS_OPENGLDRV;
-        #if USE_PIXOMATIC
-        AUTO_INITIALIZE_REGISTRANTS_PIXODRV;
-        #endif
         AUTO_INITIALIZE_REGISTRANTS_IPDRV;
         RegisterNamesXInterface();
         AUTO_INITIALIZE_REGISTRANTS_XINTERFACE;
@@ -739,9 +731,6 @@ int main(int argc, char **argv)
 
 // The linker drops these as dead code without an explicit reference.
 char blah;
-#if USE_PIXOMATIC
-extern BYTE GLoadedPixoDrv; snprintf(&blah, 1, "%d", (int) GLoadedPixoDrv);
-#endif
 extern BYTE GLoadedSDLDrv; snprintf(&blah, 1, "%d", (int) GLoadedSDLDrv);
 extern BYTE GLoadedOpenGLDrv; snprintf(&blah, 1, "%d", (int) GLoadedOpenGLDrv);
 extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
@@ -789,19 +778,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		}
 
 		// Render device command line options.
-		if( ParseParam(appCmdLine(),TEXT("SOFTWARE")) )
-		{
-			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("PixoDrv.PixoRenderDevice"	));
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"	), TEXT("Decals"			), TEXT("False"						));
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"	), TEXT("DecoLayers"		), TEXT("False"						));
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"	), TEXT("Coronas"			), TEXT("False"						));
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"	), TEXT("Projectors"		), TEXT("False"						));
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"	), TEXT("NoFractalAnim"		), TEXT("True"						));
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"	), TEXT("NoDynamicLights"	), TEXT("True"						));
-			GConfig->SetString( TEXT("UnrealGame.UnrealPawn"), TEXT("bPlayerShadows"	), TEXT("False"						), GUserIni );
-			GConfig->SetString( TEXT("Engine.Vehicle"		), TEXT("bVehicleShadows"	), TEXT("False"						), GUserIni );
-		}
-
 		if( ParseParam(appCmdLine(),TEXT("OPENGL")) )
 			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("OpenGLDrv.OpenGLRenderDevice"	));
 

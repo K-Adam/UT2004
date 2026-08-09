@@ -94,7 +94,6 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("UsePixelShaders"),		RF_Public)UBoolProperty ( CPP_PROPERTY(UsePixelShaders     ), TEXT("Options"), CPF_Config );
 
 	GIsOpenGL						= 1;
-	GIsPixomatic					= 0;
 
 	SupportsCubemaps				= 1;
 	SupportsZBIAS					= 1;
@@ -252,7 +251,6 @@ UBOOL UOpenGLRenderDevice::Init()
 	debugf( TEXT("Initializing OpenGLDrv...") );
 
 	GIsOpenGL						= 1;
-	GIsPixomatic					= 0;
 
 	SupportsCubemaps				= 1;
 	SupportsZBIAS					= 1;

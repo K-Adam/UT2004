@@ -131,15 +131,6 @@ enum EPrecacheMode
 	PRECACHE_All
 };
 
-enum EPixoHint
-{
-	PIXOHINT_Bilinear   = 1,
-	PIXOHINT_HUD		= 2,
-	PIXOHINT_Skybox		= 4,
-	
-	PIXOHINT_All		= PIXOHINT_Bilinear | PIXOHINT_HUD | PIXOHINT_Skybox
-};
-
 class ENGINE_API FRenderInterface
 {
 public:
@@ -179,11 +170,6 @@ public:
 	virtual INT SetDynamicIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseIndex) = 0;
 
 	virtual void DrawPrimitive(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT MinIndex = INDEX_NONE,INT MaxIndex = INDEX_NONE) = 0;
-
-	// Pixo helpers.
-	virtual void PixoSetHint(DWORD Hint){}
-	virtual void PixoResetHint(DWORD Hint){}
-	virtual UTexture* PixoCreateTexture( FRenderTarget* RenderTarget, UBOOL CreateMips ) { return NULL; }
 
 	// sjs ---
 	virtual int  LockDynBuffer(BYTE** pOutBuffer, int numVerts, int stride, DWORD componentFlags) {*pOutBuffer=NULL; return 0;}

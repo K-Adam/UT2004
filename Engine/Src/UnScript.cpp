@@ -508,7 +508,8 @@ void ALevelInfo::execIsSoftwareRendering( FFrame& Stack, RESULT_DECL )
 	guardSlow(ALevelInfo::execIsSoftwareRendering);
 	P_FINISH;
 
-	*(UBOOL*)Result = GIsPixomatic;
+	// Script still declares this native, there is no software renderer anymore.
+	*(UBOOL*)Result = 0;
 	unguardexecSlow;
 }
 

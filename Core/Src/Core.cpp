@@ -195,7 +195,6 @@ CORE_API TCHAR					GUserIni[1024]					= TEXT("");
 CORE_API FLOAT					NEAR_CLIPPING_PLANE				= 10.0f;
 CORE_API FLOAT					FAR_CLIPPING_PLANE				= 65536.f;
 CORE_API UBOOL					GIsOpenGL						= 0;
-CORE_API UBOOL					GIsPixomatic					= 0;
 CORE_API ERunningOS				GRunningOS						= OS_UNKNOWN;
 CORE_API DWORD					GMemoryTag						= 0;
 CORE_API DWORD					GAllocatedMemory				= 0;
