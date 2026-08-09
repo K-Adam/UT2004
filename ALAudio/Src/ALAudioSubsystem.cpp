@@ -257,21 +257,11 @@ UBOOL UALAudioSubsystem::Init()
 #if DYNAMIC_BIND
 	guard(DynamicBinding);
 	// Find DLL's.
-	DLLHandle = NULL;
-	if( !UseDefaultDriver )
-	{
-		DLLHandle = appGetDllHandle( AL_DLL );
-		if( !DLLHandle )
-			debugf( NAME_Init, TEXT("Couldn't locate %s - trying default next."), AL_DLL );
-	}
+	DLLHandle = appGetDllHandle( AL_DLL );
 	if( !DLLHandle )
 	{
-		DLLHandle = appGetDllHandle( AL_DEFAULT_DLL );
-		if( !DLLHandle )
-		{
-			debugf( NAME_Init, TEXT("Couldn't locate %s - giving up."), AL_DEFAULT_DLL );
-			return 0;
-		}
+		debugf( NAME_Init, TEXT("Couldn't locate %s - giving up."), AL_DLL );
+		return 0;
 	}
 	
 	// Find functions.

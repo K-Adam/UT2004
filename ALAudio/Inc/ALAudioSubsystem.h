@@ -16,10 +16,10 @@ Revision history:
 
 #pragma pack (push,8)
 
-#include "altypes.h"
-#include "alctypes.h"
-typedef struct ALCdevice_struct ALCdevice;
-typedef struct ALCcontext_struct ALCcontext;
+#define AL_NO_PROTOTYPES
+#define ALC_NO_PROTOTYPES
+#include "AL/al.h"
+#include "AL/alc.h"
 
 #ifdef WIN32
 #define SUPPORTS_EAX 1
@@ -42,23 +42,11 @@ typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 #define MAX_AUDIOCHANNELS 64
 #define NUM_VOICE_BUFFERS 10
 
-#ifdef _WIN64
-// 64-bit OpenAL runtimes install as OpenAL32.dll too. OpenAL Soft can also sit next to the game.
+// The Windows build copies OpenAL Soft into System/, where it is found before a system-wide OpenAL.
+#ifdef WIN32
 #define AL_DLL TEXT("OpenAL32.dll")
-#define AL_DEFAULT_DLL TEXT("soft_oal.dll")
-#elif __WIN32__
-#define AL_DLL TEXT("OpenAL32.dll")
-#ifdef DEBUG
-//#define AL_DEFAULT_DLL TEXT("DefOpenAL32D.dll")
-//#define AL_DEFAULT_DLL TEXT("MiniAL32.dll")
-#define AL_DEFAULT_DLL TEXT("DefOpenAL32.dll")
 #else
-#define AL_DEFAULT_DLL TEXT("DefOpenAL32.dll")
-#endif
-#else
-// Linux has no bundled default implementation, both use the system OpenAL.
 #define AL_DLL TEXT("libopenal.so.1")
-#define AL_DEFAULT_DLL TEXT("libopenal.so.1")
 #endif
 
 class UALAudioSubsystem;

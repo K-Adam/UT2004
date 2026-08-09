@@ -15,10 +15,11 @@
 
 #include "ALAudio.h"
 
-#include "altypes.h"
-#include "alctypes.h"
-typedef struct ALCdevice_struct ALCdevice;
-typedef struct ALCcontext_struct ALCcontext;
+// OpenAL is loaded at runtime through ALFuncs.h, only its types and constants come from the headers.
+#define AL_NO_PROTOTYPES
+#define ALC_NO_PROTOTYPES
+#include "AL/al.h"
+#include "AL/alc.h"
 
 #if USE_DIRECTSOUND
 #pragma pack(push,8)
