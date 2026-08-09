@@ -6,6 +6,11 @@ Revision history:
 	* Created by Daniel Vogel (based on XLaunch).
 =============================================================================*/
 
+#ifdef WIN32
+#pragma pack(push,8)
+#include <windows.h>
+#pragma pack(pop)
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>

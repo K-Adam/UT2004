@@ -13,11 +13,6 @@
 	Constants & static stuff.
 -----------------------------------------------------------------------------*/
 
-// !!! FIXME: This should get rid of all these win32 vs. SDL ifdefs. --ryan.
-#if __linux__
-#  define USE_SDL 1
-#endif
-
 #if (defined WIN32)
 #   define GL_DLL (TEXT("OpenGL32.dll"))
 #elif __linux__
@@ -37,6 +32,7 @@ INT				UOpenGLRenderDevice::VARSize		= 0;
 HGLRC			UOpenGLRenderDevice::hCurrentRC		= NULL;
 HMODULE			UOpenGLRenderDevice::hModuleGLMain	= NULL;
 HMODULE			UOpenGLRenderDevice::hModuleGLGDI	= NULL;
+UBOOL			UOpenGLRenderDevice::UseSDL			= 0;
 #else
 UBOOL			UOpenGLRenderDevice::GLLoaded		= 0;
 #endif
@@ -129,10 +125,8 @@ void UOpenGLRenderDevice::FindProc( void*& ProcAddress, char* Name, char* Suppor
 {
 	guard(UOpenGLRenderDevice::FindProc);
 
-#if (defined USE_SDL)
-	if( !ProcAddress )
-		ProcAddress = (void*) SDL_GL_GetProcAddress( Name );
-#elif (defined WIN32)
+#ifdef WIN32
+	// SDL creates its context through WGL too, so both paths resolve functions the same way.
 	if( !ProcAddress )
 		ProcAddress = appGetDllExport( hModuleGLMain, appFromAnsi(Name) );
 	if( !ProcAddress )
@@ -147,7 +141,8 @@ void UOpenGLRenderDevice::FindProc( void*& ProcAddress, char* Name, char* Suppor
 		ProcAddress = wglGetProcAddress( Dummy );
 	}
 #else
-#   error Please handle this for your platform.
+	if( !ProcAddress )
+		ProcAddress = (void*) SDL_GL_GetProcAddress( Name );
 #endif
 
 	if( !ProcAddress )
@@ -187,12 +182,15 @@ void UOpenGLRenderDevice::MakeCurrent()
 
 	check(ValidContext);
 #ifdef WIN32
-	check(hRC);
-	check(hDC);
-	if( hCurrentRC!=hRC )
+	if( !UseSDL )
 	{
-		verify(wglMakeCurrent(hDC,hRC));
-		hCurrentRC = hRC;
+		check(hRC);
+		check(hDC);
+		if( hCurrentRC!=hRC )
+		{
+			verify(wglMakeCurrent(hDC,hRC));
+			hCurrentRC = hRC;
+		}
 	}
 #endif
 
@@ -258,7 +256,7 @@ UBOOL UOpenGLRenderDevice::Init()
 	SupportsRenderToTextureRGB565	= 0;
 	SupportsRenderToTextureNPOT		= 0;
 
-#if (defined WIN32)
+#ifdef WIN32
 
 	// Get list of device modes.
 	for( INT i=0; ; i++ )
@@ -300,6 +298,8 @@ UBOOL UOpenGLRenderDevice::Init()
 	// Init global GL.
 	if( NumDevices==0 )
 	{
+		UseSDL = GetModuleHandleA( "SDLDrv.dll" ) != NULL;
+
 		// Find DLL's.
 		hModuleGLMain = (HMODULE) appGetDllHandle( GL_DLL );
 		if( !hModuleGLMain )
@@ -317,7 +317,7 @@ UBOOL UOpenGLRenderDevice::Init()
 			appErrorf(TEXT("Missing symbols - aborting."));
 	}
 
-#elif (defined USE_SDL)
+#else
 	// Init global GL.
 	if( NumDevices==0 )
 	{
@@ -338,9 +338,6 @@ UBOOL UOpenGLRenderDevice::Init()
 		if( !SUPPORTS_GL )
 			appErrorf(TEXT("Missing symbols - aborting."));
 	}
-
-#else
-#   error Please handle this for your platform.
 #endif
 
 	// Scratch buffer used by e.g. resource management.
@@ -430,164 +427,164 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 	MultisampleBuffers = Max(MultisampleBuffers, 0);
 	MultisampleSamples = Max(MultisampleSamples, 0);
 
-#if (defined USE_SDL)
-	SDL_GL_SetAttribute( SDL_GL_RED_SIZE, ColorBytes<=2 ? 5 : 8 );
-	SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, ColorBytes<=2 ? 5 : 8 );
-	SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, ColorBytes<=2 ? 5 : 8 );
-	SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, ColorBytes<=2 ? 16 : 24 );
-	SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
-	SDL_GL_SetAttribute( SDL_GL_MULTISAMPLEBUFFERS, MultisampleBuffers );
-	SDL_GL_SetAttribute( SDL_GL_MULTISAMPLESAMPLES, MultisampleSamples );
-
-	// Change window size.
-	Viewport->ResizeViewport( Fullscreen ? (BLIT_Fullscreen|BLIT_OpenGL) : (BLIT_OpenGL), NewX, NewY );
-
-#elif (defined WIN32)
-
-	// Get hWnd & hDC.
-	hWnd		= (HWND) Viewport->GetWindow();
-	check(hWnd);
-	hDC			= GetDC( hWnd );
-	check(hDC);
+#ifdef WIN32
+	if( !UseSDL )
+	{
+		// Get hWnd & hDC.
+		hWnd		= (HWND) Viewport->GetWindow();
+		check(hWnd);
+		hDC			= GetDC( hWnd );
+		check(hDC);
 
 #if 0 
-	// Print all PFD's exposed
-	INT Count = DescribePixelFormat( hDC, 0, 0, NULL );
-	for( i=1; i<Count; i++ )
-		PrintFormat( hDC, i );
+		// Print all PFD's exposed
+		INT Count = DescribePixelFormat( hDC, 0, 0, NULL );
+		for( i=1; i<Count; i++ )
+			PrintFormat( hDC, i );
 #endif
 
-	// Change display settings.
-	if( Fullscreen )
-	{
-		INT FindX		= NewX, 
-			FindY		= NewY, 
-			BestError	= MAXINT;
-		
-		for( INT i=0; i<Modes.Num(); i++ )
+		// Change display settings.
+		if( Fullscreen )
 		{
-			if( Modes(i).Z == ColorBytes*8 )
+			INT FindX		= NewX, 
+				FindY		= NewY, 
+				BestError	= MAXINT;
+		
+			for( INT i=0; i<Modes.Num(); i++ )
 			{
-				INT Error
-				=	(Modes(i).X-FindX)*(Modes(i).X-FindX)
-				+	(Modes(i).Y-FindY)*(Modes(i).Y-FindY);
-				if( Error < BestError )
+				if( Modes(i).Z == ColorBytes*8 )
 				{
-					NewX		= Modes(i).X;
-					NewY		= Modes(i).Y;
-					BestError	= Error;
+					INT Error
+					=	(Modes(i).X-FindX)*(Modes(i).X-FindX)
+					+	(Modes(i).Y-FindY)*(Modes(i).Y-FindY);
+					if( Error < BestError )
+					{
+						NewX		= Modes(i).X;
+						NewY		= Modes(i).Y;
+						BestError	= Error;
+					}
+				}
+			}
+
+			DWORD RefreshRate = DesiredRefreshRate ? Clamp<DWORD>( DesiredRefreshRate, 60, 100 ) : 0;
+
+#if UNICODE
+			if( !GUnicodeOS )
+			{
+				DEVMODEA DisplayMode;
+				ZeroMemory( &DisplayMode, sizeof(DisplayMode) );
+				DisplayMode.dmSize       = sizeof(DisplayMode);
+				DisplayMode.dmPelsWidth  = NewX;
+				DisplayMode.dmPelsHeight = NewY;
+				DisplayMode.dmBitsPerPel = ColorBytes * 8;
+#if 1
+				if( RefreshRate )
+				{
+					DisplayMode.dmDisplayFrequency = RefreshRate;
+					DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;
+				}
+				else
+#endif
+				{
+					DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+				}
+				if( ChangeDisplaySettingsA( &DisplayMode, CDS_FULLSCREEN )!=DISP_CHANGE_SUCCESSFUL )
+				{
+					debugf( TEXT("ChangeDisplaySettingsA failed: %ix%ix%i"), NewX, NewY, ColorBytes );
+					return 0;
+				}
+			}
+			else
+#endif
+			{
+				DEVMODE DisplayMode;
+				ZeroMemory( &DisplayMode, sizeof(DisplayMode) );
+				DisplayMode.dmSize       = sizeof(DisplayMode);
+				DisplayMode.dmPelsWidth  = NewX;
+				DisplayMode.dmPelsHeight = NewY;
+				DisplayMode.dmBitsPerPel = ColorBytes * 8;
+#if 1
+				if ( RefreshRate )
+				{
+					DisplayMode.dmDisplayFrequency = RefreshRate;
+					DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;
+				}
+				else
+#endif
+				{
+					DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+				}
+				if( ChangeDisplaySettings( &DisplayMode, CDS_FULLSCREEN )!=DISP_CHANGE_SUCCESSFUL )
+				{
+					debugf( TEXT("ChangeDisplaySettings failed: %ix%i"), NewX, NewY );
+					return 0;
 				}
 			}
 		}
 
-		DWORD RefreshRate = DesiredRefreshRate ? Clamp<DWORD>( DesiredRefreshRate, 60, 100 ) : 0;
+		// OpenGL renderer doesn't support stencil and can't run the Editor. 
+		if( GIsEditor )
+			appErrorf(NAME_FriendlyError, TEXT("The OpenGL renderer doesn't support running the Editor. Please switch to the D3D renderer if you want to use the Editor.") );
 
-#if UNICODE
-		if( !GUnicodeOS )
+		UseStencil = 0;
+
+		// Set resolution.
+		INT DesiredColorBits   = ColorBytes<=2 ? 16 : 32;
+		INT DesiredStencilBits = 0;//ColorBytes<=2 ?  0 : 8;
+		INT DesiredDepthBits   = ColorBytes<=2 ? 16 : 24;
+	
+		PIXELFORMATDESCRIPTOR pfd =
 		{
-			DEVMODEA DisplayMode;
-			ZeroMemory( &DisplayMode, sizeof(DisplayMode) );
-			DisplayMode.dmSize       = sizeof(DisplayMode);
-			DisplayMode.dmPelsWidth  = NewX;
-			DisplayMode.dmPelsHeight = NewY;
-			DisplayMode.dmBitsPerPel = ColorBytes * 8;
-#if 1
-			if( RefreshRate )
-			{
-				DisplayMode.dmDisplayFrequency = RefreshRate;
-				DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;
-			}
-			else
-#endif
-			{
-				DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
-			}
-			if( ChangeDisplaySettingsA( &DisplayMode, CDS_FULLSCREEN )!=DISP_CHANGE_SUCCESSFUL )
-			{
-				debugf( TEXT("ChangeDisplaySettingsA failed: %ix%ix%i"), NewX, NewY, ColorBytes );
-				return 0;
-			}
-		}
-		else
-#endif
+			sizeof(PIXELFORMATDESCRIPTOR),
+			1,
+			PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+			PFD_TYPE_RGBA,
+			DesiredColorBits,
+			0,0,0,0,0,0,
+			0,0,
+			0,0,0,0,0,
+			DesiredDepthBits,
+			DesiredStencilBits,
+			0,
+			PFD_MAIN_PLANE,
+			0,
+			0,0,0
+		};
+	
+		INT nPixelFormat = ChoosePixelFormat( hDC, &pfd );
+		Parse( appCmdLine(), TEXT("PIXELFORMAT="), nPixelFormat );
+		check(nPixelFormat);
+
+		debugf( TEXT("Using pixel format %i"), nPixelFormat );
+	
+		SetPixelFormat( hDC, nPixelFormat, &pfd );
+	
+		hRC = wglCreateContext( hDC );
+		check(hRC);
+
+		// Change window size.
+		UBOOL Result = Viewport->ResizeViewport( (Fullscreen ? BLIT_Fullscreen : 0) | BLIT_OpenGL, NewX, NewY );
+		if( !Result )
 		{
-			DEVMODE DisplayMode;
-			ZeroMemory( &DisplayMode, sizeof(DisplayMode) );
-			DisplayMode.dmSize       = sizeof(DisplayMode);
-			DisplayMode.dmPelsWidth  = NewX;
-			DisplayMode.dmPelsHeight = NewY;
-			DisplayMode.dmBitsPerPel = ColorBytes * 8;
-#if 1
-			if ( RefreshRate )
-			{
-				DisplayMode.dmDisplayFrequency = RefreshRate;
-				DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;
-			}
-			else
-#endif
-			{
-				DisplayMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
-			}
-			if( ChangeDisplaySettings( &DisplayMode, CDS_FULLSCREEN )!=DISP_CHANGE_SUCCESSFUL )
-			{
-				debugf( TEXT("ChangeDisplaySettings failed: %ix%i"), NewX, NewY );
-				return 0;
-			}
+			if( Fullscreen )
+				TCHAR_CALL_OS(ChangeDisplaySettings(NULL,0),ChangeDisplaySettingsA(NULL,0));
+			return 0;
 		}
 	}
-
-	// OpenGL renderer doesn't support stencil and can't run the Editor. 
-	if( GIsEditor )
-		appErrorf(NAME_FriendlyError, TEXT("The OpenGL renderer doesn't support running the Editor. Please switch to the D3D renderer if you want to use the Editor.") );
-
-	UseStencil = 0;
-
-	// Set resolution.
-	INT DesiredColorBits   = ColorBytes<=2 ? 16 : 32;
-	INT DesiredStencilBits = 0;//ColorBytes<=2 ?  0 : 8;
-	INT DesiredDepthBits   = ColorBytes<=2 ? 16 : 24;
-	
-	PIXELFORMATDESCRIPTOR pfd =
-	{
-		sizeof(PIXELFORMATDESCRIPTOR),
-		1,
-		PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-		PFD_TYPE_RGBA,
-		DesiredColorBits,
-		0,0,0,0,0,0,
-		0,0,
-		0,0,0,0,0,
-		DesiredDepthBits,
-		DesiredStencilBits,
-		0,
-		PFD_MAIN_PLANE,
-		0,
-		0,0,0
-	};
-	
-	INT nPixelFormat = ChoosePixelFormat( hDC, &pfd );
-	Parse( appCmdLine(), TEXT("PIXELFORMAT="), nPixelFormat );
-	check(nPixelFormat);
-
-	debugf( TEXT("Using pixel format %i"), nPixelFormat );
-	
-	SetPixelFormat( hDC, nPixelFormat, &pfd );
-	
-	hRC = wglCreateContext( hDC );
-	check(hRC);
-
-	// Change window size.
-	UBOOL Result = Viewport->ResizeViewport( (Fullscreen ? BLIT_Fullscreen : 0) | BLIT_OpenGL, NewX, NewY );
-	if( !Result )
-	{
-		if( Fullscreen )
-			TCHAR_CALL_OS(ChangeDisplaySettings(NULL,0),ChangeDisplaySettingsA(NULL,0));
-		return 0;
-	}
-
-#else
-#   error Please handle this for your platform.
+	else
 #endif
+	{
+		SDL_GL_SetAttribute( SDL_GL_RED_SIZE, ColorBytes<=2 ? 5 : 8 );
+		SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, ColorBytes<=2 ? 5 : 8 );
+		SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, ColorBytes<=2 ? 5 : 8 );
+		SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, ColorBytes<=2 ? 16 : 24 );
+		SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+		SDL_GL_SetAttribute( SDL_GL_MULTISAMPLEBUFFERS, MultisampleBuffers );
+		SDL_GL_SetAttribute( SDL_GL_MULTISAMPLESAMPLES, MultisampleSamples );
+
+		// Change window size.
+		Viewport->ResizeViewport( Fullscreen ? (BLIT_Fullscreen|BLIT_OpenGL) : (BLIT_OpenGL), NewX, NewY );
+	}
 
 	ValidContext = 1;
 	MakeCurrent();
@@ -897,19 +894,21 @@ void UOpenGLRenderDevice::UnSetRes( UBOOL RestoreDisplaySettings )
 	VARIndex	= 0;
 
 #ifdef WIN32
-	if( hDC	)
-		ReleaseDC( hWnd, hDC );
-
-	if( hRC )
+	if( !UseSDL )
 	{
-		hCurrentRC = NULL;
-		verify(wglMakeCurrent( NULL, NULL ));
-		verify(wglDeleteContext( hRC ));
-		hRC = NULL;
-	}
-	if( WasFullscreen && RestoreDisplaySettings )
-		TCHAR_CALL_OS(ChangeDisplaySettings(NULL,0),ChangeDisplaySettingsA(NULL,0));
+		if( hDC	)
+			ReleaseDC( hWnd, hDC );
 
+		if( hRC )
+		{
+			hCurrentRC = NULL;
+			verify(wglMakeCurrent( NULL, NULL ));
+			verify(wglDeleteContext( hRC ));
+			hRC = NULL;
+		}
+		if( WasFullscreen && RestoreDisplaySettings )
+			TCHAR_CALL_OS(ChangeDisplaySettings(NULL,0),ChangeDisplaySettingsA(NULL,0));
+	}
 #endif
 
 	ValidContext = 0;
@@ -1069,13 +1068,12 @@ void UOpenGLRenderDevice::UpdateGamma(UViewport* Viewport)
 	for(INT i=0; i<256; i++)
 		Ramp.red[i] = Ramp.green[i] = Ramp.blue[i] = Clamp<INT>( appRound( (Contrast+0.5f)*appPow(i/255.f,1.0f/Gamma)*65535.f + (Brightness-0.5f)*32768.f - Contrast*32768.f + 16384.f ), 0, 65535 );
 
-#if (defined USE_SDL)
+#ifdef WIN32
+	if( !UseSDL )
+		SetDeviceGammaRamp( hDC, &Ramp );
+	else
+#endif
 	SDL_SetGammaRamp( Ramp.red, Ramp.green, Ramp.blue );
-#elif (defined WIN32)
-	SetDeviceGammaRamp( hDC, &Ramp );
-#else
-#   error Please handle this for your platform.
-#endif	    
 
 	unguard;
 }
@@ -1101,16 +1099,16 @@ void UOpenGLRenderDevice::RestoreGamma()
 	for(INT i=0; i<256; i++)
 		Ramp.red[i] = Ramp.green[i] = Ramp.blue[i] = i << 8;
 
-#if (defined USE_SDL)
-	SDL_SetGammaRamp( Ramp.red, Ramp.green, Ramp.blue );
-#elif (defined WIN32)
-//	SetDeviceGammaRamp( hDC, &Ramp );
-	HDC DesktopDC = GetDC( GetDesktopWindow() );
-	SetDeviceGammaRamp( DesktopDC, &Ramp );
-	ReleaseDC( NULL, DesktopDC );
-#else
-#   error Please handle this for your platform.
+#ifdef WIN32
+	if( !UseSDL )
+	{
+		HDC DesktopDC = GetDC( GetDesktopWindow() );
+		SetDeviceGammaRamp( DesktopDC, &Ramp );
+		ReleaseDC( NULL, DesktopDC );
+	}
+	else
 #endif
+	SDL_SetGammaRamp( Ramp.red, Ramp.green, Ramp.blue );
 
 	unguard;
 }
@@ -1225,13 +1223,14 @@ UBOOL UOpenGLRenderDevice::Exec(const TCHAR* Cmd,FOutputDevice& Ar)
 				}
 			}
 
-#elif USE_SDL
-			int ok = SDL_VideoModeOK(Width, Height, BitDepth, SDL_OPENGL | SDL_FULLSCREEN);
-			if (ok == BitDepth)
-				Supported = 1;
-
 #else
-			Supported = 1;
+#ifdef WIN32
+			if( !UseSDL )
+				Supported = 1;
+			else
+#endif
+			if( SDL_VideoModeOK(Width, Height, BitDepth, SDL_OPENGL | SDL_FULLSCREEN) == BitDepth )
+				Supported = 1;
 #endif		
 		}
 
@@ -1372,18 +1371,17 @@ void UOpenGLRenderDevice::Present(UViewport* Viewport)
 
     // This kills framerate, causing bug reports, so it's
     //  not worth it for any "lag reduction".  --ryan.
-#if (defined WIN32)
+#ifdef WIN32
     if( ReduceMouseLag && !GIsBenchmarking )
 		glFinish();
-#endif
 
-#if (defined USE_SDL)
-	SDL_GL_SwapBuffers();
-#elif (defined WIN32)
-	verify( SwapBuffers( hDC ) );
-#else
-#   error Please handle this for your platform.
+	if( !UseSDL )
+	{
+		verify( SwapBuffers( hDC ) );
+	}
+	else
 #endif
+	SDL_GL_SwapBuffers();
 
 	unguard;
 }

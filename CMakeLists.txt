@@ -151,24 +151,22 @@ else()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(VORBISFILE REQUIRED IMPORTED_TARGET GLOBAL vorbisfile)
   add_library(Vorbis::vorbisfile ALIAS PkgConfig::VORBISFILE)
-  # Debian and Ubuntu cannot install the SDL 1.2 dev package for two architectures at once,
-  # so the runtime library is accepted when the dev symlink is missing.
-  find_path(SDL_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL REQUIRED)
-  find_library(SDL_LIBRARY NAMES SDL libSDL-1.2.so.0 REQUIRED)
-  add_library(SDL::SDL INTERFACE IMPORTED GLOBAL)
-  target_include_directories(SDL::SDL INTERFACE ${SDL_INCLUDE_DIR})
-  target_link_libraries(SDL::SDL INTERFACE ${SDL_LIBRARY})
 endif()
+# Debian and Ubuntu cannot install the SDL 1.2 dev package for two architectures at once,
+# so the runtime library is accepted when the dev symlink is missing.
+find_path(SDL_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL REQUIRED)
+find_library(SDL_LIBRARY NAMES SDL libSDL-1.2.so.0 REQUIRED)
+add_library(SDL::SDL INTERFACE IMPORTED GLOBAL)
+target_include_directories(SDL::SDL INTERFACE ${SDL_INCLUDE_DIR})
+target_link_libraries(SDL::SDL INTERFACE ${SDL_LIBRARY})
 # Speex stays vendored for Epic's 48 kHz mode (EPIC_48K), which upstream lacks.
 add_subdirectory(Speex)
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
-    XGame XInterface Onslaught UTV2004 UCC)
+    XGame XInterface Onslaught UTV2004 UCC SDLDrv SDLLaunch)
 if(WIN32)
   list(APPEND UT_MODULES Window WinDrv D3D9Drv GUIDesigner
        Launch UnrealEd Setup DebuggerLaunch BugReport Benchmark UccDepend)
-else()
-  list(APPEND UT_MODULES SDLDrv SDLLaunch)
 endif()
 foreach(m ${UT_MODULES})
   add_subdirectory(${m})

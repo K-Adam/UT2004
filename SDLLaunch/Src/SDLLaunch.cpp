@@ -38,6 +38,9 @@ void autoInitializeRegistrantsEditor(INT &Lookup);
 -----------------------------------------------------------------------------*/
 
 // General.
+#ifdef WIN32
+extern "C" {HINSTANCE hInstance;}
+#endif
 extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
 static void SetInitialConfiguration();
 
@@ -63,8 +66,13 @@ FOutputDeviceAnsiError Error;
 FFeedbackContextAnsi Warn;
 
 // File manager.
+#ifdef WIN32
+#include "FFileManagerWindows.h"
+FFileManagerWindows FileManager;
+#else
 #include "FFileManagerUnix.h"
 FFileManagerUnix FileManager;
+#endif
 
 // Config.
 #include "FConfigCacheIni.h"
@@ -86,6 +94,8 @@ static void ExitSplash(void) {}
 #else
 
 #include "SDL.h"
+// SDLmain would redirect stdout and stderr to files, SDL works without it.
+#undef main
 
 static void InitSplash(const TCHAR *filename)
 {
@@ -659,6 +669,10 @@ static UEngine* InitEngine()
 int main(int argc, char **argv)
 {
 	TCHAR CmdLine[1024] = TEXT("");
+#ifdef WIN32
+	// appInit skips the executable name on Windows, as GetCommandLine starts with it.
+	appStrncpy( CmdLine, GetCommandLine(), ARRAY_COUNT(CmdLine) );
+#else
     if (argc >= 2)
     {
 	    appStrcpy(CmdLine, appFromAnsi(argv[1]));
@@ -668,14 +682,21 @@ int main(int argc, char **argv)
     		appStrcat(CmdLine, appFromAnsi(argv[i]));
     	}
     }
+#endif
 
 	// Remember instance.
 	INT ErrorLevel = 0;
 	GIsStarted     = 1;
 
+#ifdef WIN32
+	hInstance = GetModuleHandle( NULL );
+	// Windows names the package after the executable, this keeps UT2004.ini like GModule does on Linux.
+	appStrcpy( GPackage, TEXT("UT2004") );
+#else
     // Initialize GModule.
 	strcpy( GModule, appToAnsi(TEXT("UT2004")) );
 	appStrcpy( GPackage, appPackage() );
+#endif
 
 	// Begin guarded code.
 #ifndef _DEBUG
