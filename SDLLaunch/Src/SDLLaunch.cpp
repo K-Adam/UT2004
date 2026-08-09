@@ -690,13 +690,9 @@ int main(int argc, char **argv)
 
 #ifdef WIN32
 	hInstance = GetModuleHandle( NULL );
-	// Windows names the package after the executable, this keeps UT2004.ini like GModule does on Linux.
-	appStrcpy( GPackage, TEXT("UT2004") );
-#else
-    // Initialize GModule.
+#endif
 	strcpy( GModule, appToAnsi(TEXT("UT2004")) );
 	appStrcpy( GPackage, appPackage() );
-#endif
 
 	// Begin guarded code.
 #ifndef _DEBUG

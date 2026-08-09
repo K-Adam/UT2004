@@ -246,6 +246,9 @@ extern "C"
 	extern HINSTANCE      hInstance;
 }
 
+// Overrides the launch package name derived from the executable.
+extern CORE_API ANSICHAR GModule[32];
+
 /*----------------------------------------------------------------------------
 	Functions.
 ----------------------------------------------------------------------------*/

@@ -132,6 +132,7 @@ class USDLViewport : public UViewport
 	UBOOL				LastKey;
 
 	UBOOL				MouseIsGrabbed;
+	UBOOL				WindowsMouseShown;
 	INT					TextToSpeechObject;  // file descriptor for named pipe.
 
 	// Constructor.
@@ -155,6 +156,7 @@ class USDLViewport : public UViewport
 	void UpdateInput( UBOOL Reset, FLOAT DeltaSeconds );
 	void* GetWindow();
 	void SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL FocusOnly );
+	void UpdateMousePosition();
 
 	// USDLViewport interface.
 	void UpdateMouseGrabState();

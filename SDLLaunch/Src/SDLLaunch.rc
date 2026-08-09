@@ -1,0 +1,2 @@
+// SDL 1.2 gives its window class the icon named after its default app name.
+SDL_app ICON "../../Launch/Src/Res/Unreal.ico"

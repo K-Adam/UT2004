@@ -1015,11 +1015,15 @@ CORE_API const TCHAR* appUserName()
 	unguard;
 }
 
+CORE_API ANSICHAR GModule[32];
+
 // Get launch package base name.
 CORE_API const TCHAR* appPackage()
 {
 	guard(appPackage);
 	static TCHAR Result[256]=TEXT("");
+	if( !Result[0] && GModule[0] )
+		appStrcpy( Result, ANSI_TO_TCHAR(GModule) );
 	if( !Result[0] )
 	{
 		TCHAR Tmp[256], *End=Tmp;

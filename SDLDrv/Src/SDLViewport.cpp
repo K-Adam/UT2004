@@ -12,6 +12,9 @@ Revision history:
 #include <stdlib.h>
 #ifdef WIN32
 #include <io.h>
+#pragma pack(push,8)
+#include "SDL_syswm.h"
+#pragma pack(pop)
 #else
 #include <unistd.h>
 #endif
@@ -699,6 +702,8 @@ void USDLViewport::SetTitleBar()
 
 	SDL_WM_SetCaption(appToAnsi(WindowName), appToAnsi(appPackage()));
 
+#ifndef WIN32
+    // SDL 1.2 misaligns icon masks on Windows, see ResizeViewport.
     static bool loaded_icon = false;
     if (!loaded_icon)
     {
@@ -763,6 +768,7 @@ void USDLViewport::SetTitleBar()
             SDL_WM_SetIcon(icon, mask);
         }
     }
+#endif
 }
 
 
@@ -780,6 +786,17 @@ void USDLViewport::UpdateWindowFrame()
     SetTitleBar();
 
 	unguard;
+}
+
+//
+// The GUI reads the window cursor position when it shows the OS mouse.
+//
+void USDLViewport::UpdateMousePosition()
+{
+	int X, Y;
+	SDL_GetMouseState( &X, &Y );
+	WindowsMouseX = X;
+	WindowsMouseY = Y;
 }
 
 //
@@ -879,6 +896,14 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	EInputKey Key 	    = IK_None;
 	EInputKey UpperCase = IK_None;
 	EInputKey LowerCase = IK_None;
+
+	// Windowed menus use the OS cursor like WinDrv, so the menu cursor is where the mouse is.
+	// UGameEngine::Tick releases and restores the grab for them.
+	if( bShowWindowsMouse != WindowsMouseShown )
+	{
+		WindowsMouseShown = bShowWindowsMouse;
+		SDL_ShowCursor( WindowsMouseShown );
+	}
 
 	// Mouse movement management.
 	UBOOL MouseMoved = false;
@@ -1198,7 +1223,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 	        case SDL_ACTIVEEVENT:
                 // !!! FIXME: Workaround for bug in X11 target...
-                SDL_ShowCursor(Event.active.gain ? 0 : 1);
+                SDL_ShowCursor(Event.active.gain ? WindowsMouseShown : 1);
                 break;
 
 			default:;
@@ -1494,6 +1519,8 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	}
 
     SDL_ShowCursor(0);
+	WindowsMouseShown = 0;
+	bWindowsMouseAvailable = !(NewBlitFlags & BLIT_Fullscreen);
 
     SetTitleBar();  // This can be done before SDL_SetVideoMode().
 
@@ -1501,7 +1528,18 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	{
 		appErrorf( TEXT("Couldn't set video mode: %s\n"), appFromAnsi(SDL_GetError()) );
 		appExit();
-	}	
+	}
+
+#ifdef WIN32
+	// Setting the video mode drops the window icon, give it the executable's icon again.
+	SDL_SysWMinfo Info;
+	SDL_VERSION( &Info.version );
+	if( SDL_GetWMInfo( &Info ) )
+	{
+		SendMessage( Info.window, WM_SETICON, ICON_BIG, GetClassLongPtr( Info.window, GCLP_HICON ) );
+		SendMessage( Info.window, WM_SETICON, ICON_SMALL, GetClassLongPtr( Info.window, GCLP_HICONSM ) );
+	}
+#endif
 
 	UpdateMouseGrabState();
 
@@ -1539,7 +1577,7 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 
 	if ((VideoFlags & SDL_FULLSCREEN) == 0)
     {
-	    SDL_WM_GrabInput(Client->CaptureMouse ? SDL_GRAB_ON : SDL_GRAB_OFF);
+	    SDL_WM_GrabInput(Client->CaptureMouse && !bShowWindowsMouse ? SDL_GRAB_ON : SDL_GRAB_OFF);
     	UpdateMouseGrabState();
     }
 
