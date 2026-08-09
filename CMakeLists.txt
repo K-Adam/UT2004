@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.26)
 project(UT2004 LANGUAGES C CXX)
 
 if(WIN32)
@@ -7,12 +7,37 @@ elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATC
   message(FATAL_ERROR "Only Windows and x86 or x64 Linux are supported: cmake --preset win32|win64|linux|linux32")
 endif()
 
-# The engine loads its modules and inis from System/.
-set(UT_SYSTEM_DIR ${CMAKE_SOURCE_DIR}/System)
+# Each build runs from its own game folder, so architectures don't overwrite each other and runtime
+# files stay out of the sources. The engine loads modules, inis and localization from System/ and
+# finds script packages in the shared Scripts folder through the Paths in Default.ini.
+set(UT_SYSTEM_DIR ${CMAKE_BINARY_DIR}/System)
+cmake_path(SET UT_SCRIPTS_DIR NORMALIZE ${CMAKE_BINARY_DIR}/../Scripts)
 foreach(cfg "" _DEBUG _RELEASE _RELWITHDEBINFO _MINSIZEREL)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY${cfg} ${UT_SYSTEM_DIR})
   set(CMAKE_LIBRARY_OUTPUT_DIRECTORY${cfg} ${UT_SYSTEM_DIR})
 endforeach()
+# The cache manager updates CacheRecords.ucl at runtime, so it is only seeded.
+if(NOT EXISTS ${UT_SCRIPTS_DIR}/CacheRecords.ucl)
+  file(COPY ${CMAKE_SOURCE_DIR}/System/CacheRecords.ucl DESTINATION ${UT_SCRIPTS_DIR})
+endif()
+# Read-only data the engine reads from next to System/.
+foreach(dir Help Web ForceFeedback)
+  if(NOT EXISTS ${CMAKE_BINARY_DIR}/${dir})
+    if(WIN32)
+      # A junction, because symbolic links need administrator rights on Windows.
+      file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/${dir} link)
+      file(TO_NATIVE_PATH ${CMAKE_SOURCE_DIR}/${dir} target)
+      # Drops a junction left dangling by a moved checkout.
+      execute_process(COMMAND cmd /c rmdir ${link} OUTPUT_QUIET ERROR_QUIET)
+      execute_process(COMMAND cmd /c mklink /J ${link} ${target} OUTPUT_QUIET COMMAND_ERROR_IS_FATAL ANY)
+    else()
+      file(CREATE_LINK ${CMAKE_SOURCE_DIR}/${dir} ${CMAKE_BINARY_DIR}/${dir} SYMBOLIC)
+    endif()
+  endif()
+endforeach()
+add_custom_target(ut_stage ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/System ${UT_SYSTEM_DIR}
+  VERBATIM)
 
 add_library(ut_common INTERFACE)
 target_compile_definitions(ut_common INTERFACE
@@ -87,6 +112,10 @@ function(ut_module name type)
   endif()
   target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Src)
   target_link_libraries(${name} PUBLIC ${A_DEPS} PRIVATE ut_common)
+  if(NOT type STREQUAL "SHARED")
+    # Executables need the staged data next to them, also when built as single targets.
+    add_dependencies(${name} ut_stage)
+  endif()
   if(MSVC AND NOT type STREQUAL "SHARED")
     # Garbage collection recurses through the object graph, x64 Debug overflows the 1 MB default.
     # 8 MB matches the Linux default.
@@ -176,9 +205,11 @@ endforeach()
 
 # -NOH keeps the checked-in *Classes.h headers. The script compiler only works in 32-bit builds.
 if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+  # Relative, because the engine's command line parser stops at spaces.
+  cmake_path(RELATIVE_PATH CMAKE_SOURCE_DIR BASE_DIRECTORY ${UT_SYSTEM_DIR} OUTPUT_VARIABLE UT_SOURCE_FROM_SYSTEM)
   add_custom_target(ucc_make
-    COMMAND $<TARGET_FILE:UCC> make -NOH
+    COMMAND $<TARGET_FILE:UCC> make -NOH -SOURCE=${UT_SOURCE_FROM_SYSTEM}
     WORKING_DIRECTORY ${UT_SYSTEM_DIR}
-    DEPENDS UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught UTV2004
+    DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught UTV2004
     USES_TERMINAL VERBATIM)
 endif()

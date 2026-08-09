@@ -50,6 +50,16 @@ class UMakeCommandlet : public UCommandlet
 
 		FString ClassesPath;
 
+		// Build folders pass the source tree, which is otherwise next to System/.
+		FString SourceRoot = TEXT("..");
+		Parse( appCmdLine(), TEXT("SOURCE="), SourceRoot );
+
+		// Compiled packages go to the folder the engine loads script packages from.
+		FString OutputPath;
+		for( INT i=0; i<GSys->Paths.Num() && !OutputPath.Len(); i++ )
+			if( GSys->Paths(i).Right(3)==TEXT("*.u") )
+				OutputPath = GSys->Paths(i).LeftChop(3);
+
 		// Load classes for editing.
 		UClassFactoryUC* ClassFactory = new UClassFactoryUC;
 		TArray<FString> CompiledPackages;
@@ -68,7 +78,7 @@ class UMakeCommandlet : public UCommandlet
 
 				// Try reading from package's .ini file.
 				PkgObject->PackageFlags &= ~(PKG_AllowDownload|PKG_ClientOptional|PKG_ServerSideOnly);
-				FString IniName = FString(TEXT("..")) * Pkg * TEXT("Classes") * Pkg + TEXT(".upkg");
+				FString IniName = SourceRoot * Pkg * TEXT("Classes") * Pkg + TEXT(".upkg");
 				UBOOL B=0;
 				if( GConfig->GetBool(TEXT("Flags"), TEXT("AllowDownload"), B, *IniName) && B )
 					PkgObject->PackageFlags |= PKG_AllowDownload;
@@ -80,7 +90,7 @@ class UMakeCommandlet : public UCommandlet
 					PkgObject->PackageFlags |= PKG_Official;
  
 				// Rebuild the class from its directory.
-				ClassesPath = FString(TEXT("..")) * Pkg * TEXT("Classes");
+				ClassesPath = SourceRoot * Pkg * TEXT("Classes");
 				FString Spec = ClassesPath * TEXT("*.uc");
 				TArray<FString> Files = GFileManager->FindFiles( *Spec, 1, 0 );
 				UBOOL ModPackage=false;
@@ -139,7 +149,7 @@ class UMakeCommandlet : public UCommandlet
 					}
 					else
 					{
-						Filename = FString(TEXT("..")) * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
+						Filename = SourceRoot * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
 					}
 
 //					Filename = FString(TEXT("..")) * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
@@ -164,6 +174,8 @@ class UMakeCommandlet : public UCommandlet
 				FStringOutputDevice PackageName;
 				if ( ModPackage )
 					PackageName.Logf(TEXT("%s%s%s%s"), GModPath, PATH_SEPARATOR, TEXT("System"), PATH_SEPARATOR);
+				else
+					PackageName.Logf(TEXT("%s"), *OutputPath);
 
 				PackageName.Logf(TEXT("%s.u"), Pkg);
 				if ( SavePackage(PkgObject,NULL,RF_Standalone,*PackageName,GError,Conform) )

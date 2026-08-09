@@ -1,18 +1,1 @@
 /build/
-# Build outputs. Tracked redist DLLs in System/ are unaffected.
-/System/*.dll
-/System/*.exe
-/System/*.pdb
-/System/*.ilk
-/System/*.so
-/System/ucc-bin
-/System/ut2004-bin
-# Runtime-generated in System/.
-/System/*.log
-/System/UT2004.ini
-/System/User.ini
-/System/UnrealEd.ini
-/System/*.u
-/System/UPlaylists.ini
-/System/*-BP2-*.ucl
-/System/OnslaughtBP.ucl
