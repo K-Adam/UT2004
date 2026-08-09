@@ -9,8 +9,10 @@
 
 #ifdef WITH_KARMA
 
+#pragma pack (push,8)
 #include "MeStream.h"
 #include "MeAssetDBXMLIO.h"
+#pragma pack (pop)
 
 
 void ENGINE_API KarmaTriListDataInit(KarmaTriListData* list)

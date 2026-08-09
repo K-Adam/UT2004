@@ -209,31 +209,18 @@ struct HBackdrop : public HHitProxy
 typedef void (*POLY_CALLBACK)( UModel* Model, INT iSurf );
 
 /*-----------------------------------------------------------------------------
-	FConstraints.
+	FEditorConstraints.
 -----------------------------------------------------------------------------*/
 
 //
 // General purpose movement/rotation constraints.
 //
-class EDITOR_API FConstraints
+class EDITOR_API FEditorConstraints
 {
 public:
-	// Functions.
-	virtual void Snap( FVector& Point, FVector GridBase )=0;
-	virtual void Snap( FRotator& Rotation )=0;
-	virtual UBOOL Snap( ULevel* Level, FVector& Location, FVector GridBase, FRotator& Rotation )=0;
-};
+	// Was a vtable pointer, which does not fit the int script reserves on 64-bit.
+	INT			ConstraintsVtbl;
 
-/*-----------------------------------------------------------------------------
-	FConstraints.
------------------------------------------------------------------------------*/
-
-//
-// General purpose movement/rotation constraints.
-//
-class EDITOR_API FEditorConstraints : public FConstraints
-{
-public:
 	// Variables.
 	BITFIELD	GridEnabled:1;		// Grid on/off.
 	BITFIELD	SnapVertices:1;		// Snap to nearest vertex within SnapDist, if any.
@@ -243,9 +230,9 @@ public:
 	FRotator	RotGridSize;		// Rotation grid.
 
 	// Functions.
-	virtual void Snap( FVector& Point, FVector GridBase );
-	virtual void Snap( FRotator& Rotation );
-	virtual UBOOL Snap( ULevel* Level, FVector& Location, FVector GridBase, FRotator& Rotation );
+	void Snap( FVector& Point, FVector GridBase );
+	void Snap( FRotator& Rotation );
+	UBOOL Snap( ULevel* Level, FVector& Location, FVector GridBase, FRotator& Rotation );
 };
 
 /*-----------------------------------------------------------------------------
@@ -265,12 +252,14 @@ class EDITOR_API UEditorEngine : public UEngine
 	UClass*					 CurrentClass;
 	class UTransactor*		 Trans;
 	class UTextBuffer*		 Results;
-	class WObjectProperties* ActorProperties;
-	class WObjectProperties* LevelProperties;
-	class WConfigProperties* Preferences;
-	class WProperties*       UseDest;
 	INT                      AutosaveCounter;
-	INT						 Pad[3];
+	INT						 Pad[7];
+
+	// Static because script only reserves Pad[8] for these, too little for 64-bit pointers.
+	static class WObjectProperties* ActorProperties;
+	static class WObjectProperties* LevelProperties;
+	static class WConfigProperties* Preferences;
+	static class WProperties*       UseDest;
 
 	// Graphics.
 	UTexture *Bad;

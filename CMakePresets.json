@@ -13,6 +13,15 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
     {
+      "name": "win64",
+      "inherits": "win32",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/win64",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
+      }
+    },
+    {
       "name": "linux",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/linux",
@@ -40,6 +49,16 @@
     {
       "name": "release",
       "configurePreset": "win32",
+      "configuration": "Release"
+    },
+    {
+      "name": "win64-debug",
+      "configurePreset": "win64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "win64-release",
+      "configurePreset": "win64",
       "configuration": "Release"
     },
     {

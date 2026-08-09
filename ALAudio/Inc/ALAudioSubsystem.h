@@ -43,14 +43,9 @@ typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 #define NUM_VOICE_BUFFERS 10
 
 #ifdef _WIN64
-#define AL_DLL TEXT("OpenAL64.dll")
-#ifdef DEBUG
-//#define AL_DEFAULT_DLL TEXT("DefOpenAL64D.dll")
-//#define AL_DEFAULT_DLL TEXT("MiniAL64.dll")
-#define AL_DEFAULT_DLL TEXT("DefOpenAL64.dll")
-#else
-#define AL_DEFAULT_DLL TEXT("DefOpenAL64.dll")
-#endif
+// 64-bit OpenAL runtimes install as OpenAL32.dll too. OpenAL Soft can also sit next to the game.
+#define AL_DLL TEXT("OpenAL32.dll")
+#define AL_DEFAULT_DLL TEXT("soft_oal.dll")
 #elif __WIN32__
 #define AL_DLL TEXT("OpenAL32.dll")
 #ifdef DEBUG

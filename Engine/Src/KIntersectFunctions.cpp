@@ -1,12 +1,9 @@
 #include "EnginePrivate.h"
 
+#pragma pack (push,8)
 #include <MeMath.h>
 #include <McdBox.h>
-
-#ifndef _WIN64  // !!! FIXME: Merge headers.
 #include <McdCheck.h>
-#endif
-
 #include <McdInteractionTable.h>
 #include <McdModel.h>
 #include <McdContact.h>
@@ -14,6 +11,7 @@
 #include <McdTriangleList.h>
 #include <McdModelPair.h>
 #include <McdPrimitives.h>
+#pragma pack (pop)
 //#include "vectormath.h"
 //#include <GeomUtils.h>
 

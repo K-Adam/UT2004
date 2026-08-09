@@ -3,11 +3,8 @@ project(UT2004 LANGUAGES C CXX)
 
 if(WIN32)
   enable_language(RC)
-  if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "Windows builds are Win32 (x86) only: cmake --preset win32")
-  endif()
 elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|i.86")
-  message(FATAL_ERROR "Only Windows and x86 or x64 Linux are supported: cmake --preset win32|linux|linux32")
+  message(FATAL_ERROR "Only Windows and x86 or x64 Linux are supported: cmake --preset win32|win64|linux|linux32")
 endif()
 
 # The engine loads its modules and inis from System/.
@@ -41,7 +38,7 @@ if(MSVC)
     WINDOWS_IGNORE_PACKING_MISMATCH)  # original code includes windows.h under /Zp4 too
   target_link_libraries(ut_common INTERFACE legacy_stdio_definitions)
   # Old prebuilt libs request VC6/7 CRT variants by name.
-  target_link_options(ut_common INTERFACE /SAFESEH:NO
+  target_link_options(ut_common INTERFACE $<$<EQUAL:${CMAKE_SIZEOF_VOID_P},4>:/SAFESEH:NO>
     /NODEFAULTLIB:libc.lib /NODEFAULTLIB:libcp.lib /NODEFAULTLIB:libcmt.lib
     /NODEFAULTLIB:libci.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:libcmtd.lib /NODEFAULTLIB:msvcrtd.lib)
 else()
@@ -90,6 +87,11 @@ function(ut_module name type)
   endif()
   target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Src)
   target_link_libraries(${name} PUBLIC ${A_DEPS} PRIVATE ut_common)
+  if(MSVC AND NOT type STREQUAL "SHARED")
+    # Garbage collection recurses through the object graph, x64 Debug overflows the 1 MB default.
+    # 8 MB matches the Linux default.
+    target_link_options(${name} PRIVATE /STACK:8388608)
+  endif()
   if(type STREQUAL "EXECUTABLE" AND NOT WIN32)
     # The Linux Karma libs are not position independent, so the executables carry them
     # and export them to Engine.so.
@@ -116,7 +118,12 @@ endfunction()
 # Karma physics only exists as prebuilt libs.
 set(KARMA_LIBS Mdt MdtKea MdtBcl Mst McdFrame McdCommon McdPrimitives McdConvex
     McdConvexCreateHull MeGlobals MeAssetFactory MeAssetDB MeAssetDBXMLIO MeXML)
-if(WIN32)
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  # VS2005 static CRT libs, see Engine/Src/KarmaLegacyCrt.cpp.
+  list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/win_amd64_single/)
+  list(TRANSFORM KARMA_LIBS APPEND .lib)
+  list(APPEND KARMA_LIBS legacy_stdio_definitions)
+elseif(WIN32)
   # VC7.1 libs, see Core/Src/UnLegacyCrt.cpp. Consumers must list them before Core.lib
   # so their stdio imports resolve to Core's exports.
   list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/win32_single_msvcrt/)
@@ -168,7 +175,7 @@ foreach(m ${UT_MODULES})
 endforeach()
 
 # -NOH keeps the checked-in *Classes.h headers. The script compiler only works in 32-bit builds.
-if(WIN32)
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
   add_custom_target(ucc_make
     COMMAND $<TARGET_FILE:UCC> make -NOH
     WORKING_DIRECTORY ${UT_SYSTEM_DIR}

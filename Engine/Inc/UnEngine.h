@@ -125,7 +125,7 @@ class ENGINE_API UEngine : public USubsystem
 	virtual int edcamMode( UViewport* Viewport ) {return 0;}
 	virtual int edcamTerrainBrush() {return 0;}
 	virtual int edcamMouseControl( UViewport* InViewport ) {return 0;}
-	virtual void EdCallback( DWORD Code, UBOOL Send, DWORD lParam ) {};
+	virtual void EdCallback( DWORD Code, UBOOL Send, PTRINT lParam ) {};
 	virtual INT AnotherDummyFunctionToBreakCompatibility( INT i );
 	virtual INT ReallyBreakCompatibility( INT i );
 };

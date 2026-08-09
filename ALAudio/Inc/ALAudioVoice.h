@@ -13,24 +13,12 @@
 	Dependencies.
 ------------------------------------------------------------------------------------*/
 
-// Speex is built from source on every platform but win32 right now,
-//  so the packing only needs to be forced if we're trying to match a
-//  precompiled binary package.  --ryan.
-#if defined WIN32 && !defined _WIN64
-#define PACK_SPEEX_TO_EIGHT_BYTES 1
-#endif
-
-#if PACK_SPEEX_TO_EIGHT_BYTES
+// Speex is built with default packing, the engine with 4-byte packing on MSVC.
 #pragma pack(push,8)
-#endif
-
 #define EPIC_48K
 #include "speex.h"
 #include "speex_preprocess.h"
-
-#if PACK_SPEEX_TO_EIGHT_BYTES
 #pragma pack(pop)
-#endif
 
 /*------------------------------------------------------------------------------------
 	FALVoiceModule.

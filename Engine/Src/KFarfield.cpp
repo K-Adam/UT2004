@@ -8,7 +8,10 @@
 #include "EnginePrivate.h"
 
 #ifdef WITH_KARMA
+#pragma pack (push,8)
 #include "McdBatch.h"
+#include "McdContact.h"
+#pragma pack (pop)
 
 #define DISPLAY_HELLO	(0)
 #define DISPLAY_GOODBYE	(0)
@@ -930,8 +933,6 @@ static INT KAggregateGenericIntersect(McdModelPairID p, McdIntersectResult *resu
 
 	unguard;
 }
-
-#include "McdContact.h"
 
 MeBool KIntersect(McdModelPair *p, McdIntersectResult *result)
 {

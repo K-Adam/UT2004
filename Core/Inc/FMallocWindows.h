@@ -6,6 +6,12 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
+// The pool lookup indexes its tables with the upper bits of a 32-bit address.
+#ifdef _WIN64
+#include "FMallocAnsi.h"
+typedef FMallocAnsi FMallocWindows;
+#else
+
 #define MEM_TIME(st)
 
 //
@@ -421,6 +427,8 @@ public:
 		MemInit = 0;
 	}
 };
+
+#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

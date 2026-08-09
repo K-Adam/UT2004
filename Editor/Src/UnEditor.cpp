@@ -21,6 +21,11 @@ EDITOR_API class UEditorEngine* GEditor;
 
 IMPLEMENT_CLASS(UEditorEngine);
 
+WObjectProperties* UEditorEngine::ActorProperties = NULL;
+WObjectProperties* UEditorEngine::LevelProperties = NULL;
+WConfigProperties* UEditorEngine::Preferences = NULL;
+WProperties* UEditorEngine::UseDest = NULL;
+
 /*-----------------------------------------------------------------------------
 	Init & Exit.
 -----------------------------------------------------------------------------*/
