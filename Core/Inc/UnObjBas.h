@@ -18,7 +18,7 @@
 extern "C" {
     extern void *GSerializedPointers[MAX_SERIALIZED_POINTERS];
     extern INT GTotalSerializedPointers;
-    INT SerialPointerIndex(void *ptr);
+    CORE_API INT SerialPointerIndex(void *ptr);
 }
 #endif
 

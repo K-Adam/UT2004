@@ -8,12 +8,7 @@
 
 #include "EnginePrivate.h"
 
-#if !__LINUX__ && !_WIN64
-#  include "NVTriStrip.h"
-#  ifndef HAS_NVTRISTRIP
-#    define HAS_NVTRISTRIP 1
-#  endif
-#endif
+#include "NvTriStrip.h"
 
 
 //
@@ -934,7 +929,6 @@ INT FRawIndexBuffer::Stripify()
 {
 	guard(FRawIndexBuffer::Stripify);
 
-#if HAS_NVTRISTRIP
 	PrimitiveGroup*	PrimitiveGroups = NULL;
 	_WORD			NumPrimitiveGroups = 0;
 
@@ -952,10 +946,6 @@ INT FRawIndexBuffer::Stripify()
 
 	return Indices.Num() - 2;
 
-#else
-	return 0;
-#endif
-
 	unguard;
 }
 
@@ -967,7 +957,6 @@ void FRawIndexBuffer::CacheOptimize()
 {
 	guard(FRawIndexBuffer::CacheOptimize);
 
-#if HAS_NVTRISTRIP
 	PrimitiveGroup*	PrimitiveGroups = NULL;
 	_WORD			NumPrimitiveGroups = 0;
 
@@ -982,9 +971,6 @@ void FRawIndexBuffer::CacheOptimize()
 	delete [] PrimitiveGroups;
 
 	Revision++;
-#else
-	check(0);
-#endif
 
 	unguard;
 }

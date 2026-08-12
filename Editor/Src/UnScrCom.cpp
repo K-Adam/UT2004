@@ -6635,7 +6635,7 @@ UBOOL FScriptCompiler::CompileScript
 	Warn->SetContext( this );
 
 	// Save directory and switch into package directory.
-	FString NewDir = FString::Printf( TEXT("..") PATH_SEPARATOR TEXT("%s"), InClass->GetOuter()->GetName() );
+	FString NewDir = FString(GScriptSourceRoot) * InClass->GetOuter()->GetName();
 	FString SavedDir = GFileManager->GetDefaultDirectory();
 	GFileManager->SetDefaultDirectory( *NewDir );
 

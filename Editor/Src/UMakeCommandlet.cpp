@@ -32,12 +32,23 @@ class UMakeCommandlet : public UCommandlet
 	{
 		guard(UMakeCommandlet::Main);
 
-		// The script compiler writes raw pointers into bytecode, 64-bit builds expect pointer indices.
+		// Bytecode stores context and switch sizes from the compiling build's memory layout, and the
+		// shared .u files use the 32-bit one.
 		#if SERIAL_POINTER_INDEX
 			GWarn->Log( TEXT("'ucc make' is not supported on 64-bit builds, compile the scripts with the Win32 build.") );
 			GIsRequestingExit=1;
 			return 0;
 		#endif
+
+		// The compiler switches into each package's source folder, so search paths must not be
+		// relative to the working directory.
+		FString BaseDir = GFileManager->GetDefaultDirectory();
+		for( INT i=0; i<GSys->Paths.Num(); i++ )
+		{
+			const TCHAR* P = *GSys->Paths(i);
+			if( P[0] && P[0]!='/' && P[0]!='\\' && P[1]!=':' )
+				GSys->Paths(i) = BaseDir * GSys->Paths(i);
+		}
 
 		// Create the editor class.
 		UClass* EditorEngineClass = UObject::StaticLoadClass( UEditorEngine::StaticClass(), NULL, TEXT("ini:Engine.Engine.EditorEngine"), NULL, LOAD_NoFail | LOAD_DisallowFiles, NULL );
@@ -50,9 +61,7 @@ class UMakeCommandlet : public UCommandlet
 
 		FString ClassesPath;
 
-		// Build folders pass the source tree, which is otherwise next to System/.
-		FString SourceRoot = TEXT("..");
-		Parse( appCmdLine(), TEXT("SOURCE="), SourceRoot );
+		Parse( appCmdLine(), TEXT("SOURCE="), GScriptSourceRoot, ARRAY_COUNT(GScriptSourceRoot) );
 
 		// Compiled packages go to the folder the engine loads script packages from.
 		FString OutputPath;
@@ -78,7 +87,7 @@ class UMakeCommandlet : public UCommandlet
 
 				// Try reading from package's .ini file.
 				PkgObject->PackageFlags &= ~(PKG_AllowDownload|PKG_ClientOptional|PKG_ServerSideOnly);
-				FString IniName = SourceRoot * Pkg * TEXT("Classes") * Pkg + TEXT(".upkg");
+				FString IniName = FString(GScriptSourceRoot) * Pkg * TEXT("Classes") * Pkg + TEXT(".upkg");
 				UBOOL B=0;
 				if( GConfig->GetBool(TEXT("Flags"), TEXT("AllowDownload"), B, *IniName) && B )
 					PkgObject->PackageFlags |= PKG_AllowDownload;
@@ -90,7 +99,7 @@ class UMakeCommandlet : public UCommandlet
 					PkgObject->PackageFlags |= PKG_Official;
  
 				// Rebuild the class from its directory.
-				ClassesPath = SourceRoot * Pkg * TEXT("Classes");
+				ClassesPath = FString(GScriptSourceRoot) * Pkg * TEXT("Classes");
 				FString Spec = ClassesPath * TEXT("*.uc");
 				TArray<FString> Files = GFileManager->FindFiles( *Spec, 1, 0 );
 				UBOOL ModPackage=false;
@@ -149,7 +158,7 @@ class UMakeCommandlet : public UCommandlet
 					}
 					else
 					{
-						Filename = SourceRoot * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
+						Filename = FString(GScriptSourceRoot) * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
 					}
 
 //					Filename = FString(TEXT("..")) * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
@@ -178,8 +187,9 @@ class UMakeCommandlet : public UCommandlet
 					PackageName.Logf(TEXT("%s"), *OutputPath);
 
 				PackageName.Logf(TEXT("%s.u"), Pkg);
+				// The cache export names the .ucl after everything before the first dot, so it gets the bare file name.
 				if ( SavePackage(PkgObject,NULL,RF_Standalone,*PackageName,GError,Conform) )
-					new(CompiledPackages) FString(PackageName);
+					new(CompiledPackages) FString( ModPackage ? FString(PackageName) : FString(Pkg) + TEXT(".u") );
 			}
 		}
 

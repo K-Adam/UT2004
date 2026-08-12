@@ -44,6 +44,9 @@ struct EDITOR_API FBuilderPoly
 
 EDITOR_API extern class UEditorEngine* GEditor;
 
+// Folder holding the script package sources, next to System/ unless 'ucc make -SOURCE=' moves it.
+EDITOR_API extern TCHAR GScriptSourceRoot[1024];
+
 // Texture alignment.
 enum ETAxis
 {

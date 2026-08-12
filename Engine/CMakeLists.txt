@@ -16,9 +16,10 @@ if(WIN32)
   # x86 only prebuilts, the code skips them on Win64.
   if(CMAKE_SIZEOF_VOID_P EQUAL 4)
     target_link_libraries(Engine PRIVATE
-      ${CMAKE_CURRENT_SOURCE_DIR}/Lib/NvTriStrip.lib ${CMAKE_CURRENT_SOURCE_DIR}/Lib/s3tc.lib
+      ${CMAKE_CURRENT_SOURCE_DIR}/Lib/s3tc.lib
       ${CMAKE_SOURCE_DIR}/IFC/Release/IFC23.lib)
   endif()
 endif()
+target_link_libraries(Engine PRIVATE nvtristrip)
 # After the Karma libs on Windows, see KARMA_LIBS.
 target_link_libraries(Engine PUBLIC Core)

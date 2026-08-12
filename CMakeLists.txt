@@ -192,6 +192,7 @@ target_include_directories(SDL::SDL INTERFACE ${SDL_INCLUDE_DIR})
 target_link_libraries(SDL::SDL INTERFACE ${SDL_LIBRARY})
 # Speex stays vendored for Epic's 48 kHz mode (EPIC_48K), which upstream lacks.
 add_subdirectory(Speex)
+add_subdirectory(Tools/NVTriStrip)
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
     XGame XInterface Onslaught UTV2004 UCC SDLDrv SDLLaunch)

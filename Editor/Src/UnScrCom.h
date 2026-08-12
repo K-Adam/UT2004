@@ -126,8 +126,9 @@ public:
 	UClass* MetaClass;
 
 	// Constructors.
+	// A pointer member covers the whole union, so this also clears BitMask.
 	FPropertyBase( EPropertyType InType )
-	:	Type(InType), ArrayDim(1), PropertyFlags(0), BitMask(0), MetaClass(NULL)
+	:	Type(InType), ArrayDim(1), PropertyFlags(0), Enum(NULL), MetaClass(NULL)
 	{}
 	FPropertyBase( UEnum* InEnum )
 	:	Type(CPT_Byte), ArrayDim(1), PropertyFlags(0), Enum(InEnum), MetaClass(NULL)
@@ -815,8 +816,12 @@ public:
 	FArchive& operator<<( class FName& N )
 	{NAME_INDEX W=N.GetIndex(); ByteOrderSerialize(&W, sizeof(W)); return *this;}
 	FArchive& operator<<( class UObject*& Res )
-    // !!! FIXME: may need SERIAL_POINTER_INDEX on 64-bit systems...  --ryan.
+#if SERIAL_POINTER_INDEX
+	// 64-bit bytecode keeps 4-byte object slots that index GSerializedPointers, see FFrame::ReadObject.
+	{INT D = SerialPointerIndex(Res); ByteOrderSerialize(&D,sizeof(D)); return *this;}
+#else
 	{PTRINT D = (PTRINT)Res; ByteOrderSerialize(&D,sizeof(D)); return *this;}
+#endif
 	FArchive& operator<<( TCHAR* S )
 	{Serialize(S,appStrlen(S)+1); return *this;}
 	FArchive& operator<<( enum EExprToken E )
