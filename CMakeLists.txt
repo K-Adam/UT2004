@@ -21,7 +21,7 @@ if(NOT EXISTS ${UT_SCRIPTS_DIR}/CacheRecords.ucl)
   file(COPY ${CMAKE_SOURCE_DIR}/System/CacheRecords.ucl DESTINATION ${UT_SCRIPTS_DIR})
 endif()
 # Read-only data the engine reads from next to System/.
-foreach(dir Help Web ForceFeedback)
+foreach(dir Help Web ForceFeedback KarmaData)
   if(NOT EXISTS ${CMAKE_BINARY_DIR}/${dir})
     if(WIN32)
       # A junction, because symbolic links need administrator rights on Windows.
