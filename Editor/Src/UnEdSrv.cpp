@@ -554,7 +554,7 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 				{
 					// Deduce package name from filename.
 					TCHAR* End = TempFname + appStrlen(TempFname);
-					while( End>TempFname && End[-1]!=PATH_SEPARATOR[0] && End[-1]!='/' )
+					while( End>TempFname && End[-1]!=PATH_SEPARATOR[0] && End[-1]!='/' && End[-1]!='\\' )
 						End--;
 					appStrncpy( TempName, End, NAME_SIZE );
 					if( appStrchr(TempName,'.') )
@@ -1865,7 +1865,7 @@ UBOOL UEditorEngine::Exec_StaticMesh( const TCHAR* Str, FOutputDevice& Ar )
 			{
 				// Deduce package name from filename.
 				TCHAR* End = TempFname + appStrlen(TempFname);
-				while( End>TempFname && End[-1]!=PATH_SEPARATOR[0] && End[-1]!='/' )
+				while( End>TempFname && End[-1]!=PATH_SEPARATOR[0] && End[-1]!='/' && End[-1]!='\\' )
 					End--;
 				appStrncpy( TempName, End, NAME_SIZE );
 				if( appStrchr(TempName,'.') )

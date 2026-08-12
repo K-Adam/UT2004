@@ -958,7 +958,7 @@ public:
 	void			EmitAddressToFixupLater( FNestInfo* Nest, EFixupType Type, FName Name );
 	void			EmitAddressToChainLater( FNestInfo* Nest );
 	void			EmitChainUpdate( FNestInfo* Nest );
-	void			EmitSize( int Size, const TCHAR* Tag );
+	void			EmitSize( const FPropertyBase& Type, const TCHAR* Tag );
 	void			EmitLet( const FPropertyBase& Type, const TCHAR* Tag );
 	void			EmitLineNumber(); // CDH line numbers
 	INT				EmitOuterContext();

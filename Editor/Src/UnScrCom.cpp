@@ -631,12 +631,64 @@ void FScriptCompiler::EmitChainUpdate( FNestInfo* Nest )
 }
 
 //
+// Sizes stored in bytecode follow the 32-bit layout, so every build writes the same bytecode.
+// The layout rules match UStruct::Link and the UProperty::Link overrides.
+//
+static INT StructSize32( UStruct* Struct );
+static INT ElementSize32( UProperty* Property )
+{
+	if( Property->IsA(UStrProperty::StaticClass()) || Property->IsA(UArrayProperty::StaticClass()) )
+		return 12;
+	if( Property->IsA(UDelegateProperty::StaticClass()) )
+		return 8;
+	if( Property->IsA(UObjectProperty::StaticClass()) || Property->IsA(UPointerProperty::StaticClass()) )
+		return 4;
+	if( Property->IsA(UStructProperty::StaticClass()) )
+		return StructSize32( ((UStructProperty*)Property)->Struct );
+	if( Property->IsA(UFixedArrayProperty::StaticClass()) )
+		return ElementSize32( ((UFixedArrayProperty*)Property)->Inner ) * ((UFixedArrayProperty*)Property)->Count;
+	return Property->ElementSize;
+}
+static INT StructSize32( UStruct* Struct )
+{
+	INT Size = Struct->GetInheritanceSuper() ? StructSize32(Struct->GetInheritanceSuper()) : 0;
+	for( UField* Field=Struct->Children; Field && Field->GetOuter()==Struct; Field=Field->Next )
+	{
+		UProperty* Property = Cast<UProperty>( Field );
+		if( !Property )
+			continue;
+		// Merged bools share the first one's DWORD.
+		if( Property->IsA(UBoolProperty::StaticClass()) && ((UBoolProperty*)Property)->BitMask!=FIRST_BITFIELD )
+			continue;
+		INT ElementSize = ElementSize32( Property );
+		INT Alignment = 4;
+		if( Property->IsA(UByteProperty::StaticClass()) )
+			Alignment = 1;
+		else if( Property->IsA(UStructProperty::StaticClass()) )
+			Alignment = ElementSize==2 ? 2 : ElementSize>=4 ? 4 : 1;
+		Size = Align( Size, Alignment ) + ElementSize * Property->ArrayDim;
+	}
+	return Align( Size, 4 );
+}
+static INT Size32( const FPropertyBase& Type )
+{
+	if( Type.Type==CPT_ObjectReference )
+		return 4 * Type.ArrayDim;
+	if( Type.Type==CPT_Delegate )
+		return 8 * Type.ArrayDim;
+	if( Type.Type==CPT_Struct )
+		return StructSize32( Type.Struct ) * Type.ArrayDim;
+	return Type.GetSize();
+}
+
+//
 // Emit a variable size, making sure it's within reason.
 //
-void FScriptCompiler::EmitSize( INT Size, const TCHAR* Tag )
+void FScriptCompiler::EmitSize( const FPropertyBase& Type, const TCHAR* Tag )
 {
 	guard(FScriptCompiler::EmitSize);
 
+	INT Size = Size32( Type );
 	BYTE B = Size;
 	if( B != Size )
 		appThrowf( TEXT("%s: Variable is too large (%i bytes, 255 max)"), Tag, Size );
@@ -2001,7 +2053,7 @@ UBOOL FScriptCompiler::CompileFieldExpr
 			ResultType.PropertyClass = Scope->GetOwnerClass()->ClassWithin;
 
 		if( OuterSizeFixup )
-			TopNode->Script(OuterSizeFixup) = (BYTE)ResultType.GetSize();
+			TopNode->Script(OuterSizeFixup) = (BYTE)Size32( ResultType );
 		return 1;
 	}
 	else if( RequiredType.Type == CPT_Delegate )
@@ -2039,7 +2091,7 @@ UBOOL FScriptCompiler::CompileFieldExpr
 			Writer << Function->FriendlyName;
 
 			if( OuterSizeFixup )
-				TopNode->Script(OuterSizeFixup) = (BYTE)ResultType.GetSize();
+				TopNode->Script(OuterSizeFixup) = (BYTE)Size32( ResultType );
 
 			ResultType = FToken(FPropertyBase(CPT_Delegate));	
 			return 1;
@@ -2221,7 +2273,7 @@ UBOOL FScriptCompiler::CompileFieldExpr
 		ResultType.PropertyFlags &= ~CPF_OutParm;
 
 		if( OuterSizeFixup )
-			TopNode->Script(OuterSizeFixup) = (BYTE)ResultType.GetSize();
+			TopNode->Script(OuterSizeFixup) = (BYTE)Size32( ResultType );
 
 		return 1;
 	}
@@ -2795,7 +2847,7 @@ UBOOL FScriptCompiler::CompileExpr
 					// Insert skipover info for handling null contexts.
 					FRetryPoint ContextEnd; InitRetry(ContextEnd);
 					_WORD wSkip = TopNode->Script.Num() - ContextStart.CodeTop; Writer << wSkip;
-					EmitSize( Token.GetSize(), TEXT("Context expression") );//!!hardcoded size
+					EmitSize( Token, TEXT("Context expression") );
 					CodeSwitcheroo( ContextStart, ContextEnd );
 					continue;
 				}
@@ -2818,7 +2870,7 @@ UBOOL FScriptCompiler::CompileExpr
 			// Insert skipover info for handling null contexts.
 			FRetryPoint ContextEnd; InitRetry(ContextEnd);
 			_WORD wSkip = TopNode->Script.Num() - ContextStart.CodeTop; Writer << wSkip;
-			EmitSize( Token.GetSize(), TEXT("Context expression") );//!!hardcoded size
+			EmitSize( Token, TEXT("Context expression") );
 			CodeSwitcheroo( ContextStart, ContextEnd );
 		}
 		else break;
@@ -5733,7 +5785,7 @@ void FScriptCompiler::CompileCommand( FToken& Token, UBOOL& NeedSemicolon )
 		if( TopNest->SwitchType.ArrayDim != 1 )
 			appThrowf( TEXT("Can't switch on arrays") );
 		FRetryPoint HighRetry; InitRetry(HighRetry);
-		EmitSize( TopNest->SwitchType.GetSize(), TEXT("'Switch'") );//!!hardcoded size
+		EmitSize( TopNest->SwitchType, TEXT("'Switch'") );
 		CodeSwitcheroo(LowRetry,HighRetry);
 		TopNest->SwitchType.PropertyFlags &= ~(CPF_OutParm);
 

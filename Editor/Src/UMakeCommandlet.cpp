@@ -32,14 +32,6 @@ class UMakeCommandlet : public UCommandlet
 	{
 		guard(UMakeCommandlet::Main);
 
-		// Bytecode stores context and switch sizes from the compiling build's memory layout, and the
-		// shared .u files use the 32-bit one.
-		#if SERIAL_POINTER_INDEX
-			GWarn->Log( TEXT("'ucc make' is not supported on 64-bit builds, compile the scripts with the Win32 build.") );
-			GIsRequestingExit=1;
-			return 0;
-		#endif
-
 		// The compiler switches into each package's source folder, so search paths must not be
 		// relative to the working directory.
 		FString BaseDir = GFileManager->GetDefaultDirectory();

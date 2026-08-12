@@ -341,6 +341,35 @@ void UObject::execUndefined( FFrame& Stack, RESULT_DECL  )
 	unguardexecSlow;
 }
 
+//
+// Skip a context expression whose object is None and zero its result.
+//
+static void SkipNullContext( FFrame& Stack, RESULT_DECL )
+{
+	INT wSkip = Stack.ReadWord();
+	INT Size = *Stack.Code++;
+	// The stored size follows the 32-bit layout. Where the skipped expression names its
+	// variable or function, its real size is known.
+	BYTE Token = *Stack.Code;
+	if( Token==EX_InstanceVariable || Token==EX_DefaultVariable || Token==EX_StructMember || Token==EX_FinalFunction )
+	{
+		BYTE* Expr = Stack.Code++;
+		UObject* Field = Stack.ReadObject();
+		Stack.Code = Expr;
+		UFunction* Function = Cast<UFunction>( Field );
+		UProperty* Property = Function ? Function->GetReturnProperty() : Cast<UProperty>( Field );
+		// A stored 0 means the original engine left the result alone, as it does for strings.
+		if( Property && Size )
+			Size = Property->ElementSize;
+	}
+	Stack.Code += wSkip;
+	GPropAddr = NULL;
+	GProperty = NULL;
+	GPropObject = NULL;
+	if( Result )
+		appMemzero( Result, Size );
+}
+
 ///////////////
 // Variables //
 ///////////////
@@ -414,14 +443,7 @@ void UObject::execClassContext( FFrame& Stack, RESULT_DECL )
 		if ( GDebugger )
 			GDebugger->NotifyAccessedNone();
 
-		INT wSkip = Stack.ReadWord();
-		BYTE bSize = *Stack.Code++;
-		Stack.Code += wSkip;
-		GPropAddr = NULL;
-		GPropObject = NULL;
-		GProperty = NULL;
-		if( Result )
-			appMemzero( Result, bSize );
+		SkipNullContext( Stack, Result );
 	}
 	unguardexec;
 }
@@ -1027,14 +1049,7 @@ void UObject::execContext( FFrame& Stack, RESULT_DECL )
 		if (GDebugger)
 			GDebugger->NotifyAccessedNone();	// jmw
 
-		INT wSkip = Stack.ReadWord();
-		BYTE bSize = *Stack.Code++;
-		Stack.Code += wSkip;
-		GPropAddr = NULL;
-		GProperty = NULL;
-		GPropObject = NULL;
-		if( Result )
-			appMemzero( Result, bSize );
+		SkipNullContext( Stack, Result );
 	}
 	unguardexecSlow;
 }

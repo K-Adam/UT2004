@@ -3570,6 +3570,9 @@ ULinkerLoad* UObject::GetPackageLinker
 					T = appStrstr(T,PATH_SEPARATOR)+appStrlen(PATH_SEPARATOR);
 				else if( appStrstr(T,TEXT("/")) )
 					T = appStrstr(T,TEXT("/"))+1;
+				// Script #exec lines use Windows separators on every platform.
+				else if( appStrstr(T,TEXT("\\")) )
+					T = appStrstr(T,TEXT("\\"))+1;
 				else if( appStrstr(T,TEXT(":")) )
 					T = appStrstr(T,TEXT(":"))+1;
 				else

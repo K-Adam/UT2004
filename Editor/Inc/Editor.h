@@ -211,6 +211,9 @@ struct HBackdrop : public HHitProxy
 
 typedef void (*POLY_CALLBACK)( UModel* Model, INT iSurf );
 
+// Script lays these classes out with 4-byte alignment, as MSVC's /Zp4 does for the Windows builds.
+#pragma pack (push,4)
+
 /*-----------------------------------------------------------------------------
 	FEditorConstraints.
 -----------------------------------------------------------------------------*/
@@ -300,7 +303,7 @@ class EDITOR_API UEditorEngine : public UEngine
 	FLOAT FovAngle;
 	BITFIELD GodMode:1;
 	BITFIELD AutoSave:1;
-	BYTE AutosaveTimeMinutes;
+	BYTE AutosaveTimeMinutes GCC_PACK(4);	// GCC would otherwise pack it into the bitfield word above.
 	FStringNoInit GameCommandLine;
 	TArray<FString> EditPackages;
 	TArray<FString> CutdownPackages;
@@ -501,6 +504,8 @@ EDITOR_API UBOOL GetBEGIN( const TCHAR** Stream, const TCHAR* Match );
 EDITOR_API UBOOL GetEND( const TCHAR** Stream, const TCHAR* Match );
 EDITOR_API TCHAR* SetFVECTOR( TCHAR* Dest, const FVector* Value );
 EDITOR_API UBOOL GetFSCALE( const TCHAR* Stream, FScale& Scale );
+
+#pragma pack (pop)
 
 /*-----------------------------------------------------------------------------
 	Texture aligner types.

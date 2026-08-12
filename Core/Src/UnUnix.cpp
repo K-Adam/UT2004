@@ -479,10 +479,61 @@ CORE_API INT wcstoul( const TCHAR* Start, TCHAR** End, INT Base )
     return(strtoul(TCHAR_TO_ANSI(Start), (char **) End, Base));
 }
 
-CORE_API INT swscanf( const UNICHAR* fmt, ... )
+// glibc's wide functions expect a 4-byte wchar_t, so this scans ANSI copies with sscanf. It supports
+// the plain %d, %f and %s conversions the importers use and widens %s results into their TCHAR buffers.
+// The format follows the input string as a variadic argument to keep this apart from glibc's swscanf.
+CORE_API INT swscanf( const UNICHAR* Str, ... )
 {
-    debugf(TEXT("This is currently unimplemented on Unix."));
-    appDebugBreak();
+    va_list Args;
+    va_start( Args, Str );
+    const UNICHAR* Fmt = va_arg( Args, const UNICHAR* );
+
+    enum { MAX_CONVERSIONS=16, MAX_STRING=256 };
+    void* Targets[MAX_CONVERSIONS] = {};
+    UNICHAR* WideTargets[MAX_CONVERSIONS];
+    ANSICHAR Strings[MAX_CONVERSIONS][MAX_STRING];
+    ANSICHAR AnsiFmt[1024];
+    INT Count=0, Len=0;
+    for( const UNICHAR* F=Fmt; *F && Len<(INT)sizeof(AnsiFmt)-8; F++ )
+    {
+        AnsiFmt[Len++] = (ANSICHAR) *F;
+        if( F[0]!='%' )
+            continue;
+        if( F[1]=='%' )
+        {
+            AnsiFmt[Len++] = (ANSICHAR) *++F;
+            continue;
+        }
+        check(Count<MAX_CONVERSIONS);
+        if( F[1]=='s' )
+        {
+            // Bounded, because the conversion lands in a fixed buffer first.
+            Len += sprintf( AnsiFmt+Len, "%d", MAX_STRING-1 );
+            WideTargets[Count] = va_arg( Args, UNICHAR* );
+            Targets[Count] = Strings[Count];
+        }
+        else
+        {
+            WideTargets[Count] = NULL;
+            Targets[Count] = va_arg( Args, void* );
+        }
+        Count++;
+    }
+    AnsiFmt[Len] = 0;
+    va_end( Args );
+
+    INT StrLen = appStrlen( Str );
+    ANSICHAR* AnsiStr = (ANSICHAR*) appAlloca( StrLen+1 );
+    for( INT i=0; i<=StrLen; i++ )
+        AnsiStr[i] = (ANSICHAR) Str[i];
+
+    INT Result = sscanf( AnsiStr, AnsiFmt, Targets[0], Targets[1], Targets[2], Targets[3], Targets[4], Targets[5],
+        Targets[6], Targets[7], Targets[8], Targets[9], Targets[10], Targets[11], Targets[12], Targets[13],
+        Targets[14], Targets[15] );
+    for( INT i=0; i<Result && i<Count; i++ )
+        if( WideTargets[i] )
+            for( INT j=0; (WideTargets[i][j]=(UNICHAR)Strings[i][j])!=0; j++ );
+    return Result;
 }
 
 // !!! FIXME: This can always be more robust.

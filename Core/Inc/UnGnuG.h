@@ -250,7 +250,7 @@ CORE_API INT wcstoul( const UNICHAR* Start, UNICHAR** End, INT Base );
 CORE_API INT _wtoi( const UNICHAR* Str );
 CORE_API INT _wcsnicmp( const UNICHAR* Str1, const UNICHAR *Str2, INT max );
 CORE_API INT wprintf( const UNICHAR* fmt, ... );
-CORE_API INT swscanf( const UNICHAR* fmt, ... );
+CORE_API INT swscanf( const UNICHAR* Str, ... );
 CORE_API INT wvsnprintf( UNICHAR *buf, INT max, const UNICHAR *fmt, va_list args );
 CORE_API INT iswspace( UNICHAR ch  );
 CORE_API UNICHAR *_itow( const INT Num, UNICHAR *Buffer, const INT BufSize );

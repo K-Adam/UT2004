@@ -396,7 +396,7 @@ UBOOL UEditorEngine::Exec_StaticMeshImport( const TCHAR* Str, FOutputDevice& Ar 
 
 		// Deduce package name from filename.
 		const TCHAR* End = *File + File.Len();
-		while( End>*File && End[-1]!=PATH_SEPARATOR[0] && End[-1]!='/' )
+		while( End>*File && End[-1]!=PATH_SEPARATOR[0] && End[-1]!='/' && End[-1]!='\\' )
 			End--;
 		appStrncpy( TempName, End, NAME_SIZE );
 

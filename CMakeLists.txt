@@ -204,13 +204,11 @@ foreach(m ${UT_MODULES})
   add_subdirectory(${m})
 endforeach()
 
-# -NOH keeps the checked-in *Classes.h headers. The script compiler only works in 32-bit builds.
-if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-  # Relative, because the engine's command line parser stops at spaces.
-  cmake_path(RELATIVE_PATH CMAKE_SOURCE_DIR BASE_DIRECTORY ${UT_SYSTEM_DIR} OUTPUT_VARIABLE UT_SOURCE_FROM_SYSTEM)
-  add_custom_target(ucc_make
-    COMMAND $<TARGET_FILE:UCC> make -NOH -SOURCE=${UT_SOURCE_FROM_SYSTEM}
-    WORKING_DIRECTORY ${UT_SYSTEM_DIR}
-    DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught UTV2004
-    USES_TERMINAL VERBATIM)
-endif()
+# -NOH keeps the checked-in *Classes.h headers. The source path is relative because the engine's
+# command line parser stops at spaces.
+cmake_path(RELATIVE_PATH CMAKE_SOURCE_DIR BASE_DIRECTORY ${UT_SYSTEM_DIR} OUTPUT_VARIABLE UT_SOURCE_FROM_SYSTEM)
+add_custom_target(ucc_make
+  COMMAND $<TARGET_FILE:UCC> make -NOH -SOURCE=${UT_SOURCE_FROM_SYSTEM}
+  WORKING_DIRECTORY ${UT_SYSTEM_DIR}
+  DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught UTV2004
+  USES_TERMINAL VERBATIM)

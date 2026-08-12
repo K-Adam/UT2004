@@ -23,14 +23,14 @@
       }
     },
     {
-      "name": "linux",
+      "name": "linux64",
       "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/linux",
+      "binaryDir": "${sourceDir}/build/linux64",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
     },
     {
       "name": "linux32",
-      "inherits": "linux",
+      "inherits": "linux64",
       "binaryDir": "${sourceDir}/build/linux32",
       "cacheVariables": {
         "CMAKE_C_FLAGS": "-m32",
@@ -63,13 +63,13 @@
       "configuration": "Release"
     },
     {
-      "name": "linux-debug",
-      "configurePreset": "linux",
+      "name": "linux64-debug",
+      "configurePreset": "linux64",
       "configuration": "Debug"
     },
     {
-      "name": "linux-release",
-      "configurePreset": "linux",
+      "name": "linux64-release",
+      "configurePreset": "linux64",
       "configuration": "Release"
     },
     {
