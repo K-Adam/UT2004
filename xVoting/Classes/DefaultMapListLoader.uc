@@ -167,6 +167,9 @@ static function FillPlayInfo(PlayInfo PlayInfo)
 //------------------------------------------------------------------------------------------------
 static event bool AcceptPlayInfoProperty(string PropertyName)
 {
+	if ( class'LevelInfo'.static.IsDemoBuild() )
+		return false;
+
 	switch ( PropertyName )
 	{
 		case "bUserMapList":

@@ -24,6 +24,7 @@
 // System includes.
 #include <sys/param.h>
 #include <unistd.h>
+#include <pwd.h>
 #include <dirent.h>
 #include <utime.h>
 #include <sys/time.h>
@@ -954,7 +955,6 @@ void USystem::StaticConstructor()
 
 	new(GetClass(),TEXT("PurgeCacheDays"),      RF_Public)UIntProperty   (CPP_PROPERTY(PurgeCacheDays     ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("SavePath"),            RF_Public)UStrProperty   (CPP_PROPERTY(SavePath           ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("CachePath"),           RF_Public)UStrProperty   (CPP_PROPERTY(CachePath          ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("CacheExt"),            RF_Public)UStrProperty   (CPP_PROPERTY(CacheExt           ), TEXT("Options"), CPF_Config );
 //	new(GetClass(),TEXT("CacheRecordPath"),     RF_Public)UStrProperty   (CPP_PROPERTY(CacheRecordPath    ), TEXT("Options"), CPF_Config );
 //	new(GetClass(),TEXT("MusicPath"),           RF_Public)UStrProperty   (CPP_PROPERTY(MusicPath          ), TEXT("Options"), CPF_Config );
@@ -2021,6 +2021,19 @@ void appPlatformInit()
 	// System initialization.
 	GSys = new USystem;
 	GSys->AddToRoot();
+	const char* XdgCache = getenv("XDG_CACHE_HOME");
+	if( XdgCache && XdgCache[0]=='/' )
+		GSys->CachePath = FString(appFromAnsi(XdgCache)) * TEXT("ut2004");
+	else
+	{
+		const char* Home = getenv("HOME");
+		if( !Home || Home[0]!='/' )
+		{
+			struct passwd* Pwd = getpwuid( getuid() );
+			Home = Pwd ? Pwd->pw_dir : "/tmp";
+		}
+		GSys->CachePath = FString(appFromAnsi(Home)) * TEXT(".cache") * TEXT("ut2004");
+	}
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );
 

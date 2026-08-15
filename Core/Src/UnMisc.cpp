@@ -2017,7 +2017,7 @@ CORE_API void appCreateTempFilename( const TCHAR* Path, TCHAR* Result256 )
 	guard(appCreateTempFilename);
 	static INT i=0;
 	do
-		appSprintf( Result256, TEXT("%s%04X.tmp"), Path, i++ );
+		appSprintf( Result256, TEXT("%s") PATH_SEPARATOR TEXT("%04X.tmp"), Path, i++ );
 	while( GFileManager->FileSize(Result256)>0 );
 	unguard;
 }

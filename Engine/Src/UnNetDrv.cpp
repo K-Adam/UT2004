@@ -144,8 +144,8 @@ void UNetDriver::StaticConstructor()
 	A->Inner = new(A,TEXT("StrProperty0"       ),RF_Public)UStrProperty;
 
 	// Default values.
-	MaxClientRate = 15000;
-	MaxInternetClientRate = 10000;
+	MaxClientRate = 1000000;
+	MaxInternetClientRate = 1000000;
 
 	unguard;
 }

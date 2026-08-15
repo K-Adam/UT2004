@@ -12,6 +12,7 @@
 
 #pragma pack(push,8)
 #include <windows.h>
+#include <shlobj.h>
 #pragma pack(pop)
 
 #include <stdio.h>
@@ -173,7 +174,6 @@ void USystem::StaticConstructor()
 
 	new(GetClass(),TEXT("PurgeCacheDays"),      RF_Public)UIntProperty   (CPP_PROPERTY(PurgeCacheDays    ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("SavePath"),            RF_Public)UStrProperty   (CPP_PROPERTY(SavePath          ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("CachePath"),           RF_Public)UStrProperty   (CPP_PROPERTY(CachePath         ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("CacheExt"),            RF_Public)UStrProperty   (CPP_PROPERTY(CacheExt          ), TEXT("Options"), CPF_Config );
 //	new(GetClass(),TEXT("CacheRecordPath"),     RF_Public)UStrProperty   (CPP_PROPERTY(CacheRecordPath   ), TEXT("Options"), CPF_Config );
 //	new(GetClass(),TEXT("MusicPath"),           RF_Public)UStrProperty   (CPP_PROPERTY(MusicPath         ), TEXT("Options"), CPF_Config );
@@ -1161,6 +1161,10 @@ void appPlatformInit()
 	// System initialization.
 	GSys = new USystem;
 	GSys->AddToRoot();
+	TCHAR CacheRoot[MAX_PATH+1] = TEXT("");
+	if( FAILED(SHGetFolderPathW( NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, CacheRoot )) )
+		GetTempPathW( ARRAY_COUNT(CacheRoot), CacheRoot );
+	GSys->CachePath = FString(CacheRoot) * TEXT("UT2004") * TEXT("Cache");
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );
 

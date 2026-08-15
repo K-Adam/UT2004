@@ -2135,12 +2135,20 @@ simulated function bool ForceDefaultCharacter()
 
 simulated function string GetDefaultCharacter()
 {
-	// make sure picking from valid default characters
-	if ( !CheckValidFemaleDefault() )
+	if ( Level.IsDemoBuild() )
+	{
 		PlacedFemaleCharacterName = "Tamika";
-		
-	if ( !CheckValidMaleDefault() )
 		PlacedCharacterName = "Jakob";
+	}
+	else
+	{
+		// make sure picking from valid default characters
+		if ( !CheckValidFemaleDefault() )
+			PlacedFemaleCharacterName = "Tamika";
+			
+		if ( !CheckValidMaleDefault() )
+			PlacedCharacterName = "Jakob";
+	}
 	// return appropriate character based on this pawn's sex
 	if ( (PlayerReplicationInfo != None) && PlayerReplicationInfo.bIsFemale )
 		return PlacedFemaleCharacterName;

@@ -604,7 +604,7 @@ function SaveSettings()
 		}
 	}
 
-    if ( PC.IsA('UnrealPlayer') )
+    if ( !PC.Level.IsDemoBuild() && PC.IsA('UnrealPlayer') )
     {
     	if ( PC.GetCustomStatusAnnouncerClass() != sStatAnnouncer )
     	{
@@ -634,7 +634,7 @@ function SaveSettings()
 	if ( PC.bAutoTaunt != bAuto )
 		PC.SetAutoTaunt(bAuto);
 
-    if ( !PC.IsA('UnrealPlayer') )
+    if ( !PC.Level.IsDemoBuild() && !PC.IsA('UnrealPlayer') )
     {
     	if ( !(class'UnrealPlayer'.default.CustomStatusAnnouncerPack ~= sStatAnnouncer) ||
     		 !(class'UnrealPlayer'.default.CustomRewardAnnouncerPack ~= sRewAnnouncer) )

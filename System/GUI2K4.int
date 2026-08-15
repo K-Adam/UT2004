@@ -382,6 +382,10 @@ DialogText.Caption="Weapon Arena"
 OkButton.Caption="OK"
 WeaponSelect.Caption="Choose the weapon to populate your Arena."
 
+[UT2K4BadCDKeyMsg]
+BadCDLabel.Caption="Your CD key is invalid or in use by another player"
+OkButton.Caption="OK"
+
 [UT2K4BotConfigPage]
 NoInformation="No Information Available!"
 NoPref="No Preference"

@@ -955,9 +955,6 @@ UBOOL ULevel::Listen( FString& Error )
 	if ( !LanPlay && (NetDriver->MaxInternetClientRate < NetDriver->MaxClientRate) && (NetDriver->MaxInternetClientRate > 2500) )
 		NetDriver->MaxClientRate = NetDriver->MaxInternetClientRate;
 
-	if ( GetLevelInfo()->Game && (GetLevelInfo()->Game->MaxPlayers > 16) )
-		NetDriver->MaxClientRate = ::Min(NetDriver->MaxClientRate, 10000);
-
 	// Load everything required for network server support.
 	UGameEngine* GameEngine = CastChecked<UGameEngine>( Engine );
 	GameEngine->BuildServerMasterMap( NetDriver, this );

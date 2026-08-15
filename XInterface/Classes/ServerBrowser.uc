@@ -145,7 +145,8 @@ function MOTDVerified(bool bMSVerified)
 	// Create tabs for 'standard' game types
 	AddBrowserPage(DMServerListPage);
 	AddBrowserPage(TDMServerListPage);
-	AddBrowserPage(DomServerListPage);
+	if(!PlayerOwner().Level.IsDemoBuild())
+		AddBrowserPage(DomServerListPage);
 	AddBrowserPage(CTFServerListPage);
 	AddBrowserPage(BRServerListPage);
 

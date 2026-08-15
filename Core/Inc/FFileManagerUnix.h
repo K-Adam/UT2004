@@ -474,7 +474,7 @@ public:
         char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
-		appStrcpy( tmp, BaseDir );
+		appStrcpy( tmp, FakeFilename[0]=='/' ? TEXT("") : BaseDir );
         appStrcat( tmp, FakeFilename );
         unixToANSI( ansipath, tmp );
 		char* Filename = appUnixPath(ansipath);
@@ -529,7 +529,7 @@ public:
         char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
-		appStrcpy( tmp, BaseDir );
+		appStrcpy( tmp, FakeFilename[0]=='/' ? TEXT("") : BaseDir );
         appStrcat( tmp, FakeFilename );
         unixToANSI( ansipath, tmp );
 		char* Filename = appUnixPath(ansipath);
@@ -579,7 +579,7 @@ public:
         char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
-		appStrcpy( tmp, BaseDir );
+		appStrcpy( tmp, FakePath[0]=='/' ? TEXT("") : BaseDir );
 		TCHAR* Path = appStrcat( tmp, FakePath );
 		if( Tree )
 			return FFileManagerGeneric::MakeDirectory( Path, Tree );
@@ -599,7 +599,7 @@ public:
         char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
-		appStrcpy( tmp, BaseDir );	
+		appStrcpy( tmp, FakePath[0]=='/' ? TEXT("") : BaseDir );	
 		TCHAR* Path = appStrcat( tmp, FakePath );	
 		if( Tree )
 			return FFileManagerGeneric::DeleteDirectory( Path, RequireExists, Tree );

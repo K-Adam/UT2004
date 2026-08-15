@@ -56,7 +56,7 @@ void UDownload::ReceiveData( BYTE* Data, INT Count )
 	{
 		// Open temporary file initially.
 		debugf( NAME_DevNet, TEXT("Receiving package '%s'"), Info->Parent->GetName() );
-		GFileManager->MakeDirectory( *GSys->CachePath, 0 );
+		GFileManager->MakeDirectory( *GSys->CachePath, 1 );
 		appCreateTempFilename( *GSys->CachePath, TempFilename );
 		RecvFileAr = GFileManager->CreateFileWriter( TempFilename );
 	}

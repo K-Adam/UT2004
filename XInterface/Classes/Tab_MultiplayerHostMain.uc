@@ -44,15 +44,18 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	{
 		Desc = Entry$"|"$Desc;
 
-		MyGameCombo.AddItem(ParseDescStr(Desc,2),,Desc);
+		if ( ! ((PlayerOwner().Level.IsDemoBuild()) && (InStr (Desc, "xDoubleDom" ) >= 0) ) )
+		{
+			MyGameCombo.AddItem(ParseDescStr(Desc,2),,Desc);
 
 /*
-		if ( (LastGameType=="") || (LastGameType==Entry) )
-		{
-			MyGameCombo.SetText(ParseDescStr(Desc,2));
-			LastGameType=Entry;
-		}
+			if ( (LastGameType=="") || (LastGameType==Entry) )
+			{
+				MyGameCombo.SetText(ParseDescStr(Desc,2));
+				LastGameType=Entry;
+			}
 */
+		}
 
 		Index++;
 		PlayerOwner().GetNextIntDesc("GameInfo", Index, Entry, Desc);

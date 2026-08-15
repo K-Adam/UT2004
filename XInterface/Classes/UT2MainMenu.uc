@@ -15,6 +15,12 @@ var bool	AllowClose;
 function InitComponent(GUIController MyController, GUIComponent MyOwner)
 {
 	Super.InitComponent(MyController, MyOwner);
+
+	if (PlayerOwner().Level.IsDemoBuild())
+	{
+		Controls[3].SetFocus(none);
+		Controls[2].MenuStateChange(MSAT_Disabled);
+	}
 }
 
 function OnClose(optional Bool bCanceled)

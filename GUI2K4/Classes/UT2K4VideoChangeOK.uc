@@ -61,7 +61,7 @@ function ChangeResolution( string DesiredRes )
 {
 	local int i;
 	local string CurrentRes, NewX, NewY, NewDepth, NewScreen;
-	local bool lowres, bAuto;
+	local bool lowres;
 
 	// Create the string we'll use to revert settings if change is undesireable
 	CurrentRes	= Controller.GetCurrentRes();
@@ -78,17 +78,9 @@ function ChangeResolution( string DesiredRes )
 	else
 		RevertString $= "w";
 
-	if (bool(PlayerOwner().ConsoleCommand("get ini:Engine.Engine.ViewportManager AutoResolution")))
-		RevertString @= "auto";
-
 
 	// Apply new resolution and wait for acceptance
 	PlayerOwner().ConsoleCommand("set ini:Engine.Engine.RenderDevice Use16bit"@(InStr(DesiredRes,"x16") != -1));
-
-	// Auto still sends the current size, the engine picks the desktop size for fullscreen
-	bAuto = Left(DesiredRes, 4) ~= "Auto";
-	if (bAuto)
-		DesiredRes = CurrentRes $ Mid(DesiredRes, 4);
 
 	i = InStr(DesiredRes, "x");
 
@@ -107,7 +99,7 @@ function ChangeResolution( string DesiredRes )
 		}
 	}
 
-	if( !bAuto && (int(NewX) < 640 || int(NewY) < 480) )
+	if( int(NewX) < 640 || int(NewY) < 480 )
 	{
 		KillTimer();
 		PlayerOwner().ConsoleCommand("TEMPSETRES 640x480" $ NewDepth $ NewScreen);
@@ -116,8 +108,6 @@ function ChangeResolution( string DesiredRes )
 	}
 	else
 	{
-		if (bAuto)
-			DesiredRes @= "auto";
 		PlayerOwner().ConsoleCommand( "SETRES" @ DesiredRes );
 		StartTimer();
 	}

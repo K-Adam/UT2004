@@ -531,6 +531,9 @@ function int CheckID(string CDHash)
 {
     local int i;
 
+    if ( class'LevelInfo'.static.IsDemoBuild() )
+    	return 0;
+
     for (i=0;i<BannedIDs.Length;i++)
     	if ( CDHash~=Left(BannedIDs[i],32) )
     		return 2;

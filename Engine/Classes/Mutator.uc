@@ -70,7 +70,7 @@ event PreBeginPlay()
 
 function bool MutatorIsAllowed()
 {
-	return true;
+	return !Level.IsDemoBuild() || Class==class'Mutator';
 }
 
 function Destroyed()

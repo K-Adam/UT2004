@@ -166,6 +166,9 @@ function LoadMutators()
 	AExcMutators = New(None) class'StringArray';
 	AIncMutators = New(None) class'SortedStringArray';
 
+	if ( Level.IsDemoBuild() )
+		return;
+
 	// Load All mutators
 	class'CacheManager'.static.GetMutatorList(AllMutators);
 	for (i = 0; i<AllMutators.Length; i++)

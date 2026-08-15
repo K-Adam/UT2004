@@ -858,7 +858,7 @@ function UpdateCurrentWeapon()
 		Scale3D = vect(1,1,1);
 	}
 
-	if ( OldMesh != None )
+	if ( OldMesh != None && !class'LevelInfo'.static.IsDemoBuild() )
 	{
 		EnableComponent(ch_ClassicModel);
 		ch_ClassicModel.SetComponentValue( WeaponsList[WeaponIndex].bClassicModel, True );

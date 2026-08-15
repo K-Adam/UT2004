@@ -91,7 +91,11 @@ function bool GameTypeLocked()
 		{
 			tb = c_Tabs.TabStack[i];
 			if ( tb != None )
-				EnableComponent(tb);
+			{
+				if ( tb.MyPanel == p_Mutators && class'LevelInfo'.static.IsDemoBuild() )
+					DisableComponent(tb);
+				else EnableComponent(tb);
+			}
 		}
 
 		EnableComponent(b_Primary);
