@@ -67,7 +67,7 @@ defaultproperties
 	bAlwaysTick=True
 	LANPort=11777
 	LANServerPort=10777
-	MasterServerList(0)=(Address="ut2004master1.epicgames.com",Port=28902)
-	MasterServerList(1)=(Address="ut2004master2.epicgames.com",Port=28902)
+	MasterServerList(0)=(Address="utmaster.openspy.net",Port=28902)
+	MasterServerList(1)=(Address="ut2004master.333networks.com",Port=28902)
 
 }

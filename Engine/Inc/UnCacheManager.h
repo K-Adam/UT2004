@@ -31,7 +31,12 @@ Revision history:
 #define MUTATOR_META_INDEX (INT)(2)
 
 // Global methods for ScanDirectories() & GetCacheDirectories()
-inline UBOOL ContainsMaps( const TCHAR* Test )		{ return appStrstr( Test, (FURL::DefaultMapExt == TEXT("") ? TEXT(".ut2") : *FURL::DefaultMapExt) ) != NULL; }
+// Match the extension at the end, a folder like "ut2004-files" must not count as a map path
+inline UBOOL ContainsMaps( const TCHAR* Test )
+{
+	const FString Ext = FString(TEXT(".")) + (FURL::DefaultMapExt.Len() ? FURL::DefaultMapExt : FString(TEXT("ut2")));
+	return FString(Test).Right(Ext.Len()) == Ext;
+}
 inline UBOOL ContainsPackages( const TCHAR* Test )  { return !appStrcmp(&Test[appStrlen(Test) - 3], TEXT("*.u")); }
 // Overloads
 inline UBOOL ContainsMaps( FString& Test )			{ return ContainsMaps(*Test);	  }

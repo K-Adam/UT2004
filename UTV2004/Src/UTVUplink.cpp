@@ -137,7 +137,7 @@ UTVUplink::~UTVUplink()
 void UTVUplink::TryConnect ()
 {
 	UplinkState = MSUS_WaitingChallenge;
-	MasterServerName = "ut2004master1.epicgames.com";
+	MasterServerName = "utmaster.openspy.net";
 	MasterServerPort = 28902;
 	Resolve (*MasterServerName);
 }

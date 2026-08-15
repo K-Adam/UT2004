@@ -42,6 +42,7 @@ var automated 	GUIButton	b_SinglePlayer, b_MultiPlayer, b_Host,
 
 
 
+var config bool bDisableSinglePlayer;
 var bool	bAllowClose;
 
 var array<material> CharShots;
@@ -66,6 +67,9 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 
 	Background=MyController.DefaultPens[0];
 	i_BkChar.Image = CharShots[rand(CharShots.Length)];
+
+	if (bDisableSinglePlayer)
+		b_SinglePlayer.DisableMe();
 }
 
 event Timer()
