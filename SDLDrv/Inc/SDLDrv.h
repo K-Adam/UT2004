@@ -24,7 +24,7 @@ Revision history:
 	Dependencies.
 ----------------------------------------------------------------------------*/
 
-#include "SDL.h"
+#include <SDL3/SDL.h>
 
 // Unreal includes.
 #include "Engine.h"
@@ -58,7 +58,6 @@ class USDLClient : public UClient, public FNotifyHook
 	FLOAT               ScaleJBY;
 	UBOOL               IgnoreHat;
 	UBOOL               IgnoreUngrabbedMouse;
-	UBOOL               AllowUnicodeKeys;
 	FStringNoInit       TextToSpeechFile;
 
 	// Variables.
@@ -66,6 +65,10 @@ class USDLClient : public UClient, public FNotifyHook
 	UBOOL				ConfigReturnFullscreen;
 	INT					NormalMouseInfo[3];
 	INT					CaptureMouseInfo[3];
+
+	// One window and GL context, they survive resolution and fullscreen changes.
+	SDL_Window*			Window;
+	SDL_GLContext		GLContext;
 
     static SDL_Joystick *Joystick;
     static int JoystickAxes;
@@ -110,27 +113,13 @@ class USDLViewport : public UViewport
 	DECLARE_WITHIN(USDLClient)
 
 	// Variables.
-    SDL_Surface *		ScreenSurface;
 	DWORD				BlitFlags;
-
-    UBOOL				LostGrab;
-    UBOOL				LostFullscreen;
-
-    INT					SavedCursorX;
-    INT					SavedCursorY;
-
-	// SDL Keysym to EInputKey map.
-	BYTE				KeysymMap[512];
-
-	// KeyRepeatKey.
-    INT					KeyRepeatKey;
-    TCHAR				KeyRepeatUnicode;
-	FTime				RepeatTimer;
 
 	// Joystick Hat Hack
 	EInputKey 			LastJoyHat;
-	UBOOL				LastKey;
 
+	UBOOL				WantGrab;
+	FLOAT				WheelRemainder;
 	UBOOL				MouseIsGrabbed;
 	UBOOL				WindowsMouseShown;
 	INT					TextToSpeechObject;  // file descriptor for named pipe.

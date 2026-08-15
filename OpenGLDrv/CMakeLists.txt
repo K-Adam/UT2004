@@ -3,11 +3,11 @@ ut_module(OpenGLDrv SHARED
           OpenGLRenderInterface.cpp OpenGLResource.cpp
   PCH OpenGLDrv.h OpenGLDrv.cpp
   DEPS Engine)
-target_link_libraries(OpenGLDrv PRIVATE SDL::SDL)
+target_link_libraries(OpenGLDrv PRIVATE SDL3::SDL3)
 if(WIN32)
-  # WinDrv viewports use WGL and never load SDL.dll, see UOpenGLRenderDevice::Init.
+  # WinDrv viewports use WGL and never load SDL3.dll, see UOpenGLRenderDevice::Init.
   target_link_libraries(OpenGLDrv PRIVATE delayimp)
-  target_link_options(OpenGLDrv PRIVATE /DELAYLOAD:SDL.dll)
+  target_link_options(OpenGLDrv PRIVATE /DELAYLOAD:SDL3.dll)
 else()
   target_include_directories(OpenGLDrv PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Inc/linuxGL)
 endif()

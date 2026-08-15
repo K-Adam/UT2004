@@ -12,9 +12,6 @@ Revision history:
 #include <stdlib.h>
 #ifdef WIN32
 #include <io.h>
-#pragma pack(push,8)
-#include "SDL_syswm.h"
-#pragma pack(pop)
 #else
 #include <unistd.h>
 #endif
@@ -64,10 +61,95 @@ enum EEditorMode
 
 IMPLEMENT_CLASS(USDLViewport);
 
+//
+// EInputKey mirrors Windows virtual keys. Printable keys follow the layout like VK codes do,
+// the rest follow their physical position.
+//
+static EInputKey KeyFromSDL( SDL_Keycode Key, SDL_Scancode Scancode )
+{
+	if( Key >= SDLK_A && Key <= SDLK_Z )
+		return (EInputKey)(IK_A + Key - SDLK_A);
+	if( Key >= SDLK_0 && Key <= SDLK_9 )
+		return (EInputKey)(IK_0 + Key - SDLK_0);
+	switch( Key )
+	{
+		case SDLK_SPACE:		return IK_Space;
+		case SDLK_GRAVE:		return IK_Tilde;
+		case SDLK_APOSTROPHE:	return IK_SingleQuote;
+		case SDLK_SEMICOLON:	return IK_Semicolon;
+		case SDLK_COMMA:		return IK_Comma;
+		case SDLK_PERIOD:		return IK_Period;
+		case SDLK_SLASH:		return IK_Slash;
+		case SDLK_BACKSLASH:	return IK_Backslash;
+		case SDLK_LEFTBRACKET:	return IK_LeftBracket;
+		case SDLK_RIGHTBRACKET:	return IK_RightBracket;
+		case SDLK_MINUS:		return IK_Minus;
+		case SDLK_EQUALS:		return IK_Equals;
+	}
+	if( Scancode >= SDL_SCANCODE_F1 && Scancode <= SDL_SCANCODE_F12 )
+		return (EInputKey)(IK_F1 + Scancode - SDL_SCANCODE_F1);
+	if( Scancode >= SDL_SCANCODE_F13 && Scancode <= SDL_SCANCODE_F24 )
+		return (EInputKey)(IK_F13 + Scancode - SDL_SCANCODE_F13);
+	if( Scancode >= SDL_SCANCODE_KP_1 && Scancode <= SDL_SCANCODE_KP_9 )
+		return (EInputKey)(IK_NumPad1 + Scancode - SDL_SCANCODE_KP_1);
+	switch( Scancode )
+	{
+		case SDL_SCANCODE_BACKSPACE:	return IK_Backspace;
+		case SDL_SCANCODE_TAB:			return IK_Tab;
+		case SDL_SCANCODE_RETURN:
+		case SDL_SCANCODE_KP_ENTER:		return IK_Enter;
+		case SDL_SCANCODE_PAUSE:		return IK_Pause;
+		case SDL_SCANCODE_ESCAPE:		return IK_Escape;
+		case SDL_SCANCODE_DELETE:		return IK_Delete;
+		case SDL_SCANCODE_INSERT:		return IK_Insert;
+		case SDL_SCANCODE_PRINTSCREEN:	return IK_PrintScrn;
+		case SDL_SCANCODE_LSHIFT:
+		case SDL_SCANCODE_RSHIFT:		return IK_Shift;
+		case SDL_SCANCODE_LCTRL:
+		case SDL_SCANCODE_RCTRL:		return IK_Ctrl;
+		case SDL_SCANCODE_LALT:
+		case SDL_SCANCODE_RALT:			return IK_Alt;
+		case SDL_SCANCODE_LGUI:
+		case SDL_SCANCODE_RGUI:			return IK_F24;
+		// The console key on layouts where it does not type a backquote.
+		case SDL_SCANCODE_GRAVE:		return IK_Tilde;
+		// Punctuation positions on layouts where they type other characters, like VK_OEM keys.
+		case SDL_SCANCODE_APOSTROPHE:	return IK_SingleQuote;
+		case SDL_SCANCODE_SEMICOLON:	return IK_Semicolon;
+		case SDL_SCANCODE_COMMA:		return IK_Comma;
+		case SDL_SCANCODE_PERIOD:		return IK_Period;
+		case SDL_SCANCODE_SLASH:		return IK_Slash;
+		case SDL_SCANCODE_BACKSLASH:	return IK_Backslash;
+		case SDL_SCANCODE_LEFTBRACKET:	return IK_LeftBracket;
+		case SDL_SCANCODE_RIGHTBRACKET:	return IK_RightBracket;
+		case SDL_SCANCODE_MINUS:		return IK_Minus;
+		case SDL_SCANCODE_EQUALS:		return IK_Equals;
+		case SDL_SCANCODE_NONUSBACKSLASH:	return IK_UnknownE2;
+		case SDL_SCANCODE_HOME:			return IK_Home;
+		case SDL_SCANCODE_END:			return IK_End;
+		case SDL_SCANCODE_PAGEUP:		return IK_PageUp;
+		case SDL_SCANCODE_PAGEDOWN:		return IK_PageDown;
+		case SDL_SCANCODE_LEFT:			return IK_Left;
+		case SDL_SCANCODE_RIGHT:		return IK_Right;
+		case SDL_SCANCODE_UP:			return IK_Up;
+		case SDL_SCANCODE_DOWN:			return IK_Down;
+		case SDL_SCANCODE_KP_0:			return IK_NumPad0;
+		case SDL_SCANCODE_KP_MULTIPLY:	return IK_GreyStar;
+		case SDL_SCANCODE_KP_PLUS:		return IK_GreyPlus;
+		case SDL_SCANCODE_KP_EQUALS:	return IK_Separator;
+		case SDL_SCANCODE_KP_MINUS:		return IK_GreyMinus;
+		case SDL_SCANCODE_KP_PERIOD:	return IK_NumPadPeriod;
+		case SDL_SCANCODE_KP_DIVIDE:	return IK_GreySlash;
+		case SDL_SCANCODE_NUMLOCKCLEAR:	return IK_NumLock;
+		case SDL_SCANCODE_CAPSLOCK:		return IK_CapsLock;
+		case SDL_SCANCODE_SCROLLLOCK:	return IK_ScrollLock;
+		default:						return IK_None;
+	}
+}
+
 /*-----------------------------------------------------------------------------
 	USDLViewport Init/Exit.
 -----------------------------------------------------------------------------*/
-
 
 //
 // Constructor.
@@ -77,132 +159,9 @@ USDLViewport::USDLViewport()
 {
 	guard(USDLViewport::USDLViewport);
 
-    FullscreenOnly = 0;
-
-    LostFullscreen = LostGrab = 0;
-
-    TextToSpeechObject = -1;
-
-	// Query current bit depth.
-	int depth = SDL_GetVideoInfo()->vfmt->BitsPerPixel;
-	switch (depth)
-	{
-		case 8 :	
-			ColorBytes = 2;
-			break;
-
-		case 15 :	
-			ColorBytes = 2;		
-			break;
-
-		case 16 :
-			ColorBytes = 2;
-			Caps |= CC_RGB565;
-			break;
-
-		case 24 :
-		case 32 :
-			ColorBytes = 4;
-			break;
-
-		default :	
-			ColorBytes = 2;
-			Caps |= CC_RGB565;
-	}
-	
-	SavedCursorX = -1;
-
-	// Zero out maps.
-	for (INT i=0; i<512; i++)
-		KeysymMap[i] = 0;
-
-	// Remap important keys.
-
-	// TTY Functions.
-	KeysymMap[SDLK_BACKSPACE]= IK_Backspace;
-	KeysymMap[SDLK_TAB]	= IK_Tab;
-	KeysymMap[SDLK_RETURN]	= IK_Enter;
-	KeysymMap[SDLK_PAUSE]	= IK_Pause;
-	KeysymMap[SDLK_ESCAPE]	= IK_Escape;
-	KeysymMap[SDLK_DELETE]	= IK_Delete;
-	KeysymMap[SDLK_INSERT]  = IK_Insert;
-
-	// Modifiers.
-	KeysymMap[SDLK_LSHIFT]	= IK_LShift;
-	KeysymMap[SDLK_RSHIFT]	= IK_RShift;
-	KeysymMap[SDLK_LCTRL]	= IK_LControl;
-	KeysymMap[SDLK_RCTRL]	= IK_RControl;
-	KeysymMap[SDLK_LMETA]	= IK_F24;
-	KeysymMap[SDLK_RMETA]	= IK_F24;
-	KeysymMap[SDLK_LALT]	= IK_Alt;
-	KeysymMap[SDLK_RALT]	= IK_Alt;
-	
-	// Special remaps.
-	KeysymMap[SDLK_BACKQUOTE] = IK_Tilde;
-	KeysymMap[SDLK_QUOTE] = IK_SingleQuote;
-	KeysymMap[SDLK_SEMICOLON] = IK_Semicolon;
-	KeysymMap[SDLK_COMMA] = IK_Comma;
-	KeysymMap[SDLK_PERIOD] = IK_Period;
-	KeysymMap[SDLK_SLASH] = IK_Slash;
-	KeysymMap[SDLK_BACKSLASH] = IK_Backslash;
-	KeysymMap[SDLK_LEFTBRACKET]  = IK_LeftBracket;
-	KeysymMap[SDLK_RIGHTBRACKET] = IK_RightBracket;
- 
-	// Misc function keys.
-	KeysymMap[SDLK_F1]	= IK_F1;
-	KeysymMap[SDLK_F2]	= IK_F2;
-	KeysymMap[SDLK_F3]	= IK_F3;
-	KeysymMap[SDLK_F4]	= IK_F4;
-	KeysymMap[SDLK_F5]	= IK_F5;
-	KeysymMap[SDLK_F6]	= IK_F6;
-	KeysymMap[SDLK_F7]	= IK_F7;
-	KeysymMap[SDLK_F8]	= IK_F8;
-	KeysymMap[SDLK_F9]	= IK_F9;
-	KeysymMap[SDLK_F10]	= IK_F10;
-	KeysymMap[SDLK_F11]	= IK_F11;
-	KeysymMap[SDLK_F12]	= IK_F12;
-	KeysymMap[SDLK_F13]	= IK_F13;
-	KeysymMap[SDLK_F14]	= IK_F14;
-	KeysymMap[SDLK_F15]	= IK_F15;
-
-	// Cursor control and motion.
-	KeysymMap[SDLK_HOME]	= IK_Home;
-	KeysymMap[SDLK_LEFT]	= IK_Left;
-	KeysymMap[SDLK_UP]	= IK_Up;
-	KeysymMap[SDLK_RIGHT]	= IK_Right;
-	KeysymMap[SDLK_DOWN]	= IK_Down;
-	KeysymMap[SDLK_PAGEUP]	= IK_PageUp;
-	KeysymMap[SDLK_PAGEDOWN]= IK_PageDown;
-	KeysymMap[SDLK_END]	= IK_End;
-
-	// Keypad functions and numbers.
-	KeysymMap[SDLK_KP_ENTER]= IK_Enter;
-	KeysymMap[SDLK_KP0]	= IK_NumPad0;
-	KeysymMap[SDLK_KP1]	= IK_NumPad1;
-	KeysymMap[SDLK_KP2]	= IK_NumPad2;
-	KeysymMap[SDLK_KP3]	= IK_NumPad3;
-	KeysymMap[SDLK_KP4]	= IK_NumPad4;
-	KeysymMap[SDLK_KP5]	= IK_NumPad5;
-	KeysymMap[SDLK_KP6]	= IK_NumPad6;
-	KeysymMap[SDLK_KP7]	= IK_NumPad7;
-	KeysymMap[SDLK_KP8]	= IK_NumPad8;
-	KeysymMap[SDLK_KP9]	= IK_NumPad9;
-	KeysymMap[SDLK_KP_MULTIPLY]= IK_GreyStar;
-	KeysymMap[SDLK_KP_PLUS]	= IK_GreyPlus;
-	KeysymMap[SDLK_KP_EQUALS] = IK_Separator;
-	KeysymMap[SDLK_KP_MINUS] = IK_GreyMinus;
-	KeysymMap[SDLK_KP_PERIOD] = IK_NumPadPeriod;
-	KeysymMap[SDLK_KP_DIVIDE] = IK_GreySlash;
-
-	// Other
-	KeysymMap[SDLK_MINUS]	= IK_Minus;
-	KeysymMap[SDLK_EQUALS]	= IK_Equals;     
-	KeysymMap[SDLK_NUMLOCK]	= IK_NumLock;
-	KeysymMap[SDLK_CAPSLOCK]	= IK_CapsLock;
-	KeysymMap[SDLK_SCROLLOCK]	= IK_ScrollLock;
-
-	KeyRepeatKey = 0;
-	KeyRepeatUnicode = 0;
+	FullscreenOnly = 0;
+	TextToSpeechObject = -1;
+	ColorBytes = 4;
 	LastJoyHat = IK_None;
 	debugf( TEXT("Created and initialized a new SDL viewport.") );
 
@@ -234,20 +193,21 @@ void USDLViewport::Destroy()
 //
 void USDLViewport::ShutdownAfterError()
 {
-    SDL_Quit();
+	if( RenDev )
+		RenDev->RestoreGamma();
+	SDL_Quit();
 	Super::ShutdownAfterError();
 }
 
 
+//
+// Fullscreen and grabbed windows read raw relative motion, unless a windowed menu shows the OS cursor.
+//
 void USDLViewport::UpdateMouseGrabState()
 {
-	SDL_Surface *surface = SDL_GetVideoSurface();
-	MouseIsGrabbed = 0;
-	if (surface != NULL)
-	{
-		MouseIsGrabbed = ( (surface->flags & SDL_FULLSCREEN) ||
-		                   (SDL_WM_GrabInput(SDL_GRAB_QUERY) == SDL_GRAB_ON) );
-	}
+	SDL_Window* Window = GetOuterUSDLClient()->Window;
+	SDL_SetWindowRelativeMouseMode( Window, (IsFullscreen() || WantGrab) && !WindowsMouseShown );
+	MouseIsGrabbed = SDL_GetWindowRelativeMouseMode( Window );
 }
 
 
@@ -296,27 +256,6 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		Ar.Log( RenDev->GetClass()->GetPathName() );
 		return 1;
 	}
-	else if( ParseCommand(&Cmd,TEXT("SUPPORTEDRESOLUTION")) )
-	{
-		INT		Width = 0,
-				Height = 0,
-				BitDepth = 0;
-		UBOOL	Supported = 0;
-
-		if(Parse(Cmd,TEXT("WIDTH="),Width) && Parse(Cmd,TEXT("HEIGHT="),Height) && Parse(Cmd,TEXT("BITDEPTH="),BitDepth))
-		{
-            Uint32 flags = SDL_FULLSCREEN;
-            if (RenDev && (BlitFlags & BLIT_OpenGL))
-                flags |= SDL_OPENGL;
-            if (SDL_VideoModeOK(Width, Height, BitDepth, flags))
-                Supported = 1;
-		}
-
-		Ar.Logf(TEXT("%u"),Supported);
-
-		return 1;
-	}
-
 	else if( ParseCommand(&Cmd,TEXT("SETRES")) )
 	{
 		UBOOL Auto = appStrfind(Cmd,TEXT("AUTO")) != NULL;
@@ -367,7 +306,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 				EndFullscreen();
 
 			if ( GUIController )
-				GUIController->ResolutionChanged(X, Y);
+				GUIController->ResolutionChanged(SizeX, SizeY);
 		}
 		Client->SaveConfig();
 		return 1;
@@ -420,7 +359,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 				EndFullscreen();
 
 			if ( GUIController )
-				GUIController->ResolutionChanged(X, Y);
+				GUIController->ResolutionChanged(SizeX, SizeY);
 		}
 
 		if(Fullscreen)
@@ -477,7 +416,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		    
 		Y = appAtoi(CmdTemp);
 		
-        SDL_WarpMouse(X, Y);
+        SDL_WarpMouseInWindow( GetOuterUSDLClient()->Window, X, Y );
         return 1;
 	}
 
@@ -492,6 +431,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
     else if ((ParseCommand(&Cmd,TEXT(":wq"))) || (ParseCommand(&Cmd,TEXT(":q!"))))
     {
         GIsRequestingExit = 1;
+        return 1;
     }
 
 	// --- gam
@@ -510,14 +450,6 @@ void USDLViewport::OpenWindow( PTRINT InParentWindow, UBOOL IsTemporary, INT New
 {
 	guard(USDLViewport::OpenWindow);
 
-    // Can't do multiple windows with SDL 1.2.
-    // Eh...Splash screen. !!! FIXME.
-    //check(SDL_GetVideoSurface() == NULL);
-
-	// Check resolution.
-	if (SDL_GetVideoInfo()->vfmt->BitsPerPixel < 24 && GIsEditor)
-		appErrorf(TEXT("Editor requires desktop set to 32 bit resolution"));
-	
 	check(Actor);
 	UBOOL DoRepaint=0, DoSetActive=0;
 	USDLClient* C = GetOuterUSDLClient();
@@ -719,75 +651,7 @@ void USDLViewport::SetTitleBar()
 		default:			appStrcpy(WindowName,LocalizeGeneral(TEXT("ViewOther"),TEXT("WinDrv"))); break;
 	}
 
-	SDL_WM_SetCaption(appToAnsi(WindowName), appToAnsi(appPackage()));
-
-#ifndef WIN32
-    // SDL 1.2 misaligns icon masks on Windows, see ResizeViewport.
-    static bool loaded_icon = false;
-    if (!loaded_icon)
-    {
-        loaded_icon = true;
-        SDL_Surface *icon = SDL_LoadBMP("../Help/Unreal.bmp");
-        if (icon != NULL)
-        {
-            Uint8 *mask = NULL;
-            int bpp = icon->format->BytesPerPixel;
-
-            if ((bpp >= 1) && (bpp <= 4))
-            {
-                int masksize = (icon->h * (icon->w + 7)) / 8;
-                mask = new Uint8[masksize];
-                Uint8 *dst = mask;
-                Uint8 *src = (Uint8 *) icon->pixels;
-
-                int bit = 7;
-                memset(dst, '\0', masksize);
-
-                for (int h = 0; h < icon->h; h++)
-                {
-                    for (int w = 0; w < icon->w; w++)
-                    {
-                        Uint8 r, g, b;
-
-                        if (bit < 0)
-                        {
-                            dst++;
-                            bit = 7;
-                        }
-
-                        if (bpp == 3)
-                        {
-                            // !!! FIXME: this is wrong, really.
-                            r = src[0];
-                            g = src[1];
-                            b = src[2];
-                        }
-
-                        else
-                        {
-                            Uint32 pixel = 0;
-                            if (bpp == 4)
-                                pixel = *((Uint32 *) src);
-                            else if (bpp == 2)
-                                pixel = *((Uint16 *) src);
-                            else
-                                pixel = *((Uint8 *) src);
-
-                            SDL_GetRGB(pixel, icon->format, &r, &g, &b);
-                        }
-
-                        if (!((r == 0xFF) && (b == 0xFF) && (g == 0)))
-                            *dst |= (1 << bit);
-
-                        bit--;
-                        src += bpp;
-                    }
-                }
-            }
-            SDL_WM_SetIcon(icon, mask);
-        }
-    }
-#endif
+	SDL_SetWindowTitle( GetOuterUSDLClient()->Window, appToAnsi(WindowName) );
 }
 
 
@@ -799,7 +663,7 @@ void USDLViewport::UpdateWindowFrame()
 	guard(USDLViewport::UpdateWindowFrame);
 
 	// If not a window, exit.
-	if( !ScreenSurface || (BlitFlags&BLIT_Fullscreen) || (BlitFlags&BLIT_Temporary) || !Actor)
+	if( !GetOuterUSDLClient()->Window || (BlitFlags&BLIT_Fullscreen) || (BlitFlags&BLIT_Temporary) || !Actor)
 		return;
 
     SetTitleBar();
@@ -812,7 +676,7 @@ void USDLViewport::UpdateWindowFrame()
 //
 void USDLViewport::UpdateMousePosition()
 {
-	int X, Y;
+	float X, Y;
 	SDL_GetMouseState( &X, &Y );
 	WindowsMouseX = X;
 	WindowsMouseY = Y;
@@ -824,7 +688,13 @@ void USDLViewport::UpdateMousePosition()
 void* USDLViewport::GetWindow()
 {
 	guard(USDLViewport::GetWindow);
-	return ScreenSurface;
+	SDL_Window* Window = GetOuterUSDLClient()->Window;
+#ifdef WIN32
+	// Force feedback and OpenGLDrv's gamma need the native window.
+	return SDL_GetPointerProperty( SDL_GetWindowProperties(Window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL );
+#else
+	return Window;
+#endif
 	unguard;
 }
 
@@ -850,29 +720,8 @@ UBOOL USDLViewport::CauseInputEvent( INT iKey, EInputAction Action, FLOAT Delta 
 void USDLViewport::SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL OnlyFocus )
 {
 	guard(USDLViewport::SetMouseCapture);
-
-	// Handle capturing.
-	if( Capture )
-	{
-		if( SavedCursorX == -1 )
-            SDL_GetMouseState(&SavedCursorX, &SavedCursorY);
-
-        SDL_WM_GrabInput(SDL_GRAB_ON);
-	}
-	else
-	{
-        SDL_WM_GrabInput(SDL_GRAB_OFF);
-
-        #if 0  // !!! FIXME: This is screwey on the main menu (pops mouse on quit dialog)
-  		if( GetOuterUSDLClient()->Engine->edcamMouseControl( this ) == MOUSEC_Locked )
-            SDL_WarpMouse(SavedCursorX, SavedCursorY);
-        #endif
-
-  		SavedCursorX = -1;
-	}
-
+	WantGrab = Capture;
 	UpdateMouseGrabState();
-
 	unguard;
 }
 
@@ -884,21 +733,25 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 {
 	guard(USDLViewport::UpdateInput);
 
+	// Resets come from SetRes and from inside the event loop below, so like WinDrv they leave the queue alone.
+	if( Reset )
+		return;
+
 	USDLClient* Client = GetOuterUSDLClient();
 
     if ((Client->UseJoystick) && (USDLClient::Joystick != NULL))
     {
-        SDL_JoystickUpdate();
+        SDL_UpdateJoysticks();
 
         int i;
         int max = USDLClient::JoystickButtons;
         for (i = 0; i < max; i++)
         {
-            Uint8 state = SDL_JoystickGetButton(USDLClient::Joystick, i);
+            UBOOL Pressed = SDL_GetJoystickButton(USDLClient::Joystick, i);
 		    INT Button = IK_Joy1 + i;
-			if( !Input->KeyDown( Button ) && (state == SDL_PRESSED) )
+			if( !Input->KeyDown( Button ) && Pressed )
 				CauseInputEvent( Button, IST_Press );
-			else if( Input->KeyDown( Button ) && (state != SDL_PRESSED) )
+			else if( Input->KeyDown( Button ) && !Pressed )
 				CauseInputEvent( Button, IST_Release );
         }
 
@@ -906,294 +759,109 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
         check(USDLClient::JoystickAxes <= 8);
         for (i = 0; i < USDLClient::JoystickAxes; i++)
         {
-            float pos = SDL_JoystickGetAxis(USDLClient::Joystick, i) / 65535.f;
+            float pos = SDL_GetJoystickAxis(USDLClient::Joystick, i) / 65535.f;
 		    Input->DirectAxis(axes[i], pos, DeltaSeconds);
         }
 	}
-
-	// Keyboard.
-	EInputKey Key 	    = IK_None;
-	EInputKey UpperCase = IK_None;
-	EInputKey LowerCase = IK_None;
 
 	// Windowed menus use the OS cursor like WinDrv, so the menu cursor is where the mouse is.
 	// UGameEngine::Tick releases and restores the grab for them.
 	if( bShowWindowsMouse != WindowsMouseShown )
 	{
 		WindowsMouseShown = bShowWindowsMouse;
-		SDL_ShowCursor( WindowsMouseShown );
+		if( WindowsMouseShown )
+			SDL_ShowCursor();
+		else
+			SDL_HideCursor();
+		UpdateMouseGrabState();
 	}
 
 	// Mouse movement management.
 	UBOOL MouseMoved = false;
 	UBOOL JoyHatMoved = false;
-	INT DX = 0, DY = 0;
+	UBOOL Resized = false;
+	FLOAT DX = 0, DY = 0;
 	EInputKey ThisJoyHat = IK_None;
+	SDL_JoystickID JoystickID = USDLClient::Joystick ? SDL_GetJoystickID( USDLClient::Joystick ) : 0;
 
-    bool mouse_focus, input_focus, app_focus;
+	static const EInputKey MouseButtons[] = { IK_None, IK_LeftMouse, IK_MiddleMouse, IK_RightMouse, IK_Mouse4, IK_Mouse5, IK_Mouse6, IK_Mouse7, IK_Mouse8 };
 
-	char* sdl_error;
 	SDL_Event Event;
-	INT ResizeX = 0, ResizeY = 0;
 	while( SDL_PollEvent( &Event ) )
 	{
 		switch( Event.type )
 		{
-            case SDL_QUIT:
+            case SDL_EVENT_QUIT:
                 GIsRequestingExit = 1;
                 break;
 
-			case SDL_KEYDOWN:
-				// Unicode on X11 may map CTRL-a to ASCII equivalents.
-				if ( (Event.key.keysym.unicode >= 1) &&
-				     (Event.key.keysym.unicode <= 31) &&
-				     (Event.key.keysym.mod & KMOD_CTRL) )
+			case SDL_EVENT_KEY_DOWN:
+			case SDL_EVENT_KEY_UP:
+			{
+				UBOOL Down = Event.type == SDL_EVENT_KEY_DOWN;
+				if( Down && Event.key.key == SDLK_G && (Event.key.mod & SDL_KMOD_CTRL) )
 				{
-					Event.key.keysym.unicode = Event.key.keysym.sym;
-				}
-
-				// vogel: this is a MESS - clean this part up!!!
-				if ( (Event.key.keysym.sym == SDLK_g) && (Event.key.keysym.mod & KMOD_CTRL) )
-				{
-					SDL_GrabMode mode = SDL_WM_GrabInput(SDL_GRAB_QUERY);
-					if ( mode == SDL_GRAB_ON ) 
+					if( !Event.key.repeat )
 					{
-						SDL_WM_GrabInput(SDL_GRAB_OFF);
-					} else {
-						SDL_WM_GrabInput(SDL_GRAB_ON);
+						WantGrab = !WantGrab;
+						UpdateMouseGrabState();
 					}
-					UpdateMouseGrabState();
-					// Don't pass event to engine.
+					break;
+				}
+				if( Down && Event.key.key == SDLK_RETURN && (Event.key.mod & SDL_KMOD_ALT) )
+				{
+					if( !Event.key.repeat )
+						ToggleFullscreen();
 					break;
 				}
 
-				else if ( (Event.key.keysym.sym == SDLK_RETURN) && (Event.key.keysym.mod & KMOD_ALT) )
-				{
-					ToggleFullscreen();
-					// Don't pass event to engine.
-					break;
-				}
-				// Reset timer.
-				RepeatTimer = appSeconds();
-				LastKey = true;
+				// Repeats press again, like WM_KEYDOWN.
+				EInputKey Key = KeyFromSDL( Event.key.key, Event.key.scancode );
+				if( Key != IK_None )
+					CauseInputEvent( Key, Down ? IST_Press : IST_Release );
 
-				Key = (EInputKey) Event.key.keysym.sym;
-				if ( Event.key.keysym.unicode )
-				{
-					if (Client->AllowUnicodeKeys)
-						Key = (EInputKey) Event.key.keysym.unicode;
-				}
+				// Text input leaves out the control characters WM_CHAR sends, edit boxes use them for editing and the clipboard.
+				// Ctrl+Alt is AltGr, which types text.
+				if( Down && (Key == IK_Backspace || Key == IK_Tab || Key == IK_Escape) )
+					Client->Engine->Key( this, Key, Key );
+				else if( Down && Key >= IK_A && Key <= IK_Z && (Event.key.mod & SDL_KMOD_CTRL) && !(Event.key.mod & SDL_KMOD_ALT) )
+					Client->Engine->Key( this, (EInputKey)(Key - IK_A + 1), Key - IK_A + 1 );
+				break;
+			}
 
-				// Convert to UpperCase/LowerCase values. If not
-				// a letter, leave alone
-				if ((Key >= ((EInputKey) SDLK_a)) && (Key <= ((EInputKey) SDLK_z))) 
-				{
-					LowerCase = Key;
-					UpperCase = (EInputKey) (Key - 32);
-				} 
-				else if ((Key >= ((EInputKey) (SDLK_a - 32))) && (Key <= ((EInputKey) (SDLK_z - 32)))) 
-				{
-					UpperCase = Key;
-					LowerCase = (EInputKey) (Key + 32);
-				} 
-				else 	
-				{
-					UpperCase = Key;
-					LowerCase = Key;
-				}
-				// Always send upper case letters to the system.
-				// The engine NEVER processes lowercase letters, 
-				// since lowercase keycodes are mapped to the F keys
+			case SDL_EVENT_TEXT_INPUT:
+			{
+				const char* Text = Event.text.text;
+				while( Uint32 Char = SDL_StepUTF8( &Text, NULL ) )
+					if( Char < 0x10000 )
+						Client->Engine->Key( this, Char < 256 ? (EInputKey)Char : IK_Unicode, (TCHAR)Char );
+				break;
+			}
 
-				Key = UpperCase;
-
-				// Check the Keysym map.
-				if (KeysymMap[Key] != 0)
-					Key = (EInputKey) KeysymMap[Key];
-	
-				// Reset to origional values. In case below gets 
-				// munged by the above code. Shouldn't happen.
-				if (Key == (EInputKey) SDLK_BACKSPACE)
-					Key = IK_Backspace;
-				if (Key ==(EInputKey) SDLK_TAB)
-					Key = IK_Tab;
-				if (Key == (EInputKey) SDLK_RETURN)
-					Key = IK_Enter;
-				if (Key == (EInputKey) SDLK_DELETE)
-					Key = IK_Delete;
-
-				// Send key to input system. 
-				if ( Key != IK_None )
-				{
-					if (Key >= IK_MAX)  // !!! FIXME
-						debugf(TEXT("Unsupported SDL key id (0x%X)"), (int) Event.key.keysym.sym);
-					else
-					{
-						// !!! FIXME: Total hack. '(' is IK_DOWN.  :(  --ryan.
-						if ((Key != '(') || (Event.key.keysym.sym == SDLK_DOWN))
-					        	CauseInputEvent( Key, IST_Press );
-					}
-				}
-
-				if ( Event.key.keysym.mod & KMOD_SHIFT )
-					Key = UpperCase;
-				else	
-					Key = LowerCase;
-		
-				KeyRepeatKey = Key;
-				KeyRepeatUnicode = (TCHAR) Event.key.keysym.unicode;
-		
-				// Send to text processor	
-				if (	(Event.key.keysym.sym != SDLK_DELETE  ) && 
-					(Event.key.keysym.sym != SDLK_INSERT  ) && 
-					(Event.key.keysym.sym < 272 ) &&
-					(Event.key.keysym.unicode < 272 ) )	
-				{
-					//printf("%i %i %i\n", Key, Event.key.keysym.sym, Event.key.keysym.unicode );		
-					Client->Engine->Key( this, Key, (TCHAR) Event.key.keysym.unicode);
-				}
-				else
-				{
-					KeyRepeatKey = IK_None;
-					KeyRepeatUnicode = 0;
-				}
+			case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			case SDL_EVENT_MOUSE_BUTTON_UP:
+				if( Event.button.button < ARRAY_COUNT(MouseButtons) && MouseButtons[Event.button.button] != IK_None )
+					CauseInputEvent( MouseButtons[Event.button.button], Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? IST_Press : IST_Release );
 				break;
 
-			case SDL_KEYUP:
-				// Unicode on X11 may map CTRL-a to ASCII equivalents.
-				if ( (Event.key.keysym.unicode >= 1) &&
-				     (Event.key.keysym.unicode <= 31) &&
-				     (Event.key.keysym.mod & KMOD_CTRL) )
+			case SDL_EVENT_MOUSE_WHEEL:
+			{
+				// Precise wheels and touchpads send fractions of a notch.
+				FLOAT Wheel = Event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -Event.wheel.y : Event.wheel.y;
+				if( Wheel * WheelRemainder < 0.f )
+					WheelRemainder = 0.f;
+				WheelRemainder += Wheel;
+				while( Abs(WheelRemainder) >= 1.f )
 				{
-					Event.key.keysym.unicode = Event.key.keysym.sym;
-				}
-
-				Key = (EInputKey) Event.key.keysym.sym;
-				if ( Event.key.keysym.unicode )
-				{
-					if (Client->AllowUnicodeKeys)
-						Key = (EInputKey) Event.key.keysym.unicode;
-				}
-			
-				// Convert to UpperCase/LowerCase
-				if ((Key >= ((EInputKey) SDLK_a)) && (Key <= ((EInputKey) SDLK_z))) 
-				{
-					LowerCase = Key;
-					UpperCase = (EInputKey) (Key - 32);
-				} 
-				else if ((Key >= ((EInputKey) (SDLK_a - 32))) && (Key <= ((EInputKey) (SDLK_z - 32)))) 
-				{
-					UpperCase = Key;
-					LowerCase = (EInputKey) (Key + 32);
-				}
-				else 
-				{
-					UpperCase = Key;
-					LowerCase = Key;
-				}
-			
-				// Always send upper case letters to the system.
-				Key = UpperCase;
-	
-				// Check the Keysym map.
-				if (KeysymMap[Key] != 0)
-					Key = (EInputKey) KeysymMap[Key];
-			
-				// Release all types of this key.
-				if (Key ==(EInputKey) SDLK_BACKSPACE)
-					Key = IK_Backspace;
-				if (Key == (EInputKey) SDLK_TAB)
-					Key = IK_Tab;
-				if (Key ==(EInputKey) SDLK_RETURN)
-					Key = IK_Enter;
-	
-				// Send key to input system.
-				if (Key < IK_MAX)  // !!! FIXME
+					EInputKey Key = WheelRemainder > 0.f ? IK_MouseWheelUp : IK_MouseWheelDown;
+					CauseInputEvent( Key, IST_Press );
 					CauseInputEvent( Key, IST_Release );
-
-				// Turn off repeating. Needed for
-				// chat modes.
-				KeyRepeatKey = 0;
-				KeyRepeatUnicode = 0;
-				break;
-		
-			case SDL_MOUSEBUTTONDOWN:
-				switch (Event.button.button)
-				{
-					case 1:
-						Key = IK_LeftMouse;
-						break;
-					case 2:
-						Key = IK_MiddleMouse;
-						break;
-					case 3:
-						Key = IK_RightMouse;
-						break;
-					case 4:
-						Key = IK_MouseWheelUp;
-						break;
-					case 5:
-						Key = IK_MouseWheelDown;
-						break;
-					case 6:
-						Key = IK_Mouse4;
-						break;
-					case 7:
-						Key = IK_Mouse5;
-						break;
-					case 8:
-						Key = IK_Mouse6;
-						break;
-					case 9:
-						Key = IK_Mouse7;
-						break;
-					case 10:
-						Key = IK_Mouse8;
-						break;
+					WheelRemainder -= WheelRemainder > 0.f ? 1.f : -1.f;
 				}
-				// Send to input system.
-				CauseInputEvent( Key, IST_Press );
 				break;
+			}
 
-			case SDL_MOUSEBUTTONUP:
-				switch (Event.button.button)
-				{
-					case 1:
-						Key = IK_LeftMouse;
-						break;
-					case 2:
-						Key = IK_MiddleMouse;
-						break;
-					case 3:
-						Key = IK_RightMouse;
-						break;
-					case 4:
-						Key = IK_MouseWheelUp;
-						break;
-					case 5:
-						Key = IK_MouseWheelDown;
-						break;
-					case 6:
-						Key = IK_Mouse4;
-						break;
-					case 7:
-						Key = IK_Mouse5;
-						break;
-					case 8:
-						Key = IK_Mouse6;
-						break;
-					case 9:
-						Key = IK_Mouse7;
-						break;
-					case 10:
-						Key = IK_Mouse8;
-						break;
-				}
-				// Send to input system.
-				CauseInputEvent( Key, IST_Release );
-				break;
-	
-			case SDL_MOUSEMOTION:
+			case SDL_EVENT_MOUSE_MOTION:
 				if ((!MouseIsGrabbed) && (Client->IgnoreUngrabbedMouse))
 					break;
 
@@ -1201,17 +869,17 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				DX += Event.motion.xrel;
 				DY += Event.motion.yrel;
 				break;
-	
-			case SDL_JOYBALLMOTION:
-				if ( Event.jball.which != Client->JoystickNumber || !Client->UseJoystick )
+
+			case SDL_EVENT_JOYSTICK_BALL_MOTION:
+				if ( Event.jball.which != JoystickID || !Client->UseJoystick )
 	                break;
 				MouseMoved = true;
-				DX += (INT) (Event.jball.xrel * Client->ScaleJBX);
-				DY += (INT) (Event.jball.yrel * Client->ScaleJBY);
+				DX += Event.jball.xrel * Client->ScaleJBX;
+				DY += Event.jball.yrel * Client->ScaleJBY;
 	                break;
-	
-			case SDL_JOYHATMOTION:
-				if ( (Event.jhat.which != Client->JoystickNumber) ||
+
+			case SDL_EVENT_JOYSTICK_HAT_MOTION:
+				if ( (Event.jhat.which != JoystickID) ||
 				     (Event.jhat.hat != Client->JoystickHatNumber) ||
 				     (!Client->UseJoystick) ||
 				     (Client->IgnoreHat) )
@@ -1238,60 +906,56 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 					default :
 						ThisJoyHat = (EInputKey) 0;
 						break;
-				}				
+				}
 				break;
 
-			case SDL_VIDEORESIZE:
-				ResizeX = Event.resize.w;
-				ResizeY = Event.resize.h;
+			case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+				Resized = true;
 				break;
 
-	        case SDL_ACTIVEEVENT:
-                // !!! FIXME: Workaround for bug in X11 target...
-                SDL_ShowCursor(Event.active.gain ? WindowsMouseShown : 1);
-                break;
+			// Like WinDrv, the desktop gets its gamma back while the game is in the background.
+			case SDL_EVENT_WINDOW_FOCUS_LOST:
+				if( RenDev )
+					RenDev->RestoreGamma();
+				if( GUIController )
+					GUIController->ResetInput();
+				if( Input )
+					Input->ResetInput();
+				break;
+
+			case SDL_EVENT_WINDOW_FOCUS_GAINED:
+				if( RenDev )
+					RenDev->UpdateGamma( this );
+				break;
 
 			default:;
 		}
 	}
 
-	// Applied after the loop so a drag costs one GL reinit, and never during a reset, which runs inside SetRes.
-	// The menus need 640x480, a smaller window makes the GUI switch to a fixed resolution.
-	if( ResizeX && !Reset && RenDev && !(BlitFlags & BLIT_Fullscreen) )
+	// Once after the loop, so a drag resizes once per frame. The window already has the new size.
+	if( Resized && RenDev && !(BlitFlags & BLIT_Fullscreen) )
 	{
-		ResizeX = Max( ResizeX, 640 );
-		ResizeY = Max( ResizeY, 480 );
-		if( ResizeX != SizeX || ResizeY != SizeY )
-			RenDev->SetRes( this, ResizeX, ResizeY, 0, ColorBytes );
+		int W, H;
+		SDL_GetWindowSizeInPixels( Client->Window, &W, &H );
+		if( W != SizeX || H != SizeY )
+			ResizeViewport( BlitFlags | BLIT_NoWindowChange, W, H );
 	}
 
 	// Deliver mouse behavior to the engine.
 	if ( MouseMoved )
 	{
-	    WindowsMouseX += DX;
-	    WindowsMouseY += DY;
-
-        if (WindowsMouseX > SizeX)
-            WindowsMouseX = SizeX;
-
-        if (WindowsMouseX < 0)
-            WindowsMouseX = 0;
-
-        if (WindowsMouseY > SizeY)
-            WindowsMouseY = SizeY;
-
-        if (WindowsMouseY < 0)
-            WindowsMouseY = 0;
+	    WindowsMouseX = Clamp<FLOAT>( WindowsMouseX + DX, 0, SizeX );
+	    WindowsMouseY = Clamp<FLOAT>( WindowsMouseY + DY, 0, SizeY );
 
 		// Send to input subsystem.
 		if( DX )
 			CauseInputEvent( IK_MouseX, IST_Axis, +DX );
-		      
+
 		if( DY )
 			CauseInputEvent( IK_MouseY, IST_Axis, -DY );
 
 		if (!Client->InMenuLoop)
-			Client->Engine->MouseDelta(this, 0, DX, DY);
+			Client->Engine->MouseDelta(this, 0, appRound(DX), appRound(DY));
 
 		if (!IsRealtime())
 		{
@@ -1311,32 +975,10 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	{
 		if (LastJoyHat)
 			CauseInputEvent( LastJoyHat, IST_Release );
-		if (ThisJoyHat)	
-			CauseInputEvent( ThisJoyHat, IST_Press );		
+		if (ThisJoyHat)
+			CauseInputEvent( ThisJoyHat, IST_Press );
 		LastJoyHat = ThisJoyHat;
-	} 
-
-
-	// Send WM_CHAR for down keys.
-	if ( LastKey && ( appSeconds() - RepeatTimer < 0.5 ) ) 
-		return;
-	LastKey = false;
-	if ( appSeconds() - RepeatTimer < 0.1 )
-		return;
-		
-	RepeatTimer = appSeconds();
-
-	// Deliver keyboard events to the engine	
-	if ( KeyRepeatKey )
-	{
-		if ( KeyRepeatKey == IK_Backspace )
-		{
-			CauseInputEvent( IK_Backspace, IST_Press );
-			CauseInputEvent( IK_Backspace, IST_Release );
-		}
-		else
- 			Client->Engine->Key( this, (EInputKey) KeyRepeatKey, KeyRepeatUnicode );
-	}		
+	}
 
 	unguard;
 }
@@ -1523,10 +1165,8 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	NewX = InNewX!=INDEX_NONE ? InNewX : (NewBlitFlags&BLIT_Fullscreen) ? Client->FullscreenViewportX : Client->WindowedViewportX;
 	NewY = InNewX!=INDEX_NONE ? InNewY : (NewBlitFlags&BLIT_Fullscreen) ? Client->FullscreenViewportY : Client->WindowedViewportY;
 
-	// Align NewX.
 	check(NewX>=0);
 	check(NewY>=0);
-	NewX = Align(NewX,2);
 
 	if( !(NewBlitFlags & BLIT_Temporary) )
 	{
@@ -1534,53 +1174,75 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	}
 
 	// Set new info.
-	DWORD OldBlitFlags = BlitFlags;
-	BlitFlags          = NewBlitFlags & ~BLIT_ParameterFlags;
-	SizeX              = NewX;
-	SizeY              = NewY;
+	BlitFlags = NewBlitFlags & ~BLIT_ParameterFlags;
 
-	INT VideoFlags = 0;
-	INT VideoBPP   = 0;
-
-	if( NewBlitFlags & BLIT_OpenGL )
+	if( !Client->Window )
 	{
-		VideoFlags |= SDL_OPENGL;
-		debugf( TEXT("OpenGL") );
+		Client->Window = SDL_CreateWindow( "", NewX, NewY, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN );
+		if( !Client->Window )
+			appErrorf( TEXT("Couldn't create window: %s"), appFromAnsi(SDL_GetError()) );
+		SDL_StartTextInput( Client->Window );
+
+		// The menus need 640x480, a smaller window makes the GUI switch to a fixed resolution.
+		if( !GIsEditor )
+			SDL_SetWindowMinimumSize( Client->Window, 640, 480 );
+
+#ifndef WIN32
+		// Windows windows get the executable's icon.
+		SDL_Surface* Icon = SDL_LoadBMP( "../Help/Unreal.bmp" );
+		if( Icon )
+		{
+			SDL_SetSurfaceColorKey( Icon, true, SDL_MapSurfaceRGB( Icon, 255, 0, 255 ) );
+			SDL_SetWindowIcon( Client->Window, Icon );
+			SDL_DestroySurface( Icon );
+		}
+#endif
 	}
 
-	if( NewBlitFlags & BLIT_Fullscreen )
+	// A null render device may have opened the window first.
+	if( (NewBlitFlags & BLIT_OpenGL) && !Client->GLContext )
 	{
-		VideoFlags |= SDL_FULLSCREEN;
-	}
-	else if( !GIsEditor )
-	{
-		VideoFlags |= SDL_RESIZABLE;
+		Client->GLContext = SDL_GL_CreateContext( Client->Window );
+		if( !Client->GLContext )
+			appErrorf( TEXT("Couldn't create OpenGL context: %s"), appFromAnsi(SDL_GetError()) );
 	}
 
-    SDL_ShowCursor(0);
+	// User resizing already gave the window its size.
+	SDL_Window* Window = Client->Window;
+	if( !(NewBlitFlags & BLIT_NoWindowChange) )
+	{
+		if( NewBlitFlags & BLIT_Fullscreen )
+		{
+			// The desktop size, which Auto uses, stays borderless so switching away is instant. Other sizes change the display mode.
+			SDL_DisplayMode Mode;
+			UBOOL Exclusive = (NewX != Client->DesktopX || NewY != Client->DesktopY)
+				&& SDL_GetClosestFullscreenDisplayMode( SDL_GetDisplayForWindow(Window), NewX, NewY, 0.f, false, &Mode );
+			SDL_SetWindowFullscreenMode( Window, Exclusive ? &Mode : NULL );
+			SDL_SetWindowFullscreen( Window, true );
+		}
+		else
+		{
+			SDL_SetWindowFullscreen( Window, false );
+			SDL_SetWindowSize( Window, Align(NewX,2), NewY );
+			SDL_SetWindowResizable( Window, !GIsEditor );
+		}
+		SDL_ShowWindow( Window );
+		SDL_SyncWindow( Window );
+
+		// SDL may pick another display mode, and the OS may limit the window.
+		int W, H;
+		SDL_GetWindowSizeInPixels( Window, &W, &H );
+		NewX = W;
+		NewY = H;
+	}
+	SizeX = NewX;
+	SizeY = NewY;
+
+	SDL_HideCursor();
 	WindowsMouseShown = 0;
 	bWindowsMouseAvailable = !(NewBlitFlags & BLIT_Fullscreen);
 
-    SetTitleBar();  // This can be done before SDL_SetVideoMode().
-
-  	if ( SDL_SetVideoMode( NewX, NewY, VideoBPP, VideoFlags ) == NULL )
-	{
-		appErrorf( TEXT("Couldn't set video mode: %s\n"), appFromAnsi(SDL_GetError()) );
-		appExit();
-	}
-
-#ifdef WIN32
-	// Setting the video mode drops the window icon, give it the executable's icon again.
-	SDL_SysWMinfo Info;
-	SDL_VERSION( &Info.version );
-	if( SDL_GetWMInfo( &Info ) )
-	{
-		SendMessage( Info.window, WM_SETICON, ICON_BIG, GetClassLongPtr( Info.window, GCLP_HICON ) );
-		SendMessage( Info.window, WM_SETICON, ICON_SMALL, GetClassLongPtr( Info.window, GCLP_HICONSM ) );
-	}
-#endif
-
-	UpdateMouseGrabState();
+	SetTitleBar();
 
 	// Make this viewport current and update its title bar.
 	GetOuterUClient()->MakeCurrent( this );	
@@ -1614,11 +1276,9 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 		Client->SaveConfig();
 	}
 
-	if ((VideoFlags & SDL_FULLSCREEN) == 0)
-    {
-	    SDL_WM_GrabInput(Client->CaptureMouse && !bShowWindowsMouse ? SDL_GRAB_ON : SDL_GRAB_OFF);
-    	UpdateMouseGrabState();
-    }
+	if( !(NewBlitFlags & BLIT_Fullscreen) )
+		WantGrab = Client->CaptureMouse && !bShowWindowsMouse;
+	UpdateMouseGrabState();
 
 	return 1;
 	unguard;

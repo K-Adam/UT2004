@@ -183,13 +183,16 @@ else()
   pkg_check_modules(VORBISFILE REQUIRED IMPORTED_TARGET GLOBAL vorbisfile)
   add_library(Vorbis::vorbisfile ALIAS PkgConfig::VORBISFILE)
 endif()
-# Debian and Ubuntu cannot install the SDL 1.2 dev package for two architectures at once,
-# so the runtime library is accepted when the dev symlink is missing.
-find_path(SDL_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL REQUIRED)
-find_library(SDL_LIBRARY NAMES SDL libSDL-1.2.so.0 REQUIRED)
-add_library(SDL::SDL INTERFACE IMPORTED GLOBAL)
-target_include_directories(SDL::SDL INTERFACE ${SDL_INCLUDE_DIR})
-target_link_libraries(SDL::SDL INTERFACE ${SDL_LIBRARY})
+find_package(SDL3 CONFIG REQUIRED)
+if(NOT MSVC)
+  # Core declares its own 16-bit wcs functions, which clash with glibc's <wchar.h> that SDL includes.
+  # SDL needs nothing from it, so its include guard is set up front.
+  get_target_property(SDL3_TARGET SDL3::SDL3 ALIASED_TARGET)
+  if(NOT SDL3_TARGET)
+    set(SDL3_TARGET SDL3::SDL3)
+  endif()
+  set_property(TARGET ${SDL3_TARGET} APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS _WCHAR_H=1)
+endif()
 # Speex stays vendored for Epic's 48 kHz mode (EPIC_48K), which upstream lacks.
 add_subdirectory(Speex)
 add_subdirectory(Tools/NVTriStrip)

@@ -13,12 +13,8 @@
 	Constants & static stuff.
 -----------------------------------------------------------------------------*/
 
-#if (defined WIN32)
+#ifdef WIN32
 #   define GL_DLL (TEXT("OpenGL32.dll"))
-#elif __linux__
-#   define GL_DLL (TEXT("libGL.so.1"))
-#else
-#   error Fill this in for your platform.
 #endif
 
 // Static variables.
@@ -322,13 +318,10 @@ UBOOL UOpenGLRenderDevice::Init()
 	if( NumDevices==0 )
 	{
 		// Bind the library.
-        FString OpenGLLibName = GL_DLL;
-
 		if ( !GLLoaded )
 		{
-			// Only call it once as succeeding calls will 'fail'.
-			debugf( TEXT("binding %s"), *OpenGLLibName );
-			if ( SDL_GL_LoadLibrary( appToAnsi(*OpenGLLibName) ) == -1 )
+			// SDL picks the library, under Wayland a name here would be taken as the EGL library.
+			if ( !SDL_GL_LoadLibrary( NULL ) )
 				appErrorf( appFromAnsi(SDL_GetError()) );
 			GLLoaded = true;
 		}
@@ -1051,6 +1044,8 @@ void UOpenGLRenderDevice::UpdateGamma(UViewport* Viewport)
 {
 	guard(UOpenGLRenderDevice::UpdateGamma);
 
+	// SDL3 has no gamma API, so only Windows sets one.
+#ifdef WIN32
 	if( ParseParam(appCmdLine(),TEXT("NOGAMMA")) )
 		return;
 
@@ -1068,12 +1063,16 @@ void UOpenGLRenderDevice::UpdateGamma(UViewport* Viewport)
 	for(INT i=0; i<256; i++)
 		Ramp.red[i] = Ramp.green[i] = Ramp.blue[i] = Clamp<INT>( appRound( (Contrast+0.5f)*appPow(i/255.f,1.0f/Gamma)*65535.f + (Brightness-0.5f)*32768.f - Contrast*32768.f + 16384.f ), 0, 65535 );
 
-#ifdef WIN32
 	if( !UseSDL )
 		SetDeviceGammaRamp( hDC, &Ramp );
 	else
+	{
+		HWND Window = (HWND) Viewport->GetWindow();
+		HDC WindowDC = GetDC( Window );
+		SetDeviceGammaRamp( WindowDC, &Ramp );
+		ReleaseDC( Window, WindowDC );
+	}
 #endif
-	SDL_SetGammaRamp( Ramp.red, Ramp.green, Ramp.blue );
 
 	unguard;
 }
@@ -1086,6 +1085,7 @@ void UOpenGLRenderDevice::RestoreGamma()
 {
 	guard(UOpenGLRenderDevice::RestoreGamma);
 
+#ifdef WIN32
 	if( ParseParam(appCmdLine(),TEXT("NOGAMMA")) )
 		return;
 
@@ -1099,16 +1099,10 @@ void UOpenGLRenderDevice::RestoreGamma()
 	for(INT i=0; i<256; i++)
 		Ramp.red[i] = Ramp.green[i] = Ramp.blue[i] = i << 8;
 
-#ifdef WIN32
-	if( !UseSDL )
-	{
-		HDC DesktopDC = GetDC( GetDesktopWindow() );
-		SetDeviceGammaRamp( DesktopDC, &Ramp );
-		ReleaseDC( NULL, DesktopDC );
-	}
-	else
+	HDC DesktopDC = GetDC( GetDesktopWindow() );
+	SetDeviceGammaRamp( DesktopDC, &Ramp );
+	ReleaseDC( NULL, DesktopDC );
 #endif
-	SDL_SetGammaRamp( Ramp.red, Ramp.green, Ramp.blue );
 
 	unguard;
 }
@@ -1211,27 +1205,8 @@ UBOOL UOpenGLRenderDevice::Exec(const TCHAR* Cmd,FOutputDevice& Ar)
 
 		if( Parse(Cmd,TEXT("WIDTH="),Width) && Parse(Cmd,TEXT("HEIGHT="),Height) && Parse(Cmd,TEXT("BITDEPTH="),BitDepth) )
 		{
-#if 0
-			for(INT ModeIndex = 0;ModeIndex < DisplayModes.Num();ModeIndex++)
-			{
-				D3DDISPLAYMODE&	DisplayMode = DisplayModes(ModeIndex);
-
-				if(DisplayMode.Width == Width && DisplayMode.Height == Height && GetFormatBPP(DisplayMode.Format) == BitDepth)
-				{
-					Supported = 1;
-					break;
-				}
-			}
-
-#else
-#ifdef WIN32
-			if( !UseSDL )
-				Supported = 1;
-			else
-#endif
-			if( SDL_VideoModeOK(Width, Height, BitDepth, SDL_OPENGL | SDL_FULLSCREEN) == BitDepth )
-				Supported = 1;
-#endif		
+			// The viewport picks the closest display mode.
+			Supported = 1;
 		}
 
 		Ar.Logf(TEXT("%u"),Supported);
@@ -1381,7 +1356,7 @@ void UOpenGLRenderDevice::Present(UViewport* Viewport)
 	}
 	else
 #endif
-	SDL_GL_SwapBuffers();
+	SDL_GL_SwapWindow( SDL_GL_GetCurrentWindow() );
 
 	unguard;
 }

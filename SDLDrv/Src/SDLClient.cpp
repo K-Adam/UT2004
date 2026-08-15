@@ -52,7 +52,6 @@ void USDLClient::StaticConstructor()
 	new(GetClass(),TEXT("ScaleJBY"),             RF_Public)UFloatProperty(CPP_PROPERTY(ScaleJBY),            TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("IgnoreHat"),            RF_Public)UBoolProperty(CPP_PROPERTY(IgnoreHat),            TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("IgnoreUngrabbedMouse"), RF_Public)UBoolProperty(CPP_PROPERTY(IgnoreUngrabbedMouse), TEXT("Display"),  CPF_Config );
-	new(GetClass(),TEXT("AllowUnicodeKeys"),     RF_Public)UBoolProperty(CPP_PROPERTY(AllowUnicodeKeys),     TEXT("Display"),  CPF_Config );
 	new(GetClass(),TEXT("TextToSpeechFile"),     RF_Public)UStrProperty(CPP_PROPERTY(TextToSpeechFile),      TEXT("Display"),  CPF_Config );
 
 	unguard;
@@ -85,17 +84,7 @@ void USDLClient::Init( UEngine* InEngine )
 	// Init base.
 	UClient::Init( InEngine );
 
-	// Fix up the environment variables for 3dfx.
-	putenv("MESA_GLX_FX=f");
-	putenv("FX_GLIDE_NO_SPLASH=1");
-	// Force MESA to not initialize an atexit handler.
-	putenv("MESA_FX_NO_SIGNALS=1");
-
-	// The launcher's splash has already set a video mode, restart video so SDL reports the desktop mode again.
-	if( SDL_WasInit(SDL_INIT_VIDEO) )
-		SDL_QuitSubSystem(SDL_INIT_VIDEO);
-
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) == -1)
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK))
     {
         const TCHAR *err = appFromAnsi(SDL_GetError());
 		appErrorf(TEXT("Couldn't initialize SDL: %s\n"), err);
@@ -117,21 +106,21 @@ void USDLClient::Init( UEngine* InEngine )
 		AutoResolution = 0;
 	}
 
-	// Valid only before the first SDL_SetVideoMode.
-	const SDL_VideoInfo* VideoInfo = SDL_GetVideoInfo();
-	DesktopX = VideoInfo->current_w;
-	DesktopY = VideoInfo->current_h;
+	const SDL_DisplayMode* Desktop = SDL_GetDesktopDisplayMode( SDL_GetPrimaryDisplay() );
+	if( Desktop )
+	{
+		DesktopX = Desktop->w;
+		DesktopY = Desktop->h;
+	}
 	if( AutoResolution && DesktopX && DesktopY )
 	{
 		FullscreenViewportX = DesktopX;
 		FullscreenViewportY = DesktopY;
 	}
 
-	// For us foreigners ;-)
-	SDL_EnableUNICODE(true);
-
 	// Joystick.
-    int joystickCount = SDL_NumJoysticks();
+    int joystickCount = 0;
+    SDL_JoystickID* Joysticks = SDL_GetJoysticks( &joystickCount );
     JoystickButtons = 0;
     JoystickAxes = 0;
     debugf( NAME_Init, TEXT("Detected %d joysticks"), joystickCount);
@@ -143,14 +132,14 @@ void USDLClient::Init( UEngine* InEngine )
             JoystickNumber = 0;
     	}
 
-		const char *joyNameAnsi = SDL_JoystickName(JoystickNumber);
+		const char *joyNameAnsi = SDL_GetJoystickNameForID(Joysticks[JoystickNumber]);
 		if (joyNameAnsi == NULL)
 			joyNameAnsi = "Unknown Joystick";
         const TCHAR *joyName = appFromAnsi(joyNameAnsi);
     	debugf( NAME_Init, TEXT("Joystick [%i] : %s") ,
 				JoystickNumber , joyName);
     			
-    	Joystick = SDL_JoystickOpen( JoystickNumber );
+    	Joystick = SDL_OpenJoystick( Joysticks[JoystickNumber] );
 		if ( Joystick == NULL )
 		{
 		    debugf( NAME_Init, TEXT("Couldn't open joystick [%s]"), joyName );
@@ -158,13 +147,13 @@ void USDLClient::Init( UEngine* InEngine )
   		}
    	    else
    		{
-   			JoystickButtons = SDL_JoystickNumButtons( Joystick );
+   			JoystickButtons = SDL_GetNumJoystickButtons( Joystick );
    		    debugf( NAME_Init, TEXT("Joystick has %i buttons"), JoystickButtons );
 
-   			JoystickHats = SDL_JoystickNumHats( Joystick );
+   			JoystickHats = SDL_GetNumJoystickHats( Joystick );
    		    debugf( NAME_Init, TEXT("Joystick has %i hats"), JoystickHats );
 
-   			JoystickBalls = SDL_JoystickNumBalls( Joystick );
+   			JoystickBalls = SDL_GetNumJoystickBalls( Joystick );
    		    debugf( NAME_Init, TEXT("Joystick has %i balls"), JoystickBalls );
 
             if ((JoystickHatNumber < 0) || (JoystickHatNumber >= JoystickHats))
@@ -179,14 +168,14 @@ void USDLClient::Init( UEngine* InEngine )
             if ((JoystickButtons > 12) && (JoystickHats > 0) && (!IgnoreHat))
                 JoystickButtons = 12;  /* joy13 is first hat "button" */
 
-            if (JoystickButtons != SDL_JoystickNumButtons(Joystick))
+            if (JoystickButtons != SDL_GetNumJoystickButtons(Joystick))
             {
                 debugf( NAME_Init, TEXT("Too many joystick buttons; clamped to %d."), JoystickButtons);
                 if ((JoystickHats > 0) && (!IgnoreHat))
                     debugf( NAME_Init, TEXT("(Disable hat switches with \"IgnoreHat=True\" to raise this.)"));
             }
 
-   			JoystickAxes    = SDL_JoystickNumAxes( Joystick );
+   			JoystickAxes    = SDL_GetNumJoystickAxes( Joystick );
    			debugf( NAME_Init, TEXT("Joystick has %i axes"   ), JoystickAxes );
 
             // x + y + z + r + u + v + 2 "sliders" == 8 axes.
@@ -197,6 +186,8 @@ void USDLClient::Init( UEngine* InEngine )
             }
    	    }
 	}
+	SDL_free( Joysticks );
+
 	// Success.
 	debugf( NAME_Init, TEXT("SDLClient initialized.") );
 
@@ -215,11 +206,18 @@ void USDLClient::Destroy()
 	for( INT i=0; i<Viewports.Num(); i++ )
 		Viewports(i)->ConditionalDestroy();
 
-	// Shut down GRenDev.
+	// Shut down GRenDev while its context is still alive.
 	Engine->GRenDev->Exit(NULL);
 
+	if( GLContext )
+		SDL_GL_DestroyContext( GLContext );
+	if( Window )
+		SDL_DestroyWindow( Window );
+	GLContext = NULL;
+	Window = NULL;
+
 	if ( Joystick != NULL )
-		SDL_JoystickClose( Joystick );
+		SDL_CloseJoystick( Joystick );
 
     SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK);
 
@@ -243,6 +241,8 @@ void USDLClient::ShutdownAfterError()
 {
 	debugf( NAME_Exit, TEXT("Executing USDLClient::ShutdownAfterError") );
     SDL_Quit();
+	Window = NULL;
+	GLContext = NULL;
 
 	if (Engine && Engine->Audio)
 	{

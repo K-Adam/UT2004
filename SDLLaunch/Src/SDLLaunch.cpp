@@ -93,42 +93,43 @@ static void ExitSplash(void) {}
 
 #else
 
-#include "SDL.h"
-// SDLmain would redirect stdout and stderr to files, SDL works without it.
-#undef main
+#include <SDL3/SDL.h>
+
+static SDL_Window* SplashWindow = NULL;
 
 static void InitSplash(const TCHAR *filename)
 {
     if (filename == NULL)
         return;
 
-    if (SDL_Init(SDL_INIT_VIDEO) == -1)
+    // A GL backed surface would make its context current and take that away from SDLDrv's.
+    SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "0");
+    if (!SDL_Init(SDL_INIT_VIDEO))
         return;
 
     SDL_Surface *bmp = SDL_LoadBMP(appToAnsi(filename));
     if (bmp == NULL)
         return;
 
-    putenv("SDL_WINDOW_POS=center");        // legacy.
-    putenv("SDL_VIDEO_WINDOW_POS=center");  // new in SDL CVS.
-    SDL_Surface *screen = SDL_SetVideoMode(bmp->w, bmp->h, 0, SDL_NOFRAME);
-    putenv("SDL_WINDOW_POS=nopref");  // !!! FIXME: is there a portable way to delete values?
-    putenv("SDL_VIDEO_WINDOW_POS=nopref");  // !!! FIXME: is there a portable way to delete values?
-
+    SplashWindow = SDL_CreateWindow("", bmp->w, bmp->h, SDL_WINDOW_BORDERLESS);
+    SDL_Surface *screen = SplashWindow ? SDL_GetWindowSurface(SplashWindow) : NULL;
     if (screen != NULL)
     {
         SDL_BlitSurface(bmp, NULL, screen, NULL);
-        SDL_Flip(screen);
+        SDL_UpdateWindowSurface(SplashWindow);
     }
 
-    SDL_FreeSurface(bmp);
+    SDL_DestroySurface(bmp);
 }
 
 
 static void ExitSplash(void)
 {
-    // Don't quit: SDLDrv will have created an OpenGL window at this point.
-    //SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    if (SplashWindow == NULL)
+        return;
+    SDL_DestroyWindow(SplashWindow);
+    SplashWindow = NULL;
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 #endif
 
@@ -670,9 +671,6 @@ int main(int argc, char **argv)
 {
 	TCHAR CmdLine[1024] = TEXT("");
 #ifdef WIN32
-	// Auto resolution needs real pixels, Windows would otherwise scale a native size fullscreen window.
-	SetProcessDPIAware();
-
 	// appInit skips the executable name on Windows, as GetCommandLine starts with it.
 	appStrncpy( CmdLine, GetCommandLine(), ARRAY_COUNT(CmdLine) );
 #else
