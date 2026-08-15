@@ -319,6 +319,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 
 	else if( ParseCommand(&Cmd,TEXT("SETRES")) )
 	{
+		UBOOL Auto = appStrfind(Cmd,TEXT("AUTO")) != NULL;
 		INT X=appAtoi(Cmd);
 		const TCHAR* CmdTemp = appStrchr(Cmd,'x') ? appStrchr(Cmd,'x')+1 : appStrchr(Cmd,'X') ? appStrchr(Cmd,'X')+1 : TEXT("");
 		INT Y=appAtoi(CmdTemp);
@@ -331,6 +332,23 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 			Fullscreen = 0;
 		else if(appStrchr(Cmd,'f') || appStrchr(Cmd,'F'))
 			Fullscreen = 1;
+		USDLClient* Client = GetOuterUSDLClient();
+		Client->AutoResolution = Auto;
+		if( Auto && Client->DesktopX && Client->DesktopY )
+		{
+			Client->FullscreenViewportX = Client->DesktopX;
+			Client->FullscreenViewportY = Client->DesktopY;
+		}
+		if( Auto && (Fullscreen || FullscreenOnly) )
+		{
+			X = Client->FullscreenViewportX;
+			Y = Client->FullscreenViewportY;
+		}
+		else if( Auto && IsFullscreen() )
+		{
+			X = Client->WindowedViewportX;
+			Y = Client->WindowedViewportY;
+		}
 		if( X && Y )
 		{
 			INT ColorBytes = 0;
@@ -351,6 +369,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 			if ( GUIController )
 				GUIController->ResolutionChanged(X, Y);
 		}
+		Client->SaveConfig();
 		return 1;
 	}
 
@@ -915,6 +934,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 	char* sdl_error;
 	SDL_Event Event;
+	INT ResizeX = 0, ResizeY = 0;
 	while( SDL_PollEvent( &Event ) )
 	{
 		switch( Event.type )
@@ -1221,6 +1241,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				}				
 				break;
 
+			case SDL_VIDEORESIZE:
+				ResizeX = Event.resize.w;
+				ResizeY = Event.resize.h;
+				break;
+
 	        case SDL_ACTIVEEVENT:
                 // !!! FIXME: Workaround for bug in X11 target...
                 SDL_ShowCursor(Event.active.gain ? WindowsMouseShown : 1);
@@ -1228,6 +1253,16 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 			default:;
 		}
+	}
+
+	// Applied after the loop so a drag costs one GL reinit, and never during a reset, which runs inside SetRes.
+	// The menus need 640x480, a smaller window makes the GUI switch to a fixed resolution.
+	if( ResizeX && !Reset && RenDev && !(BlitFlags & BLIT_Fullscreen) )
+	{
+		ResizeX = Max( ResizeX, 640 );
+		ResizeY = Max( ResizeY, 480 );
+		if( ResizeX != SizeX || ResizeY != SizeY )
+			RenDev->SetRes( this, ResizeX, ResizeY, 0, ColorBytes );
 	}
 
 	// Deliver mouse behavior to the engine.
@@ -1516,6 +1551,10 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	if( NewBlitFlags & BLIT_Fullscreen )
 	{
 		VideoFlags |= SDL_FULLSCREEN;
+	}
+	else if( !GIsEditor )
+	{
+		VideoFlags |= SDL_RESIZABLE;
 	}
 
     SDL_ShowCursor(0);

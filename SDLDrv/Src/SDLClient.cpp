@@ -91,6 +91,10 @@ void USDLClient::Init( UEngine* InEngine )
 	// Force MESA to not initialize an atexit handler.
 	putenv("MESA_FX_NO_SIGNALS=1");
 
+	// The launcher's splash has already set a video mode, restart video so SDL reports the desktop mode again.
+	if( SDL_WasInit(SDL_INIT_VIDEO) )
+		SDL_QuitSubSystem(SDL_INIT_VIDEO);
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) == -1)
     {
         const TCHAR *err = appFromAnsi(SDL_GetError());
@@ -110,6 +114,17 @@ void USDLClient::Init( UEngine* InEngine )
 		WindowedViewportX  = FullscreenViewportX  = MenuViewportX   = 640;
 		WindowedViewportY  = FullscreenViewportY  = MenuViewportY   = 480;
 		// --- gam
+		AutoResolution = 0;
+	}
+
+	// Valid only before the first SDL_SetVideoMode.
+	const SDL_VideoInfo* VideoInfo = SDL_GetVideoInfo();
+	DesktopX = VideoInfo->current_w;
+	DesktopY = VideoInfo->current_h;
+	if( AutoResolution && DesktopX && DesktopY )
+	{
+		FullscreenViewportX = DesktopX;
+		FullscreenViewportY = DesktopY;
 	}
 
 	// For us foreigners ;-)

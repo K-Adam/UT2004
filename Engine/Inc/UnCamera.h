@@ -486,6 +486,7 @@ class ENGINE_API UClient : public UObject
 	BITFIELD	Projectors;
 	BITFIELD	ReportDynamicUploads;
 	BITFIELD	WeatherEffects;
+	BITFIELD	AutoResolution;
 	INT			WindowedViewportX;
 	INT			WindowedViewportY;
 	INT			FullscreenViewportX;
@@ -501,6 +502,7 @@ class ENGINE_API UClient : public UObject
 	FLOAT		ScaleHUDX;
 	FLOAT		AnimMeshDynamicLOD; //Maximum framerate-induced animating mesh LOD reduction.
 	FLOAT		DrawDistanceLOD;
+	INT			DesktopX, DesktopY;
 
     UEnum *PTextureDetail; // gam
 

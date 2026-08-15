@@ -150,6 +150,7 @@ function CheckSupportedResolutions()
 
 	PC = PlayerOwner();
 	CurrentSelection = co_Resolution.GetText();
+	bStandard = CurrentSelection ~= "Auto";
 
 	// Disable all notifications!!
 	bOldIgnoreChange = bIgnoreChange;
@@ -253,8 +254,8 @@ function int AddNewResolution(string NewDisplayMode)
 	InWidth = int(StrW);
 	InHeight = int(StrH);
 
-	// not there, so add it in the appropriate spot
-	for (i = 0; i < co_Resolution.ItemCount(); i++)
+	// not there, so add it in the appropriate spot, after Auto
+	for (i = 1; i < co_Resolution.ItemCount(); i++)
 	{
 		Str = co_Resolution.GetItem(i);
 		Divide(Str, "x", StrW, StrH);
@@ -378,6 +379,8 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		// GameResolution is set if menu requires 640x480 but current resolution is smaller than that
 		if(Controller.GameResolution != "")
 			sRes = Controller.GameResolution;
+		else if (bool(PC.ConsoleCommand("get ini:Engine.Engine.ViewportManager AutoResolution")))
+			sRes = "Auto";
 		else sRes = Controller.GetCurrentRes();
 		sResD = sRes;
 		i = AddNewResolution(sRes);
@@ -550,6 +553,8 @@ function ResetViewport()
 	ViewportClass.static.ResetConfig("WindowedViewportY");
 	ViewportClass.static.ResetConfig("FullscreenViewportX");
 	ViewportClass.static.ResetConfig("FullscreenViewportY");
+	// ResetConfig would only change the ini, SETRES applies Auto to the running client and saves it
+	PlayerOwner().ConsoleCommand("SETRES" @ Controller.GetCurrentRes() @ "auto");
 	ViewportClass.static.ResetConfig("Brightness");
 	ViewportClass.static.ResetConfig("Contrast");
 	ViewportClass.static.ResetConfig("Gamma");
@@ -1068,7 +1073,7 @@ function VideoChangeClose(optional bool bCancelled)
 
 	else
 	{
-		if ( int(NewX) < 640 || int(NewY) < 480 )
+		if ( sRes != "Auto" && (int(NewX) < 640 || int(NewY) < 480) )
 			Controller.GameResolution = NewX $ "x" $ NewY;
 		else Controller.GameResolution = "";
 
@@ -1167,9 +1172,10 @@ final function GetComboOptions(moComboBox Combo, out array<GUIListElem> Ar)
 			break;
 
 		case co_Resolution:
-			Ar.Length = ArrayCount(DisplayModes);
-			for (i = 0; i < Ar.Length; i++)
-				Ar[i].Item = DisplayModes[i].Width$"x"$DisplayModes[i].Height;
+			Ar.Length = ArrayCount(DisplayModes) + 1;
+			Ar[0].Item = "Auto";
+			for (i = 0; i < ArrayCount(DisplayModes); i++)
+				Ar[i + 1].Item = DisplayModes[i].Width$"x"$DisplayModes[i].Height;
 			break;
 
 		case co_RenderDevice:

@@ -670,6 +670,9 @@ int main(int argc, char **argv)
 {
 	TCHAR CmdLine[1024] = TEXT("");
 #ifdef WIN32
+	// Auto resolution needs real pixels, Windows would otherwise scale a native size fullscreen window.
+	SetProcessDPIAware();
+
 	// appInit skips the executable name on Windows, as GetCommandLine starts with it.
 	appStrncpy( CmdLine, GetCommandLine(), ARRAY_COUNT(CmdLine) );
 #else
@@ -879,6 +882,7 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		{
 			GConfig->SetString( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportX"), *ScreenWidth  );
 			GConfig->SetString( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportY"), *ScreenHeight );
+			GConfig->SetBool( TEXT("SDLDrv.SDLClient"), TEXT("AutoResolution"), 0 );
 		}
 
 		// Set sane default values on initial run.

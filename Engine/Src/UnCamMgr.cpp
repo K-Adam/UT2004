@@ -59,6 +59,7 @@ void UClient::StaticConstructor()
 	new(GetClass(),TEXT("WindowedViewportY"),	RF_Public)UIntProperty  (CPP_PROPERTY(WindowedViewportY     ), TEXT("Client"),  CPF_Config );
 	new(GetClass(),TEXT("FullscreenViewportX"),	RF_Public)UIntProperty  (CPP_PROPERTY(FullscreenViewportX   ), TEXT("Client"),  CPF_Config );
 	new(GetClass(),TEXT("FullscreenViewportY"),	RF_Public)UIntProperty  (CPP_PROPERTY(FullscreenViewportY	), TEXT("Client"),  CPF_Config );
+	new(GetClass(),TEXT("AutoResolution"),		RF_Public)UBoolProperty (CPP_PROPERTY(AutoResolution		), TEXT("Client"),  CPF_Config );
 	new(GetClass(),TEXT("MenuViewportX"),	    RF_Public)UIntProperty  (CPP_PROPERTY(MenuViewportX         ), TEXT("Client"),  CPF_Config );
 	new(GetClass(),TEXT("MenuViewportY"),	    RF_Public)UIntProperty  (CPP_PROPERTY(MenuViewportY	        ), TEXT("Client"),  CPF_Config );
 	new(GetClass(),TEXT("Brightness"),			RF_Public)UFloatProperty(CPP_PROPERTY(Brightness			), TEXT("Display"), CPF_Config );
