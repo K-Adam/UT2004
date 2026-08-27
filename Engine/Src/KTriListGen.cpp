@@ -6,7 +6,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 
 #define USE_EDGES (0)
 
@@ -565,5 +564,4 @@ int MEAPI KTriListGenerator(McdModelPair* modelTriListPair,
     unguard;
 }
 
-#endif // WITH_KARMA
 

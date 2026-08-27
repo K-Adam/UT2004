@@ -9,7 +9,6 @@ Revision history:
 
 #include "OnslaughtPrivate.h"
 
-#ifdef WITH_KARMA
 
 // Don't let repulsors hit non-vehicle pawns of the other team.
 UBOOL AONSHoverCraft::KRepulsorsShouldHit(AActor* Actor)
@@ -343,6 +342,5 @@ void AONSHoverCraft::PostNetReceive()
 	unguard;
 }
 
-#endif // WITH_KARMA
 
 IMPLEMENT_CLASS(AONSHoverCraft);

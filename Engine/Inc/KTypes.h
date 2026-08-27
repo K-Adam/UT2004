@@ -32,7 +32,6 @@ typedef struct _FKSimParams
 	FLOAT	MaxTimestep;
 } FKSimParams;
 
-#ifdef WITH_KARMA
 
 ///////////////// Internal Classes /////////////////
 
@@ -78,7 +77,6 @@ typedef struct _KarmaTriListData
 
 void ENGINE_API KarmaTriListDataInit(KarmaTriListData* list);
 
-#endif
 
 // ---------------------------------------------
 //	Karma-relevant StaticMesh extensions
@@ -235,9 +233,7 @@ class ENGINE_API UKMeshProps : public UObject
 		InertiaTensor[3] = InertiaTensor[4] = InertiaTensor[5] = 0;
 	}
 	
-#ifdef WITH_KARMA
 	void Draw(FRenderInterface* RI, INT ShowFlags);
-#endif
 
 	virtual void Serialize(FArchive& Ar)
 	{
@@ -251,7 +247,6 @@ class ENGINE_API UKMeshProps : public UObject
 	}
 };
 
-#ifdef WITH_KARMA
 /* NOTE!: These also scale from ME to Unreal (using K_ME2UMassScale/K_U2MEMassScale) */
 void    ENGINE_API KU2METransform(MeMatrix4 tm, const FVector pos, const FRotator rot);
 void    ENGINE_API KME2UTransform(FVector* pos, FRotator* rot, const MeMatrix4 tm);
@@ -272,5 +267,4 @@ McdGeometryID	ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 void			ENGINE_API KUpdateMassProps(UKMeshProps* mp);
 void			ENGINE_API KCopyMassPropsToClipboard(UKMeshProps* mp);
 
-#endif
 

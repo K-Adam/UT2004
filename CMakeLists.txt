@@ -45,7 +45,7 @@ target_compile_definitions(ut_common INTERFACE
   DO_GUARD=1 DO_CHECK=1 DO_STAT=1 DO_CLOCK=1
   DO_GUARD_SLOW=0 DO_STAT_SLOW=0 DO_CLOCK_SLOW=0
   $<IF:$<CONFIG:Debug>,_DEBUG$<SEMICOLON>DEBUG$<SEMICOLON>DO_CHECK_SLOW=1,DO_CHECK_SLOW=0>)
-target_include_directories(ut_common INTERFACE ${CMAKE_SOURCE_DIR}/metoolkit/include)
+target_include_directories(ut_common INTERFACE ${CMAKE_SOURCE_DIR}/metoolkit-karma/include)
 
 if(MSVC)
   # The prebuilt static libs expect the release DLL CRT.
@@ -121,13 +121,6 @@ function(ut_module name type)
     # 8 MB matches the Linux default.
     target_link_options(${name} PRIVATE /STACK:8388608)
   endif()
-  if(type STREQUAL "EXECUTABLE" AND NOT WIN32)
-    # The Linux Karma libs are not position independent, so the executables carry them
-    # and export them to Engine.so.
-    target_link_libraries(${name} PRIVATE ${KARMA_LIBS})
-    target_link_options(${name} PRIVATE -no-pie)
-    set_target_properties(${name} PROPERTIES ENABLE_EXPORTS ON)
-  endif()
   # Explicit /Yc and /Yu because target_precompile_headers would force-include the header everywhere.
   if(A_PCH AND MSVC)
     list(GET A_PCH 0 hdr)
@@ -143,34 +136,6 @@ function(ut_module name type)
     endforeach()
   endif()
 endfunction()
-
-# Karma physics only exists as prebuilt libs.
-set(KARMA_LIBS Mdt MdtKea MdtBcl Mst McdFrame McdCommon McdPrimitives McdConvex
-    McdConvexCreateHull MeGlobals MeAssetFactory MeAssetDB MeAssetDBXMLIO MeXML)
-if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-  # VS2005 static CRT libs, see Engine/Src/KarmaLegacyCrt.cpp.
-  list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/win_amd64_single/)
-  list(TRANSFORM KARMA_LIBS APPEND .lib)
-  list(APPEND KARMA_LIBS legacy_stdio_definitions)
-elseif(WIN32)
-  # VC7.1 libs, see Core/Src/UnLegacyCrt.cpp. Consumers must list them before Core.lib
-  # so their stdio imports resolve to Core's exports.
-  list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/win32_single_msvcrt/)
-  list(TRANSFORM KARMA_LIBS APPEND .lib)
-  list(APPEND KARMA_LIBS legacy_stdio_definitions)
-else()
-  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(KARMA_DIR linux_hx_single)
-  else()
-    set(KARMA_DIR linux_single_gcc3.2)
-  endif()
-  list(TRANSFORM KARMA_LIBS PREPEND ${CMAKE_SOURCE_DIR}/metoolkit/lib.rel/${KARMA_DIR}/lib)
-  list(TRANSFORM KARMA_LIBS APPEND .a)
-  # Whole archives because only Engine.so references them, and ld does not pull archive
-  # members for undefined symbols of shared libraries.
-  string(JOIN "," KARMA_GROUP ${KARMA_LIBS})
-  set(KARMA_LIBS "$<LINK_LIBRARY:WHOLE_ARCHIVE,${KARMA_GROUP}>")
-endif()
 
 find_package(ZLIB REQUIRED)
 if(WIN32)
@@ -196,6 +161,10 @@ endif()
 # Speex stays vendored for Epic's 48 kHz mode (EPIC_48K), which upstream lacks.
 add_subdirectory(Speex)
 add_subdirectory(Tools/NVTriStrip)
+# Static, but linked into Engine.so.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+add_subdirectory(metoolkit-karma)
+unset(CMAKE_POSITION_INDEPENDENT_CODE)
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
     XGame XInterface Onslaught UTV2004 UCC SDLDrv SDLLaunch)

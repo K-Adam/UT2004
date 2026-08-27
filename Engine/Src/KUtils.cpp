@@ -7,7 +7,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 
 #pragma pack (push,8)
 #include "MeStream.h"
@@ -1531,5 +1530,4 @@ void KGMDestroyGeometry(McdGeomMan* gm, McdGeometryID geom)
 	}
 }
 
-#endif // WITH_KARMA
 

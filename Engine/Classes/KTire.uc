@@ -4,10 +4,8 @@ class KTire extends KActor
 
 cpptext
 {
-#ifdef WITH_KARMA
 	// Actor interface.
 	virtual void preContactUpdate();
-#endif
 }
 
 var KCarWheelJoint  WheelJoint;         // joint holding this wheel to chassis etc.

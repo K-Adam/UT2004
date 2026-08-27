@@ -13,7 +13,6 @@ cpptext
 {
 	INT* GetOptimizedRepList(BYTE* Recent, FPropertyRetirement* Retire, INT* Ptr, UPackageMap* Map, UActorChannel* Channel);
 
-#ifdef WITH_KARMA
 	// Actor interface.
 	virtual UBOOL Tick(FLOAT DeltaTime, enum ELevelTick TickType);
 	virtual void preKarmaStep(FLOAT DeltaTime);
@@ -26,7 +25,6 @@ cpptext
 	virtual void ProcessCarInput();
 	virtual void ChangeGear(UBOOL bReverse);
 	virtual void PackState();
-#endif
 }
 
 // wheel params

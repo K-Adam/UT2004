@@ -6,7 +6,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 
 /* ********************* PARTITIONER ***************************** */
 
@@ -1082,5 +1081,4 @@ void MEAPI KWorldStepSafeTime(MdtWorldID w, MeReal stepSize, ULevel* level, UBOO
 	unguard;
 }
 
-#endif // WITH_KARMA
 

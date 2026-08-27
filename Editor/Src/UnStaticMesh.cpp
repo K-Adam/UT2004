@@ -992,7 +992,6 @@ UObject* UStaticMeshFactory::FactoryCreateText
 					GEditor->bspRefresh(StaticMesh->CollisionModel,1);
 					GEditor->bspBuildBounds(StaticMesh->CollisionModel);
 
-#ifdef WITH_KARMA
 					// If we dont already have physics props, construct them here.
 					if(!StaticMesh->KPhysicsProps)
 						StaticMesh->KPhysicsProps = ConstructObject<UKMeshProps>(UKMeshProps::StaticClass(), StaticMesh);
@@ -1003,7 +1002,6 @@ UObject* UStaticMeshFactory::FactoryCreateText
 
 					// Then re-calc the mass props.
 					KUpdateMassProps(StaticMesh->KPhysicsProps);
-#endif
 				}
 
 				for( int x = 0 ; x < FaceIdx.Num() ; x += 3 )

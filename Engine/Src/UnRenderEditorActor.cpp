@@ -229,7 +229,6 @@ void AActor::RenderEditorSelected(FLevelSceneNode* SceneNode,FRenderInterface* R
 	unguard;
 }
 
-#ifdef WITH_KARMA
 void AKConstraint::RenderEditorSelected(FLevelSceneNode* SceneNode,FRenderInterface* RI, FDynamicActor* FDA)
 {
 	guard(AKConstraint::RenderEditorSelected);
@@ -286,7 +285,6 @@ void AKConstraint::RenderEditorSelected(FLevelSceneNode* SceneNode,FRenderInterf
 	Super::RenderEditorSelected(SceneNode,RI,FDA);
 	unguard;
 }
-#endif
 
 void AActor::RenderEditorInfo(FLevelSceneNode* SceneNode,FRenderInterface* RI, FDynamicActor* FDA)
 {

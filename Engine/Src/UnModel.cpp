@@ -788,14 +788,12 @@ void UModel::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,FRenderInter
 		POP_HIT(SceneNode->Viewport);
 	}
 
-#ifdef WITH_KARMA
 	// If this is a blocking volume set up to kBlockKarma - draw the collision.
 	if(Actor->bBlockKarma && Actor->getKModel())
 	{
 		McdModelID model = Actor->getKModel();
 		KModelDraw(model, KGData->DebugDrawOpt, KLineDraw);
 	}
-#endif
 
 	unguard;
 }

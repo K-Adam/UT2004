@@ -7,7 +7,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 #pragma pack (push,8)
 #include "McdBatch.h"
 #include "McdContact.h"
@@ -1235,5 +1234,4 @@ void KHandleCollisions(McdModelPairContainer* pairs, ULevel* level)
 	unguard;
 }
 
-#endif
 

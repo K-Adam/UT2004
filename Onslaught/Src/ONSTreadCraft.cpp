@@ -8,7 +8,6 @@ Revision history:
 
 #include "OnslaughtPrivate.h"
 
-#ifdef WITH_KARMA
 
 // Calculate forces for thrust/turning etc. and apply them.
 void AONSTreadCraft::UpdateVehicle(FLOAT DeltaTime)
@@ -231,6 +230,5 @@ void AONSTreadCraft::PostNetReceive()
 	unguard;
 }
 
-#endif // WITH_KARMA
 
 IMPLEMENT_CLASS(AONSTreadCraft);

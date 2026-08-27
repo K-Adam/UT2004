@@ -11,10 +11,8 @@ class KHinge extends KConstraint
 
 cpptext
 {
-#ifdef WITH_KARMA
     virtual void KUpdateConstraintParams();
 	virtual void preKarmaStep(FLOAT DeltaTime);
-#endif
 }
 
 // Spatial light effect to use.

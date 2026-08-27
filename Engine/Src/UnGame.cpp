@@ -169,9 +169,7 @@ void UGameEngine::Init()
 		GRenDev->Init();
 	}
     
-#ifdef WITH_KARMA
     KInitGameKarma(); // Init Karma physics.
-#endif
 
 #ifdef WITH_LIPSINC
 	GLIPSincInitGame(); // Init LIPSinc system.
@@ -371,10 +369,8 @@ void UGameEngine::Destroy()
 	GLevel = NULL;
 	debugf( NAME_Exit, TEXT("Game engine shut down") );
 
-#ifdef WITH_KARMA
     KGData->bShutdownPending = 1;
     KTermGameKarma();
-#endif
 
 #ifdef WITH_LIPSINC
 	GLIPSincShutdownGame();
@@ -2154,7 +2150,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 			SavePackage( GLevel->GetOuter(), GLevel, 0, Filename, GLog );
 		}
 
-#ifdef WITH_KARMA
 		if(!GIsEditor) // dont need to do this in editor - no Karma runs.
 		{
 			// To save memory, we remove Karma from all actors before loading the new level.
@@ -2167,7 +2162,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 				}
 			}
 		}
-#endif
 		GLevel = NULL;
 	}
 	unguard;
@@ -2534,7 +2528,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 		Info->bStartup = 1;
 		Info->TimeDilation = ((ALevelInfo *)(Info->GetClass()->GetDefaultActor()))->TimeDilation;
 
-#ifdef WITH_KARMA
 		if(!GIsEditor && !GLevel->GetLevelInfo()->bKNoInit)
 		{
 			KInitLevelKarma(GLevel);
@@ -2543,7 +2536,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 				if( GLevel->Actors(i) )
 					KInitActorKarma( GLevel->Actors(i) );
 		}
-#endif
 
 		// Init the game.
 		if( Info->Game )
@@ -2634,7 +2626,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 					GLevel->Actors(i)->PostEditChange();
 				}
 
-#ifdef WITH_KARMA
 				AActor* actor = GLevel->Actors(i);
 
 				if(actor->Physics != PHYS_Karma || !actor->KParams || !actor->KParams->IsA(UKarmaParams::StaticClass()))
@@ -2649,7 +2640,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 				// If dedicated server, turn off karma for actors with bHighDetailOnly or bClientsOnly
 				if(	GLevel->GetLevelInfo()->NetMode == NM_DedicatedServer && (kparams->bHighDetailOnly || kparams->bClientOnly) )					
 					KTermActorDynamics(actor);
-#endif
 			}
 		}
 
@@ -2668,7 +2658,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 		debugf( NAME_Log, TEXT("Bringing %s up for play (%i) appSeconds: %f..."), GLevel->GetFullName(), appRound(GetMaxTickRate()), appSeconds() ); // sjs
 		GLevel->FinishedPrecaching = 0;
 
-#ifdef WITH_KARMA
 		if(!GIsEditor && !GLevel->GetLevelInfo()->bKNoInit)
 		{
 			KInitLevelKarma(GLevel);
@@ -2677,7 +2666,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 				if( GLevel->Actors(i) )
 					KInitActorKarma( GLevel->Actors(i) );
 		}
-#endif
 
 		for( INT i=0; i<GLevel->Actors.Num(); i++ ) 
 		{
@@ -2695,7 +2683,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 					GLevel->Actors(i)->PostEditChange();
 				}
 
-#ifdef WITH_KARMA
 				AActor* actor = GLevel->Actors(i);
 
 				if ( actor->Physics == PHYS_KarmaRagDoll )
@@ -2718,7 +2705,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 					if(	GLevel->GetLevelInfo()->NetMode == NM_DedicatedServer && (kparams->bHighDetailOnly || kparams->bClientOnly) )					
 						KTermActorDynamics(actor);
 				}
-#endif
 			}
 		}
 
@@ -2826,7 +2812,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
         GLevel->LoadSounds();
     // --- amb
 
-#ifdef WITH_KARMA
 	// Pre-allocate pool of KarmaTriListData structs
 	// Don't bother if bKNoInit is false
 	ALevelInfo* lInfo = GLevel->GetLevelInfo();
@@ -2839,7 +2824,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 			GLevel->TriListPool.AddItem(list);
 		}
 	}
-#endif
 
 	if ( PendingRecordMovie && Client && Client->Viewports.Num()>0 && Client->Viewports(0) && PendingRecordMovie != TEXT("") )
 	{

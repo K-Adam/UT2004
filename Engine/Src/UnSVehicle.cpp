@@ -9,9 +9,7 @@ void ASVehicle::execUpdateVehicle( FFrame& Stack, RESULT_DECL )
 	
 	P_GET_FLOAT(DeltaTime);
 	P_FINISH;
-#ifdef WITH_KARMA
 	UpdateVehicle(DeltaTime);
-#endif
 	unguard;
 }
 
@@ -33,7 +31,6 @@ void ASVehicle::execGraphData( FFrame& Stack, RESULT_DECL )
 	unguard;
 }
 
-#ifdef WITH_KARMA
 
 // Remove any contacts due the line wheels
 void KTermSVehicleDynamics(ASVehicle* v)
@@ -729,5 +726,4 @@ void ASVehicle::physKarma(FLOAT DeltaTime)
 	unguard;
 }
 
-#endif
 

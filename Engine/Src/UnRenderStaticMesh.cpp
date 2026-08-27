@@ -957,7 +957,6 @@ void RenderStaticMesh(FDynamicActor* Owner,FLevelSceneNode* SceneNode,TList<FDyn
 		}
 	}
 
-#ifdef WITH_KARMA
 	// Draw Karma collision primitives
 	if(StaticMesh->KPhysicsProps && Actor->bBlockKarma)
 	{
@@ -967,7 +966,6 @@ void RenderStaticMesh(FDynamicActor* Owner,FLevelSceneNode* SceneNode,TList<FDyn
 		else
 			StaticMesh->KPhysicsProps->Draw(RI, SceneNode->Viewport->Actor->ShowFlags);
 	}
-#endif
 
 	// If we have a simple collision model, and its being used, draw it.
 	if( SceneNode->Viewport->Actor->ShowFlags & SHOW_Collision )
@@ -1142,7 +1140,6 @@ void RenderBatchedStaticMesh(FStaticMeshBatchList& BatchList,FDynamicActor* Dyna
 
 	// Draw Karma collision primitives.
 
-#ifdef WITH_KARMA
 	if(StaticMesh->KPhysicsProps && Actor->bBlockKarma)
 	{
 		McdModelID model = Actor->getKModel();
@@ -1151,7 +1148,6 @@ void RenderBatchedStaticMesh(FStaticMeshBatchList& BatchList,FDynamicActor* Dyna
 		else
 			StaticMesh->KPhysicsProps->Draw(RI, SceneNode->Viewport->Actor->ShowFlags);
 	}
-#endif
 
 	// If we have a simple collision model, and its being used, draw it.
 

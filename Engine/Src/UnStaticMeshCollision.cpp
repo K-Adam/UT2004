@@ -37,7 +37,6 @@ FBox UStaticMesh::GetCollisionBoundingBox(const AActor* Owner) const
 			Result += CollisionModel->GetCollisionBoundingBox(Owner);
 	}
 
-#ifdef WITH_KARMA
 	// If this actor is bBlockKarma, when ensure its collision bounding box also includes 
 	// the Karma primitive bounding box. This also keep the bounding box up to date.
 	if(Owner->bBlockKarma)
@@ -53,7 +52,6 @@ FBox UStaticMesh::GetCollisionBoundingBox(const AActor* Owner) const
 			Result += FBox(umin, umax);
 		}
 	}
-#endif
 
 	return Result;
 }

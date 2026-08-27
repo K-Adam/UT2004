@@ -25,12 +25,10 @@ void AActor::execKGetSimParams( FFrame& Stack, RESULT_DECL )
 	P_GET_STRUCT_REF(FKSimParams, SimParams);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	if(!KGData)
 		return;
 	
 	*SimParams = KGData->SimParams;
-#endif
 
 	unguard;
 }
@@ -42,17 +40,14 @@ void AActor::execKSetSimParams( FFrame& Stack, RESULT_DECL )
 	P_GET_STRUCT(FKSimParams, SimParams);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	if(!KGData)
 		return;
 
 	KGData->SimParams = SimParams;
-#endif
 
 	unguard;
 }
 
-#ifdef WITH_KARMA
 
 // // //
 
@@ -245,7 +240,6 @@ void AKTire::preContactUpdate()
 	unguard;
 }
 
-#endif
 
 // // //
 void AActor::execKGetRBQuaternion( FFrame& Stack, RESULT_DECL )
@@ -255,7 +249,6 @@ void AActor::execKGetRBQuaternion( FFrame& Stack, RESULT_DECL )
 
 	FQuat Res(0, 0, 0, 1);
 
-#ifdef WITH_KARMA
 	McdModelID model = this->getKModel();
 	if(!model)
 	{
@@ -276,7 +269,6 @@ void AActor::execKGetRBQuaternion( FFrame& Stack, RESULT_DECL )
 	Res.X = q[1];
 	Res.Y = q[2];
 	Res.Z = q[3];
-#endif
 
 	*(FQuat*)Result = Res;
 
@@ -290,12 +282,7 @@ void AActor::execKGetRigidBodyState( FFrame& Stack, RESULT_DECL )
 	P_GET_STRUCT_REF(FKRigidBodyState, RBstate);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	KGetRigidBodyState(RBstate);
-#else
-	appMemset( RBstate, 0, sizeof(FKRigidBodyState) );
-	RBstate->Quaternion.W = 1.0f;
-#endif
 
 	unguard;
 }
@@ -308,9 +295,7 @@ void AActor::execKDrawRigidBodyState( FFrame& Stack, RESULT_DECL )
 	P_GET_UBOOL(AltColour);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	KDrawRigidBodyState(&RBstate, AltColour);
-#endif
 
 	unguard;
 }
@@ -362,9 +347,7 @@ void AActor::execKSetMass( FFrame& Stack, RESULT_DECL )
 
     kparams->KMass = mass;
 
-#ifdef WITH_KARMA
     kparams->PostEditChange(); // sync with Karma
-#endif
 
     unguard;
 }
@@ -459,9 +442,7 @@ void AActor::execKSetInertiaTensor( FFrame& Stack, RESULT_DECL )
 		fullParams->KInertiaTensor[4] = it2.Y;
 		fullParams->KInertiaTensor[5] = it2.Z;
 		
-#ifdef WITH_KARMA
 		this->KParams->PostEditChange(); // sync with Karma
-#endif
 	}
 
     unguard;
@@ -486,9 +467,7 @@ void AActor::execKSetCOMOffset( FFrame& Stack, RESULT_DECL )
 	{
 		fullParams->KCOMOffset = offset;
 
-#ifdef WITH_KARMA
 		this->KParams->PostEditChange(); // sync with Karma
-#endif
 	}
 
     unguard;
@@ -527,7 +506,6 @@ void AActor::execKGetCOMPosition( FFrame& Stack, RESULT_DECL )
     P_GET_VECTOR_REF(pos);
     P_FINISH;
 
-#ifdef WITH_KARMA
 	McdModelID model = this->getKModel();
     if(!model)
         return;
@@ -539,9 +517,6 @@ void AActor::execKGetCOMPosition( FFrame& Stack, RESULT_DECL )
 	MeVector3 mePos;
 	MdtBodyGetCenterOfMassPosition(body, mePos);
 	KME2UPosition(pos, mePos);
-#else
-	pos->X = pos->Y = pos->Z = 0;
-#endif
 
     unguard;
 }
@@ -567,9 +542,7 @@ void AActor::execKSetDampingProps( FFrame& Stack, RESULT_DECL )
     kparams->KLinearDamping = lindamp;
     kparams->KAngularDamping = angdamp;
 
-#ifdef WITH_KARMA
     kparams->PostEditChange(); // sync with Karma
-#endif
 
     unguard;
 }
@@ -736,7 +709,6 @@ void AActor::execKSetBlockKarma( FFrame& Stack, RESULT_DECL )
 	P_GET_UBOOL(newBlock);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	// Do nothing if state is already right,or is a constraint.
 	if(bBlockKarma == newBlock || this->IsA(AKConstraint::StaticClass()))
 		return;
@@ -748,7 +720,6 @@ void AActor::execKSetBlockKarma( FFrame& Stack, RESULT_DECL )
 	bBlockKarma = newBlock;
 
 	bShouldStopKarma = KShouldStopKarma(this); // Cache this for speed.
-#endif
 	
 	unguard;
 }
@@ -761,9 +732,7 @@ void AActor::execKWake( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	KWake();
-#endif
 
     unguard;
 }
@@ -776,14 +745,10 @@ void AActor::execKIsAwake( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	if( KIsAwake() )
 		*(UBOOL*)Result = 1;
 	else
 		*(UBOOL*)Result = 0;
-#else
-	*(UBOOL*)Result = 0;
-#endif
 
     unguard;
 }
@@ -800,9 +765,7 @@ void AActor::execKAddImpulse( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	KAddImpulse(Impulse, Position, BoneName);
-#endif
     unguard;
 }
 
@@ -814,9 +777,7 @@ void AActor::execKAddAngularImpulse( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	KAddAngularImpulse(AngImpulse);
-#endif
 	unguard;
 }
 
@@ -831,7 +792,6 @@ void AActor::execKSetSkelVel( FFrame& Stack, RESULT_DECL )
 	P_GET_UBOOL_OPTX(AddToCurrent, 0);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	RTN_WITH_ERR_IF(!MeshInstance || !MeshInstance->IsA(USkeletalMeshInstance::StaticClass()), 
 		"(Karma:) execKSetSkelVel: No skeletal mesh.");
 
@@ -839,7 +799,6 @@ void AActor::execKSetSkelVel( FFrame& Stack, RESULT_DECL )
 
 	KSetSkelVel(inst, Velocity, AngVelocity);
 	
-#endif
 
 	unguard;
 }
@@ -856,7 +815,6 @@ void AActor::execKAddBoneLifter( FFrame& Stack, RESULT_DECL )
 	P_GET_STRUCT(FInterpCurveInit, Softness);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	RTN_WITH_ERR_IF(!MeshInstance || !MeshInstance->IsA(USkeletalMeshInstance::StaticClass()), 
 		"(Karma:) execKAddBoneLifter: No skeletal mesh.");
 
@@ -881,7 +839,6 @@ void AActor::execKAddBoneLifter( FFrame& Stack, RESULT_DECL )
 	MdtContactGroupSetBodies(cg, body, 0);
 	MdtContactGroupEnable(cg);
 	lifter->LiftContact = cg;
-#endif
 
 	unguard;
 }
@@ -894,7 +851,6 @@ void AActor::execKRemoveLifterFromBone( FFrame& Stack, RESULT_DECL )
 	P_GET_NAME(BoneName);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	RTN_WITH_ERR_IF(!MeshInstance || !MeshInstance->IsA(USkeletalMeshInstance::StaticClass()), 
 		"(Karma:) execKRemoveLifterFromBone: No skeletal mesh.");
 
@@ -920,7 +876,6 @@ void AActor::execKRemoveLifterFromBone( FFrame& Stack, RESULT_DECL )
 		else
 			i++;
 	}
-#endif
 
 	unguard;
 }
@@ -932,7 +887,6 @@ void AActor::execKRemoveAllBoneLifters( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	RTN_WITH_ERR_IF(!MeshInstance || !MeshInstance->IsA(USkeletalMeshInstance::StaticClass()), 
 		"(Karma:) execKRemoveAllBoneLifters: No skeletal mesh.");
 
@@ -946,7 +900,6 @@ void AActor::execKRemoveAllBoneLifters( FFrame& Stack, RESULT_DECL )
 		MdtContactGroupDestroy(cg);
 	}
 	inst->KBoneLifters.Empty(); // This calls MdtContactGroupDestroy from the destructor.
-#endif
 
 	unguard;
 }
@@ -960,7 +913,6 @@ void AActor::execKGetSkelMass( FFrame& Stack, RESULT_DECL )
 
 	*(FLOAT*)Result = 0.f;
 
-#ifdef WITH_KARMA
 	RTN_WITH_ERR_IF(!MeshInstance || !MeshInstance->IsA(USkeletalMeshInstance::StaticClass()), 
 		"(Karma:) execKGetSkelMass: No skeletal mesh.");
 
@@ -986,7 +938,6 @@ void AActor::execKGetSkelMass( FFrame& Stack, RESULT_DECL )
 		"(Karma:) execKGetSkelMass: Total mass of zero.");
 
 	*(FLOAT*)Result = totalMass;
-#endif
 
 	unguard;
 }
@@ -999,9 +950,7 @@ void AActor::execKFreezeRagdoll( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	this->KFreezeRagdoll();
-#endif
 
 	unguard;
 }
@@ -1013,14 +962,10 @@ void AActor::execKIsRagdollAvailable( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	if(XLevel && Level && (XLevel->Ragdolls.Num() < Level->MaxRagdolls) )
 		*(DWORD*)Result = 1;
 	else
 		*(DWORD*)Result = 0;
-#else
-	*(DWORD*)Result = 0;
-#endif
 
 	unguard;
 }
@@ -1034,7 +979,6 @@ void AActor::execKMakeRagdollAvailable( FFrame& Stack, RESULT_DECL )
 
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	if(!Level || !XLevel)
 		return;
 
@@ -1066,7 +1010,6 @@ void AActor::execKMakeRagdollAvailable( FFrame& Stack, RESULT_DECL )
 	// If we still dont have a free ragdoll - warn
 	if(XLevel->Ragdolls.Num() >= Level->MaxRagdolls)
 		debugf(TEXT("execKMakeRagdollAvailable: No Ragdoll Available."));
-#endif
 
 	unguard;
 }
@@ -1082,7 +1025,6 @@ void AActor::execKDisableCollision( FFrame& Stack, RESULT_DECL )
 	if(!Other)
 		return;
 
-#ifdef WITH_KARMA
 	ULevel* level = this->GetLevel();
 
 	if(!level)
@@ -1093,7 +1035,6 @@ void AActor::execKDisableCollision( FFrame& Stack, RESULT_DECL )
 
 	if(m1 && m2 && m1 != m2)
 		KDisablePairCollision(m1, m2, level);
-#endif
 
 	unguard;
 }
@@ -1110,7 +1051,6 @@ void AActor::execKEnableCollision( FFrame& Stack, RESULT_DECL )
 	if(!Other)
 		return;
 
-#ifdef WITH_KARMA
 	ULevel* level = this->GetLevel();
 
 	if(!level)
@@ -1121,7 +1061,6 @@ void AActor::execKEnableCollision( FFrame& Stack, RESULT_DECL )
 
 	if(m1 && m2 && m1 != m2)
 		KEnablePairCollision(m1, m2, level);
-#endif
 
 	unguard;
 }
@@ -1145,9 +1084,7 @@ void AActor::execKSetStayUpright( FFrame& Stack, RESULT_DECL )
     kparams->bKStayUpright = stayUpright;
     kparams->bKAllowRotate = allowRotate;
 	
-#ifdef WITH_KARMA
     kparams->PostEditChange(); // sync with Karma
-#endif
 
 	unguard;
 }
@@ -1171,9 +1108,7 @@ void AActor::execKSetStayUprightParams( FFrame& Stack, RESULT_DECL )
 	kparams->StayUprightStiffness = stiffness;
 	kparams->StayUprightDamping = damping;
 
-#ifdef WITH_KARMA
     kparams->PostEditChange(); // sync with Karma
-#endif
 
 	unguard;
 }

@@ -13,9 +13,7 @@
 	Engine private includes.
 -----------------------------------------------------------------------------*/
 
-#ifdef WITH_KARMA
     #include "KarmaSupport.h"
-#endif
 
 #ifdef WITH_LIPSINC
 	#include "LIPSincSupport.h"

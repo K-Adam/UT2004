@@ -820,7 +820,6 @@ void USkeletalMesh::Destroy()
 
 
 
-#ifdef WITH_KARMA
 /* Destroy dynamics/collision for this Skeletal Mesh instance. */
 void USkeletalMeshInstance::Destroy()
 {
@@ -831,7 +830,6 @@ void USkeletalMeshInstance::Destroy()
 
 	unguard;
 }
-#endif
 
 
 
@@ -3985,7 +3983,6 @@ void USkeletalMeshInstance::GetFrame
 		// Digest bones into the spacebases.
 		for( INT bone=0; bone < Mesh.RefSkeleton.Num(); bone ++ )
 		{
-#ifdef WITH_KARMA
             if( BoneFlags(bone) == BBONE_RefPose || bForceRefpose )
             {
                 if(NoRefPose.Num() && NoRefPose(bone))
@@ -3999,13 +3996,6 @@ void USkeletalMeshInstance::GetFrame
                     CachedPositions(bone) = Mesh.RefSkeleton(bone).BonePos.Position;
                 }
             }
-#else
-			if( BoneFlags(bone) == BBONE_RefPose || bForceRefpose )
-			{
-				CachedOrientations(bone) = Mesh.RefSkeleton(bone).BonePos.Orientation;
-				CachedPositions(bone) = Mesh.RefSkeleton(bone).BonePos.Position;
-			}
-#endif
 						
 			// Final transformation of quaternion/position to FCoords representation.
 			FQuatToFCoordsFast( CachedOrientations(bone),CachedPositions(bone), SpaceBases(bone));
@@ -5643,7 +5633,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 		}
 	}
 
-#ifdef WITH_KARMA
 	if(SkelMesh->KPhysicsProps)
 	{
 		// For in-game, draw the actual model
@@ -5659,7 +5648,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 			SkelMesh->KPhysicsProps->Draw(RI, SceneNode->Viewport->Actor->ShowFlags);
 		}
 	}
-#endif
 
 	// Normals/influence-colors drawing.
 	if( bDisplayNormals && DebugInfluences.Num() && !SceneNode->Viewport->IsOrtho())

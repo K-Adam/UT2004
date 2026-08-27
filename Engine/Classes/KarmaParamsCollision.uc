@@ -11,9 +11,7 @@ class KarmaParamsCollision extends Object
 
 cpptext
 {
-#ifdef WITH_KARMA
 	void CalcContactRegion();
-#endif
 }
 
 // Used internally for Karma stuff - DO NOT CHANGE!

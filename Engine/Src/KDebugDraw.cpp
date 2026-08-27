@@ -7,7 +7,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 
 #include "KDebugDraw.h"
 
@@ -853,5 +852,4 @@ void UKMeshProps::Draw(FRenderInterface* RI, INT ShowFlags)
 	unguard;
 }
 
-#endif // WITH_KARMA
 

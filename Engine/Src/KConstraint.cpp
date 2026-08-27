@@ -10,7 +10,6 @@ IMPLEMENT_CLASS(AKHinge);
 IMPLEMENT_CLASS(AKConeLimit);
 IMPLEMENT_CLASS(AKCarWheelJoint);
 
-#ifdef WITH_KARMA
 
 ///////////////// INIT AND TERM //////////////////////////
 
@@ -607,7 +606,6 @@ void AKConstraint::CheckForErrors()
 	unguard;
 }
 
-#endif // WITH_KARMA
 
 /*** UC CONSTRAINT ***/
 void AKConstraint::execKGetConstraintForce( FFrame& Stack, RESULT_DECL )
@@ -616,7 +614,6 @@ void AKConstraint::execKGetConstraintForce( FFrame& Stack, RESULT_DECL )
 
     P_GET_VECTOR_REF(Force);
     P_FINISH;
-#ifdef WITH_KARMA
     MdtConstraintID constraint = this->getKConstraint();
     if(!constraint)
         return;
@@ -625,9 +622,6 @@ void AKConstraint::execKGetConstraintForce( FFrame& Stack, RESULT_DECL )
     MeVector3 mforce;
     MdtConstraintGetForce(constraint, 0, mforce);
     KME2UPosition(Force, mforce);
-#else
-	Force->X = Force->Y = Force->Z = 0;
-#endif
     unguard;
 }
 
@@ -637,7 +631,6 @@ void AKConstraint::execKGetConstraintTorque( FFrame& Stack, RESULT_DECL )
 
     P_GET_VECTOR_REF(Torque);
     P_FINISH;
-#ifdef WITH_KARMA
     MdtConstraintID constraint = this->getKConstraint();
     if(!constraint)
         return;
@@ -645,9 +638,6 @@ void AKConstraint::execKGetConstraintTorque( FFrame& Stack, RESULT_DECL )
     MeVector3 mtorque;
     MdtConstraintGetTorque(constraint, 0, mtorque);
     KME2UPosition(Torque, mtorque);
-#else
-	Torque->X = Torque->Y = Torque->Z = 0;
-#endif
     unguard
 }
 
@@ -658,9 +648,7 @@ void AKConstraint::execKUpdateConstraintParams( FFrame& Stack, RESULT_DECL )
     guard(AKConstraint::execKGetConstraintTorque);
 
     P_FINISH;
-#ifdef WITH_KARMA
     this->KUpdateConstraintParams();
-#endif
 	unguard;
 }
 
@@ -668,7 +656,6 @@ void AKConstraint::execKUpdateConstraintParams( FFrame& Stack, RESULT_DECL )
 ////// CONSTRAINT SPECIFIC KUPDATECONSTRAINTPARAMS ///////
 //////////////////////////////////////////////////////////
 
-#ifdef WITH_KARMA
 /*** CONE LIMIT ***/
 void AKConeLimit::KUpdateConstraintParams()
 {
@@ -763,5 +750,4 @@ void AKCarWheelJoint::KUpdateConstraintParams()
 	unguard;
 }
 
-#endif
 

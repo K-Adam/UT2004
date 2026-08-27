@@ -1680,10 +1680,8 @@ void ULevel::Tick( ELevelTick TickType, FLOAT DeltaSeconds )
 		NewlySpawned = NULL;
 		INT Updated  = 1;
 
-#ifdef WITH_KARMA
         /* KTODO: Should we do this _after_ actor physics? */
         KTickLevelKarma(this, DeltaSeconds);
-#endif
 
 		for( INT iActor=iFirstDynamicActor; iActor<Actors.Num(); iActor++ )
 		{
@@ -1707,10 +1705,8 @@ void ULevel::Tick( ELevelTick TickType, FLOAT DeltaSeconds )
 				}
 			}
 		}
-#ifdef WITH_KARMA
 		if(KGData)
 			KGData->bDoTick = 0;
-#endif
 		unguard;
 	}
 	else if( IsPaused() )

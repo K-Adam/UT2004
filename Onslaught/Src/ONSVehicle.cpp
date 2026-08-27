@@ -328,7 +328,6 @@ UBOOL AONSVehicle::Tick(FLOAT DeltaTime, enum ELevelTick TickType)
 
 		if (SparkEffect)
 		{
-			#ifdef WITH_KARMA
 			if (KParams && KParams->bContactingLevel)
 			{
 				KParams->CalcContactRegion();
@@ -340,7 +339,6 @@ UBOOL AONSVehicle::Tick(FLOAT DeltaTime, enum ELevelTick TickType)
 				SparkEffect->eventUpdateSparks(KParams->ContactRegionRadius, Velocity);
 			}
 			else
-			#endif
 			{
 				if (SparkEffect->bSparksActive)
 					SparkEffect->eventUpdateSparks(0, FVector(0,0,0));

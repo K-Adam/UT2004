@@ -11,7 +11,6 @@ class KConstraint extends KActor
 
 cpptext
 {
-#ifdef WITH_KARMA
     virtual MdtConstraintID getKConstraint() const;
     virtual McdModelID getKModel() const;
 
@@ -28,7 +27,6 @@ cpptext
 
 	virtual void preKarmaStep(FLOAT DeltaTime) {};
 	virtual void postKarmaStep() {};
-#endif
 }
 
 // Used internally for Karma stuff - DO NOT CHANGE!

@@ -9,7 +9,6 @@ Revision history:
 
 #include "OnslaughtPrivate.h"
 
-#ifdef WITH_KARMA
 
 static inline float HeadingAngle(FVector dir)
 {
@@ -356,7 +355,6 @@ void AONSChopperCraft::PostNetReceive()
 	unguard;
 }
 
-#endif // WITH_KARMA
 
 /* AdjustFlight()
 ZDiff is Destination.Z - Location.Z

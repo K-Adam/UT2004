@@ -7,7 +7,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 
 #define ME_ASSERT_INERTIASCALE ((MeReal)1)
 
@@ -1561,7 +1560,6 @@ void AActor::physKarmaRagDoll(FLOAT deltaTime)
     unguard;
 }
 
-#endif
 
 void AActor::execKScaleJointLimits( FFrame& Stack, RESULT_DECL )
 {
@@ -1571,12 +1569,10 @@ void AActor::execKScaleJointLimits( FFrame& Stack, RESULT_DECL )
 	P_GET_FLOAT(Stiffness);
 	P_FINISH;
 
-#ifdef WITH_KARMA
 	USkeletalMeshInstance* inst = Cast<USkeletalMeshInstance>(MeshInstance);
 
 	if(inst)
 		KScaleJointLimits(inst, Scale, Stiffness);
-#endif
 
 	unguard;
 }

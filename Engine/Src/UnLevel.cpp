@@ -126,13 +126,11 @@ ULevel::ULevel( UEngine* InEngine, UBOOL InRootOutside )
 
 	GScriptEntryTag = GScriptCycles = FinishedPrecaching = 0;
 
-#ifdef WITH_KARMA
     this->KWorld = NULL;
     this->KBridge = NULL;
 	this->KAssetFactory = NULL;
     
     this->KLevelModel = NULL;
-#endif
 	unguard;
 }
 
@@ -485,9 +483,7 @@ void ULevel::Destroy()
 	for(INT ProjectorIndex = 0;ProjectorIndex < DynamicProjectors.Num();ProjectorIndex++)
 		DynamicProjectors(ProjectorIndex)->RemoveReference();
 
-#ifdef WITH_KARMA
     KTermLevelKarma(this);
-#endif
 
 #ifdef WITH_LIPSINC
 	GLIPSincShutdownLevel();
@@ -828,10 +824,8 @@ UBOOL ULevel::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 
 		return 1;
 	}
-#ifdef WITH_KARMA
     else if( (GetLevelInfo()->NetMode == NM_Standalone) && KExecCommand( Cmd , &Ar ) )
         return 1;
-#endif
 	else return 0;
 	unguard;
 }

@@ -7,7 +7,6 @@
 
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 
 /* Global data */
 ENGINE_API KarmaGlobals* KGData = 0;
@@ -1984,5 +1983,4 @@ void MEAPI KSetActorCollision(AActor* actor, UBOOL newBlock)
 	unguard;
 }
 
-#endif // WITH_KARMA
 

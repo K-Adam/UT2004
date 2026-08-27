@@ -524,8 +524,6 @@ const MAXSTEPHEIGHT = 35.0; // Maximum step height walkable by pawns
 const MINFLOORZ = 0.7; // minimum z value for floor normal (if less, not a walkable floor)
 					   // 0.7 ~= 45 degree angle for floor
 
-// ifdef WITH_KARMA
-
 // Used to avoid compression
 struct KRBVec
 {
@@ -558,8 +556,6 @@ var(Karma) export editinline KarmaParamsCollision KParams; // Parameters for Kar
 var const native int KStepTag;
 
 var	float AccumKarmaAngleError;
-
-// endif
 
 //-----------------------------------------------------------------------------
 // Animation replication (can be used to replicate channel 0 anims for dumb proxies)
@@ -936,8 +932,6 @@ native(3970) final function SetPhysics( EPhysics newPhysics );
 
 native final function OnlyAffectPawns(bool B);
 
-// ifdef WITH_KARMA
-
 // NB. These take affect until you quit the game! Make sure you reset them to defaults when leaving mod etc.
 native final function KGetSimParams(out KSimParams SimParams);
 native final function KSetSimParams(KSimParams SimParams);
@@ -1021,8 +1015,6 @@ event KApplyForce(out vector Force, out vector Torque);
 // This is called from inside C++ physKarma at the appropriate time to update state of Karma rigid body.
 // If you return true, newState will be set into the rigid body. Return false and it will do nothing.
 event bool KUpdateState(out KRigidBodyState newState);
-
-// endif
 
 // Timing
 native final function Clock(out float time);

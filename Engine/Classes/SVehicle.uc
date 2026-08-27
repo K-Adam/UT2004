@@ -9,7 +9,6 @@ class SVehicle extends Vehicle
 
 cpptext
 {
-#ifdef WITH_KARMA
 	// Actor interface.
 	virtual void PostBeginPlay();
 	virtual void Destroy();
@@ -25,7 +24,6 @@ cpptext
 
 	// SVehicle interface.
 	virtual void UpdateVehicle(FLOAT DeltaTime);
-#endif
 
 }
 

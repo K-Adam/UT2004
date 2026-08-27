@@ -67,13 +67,6 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 #endif
 
 // Karma Includes
-#if !defined(NO_KARMA)
-#ifndef WITH_KARMA
-#  define WITH_KARMA
-#endif
-#endif
-
-#ifdef WITH_KARMA
 #pragma pack (push,8)
     #include "MePrecision.h"
     #include "Mst.h"
@@ -88,7 +81,6 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 
 	const MeReal K_Rad2U = (MeReal)10430.2192;
 	const MeReal K_U2Rad = (MeReal)0.000095875262;
-#endif
 
 
 #pragma pack(push,4)

@@ -9,7 +9,6 @@ Revision history:
 
 #include "OnslaughtPrivate.h"
 
-#ifdef WITH_KARMA
 
 void AONSWheeledCraft::UpdateVehicle(FLOAT DeltaTime)
 {
@@ -681,6 +680,5 @@ void AONSWheeledCraft::PackState()
 	unguard;
 }
 
-#endif // WITH_KARMA
 
 IMPLEMENT_CLASS(AONSWheeledCraft);

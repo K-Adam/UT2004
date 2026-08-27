@@ -9,7 +9,6 @@ Revision history:
 
 #include "OnslaughtPrivate.h"
 
-#ifdef WITH_KARMA
 
 static inline float HeadingAngle(FVector dir)
 {
@@ -375,6 +374,5 @@ void AONSPlaneCraft::PostNetReceive()
 	unguard;
 }
 
-#endif // WITH_KARMA
 
 IMPLEMENT_CLASS(AONSPlaneCraft);

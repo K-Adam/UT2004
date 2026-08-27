@@ -113,7 +113,6 @@ UBOOL USkeletalMesh::LineCheck(
 			return 1;
 	}
 
-#ifdef WITH_KARMA
 	// If its not a zero extent check against a ragdoll, use the superclass (cylinder) line check.
     if(Extent != FVector(0, 0, 0) || (Owner->Physics != PHYS_KarmaRagDoll))
     {
@@ -189,9 +188,6 @@ UBOOL USkeletalMesh::LineCheck(
         return 1;
 	}
 	////////////////////////////
-#else
-	return Super::LineCheck(Result, Owner, End, Start, Extent, ExtraNodeFlags, TraceFlags);
-#endif // WITH_KARMA
 
 	unguard;
 }
@@ -386,7 +382,6 @@ FBox USkeletalMesh::GetCollisionBoundingBox( const AActor* Owner ) const
 	if( BoneCollisionSpheres.Num() > 0 || BoneCollisionBoxes.Num() > 0 )
 		return CalcPrimBox(inst);
 
-#ifdef WITH_KARMA
 	if(inst->KFrozen)
 		return inst->KSkelBox;
 
@@ -394,8 +389,5 @@ FBox USkeletalMesh::GetCollisionBoundingBox( const AActor* Owner ) const
 		return Super::GetCollisionBoundingBox(Owner);
 
 	return inst->KSkelBox;
-#else
-	return Super::GetCollisionBoundingBox(Owner);
-#endif
 	unguard;
 }

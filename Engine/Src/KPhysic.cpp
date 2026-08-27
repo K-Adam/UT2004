@@ -6,7 +6,6 @@
 ============================================================================*/
 #include "EnginePrivate.h"
 
-#ifdef WITH_KARMA
 
 void AActor::KFreezeRagdoll()
 {
@@ -48,7 +47,6 @@ void AActor::KFreezeRagdoll()
 
 	unguard;
 }
-#endif
 
 
 
@@ -66,20 +64,6 @@ void AKActor::Spawned()
 /*****************************************************/
 
 
-#ifndef WITH_KARMA
-
-void UKarmaParamsCollision::execCalcContactRegion( FFrame& Stack, RESULT_DECL )
-{
-	guard(UKarmaParamsCollision::execCalcContactRegion);
-
-	P_FINISH;
-
-	// no-op stub for builds without Karma support.  --ryan.
-
-	unguard;
-}
-
-#else
 
 // Returns actors model (or NULL if it has none, or is a constraint.
 McdModelID AActor::getKModel() const
@@ -1254,7 +1238,6 @@ void AKVehicle::TickSimulated( FLOAT DeltaSeconds )
 	unguard;
 }
 
-#endif // WITH_KARMA
 
 // Handy function for plotting script variables onto screen graph.
 void AKVehicle::execGraphData( FFrame& Stack, RESULT_DECL )

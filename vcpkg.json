@@ -4,7 +4,8 @@
     "libvorbis",
     "dxsdk-d3dx",
     "sdl3",
-    "openal-soft"
+    "openal-soft",
+    "bullet3"
   ],
   "builtin-baseline": "300239058e33420acd153135b3f6e6b187828992"
 }

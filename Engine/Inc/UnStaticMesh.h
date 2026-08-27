@@ -455,10 +455,8 @@ public:
 	// Karma properties
 
 	UKMeshProps*							KPhysicsProps;
-#ifdef WITH_KARMA
 	TArray<McdGeometryID>					KCollisionGeom;
 	TArray<FVector>							KCollisionGeomScale3D;
-#endif
 
 	// Constructor.
 

@@ -10,7 +10,6 @@ cpptext
 {
 	INT* GetOptimizedRepList(BYTE* Recent, FPropertyRetirement* Retire, INT* Ptr, UPackageMap* Map, UActorChannel* Channel);
 
-#ifdef WITH_KARMA
 	// Actor interface.
 	virtual UBOOL Tick(FLOAT DeltaTime, enum ELevelTick TickType);
 	virtual void PostNetReceive();
@@ -21,7 +20,6 @@ cpptext
 
 	// SHover interface.
 	virtual void PackState();
-#endif
 }
 
 var()	array<vector>		ThrusterOffsets;

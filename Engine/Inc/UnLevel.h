@@ -327,7 +327,6 @@ class ENGINE_API ULevel : public ULevelBase
 //	INT	MoveCycles, NumMoves, NumReps, NumPV, NumRPC, SeePlayer, CanvasCycles;
 //	INT Spawning, ParticleTickTime, Unused;
     
-#ifdef WITH_KARMA
     MdtWorldID      KWorld; /* Dyanmics */
     MstBridgeID     KBridge; /* Glue (callbacks etc.) */
 	MeAssetFactory*	KAssetFactory; /* Used for instancing ragdolls etc. */
@@ -347,7 +346,6 @@ class ENGINE_API ULevel : public ULevelBase
 	// Contains pairs of models that have no collision between them.
 	// This does NOT include intra-skeletal disabled models. Those are held in USkeletalMeshInstance KSkelDisableTable.
 	TMap<KModelPairType, UBOOL>			KDisableTable;
-#endif
 
 	// Constructor.
 	ULevel( UEngine* InEngine, UBOOL RootOutside );

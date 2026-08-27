@@ -6,13 +6,11 @@ class KVehicle extends Vehicle
 
 cpptext
 {
-#ifdef WITH_KARMA
 	virtual void PostNetReceive();
     virtual void PostEditChange();
 	virtual void setPhysics(BYTE NewPhysics, AActor *NewFloor, FVector NewFloorV);
 	virtual void TickSimulated( FLOAT DeltaSeconds );
 	virtual void TickAuthoritative( FLOAT DeltaSeconds );
-#endif
 
 }
 

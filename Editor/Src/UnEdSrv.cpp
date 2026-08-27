@@ -1974,7 +1974,6 @@ UBOOL UEditorEngine::Exec_StaticMesh( const TCHAR* Str, FOutputDevice& Ar )
 		GEditor->bspRefresh(StaticMesh->CollisionModel,1);
 		GEditor->bspBuildBounds(StaticMesh->CollisionModel);
 
-#ifdef WITH_KARMA
 		// Now - use this as the Karma collision for this static mesh as well.
 
 		// If we dont already have physics props, construct them here.
@@ -1987,7 +1986,6 @@ UBOOL UEditorEngine::Exec_StaticMesh( const TCHAR* Str, FOutputDevice& Ar )
 
 		// Then re-calc the mass props.
 		KUpdateMassProps(StaticMesh->KPhysicsProps);
-#endif
 
 		// Finally mark the parent package as 'dirty', so user will be prompted if they want to save it etc.
 		UObject* Outer = StaticMesh->GetOuter();

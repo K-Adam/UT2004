@@ -240,7 +240,6 @@
 	virtual void stepUp(FVector GravDir, FVector DesiredDir, FVector Delta, FCheckResult &Hit);
 	virtual UBOOL ShrinkCollision(AActor *HitActor, const FVector &StartLocation);
     
-#ifdef WITH_KARMA
     virtual McdModelID getKModel() const;
     
 	void KWake();
@@ -266,7 +265,6 @@
 
 	virtual void preContactUpdate();
 	virtual UBOOL KRepulsorsShouldHit(AActor* Actor) { return true; }
-#endif
     
 	// AI functions.
 	virtual UBOOL ReachedBy(APawn * P, FVector Loc) { return false; }

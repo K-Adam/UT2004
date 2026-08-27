@@ -1306,7 +1306,6 @@ void FLevelSceneNode::Render(FRenderInterface* RI)
 
 	RenderLevel(this,RI);
 
-#ifdef WITH_KARMA
 	UBOOL bDrawConstraints = false;
 	if(KGData)
 	{
@@ -1326,7 +1325,6 @@ void FLevelSceneNode::Render(FRenderInterface* RI)
 		// done here instead of tick, so we get contacts etc. even if Karma is paused etc.
 		KLevelDebugDrawConstraints(Level);
 	}
-#endif
 
 	if( StencilMask && (GIsEditor || Viewport->RenDev->UseStencil) )
 	{

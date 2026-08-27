@@ -8,7 +8,6 @@ cpptext
 	INT* GetOptimizedRepList(BYTE* Recent, FPropertyRetirement* Retire, INT* Ptr, UPackageMap* Map, UActorChannel* Channel);
 	virtual UBOOL AdjustFlight(FLOAT ZDiff, UBOOL bFlyingDown, FLOAT Distance, AActor* GoalActor);
 
-#ifdef WITH_KARMA
 	// Actor interface.
 	virtual UBOOL Tick(FLOAT DeltaTime, enum ELevelTick TickType);
 	virtual void PostNetReceive();
@@ -18,7 +17,6 @@ cpptext
 
 	// SHover interface.
 	virtual void PackState();
-#endif
 }
 
 var()	float				UprightStiffness;

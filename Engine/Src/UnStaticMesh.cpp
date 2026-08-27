@@ -96,9 +96,7 @@ void UStaticMesh::Destroy()
 {
 	guard(UStaticMesh::Destroy);
 
-#ifdef WITH_KARMA
 	KTermStaticMeshCollision(this);
-#endif
 
 	Super::Destroy();
 	unguard;

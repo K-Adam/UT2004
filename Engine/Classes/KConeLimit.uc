@@ -10,9 +10,7 @@ class KConeLimit extends KConstraint
 
 cpptext
 {
-#ifdef WITH_KARMA
     virtual void KUpdateConstraintParams();
-#endif
 }
 
 var(KarmaConstraint) float KHalfAngle; // ( 65535 = 360 deg )

@@ -1780,7 +1780,6 @@ void AActor::Destroy()
 		ActorRenderData = NULL;
 	}
 
-#ifdef WITH_KARMA
     KTermActorKarma(this);
 	if(XLevel)
 		check(XLevel->KContactGenActors.FindItemIndex(this) == INDEX_NONE);
@@ -1791,7 +1790,6 @@ void AActor::Destroy()
 		delete KParams;
 		KParams = NULL;
 	}
-#endif
 
     if( this->IsInOctree() )
 	{
@@ -1981,7 +1979,6 @@ void AActor::SetCollision
 
 	bNetDirty = true; //for network replication
 
-#ifdef WITH_KARMA
 	if(bBlockKarma && !GIsEditor) // Never generate contacts in the editor
 	{
 		// If turning on bCollideActors for an actor with bBlockKarma true and in a Karma physics mode,
@@ -1995,7 +1992,6 @@ void AActor::SetCollision
 			KGoodbyeActorAffectedPairs(this);
 		}
 	}
-#endif
 
 	unguard;
 }

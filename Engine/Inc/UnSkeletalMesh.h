@@ -804,7 +804,6 @@ struct FSkelBoneBox
 	}
 };
 
-#ifdef WITH_KARMA
 class FKBoneLifter
 {
 public:
@@ -818,7 +817,6 @@ public:
 
 	FKBoneLifter(DWORD InBoneIndex , FInterpCurve* InLiftVel, FLOAT InLateralFriction, FInterpCurve* InSoftness);
 };
-#endif
 
 // All data to define a certain LOD model for a mesh.
 class FStaticLODModel
@@ -995,7 +993,6 @@ class ENGINE_API USkeletalMeshInstance : public ULodMeshInstance
 	FString CurrentLIPSincAnim( void );
 #endif	
 
-#ifdef WITH_KARMA
     /* 
     This means the 'Reference' relative transform (with BBONE_RefPose flag) 
     for this bone is nothing, and that ALL relative transforms come from a Director.
@@ -1037,7 +1034,6 @@ class ENGINE_API USkeletalMeshInstance : public ULodMeshInstance
 
 	// Time that the next convulsion will start.
 	FLOAT						KNextConvulsionTime;
-#endif
 	
 	// Object interface.
 	void Serialize( FArchive& Ar );
@@ -1050,15 +1046,11 @@ class ENGINE_API USkeletalMeshInstance : public ULodMeshInstance
 		m_nActiveLIPSincAnim = -1;
 #endif
 
-#ifdef WITH_KARMA
         KSkelIsInitialised = 0;
         KLastTraceHit = -1;
-#endif
 	}
 
-#ifdef WITH_KARMA
 	virtual void Destroy();
-#endif
 
 	UBOOL UpdateAnimation(FLOAT DeltaSeconds);
 	UBOOL PlayAnim(INT Channel,FName SequenceName, FLOAT InRate, FLOAT InTweenTime, UBOOL InLooping);

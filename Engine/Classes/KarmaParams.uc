@@ -12,10 +12,8 @@ class KarmaParams extends KarmaParamsCollision
 
 cpptext
 {
-#ifdef WITH_KARMA
     void PostEditChange();
 	void Destroy();
-#endif
 }
 
 // Used internally for Karma stuff - DO NOT CHANGE!

@@ -151,13 +151,10 @@ void AActor::setPhysics(BYTE NewPhysics, AActor *NewFloor, FVector NewFloorV)
 	}
 
     
-#ifdef WITH_KARMA
     BYTE OldPhysics = Physics;
-#endif
     
 	Physics = NewPhysics;
 
-#ifdef WITH_KARMA
     // If the new physics isn't using Karma, but the old one was, shut it down.
     if(OldPhysics == PHYS_Karma)
     {
@@ -175,7 +172,6 @@ void AActor::setPhysics(BYTE NewPhysics, AActor *NewFloor, FVector NewFloorV)
     {
 		KInitActorKarma(this);
     }
-#endif
 
 	if ( (Physics == PHYS_Walking) || (Physics == PHYS_None) || (Physics == PHYS_RootMotion) 
 			|| (Physics == PHYS_Rotating) || (Physics == PHYS_Spider) )
@@ -239,10 +235,8 @@ void AMover::performPhysics(FLOAT DeltaSeconds)
 		case PHYS_Rotating: break;
 		case PHYS_MovingBrush: physMovingBrush(DeltaSeconds); break;
         case PHYS_Trailer: physTrailer(DeltaSeconds); break;
-#ifdef WITH_KARMA
         case PHYS_Karma: physKarma(DeltaSeconds); break;
         case PHYS_KarmaRagDoll: physKarmaRagDoll(DeltaSeconds); break;
-#endif
 	}
 	if ( bOnlyDirtyReplication && (Physics != PHYS_Rotating) && (Physics != PHYS_MovingBrush) && (Physics != PHYS_None) )
 		bNetDirty = true;
@@ -285,10 +279,8 @@ void AActor::performPhysics(FLOAT DeltaSeconds)
 		case PHYS_Trailer: physTrailer(DeltaSeconds); break;
 		case PHYS_RootMotion: physRootMotion(DeltaSeconds); break;
 		case PHYS_CinMotion: physRootMotion(DeltaSeconds);break;
-#ifdef WITH_KARMA
         case PHYS_Karma: physKarma(DeltaSeconds); break;
         case PHYS_KarmaRagDoll: physKarmaRagDoll(DeltaSeconds); break;
-#endif
 	}
 
 	// rotate
@@ -429,10 +421,8 @@ void APawn::startNewPhysics(FLOAT deltaTime, INT Iterations)
 		case PHYS_Ladder: physLadder(deltaTime, Iterations); break;
 		case PHYS_RootMotion: physRootMotion(deltaTime); break;
 		case PHYS_CinMotion: physRootMotion(deltaTime); break;
-#ifdef WITH_KARMA
         case PHYS_Karma: physKarma(deltaTime); break;
         case PHYS_KarmaRagDoll: physKarmaRagDoll(deltaTime); break;
-#endif
         case PHYS_Hovering: physHovering(deltaTime, Iterations); break; // sjs
 	}
 }

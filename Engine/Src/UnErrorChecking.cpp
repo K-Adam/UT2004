@@ -107,9 +107,7 @@ void AActor::CheckForErrors()
 	if(LightEffect == LE_WateryShimmer || LightEffect == LE_FireWaver || LightEffect == LE_TorchWaver || LightEffect == LE_CloudCast)
 		GWarn->MapCheck_Add(MCTYPE_WARNING,this,*FString::Printf(TEXT("%s : Obsolete LightEffect"),GetName()));
 
-#ifdef WITH_KARMA
 	KCheckActor(this);
-#endif
 
 	unguard;
 }

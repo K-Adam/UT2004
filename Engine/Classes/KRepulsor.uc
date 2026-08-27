@@ -3,9 +3,7 @@ class KRepulsor extends Actor
 
 cpptext
 {
-#ifdef WITH_KARMA
 	void Destroy();
-#endif
 }
 
 var()	bool	bEnableRepulsion;

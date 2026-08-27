@@ -121,10 +121,8 @@ AActor* ULevel::SpawnActor
 	// Set instigator
 	Actor->Instigator = Instigator;
 
-#ifdef WITH_KARMA
     // Initilise Karma physics for this actor (if there are any)
     KInitActorKarma(Actor);
-#endif
 
 	// Send messages.
 	Actor->InitExecution();
@@ -1303,7 +1301,6 @@ UBOOL ULevel::MoveActor
 	if( Actor->bCollideActors && Hash )
 		Hash->AddActor( Actor );
 
-#ifdef WITH_KARMA
 	// If this actor has a Karma Model, but has no dynamics body and it is not Static,
 	// then update its transform from the Unreal actor.
 	// This allows moving movers/players etc. to have Karma collision.
@@ -1317,7 +1314,6 @@ UBOOL ULevel::MoveActor
 		if(McdGeometryGetTypeId(McdModelGetGeometry(model)) != kMcdGeometryTypeNull)
 			McdModelUpdate(model);
 	}
-#endif
 
 	// Handle bump and touch notifications.
 	if( !bTest )

@@ -1058,7 +1058,6 @@ void AActor::execLinkSkelAnim( FFrame& Stack, RESULT_DECL )
 	unguardexecSlow;
 }
 
-#ifdef WITH_KARMA
 static UBOOL MeshIsCompatible(UMesh* Mesh, UMesh* newMesh)
 {
 	guard(MeshIsCompatible);
@@ -1087,7 +1086,6 @@ static UBOOL MeshIsCompatible(UMesh* Mesh, UMesh* newMesh)
 
 	unguard;
 }
-#endif
 
 void AActor::execLinkMesh( FFrame& Stack, RESULT_DECL )
 {
@@ -1103,7 +1101,6 @@ void AActor::execLinkMesh( FFrame& Stack, RESULT_DECL )
 			// If we are currently in ragdoll, check the mesh has the same heirarchy before replacing it.
 			if(Mesh)
 			{
-#ifdef WITH_KARMA
 				USkeletalMeshInstance* inst = (USkeletalMeshInstance*)Mesh->MeshGetInstance(this);
 
 				// If we are currently running ragdoll, skeletons have to exactly match
@@ -1112,7 +1109,6 @@ void AActor::execLinkMesh( FFrame& Stack, RESULT_DECL )
 					if( !MeshIsCompatible( Mesh, NewMesh ) )
 						return;
 				}
-#endif
 
 				//#Skel - Other subclasses need specific setmesh to update meshinstances properly.
 				if( bKeepAnim )
