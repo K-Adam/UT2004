@@ -24,7 +24,10 @@ Revision history:
 	Dependencies.
 ----------------------------------------------------------------------------*/
 
+// SDL3.dll uses default packing, the engine builds with /Zp4.
+#pragma pack(push,8)
 #include <SDL3/SDL.h>
+#pragma pack(pop)
 
 // Unreal includes.
 #include "Engine.h"

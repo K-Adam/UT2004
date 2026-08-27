@@ -93,7 +93,10 @@ static void ExitSplash(void) {}
 
 #else
 
+// SDL3.dll uses default packing, the engine builds with /Zp4.
+#pragma pack(push,8)
 #include <SDL3/SDL.h>
+#pragma pack(pop)
 
 static SDL_Window* SplashWindow = NULL;
 
@@ -798,6 +801,9 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		// Render device command line options.
 		if( ParseParam(appCmdLine(),TEXT("OPENGL")) )
 			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("OpenGLDrv.OpenGLRenderDevice"	));
+
+		if( ParseParam(appCmdLine(),TEXT("GLES")) )
+			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("GLESDrv.GLESRenderDevice"	));
 
 		if( ParseParam(appCmdLine(),TEXT("NULLRENDER")) )
 			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("Engine.NullRenderDevice"	));
