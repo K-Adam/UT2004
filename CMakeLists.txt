@@ -170,7 +170,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(metoolkit-karma)
 unset(CMAKE_POSITION_INDEPENDENT_CODE)
 
-set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv GLESDrv ALAudio
+set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
     XGame XInterface Onslaught UTV2004 UCC SDLDrv SDLLaunch)
 if(WIN32)
   list(APPEND UT_MODULES Window WinDrv D3D9Drv GUIDesigner

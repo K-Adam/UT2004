@@ -42,7 +42,6 @@ void autoInitializeRegistrantsEditor(INT &Lookup);
 extern "C" {HINSTANCE hInstance;}
 #endif
 extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
-static void SetInitialConfiguration();
 
 // Memory allocator.
 #ifdef _DEBUG
@@ -518,6 +517,9 @@ static UEngine* InitEngine()
         }
     }
 
+	if( appStricmp(GConfig->GetStr(TEXT("Engine.Engine"),TEXT("RenderDevice"),TEXT("System")),TEXT("GLESDrv.GLESRenderDevice"))==0 )
+		GConfig->SetString(TEXT("Engine.Engine"), TEXT("RenderDevice"), TEXT("OpenGLDrv.OpenGLRenderDevice"));
+
     bool isd3d = false;
     if (appStricmp(GConfig->GetStr(TEXT("Engine.Engine"),TEXT("RenderDevice"),TEXT("System")),TEXT("D3DDrv.D3DRenderDevice"))==0)
         isd3d = true;
@@ -802,9 +804,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		if( ParseParam(appCmdLine(),TEXT("OPENGL")) )
 			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("OpenGLDrv.OpenGLRenderDevice"	));
 
-		if( ParseParam(appCmdLine(),TEXT("GLES")) )
-			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("GLESDrv.GLESRenderDevice"	));
-
 		if( ParseParam(appCmdLine(),TEXT("NULLRENDER")) )
 			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("Engine.NullRenderDevice"	));
 
@@ -889,12 +888,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 			GConfig->SetBool( TEXT("SDLDrv.SDLClient"), TEXT("AutoResolution"), 0 );
 		}
 
-		// Set sane default values on initial run.
-		INT FirstRun = 0;
-		GConfig->GetInt( TEXT("FirstRun"), TEXT("FirstRun"), FirstRun );
-		if( GIsClient && (FirstRun==0) )
-			SetInitialConfiguration();
-
 		// Create log window, but only show it if ShowLog.
         #if 0
 		GLogWindow = new WLog( Log.Filename, Log.LogAr, TEXT("GameLog") );
@@ -960,334 +953,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 	appExit();
 	GIsStarted = 0;
 	return((int) ErrorLevel);
-}
-
-
-// Query the HW for caps.
-static void SetInitialConfiguration()
-{
-	guard(SetInitialConfiguration);
-
-    // !!! FIXME: Be nice to get this into Linux in some form...  --ryan.
-
-#if 0
-	//!!vogel: currently only queries primary device though it will be used by default anyways.
-
-	// Variables.
-	HRESULT Result;
-	INT		OnboardVideoMemory	= MAXINT;
-	UBOOL	HardwareTL			= true,
-			DeviceCapsValid		= false;
-	D3DADAPTER_IDENTIFIER8		DeviceIdentifier;
-	D3DCAPS8					DeviceCaps8;
-
-	// Query D3D7 DirectDraw for available local video memory.
-	guard(GetAvailableVidMem);
-	LPDIRECTDRAW DirectDraw;
-
-	appMemzero( &DeviceCaps8, sizeof(DeviceCaps8) ); // gam
-
-	if( FAILED(Result=DirectDrawCreate( NULL, &DirectDraw, NULL ) ) )
-		debugf(NAME_Init, TEXT("D3D Driver: Couldn't query amount of local video memory"));
-	else 
-	{
-		LPDIRECTDRAW7 DirectDraw7;
-		if( FAILED(Result=DirectDraw->QueryInterface(IID_IDirectDraw7, (LPVOID*) &DirectDraw7) ) ) 
-			debugf(NAME_Init, TEXT("D3D Device: Couldn't query amount of local video memory"));
-		else
-		{			
-			DDSCAPS2	ddsCaps2; 
-			DWORD		dwTotal; 
-			DWORD		dwFree;
-
-			// See Tom Forsyth's post to DXDev
-			// http://discuss.microsoft.com/SCRIPTS/WA-MSD.EXE?A2=ind0203a&L=directxdev&D=1&F=&S=&P=12849
-
-			appMemzero( &ddsCaps2, sizeof(ddsCaps2) );
-			ddsCaps2.dwCaps = DDSCAPS_3DDEVICE | DDSCAPS_LOCALVIDMEM | DDSCAPS_TEXTURE | DDSCAPS_VIDEOMEMORY;
-			DirectDraw7->GetAvailableVidMem(&ddsCaps2, &dwTotal, &dwFree);
-
-			if( dwTotal )
-				OnboardVideoMemory = Min<DWORD>( OnboardVideoMemory, dwTotal );
-
-			appMemzero( &ddsCaps2, sizeof(ddsCaps2) );
-			ddsCaps2.dwCaps = DDSCAPS_LOCALVIDMEM | DDSCAPS_TEXTURE | DDSCAPS_VIDEOMEMORY;
-			DirectDraw7->GetAvailableVidMem(&ddsCaps2, &dwTotal, &dwFree);
-
-			if( dwTotal )
-				OnboardVideoMemory = Min<DWORD>( OnboardVideoMemory, dwTotal );
-
-			appMemzero( &ddsCaps2, sizeof(ddsCaps2) );
-			ddsCaps2.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_LOCALVIDMEM | DDSCAPS_VIDEOMEMORY;
-			DirectDraw7->GetAvailableVidMem(&ddsCaps2, &dwTotal, &dwFree);
-
-			if( dwTotal )
-				OnboardVideoMemory = Min<DWORD>( OnboardVideoMemory, dwTotal );
-
-			DirectDraw7->Release();
-		}
-		DirectDraw->Release();
-	}
-	unguard;
-
-	// As GetAvailableVidMem is called before entering fullscreen the numbers are slightly less
-	// as it reports "local video memory" - "memory used for desktop". Though this shouldn't matter 
-	// that much as the user can always override it and as the default values should be conservative.
-	if( OnboardVideoMemory != MAXINT )
-	{
-		OnboardVideoMemory = OnboardVideoMemory / 1024 / 1024;
-		debugf( NAME_Init, TEXT("D3D Device: Video memory on board: %i"), OnboardVideoMemory );
-	}
-
-	// Query D3D8 device for SW vs HW T&L and DXT1.
-	// Card specific defaults.
-	guard(GetD3DDeviceCaps);
-	IDirect3D8* Direct3D8 = Direct3DCreate8(D3D_SDK_VERSION);
-	if( Direct3D8 )
-	{
-		if( SUCCEEDED(Result = Direct3D8->GetDeviceCaps(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, &DeviceCaps8) ) )
-		{
-			DeviceCapsValid = true;
-			if( (DeviceCaps8.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT) == 0 )
-				HardwareTL = 0;
-			// We require at least 8 vertex streams.
-			if( DeviceCaps8.MaxStreams < 8 )
-				HardwareTL = 0;
-		}
-		else
-			debugf(NAME_Init, TEXT("D3D Device: Couldn't query SW vs HW T&L"));
-
-		// Lower detail settings if DXT3 isn't supported
-		if(FAILED(Direct3D8->CheckDeviceFormat(D3DADAPTER_DEFAULT,D3DDEVTYPE_HAL,D3DFMT_X8R8G8B8,0,D3DRTYPE_TEXTURE,D3DFMT_DXT3)))
-			OnboardVideoMemory /= 2;
-
-		if( FAILED( Direct3D8->GetAdapterIdentifier(D3DADAPTER_DEFAULT,D3DENUM_NO_WHQL_LEVEL,&DeviceIdentifier) ) )
-			appMemzero( &DeviceIdentifier, sizeof(DeviceIdentifier) );
-
-		Direct3D8->Release();
-	}
-	else
-	{
-		debugf(NAME_Init, TEXT("D3D Device: Couldn't query SW vs HW T&L"));
-		appMemzero( &DeviceIdentifier, sizeof(DeviceIdentifier) );
-	}
-	unguard;
-
-	// Caps specific settings.
-	if( DeviceCapsValid )
-	{
-		if( DeviceCaps8.MaxSimultaneousTextures < 4 )
-		{
-			GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("DetailTextures"		),	TEXT("False"		));		
-		}
-	}
-
-	// Rough generic card defaults.
-	if( OnboardVideoMemory < 8 )
-	{
-		// 8 MByte or less
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("FullScreenViewportX"	),	TEXT("320"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("FullScreenViewportY"	),	TEXT("240"			));
-
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailInterface"	),	TEXT("Normal"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailTerrain"	),	TEXT("VeryLow"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWeaponSkin"),	TEXT("VeryLow"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailPlayerSkin"),	TEXT("VeryLow"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWorld"		),	TEXT("Low"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailRenderMap"	),	TEXT("VeryLow"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailLightmap"	),	TEXT("VeryLow"		));
-
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Decals"					),	TEXT("False"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Coronas"				),	TEXT("False"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Projectors"				),	TEXT("False"		));
-
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("UseTrilinear"			),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("UseCubemaps"			),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("HighDetailActors"		),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("SuperHighDetailActors"),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("Use16bit"				),	TEXT("True"			));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("Use16bitTextures"		),	TEXT("True"			));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("DetailTextures"		),	TEXT("False"		));		
-
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoFractalAnim"			),	TEXT("True"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoDynamicLights"		),	TEXT("True"			));
-		GConfig->SetString( TEXT("XGame.xPawn")			, TEXT("bPlayerShadows"			),	TEXT("False"		), GUserIni );
-	}
-	else if( OnboardVideoMemory <= 16 )
-	{
-		// 16 MByte
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("FullScreenViewportX"	),	TEXT("512"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("FullScreenViewportY"	),	TEXT("384"			));
-
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailInterface"	),	TEXT("Normal"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailTerrain"	),	TEXT("Low"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWeaponSkin"),	TEXT("Low"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailPlayerSkin"),	TEXT("Low"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWorld"		),	TEXT("VeryLow"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailRenderMap"	),	TEXT("Low"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailLightmap"	),	TEXT("Low"			));
-
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Decals"					),	TEXT("False"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Coronas"				),	TEXT("False"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Projectors"				),	TEXT("False"		));
-
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("UseTrilinear"			),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("UseCubemaps"			),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("HighDetailActors"		),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("SuperHighDetailActors"),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("Use16bit"				),	TEXT("True"			));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("Use16bitTextures"		),	TEXT("True"			));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("DetailTextures"		),	TEXT("False"		));		
-
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoFractalAnim"			),	TEXT("True"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoDynamicLights"		),	TEXT("True"			));
-		GConfig->SetString( TEXT("XGame.xPawn")			, TEXT("bPlayerShadows"			),	TEXT("False"		), GUserIni );
-	}
-	else if( OnboardVideoMemory <= 32 )
-	{
-		// 32 MByte
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailInterface"	),	TEXT("Normal"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailTerrain"	),	TEXT("Lower"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWeaponSkin"),	TEXT("Lower"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailPlayerSkin"),	TEXT("Low"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWorld"		),	TEXT("Low"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailRenderMap"	),	TEXT("Lower"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailLightmap"	),	TEXT("Lower"		));
-
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("UseTrilinear"			),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("HighDetailActors"		),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("SuperHighDetailActors"),	TEXT("False"		));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("Use16bit"				),	TEXT("True"			));
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"),	TEXT("DetailTextures"		),	TEXT("False"		));
-	}
-	else if( OnboardVideoMemory <= 64 )
-	{
-		// 64 MByte
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailInterface"	),	TEXT("Normal"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailTerrain"	),	TEXT("Normal"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWeaponSkin"),	TEXT("Normal"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailPlayerSkin"),	TEXT("Lower"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWorld"		),	TEXT("Normal"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailRenderMap"	),	TEXT("Lower"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailLightmap"	),	TEXT("Normal"		));
-
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("SuperHighDetailActors"),	TEXT("False"		));
-	}
-	else if( OnboardVideoMemory <= 128 )
-	{
-		// 128 MByte
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailInterface"	),	TEXT("Higher"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailTerrain"	),	TEXT("Higher"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWeaponSkin"),	TEXT("Higher"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailPlayerSkin"),	TEXT("Higher"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWorld"		),	TEXT("Higher"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailRenderMap"	),	TEXT("Higher"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailLightmap"	),	TEXT("Higher"		));
-	}
-	else
-	{
-		// 256 MByte and more
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailInterface"	),	TEXT("UltraHigh"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailTerrain"	),	TEXT("UltraHigh"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWeaponSkin"),	TEXT("UltraHigh"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailPlayerSkin"),	TEXT("UltraHigh"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailWorld"		),	TEXT("UltraHigh"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailRenderMap"	),	TEXT("UltraHigh"	));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("TextureDetailLightmap"	),	TEXT("UltraHigh"	));
-
-		GConfig->SetString( TEXT("D3DDrv.D3DRenderDevice"), TEXT("UseCompressedLightmaps"	),	TEXT("False"	));
-	}
-
-	// ATI
-	if( DeviceIdentifier.VendorId==0x1002 )
-	{
-	}
-	// 3dfx
-	else if( DeviceIdentifier.VendorId==0x121A )
-	{
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("FullScreenViewportX"	),	TEXT("640"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("FullScreenViewportY"	),	TEXT("480"			));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Projectors"				),	TEXT("False"		));
-		GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("NoDynamicLights"		),	TEXT("True"			));
-	}
-	// Intel
-	else if( DeviceIdentifier.VendorId==0x8086 )
-	{
-	}
-#if 0
-	// Kyro
-	else if( DeviceIdentifier.DeviceId==0x010 )
-	{
-	}
-#endif
-	// NVIDIA
-	else if( DeviceIdentifier.VendorId==0x10DE )
-	{
-		// TNT/ GF2/ GF4MX can't handle required stage setup for most projectors.
-		// if( DeviceCaps8.MaxSimultaneousTextures == 2 )
-		//	GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("Projectors"				),	TEXT("False"		));
-
-		// TNT
-		if( DeviceIdentifier.DeviceId == 0x0020 )
-		{
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		}
-		// TNT 2
-		if( DeviceIdentifier.DeviceId >= 0x0028 && DeviceIdentifier.DeviceId <= 0x002F )
-		{
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		}
-		// GeForce
-		if( DeviceIdentifier.DeviceId >= 0x0100 && DeviceIdentifier.DeviceId <= 0x0103 )
-		{
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		}
-		// GeForce 2 MX
-		if( DeviceIdentifier.DeviceId >= 0x0110 && DeviceIdentifier.DeviceId <= 0x0113 )
-		{
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		}
-		// GeForce 2
-		if( DeviceIdentifier.DeviceId >= 0x0150 && DeviceIdentifier.DeviceId <= 0x0153 )
-		{
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		}
-		// GeForce 4 MX
-		if( DeviceIdentifier.DeviceId >= 0x0170 && DeviceIdentifier.DeviceId <= 0x0179 )
-		{		
-			GConfig->SetString( TEXT("WinDrv.WindowsClient"), TEXT("DecoLayers"				),	TEXT("False"		));
-		}
-		// GeForce 3
-		if( DeviceIdentifier.DeviceId >= 0x0200 && DeviceIdentifier.DeviceId <= 0x0203 )
-		{
-		}
-		// GeForce 4 Ti
-		if( DeviceIdentifier.DeviceId >= 0x0250 && DeviceIdentifier.DeviceId <= 0x0253 )
-		{
-		}
-	}
-	// Matrox
-	else if( DeviceIdentifier.VendorId==0x102B )
-	{
-	}
-	// Trident
-	else if( DeviceIdentifier.VendorId==0x1023 )
-	{
-	}
-	// SiS
-	else if( DeviceIdentifier.VendorId==0x1039 )
-	{
-	}
-	// Generic
-	else
-	{
-	}
-#endif
-	unguard;
 }
 
 /*-----------------------------------------------------------------------------

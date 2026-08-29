@@ -690,7 +690,7 @@ void* USDLViewport::GetWindow()
 	guard(USDLViewport::GetWindow);
 	SDL_Window* Window = GetOuterUSDLClient()->Window;
 #ifdef WIN32
-	// Force feedback and OpenGLDrv's gamma need the native window.
+	// Force feedback needs the native window.
 	return SDL_GetPointerProperty( SDL_GetWindowProperties(Window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL );
 #else
 	return Window;

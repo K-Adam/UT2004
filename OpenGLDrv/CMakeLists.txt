@@ -1,13 +1,11 @@
 ut_module(OpenGLDrv SHARED
-  SOURCES OpenGLDrv.cpp OpenGLMaterialState.cpp OpenGLRenderDevice.cpp
-          OpenGLRenderInterface.cpp OpenGLResource.cpp
+  SOURCES OpenGLDrv.cpp OpenGLMaterial.cpp OpenGLRenderDevice.cpp OpenGLRenderInterface.cpp OpenGLResource.cpp
   PCH OpenGLDrv.h OpenGLDrv.cpp
   DEPS Engine)
-target_link_libraries(OpenGLDrv PRIVATE SDL3::SDL3)
+target_link_libraries(OpenGLDrv PRIVATE SDL3::SDL3 ${GLES_TARGET})
 if(WIN32)
-  # WinDrv viewports use WGL and never load SDL3.dll, see UOpenGLRenderDevice::Init.
-  target_link_libraries(OpenGLDrv PRIVATE delayimp)
-  target_link_options(OpenGLDrv PRIVATE /DELAYLOAD:SDL3.dll)
-else()
-  target_include_directories(OpenGLDrv PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Inc/linuxGL)
+  # The engine loads OpenGLDrv at runtime and SDL loads libEGL by name, so linking copies neither DLL.
+  add_custom_command(TARGET OpenGLDrv POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:OpenGLDrv> $<TARGET_FILE:unofficial::angle::libEGL> ${UT_SYSTEM_DIR}
+    COMMAND_EXPAND_LISTS)
 endif()
