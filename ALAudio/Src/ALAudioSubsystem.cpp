@@ -410,33 +410,13 @@ UBOOL UALAudioSubsystem::Init()
 		unguard;
 	#endif
 
-	// Init shared audio capture device.
-	if( !GIsEditor )
-	{
-		if( CaptureDevice == NULL )
-		{
-			CaptureDevice = new FALAudioCaptureDevice();
-			if( CaptureDevice->Init() )
-			{
-				CaptureDevice->Record();
-			}
-			else
-			{
-				delete CaptureDevice;
-				CaptureDevice = NULL;
-			}
-		}			
-	}
-	else
-		CaptureDevice = NULL;
-
 	#ifndef WIN32  // !!! FIXME
 	alcProcessContext( SoundContext );
 	#endif
 
 #if WITH_SPEEX
 	// Init voice encoding/ decoding module.
-	VoiceModule = new FALVoiceModule( this, CaptureDevice );
+	VoiceModule = new FALVoiceModule( this );
 #endif
 
 	// Init streaming thread.
@@ -677,13 +657,32 @@ UBOOL UALAudioSubsystem::Update( FSceneNode* SceneNode )
 	SetEAXEffect();
 
 #if WITH_SPEEX
-	if( CaptureDevice )
+	// An open Bluetooth headset mic switches all of its audio to mono hands-free mode, so it stays closed unless voice is being captured.
+	UBOOL WantCapture = !GIsEditor && UseVoIP && (Viewport->Actor->bVoiceTalk || EnhancedDenoiser || UseVAD);
+	if( WantCapture && !WantedCapture )
 	{
-		// Dampen sound volume if recording.
-		DampenVolume = Viewport->Actor->bVoiceTalk;
+		FALAudioCaptureDevice* Capture = new FALAudioCaptureDevice();
+		if( Capture->Init() )
+		{
+			Capture->Record();
+			CaptureDevice = Capture;
+			VoiceModule->ResetCapture();
+		}
+		else
+			delete Capture;
+	}
+	WantedCapture = WantCapture;
 
-		// Check capture device and encode + send packets if there is enough data.
+	DampenVolume = CaptureDevice && Viewport->Actor->bVoiceTalk;
+
+	// Runs before closing so the encoder sees the key release.
+	if( CaptureDevice )
 		VoiceModule->Encode();
+
+	if( !WantCapture && CaptureDevice )
+	{
+		delete CaptureDevice;
+		CaptureDevice = NULL;
 	}
 #endif
 

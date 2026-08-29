@@ -27,19 +27,19 @@
 class FALVoiceModule
 {
 public:
-	FALVoiceModule( class UALAudioSubsystem* InAudioSubsystem, FAudioCaptureDevice* InCaptureDevice );
+	FALVoiceModule( class UALAudioSubsystem* InAudioSubsystem );
 	~FALVoiceModule();
 
 	void SetEncoder( EVoiceCodec InVoiceCodec );
 
 	INT Encode();
+	void ResetCapture();
 	UBOOL Decode( FVoiceInfo* VoiceInfo );
 
 	void NoteDestroy( AActor* Actor );
 
 protected:
 	UALAudioSubsystem*			AudioSubsystem;
-	FAudioCaptureDevice*		CaptureDevice;
 
 	DWORD						CaptureOffset;
 	UBOOL						CapturingVoice,

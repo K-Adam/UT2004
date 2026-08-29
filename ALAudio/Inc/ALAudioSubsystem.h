@@ -197,7 +197,8 @@ protected:
 	FALSoundSource*				TransientSource;
 	DOUBLE						LastHWUpdate,
 								LastVoiceTime;
-	UBOOL						DampenVolume;
+	UBOOL						DampenVolume,
+								WantedCapture;
 
 	// AL specific.
 	ALCdevice*					SoundDevice;

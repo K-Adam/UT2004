@@ -11,16 +11,14 @@
 //
 //	FALVoiceModule::FALVoiceModule.
 //
-FALVoiceModule::FALVoiceModule( UALAudioSubsystem* InAudioSubsystem, FAudioCaptureDevice* InCaptureDevice )
+FALVoiceModule::FALVoiceModule( UALAudioSubsystem* InAudioSubsystem )
 {
 	guard(FALVoiceModule::FALVoiceModule);
-	
-	// Store audio subsystem and capture device.
+
 	AudioSubsystem	= InAudioSubsystem;
-	CaptureDevice	= InCaptureDevice;
 
 	// Initialize audio capture relevant data.
-	CaptureOffset	= CaptureDevice ? CaptureDevice->GetCurrentOffset() : 0;
+	CaptureOffset	= 0;
 	CapturingVoice	= 0;
 	VADActive		= 0;
 
@@ -65,7 +63,6 @@ FALVoiceModule::~FALVoiceModule()
 	SpeexDecoders.Empty();
 
 	AudioSubsystem		= NULL;
-	CaptureDevice		= NULL;
 
 	unguard;
 }
@@ -158,6 +155,16 @@ void FALVoiceModule::SetEncoder( EVoiceCodec InVoiceCodec )
 }
 
 //
+//	FALVoiceModule::ResetCapture.
+//
+void FALVoiceModule::ResetCapture()
+{
+	// The previous device's ring buffer offset is meaningless for a newly opened one.
+	CaptureOffset	= UAudioSubsystem::CaptureDevice->GetCurrentOffset();
+	CapturingVoice	= 0;
+}
+
+//
 //	FALVoiceModule::Encode.
 //
 INT FALVoiceModule::Encode()
@@ -165,6 +172,7 @@ INT FALVoiceModule::Encode()
 	guard(FALVoiceModule::Encode);
 
 	// Nothing to do if we don't have a capture device.
+	FAudioCaptureDevice* CaptureDevice = UAudioSubsystem::CaptureDevice;
 	if( !CaptureDevice )
 		return 0;
 
