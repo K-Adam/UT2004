@@ -261,12 +261,6 @@ class EDITOR_API UEditorEngine : public UEngine
 	INT                      AutosaveCounter;
 	INT						 Pad[7];
 
-	// Static because script only reserves Pad[8] for these, too little for 64-bit pointers.
-	static class WObjectProperties* ActorProperties;
-	static class WObjectProperties* LevelProperties;
-	static class WConfigProperties* Preferences;
-	static class WProperties*       UseDest;
-
 	// Graphics.
 	UTexture *Bad;
 	UTexture *Bkgnd, *BkgndHi, *BadHighlight, *MaterialArrow, *MaterialBackdrop;

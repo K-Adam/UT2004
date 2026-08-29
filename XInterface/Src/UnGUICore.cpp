@@ -1338,8 +1338,10 @@ void UGUIController::execSetRenderDevice( FFrame& Stack, RESULT_DECL )
 	P_GET_STR(NewRenderClass);
 	P_FINISH;
 
-	GConfig->SetString( TEXT("Engine.Engine"), TEXT("RenderDevice"), *NewRenderClass );
-	*(UBOOL*)Result = 1;
+	// The retail menu still lists renderers this build does not ship.
+	*(UBOOL*)Result = UObject::StaticLoadClass( URenderDevice::StaticClass(), NULL, *NewRenderClass, NULL, LOAD_NoWarn|LOAD_Quiet, NULL )!=NULL;
+	if( *(UBOOL*)Result )
+		GConfig->SetString( TEXT("Engine.Engine"), TEXT("RenderDevice"), *NewRenderClass );
 
 	unguardexec;
 }

@@ -9,7 +9,138 @@ Revision history:
 
 #include "EditorPrivate.h"
 #include "FFileManagerArc.h"
-#include "../../Setup/Inc/Setup.h"
+
+#define MANIFEST_FILE TEXT("Manifest")
+#define MANIFEST_EXT  TEXT(".ini")
+#define SFX_STUB      TEXT("RunSFX.exe")
+
+/*-----------------------------------------------------------------------------
+	Functions.
+-----------------------------------------------------------------------------*/
+
+//
+// Return the name part only.
+//
+inline FString BaseFilename( FString Src )
+{
+	guard(BaseFilename);
+	for( ; ; )
+	{
+		INT i = Src.InStr( PATH_SEPARATOR ); 
+		if( i<0 )
+			break;
+		Src = Src.Mid(i+1);
+	}
+	return Src;
+	unguard;
+}
+
+//
+// Return the path part only.
+//
+inline FString BasePath( const FString& Src )
+{
+	guard(BasePath);
+	for( INT i=Src.Len()-1; i>=0; i-- )
+		if( Src.Mid(i,1)==PATH_SEPARATOR )
+			return Src.Left(i);
+	return TEXT("");
+	unguard;
+}
+
+//
+// Recurive file find.
+//
+inline TArray<FString> FindFilesRecursive( FString Path, FString Spec )
+{
+	guard(FindFilesRecursive);
+	TArray<FString> Result = GFileManager->FindFiles( *(Path * Spec), 1, 0 );
+	TArray<FString> Dirs   = GFileManager->FindFiles( *(Path * TEXT("*")), 0, 1 );
+	for( TArray<FString>::TIterator It(Dirs); It; ++It )
+	{
+		TArray<FString> SubFiles = FindFilesRecursive( *(Path*(*It)), Spec );
+		for( TArray<FString>::TIterator Jt(SubFiles); Jt; ++Jt )
+			new(Result)FString( (*It) * (*Jt) );
+	}
+	return Result;
+	unguard;
+}
+
+/*-----------------------------------------------------------------------------
+	File information.
+-----------------------------------------------------------------------------*/
+
+//
+// Information about a file.
+//
+struct FFileInfo
+{
+	FString Dest, Src, Master, Ref, Lang;
+	SQWORD  Size, RefSize, CompSize;
+	UBOOL   MasterRecurse, Compressed, Optional;
+	DWORD   Flags;
+	INT		CDNum;
+	FFileInfo( FString Init )
+	: Dest(), Src(), Ref(), Lang(), Size(0), RefSize(0), MasterRecurse(0), Flags(0), CDNum(0), Compressed(0), CompSize(0), Optional(0)
+	{
+		guard(FFileInfo::FFileInfo);
+		if( Init.Left(1)==TEXT("(") )
+			Init = Init.Mid(1);
+		if( Init.Right(1)==TEXT(")") )
+			Init = Init.LeftChop(1);
+		Parse( *Init, TEXT("DEST="),   Dest   );
+		Parse( *Init, TEXT("SRC="),    Src    );
+		Parse( *Init, TEXT("MASTER="), Master );
+		Parse( *Init, TEXT("REF="),    Ref    );
+		Parse( *Init, TEXT("REFSIZE="),RefSize);
+		Parse( *Init, TEXT("COMPSIZE="),CompSize);
+		Parse( *Init, TEXT("SIZE="),   Size   );
+		Parse( *Init, TEXT("LANG="),   Lang   );
+		Parse( *Init, TEXT("FLAGS="),  Flags  );
+		Parse( *Init, TEXT("CD="),     CDNum  );
+		ParseUBOOL( *Init, TEXT("MASTERRECURSE="), MasterRecurse );
+		ParseUBOOL( *Init, TEXT("COMPRESSED="), Compressed );
+		ParseUBOOL( *Init, TEXT("OPTIONAL="), Optional );
+		unguard;
+	}
+	FString Safe( const FString& Str )
+	{
+		if( Src.InStr(TEXT(" "))>=0 )
+			return US+TEXT("\"") + Str + TEXT("\"");
+		return Str;
+	}
+	void Write( FOutputDevice& Ar, UBOOL Distribution )
+	{
+		guard(FFileInfo::Write);
+		Ar.Logf( TEXT("(Src=%s"), *Safe(Src) );
+		if( Dest!=TEXT("") )
+			Ar.Logf( TEXT(",Dest=%s"), *Safe(Dest) );
+		if( Distribution && Master!=TEXT("") )
+			Ar.Logf( TEXT(",Master=%s"), *Safe(Master) );
+		if( Ref!=TEXT("") )
+			Ar.Logf( TEXT(",Ref=%s"), *Safe(Ref) );
+		if( RefSize )
+			Ar.Logf( TEXT(",RefSize=%i"), RefSize );
+		if( Lang!=TEXT("") )
+			Ar.Logf( TEXT(",Lang=%s"), *Lang );
+		if( Size!=0 )
+			Ar.Logf( TEXT(",Size=%i"), Size );
+		if( CompSize!=0 )
+			Ar.Logf( TEXT(",CompSize=%i"), CompSize );
+		if( Flags!=0 )
+			Ar.Logf( TEXT(",Flags=%i"), Flags );
+		if( CDNum!=0)
+			Ar.Logf( TEXT(",CD=%i"), CDNum );
+		if( Distribution && MasterRecurse )
+			Ar.Logf( TEXT(",MasterRecurse=True") );
+		if( Compressed )
+			Ar.Logf( TEXT(",Compressed=True") );
+		if( Optional )
+			Ar.Logf( TEXT(",Optional=True") );
+		Ar.Log( TEXT(")") );
+		unguard;
+	}
+};
 
 /*-----------------------------------------------------------------------------
 	Master distribution image generator.

@@ -65,7 +65,6 @@ class USDLClient : public UClient, public FNotifyHook
 
 	// Variables.
 	UBOOL				InMenuLoop;
-	UBOOL				ConfigReturnFullscreen;
 	INT					NormalMouseInfo[3];
 	INT					CaptureMouseInfo[3];
 

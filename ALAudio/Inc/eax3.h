@@ -12,40 +12,6 @@
 extern "C" {
 #endif // __cplusplus
 
-#ifndef OPENAL
-	#include <dsound.h>
-
-	/*
-	 * EAX Wrapper Interface (using Direct X 7) {4FF53B81-1CE0-11d3-AAB8-00A0C95949D5}
-	 */
-	DEFINE_GUID(CLSID_EAXDirectSound, 
-    	0x4ff53b81, 
-    	0x1ce0, 
-    	0x11d3,
-    	0xaa, 0xb8, 0x0, 0xa0, 0xc9, 0x59, 0x49, 0xd5);
-    	
-   /*
-	* EAX Wrapper Interface (using Direct X 8) {CA503B60-B176-11d4-A094-D0C0BF3A560C}
-	*/
-	DEFINE_GUID(CLSID_EAXDirectSound8, 
-		0xca503b60,
-		0xb176,
-		0x11d4,
-		0xa0, 0x94, 0xd0, 0xc0, 0xbf, 0x3a, 0x56, 0xc);
-
-	
-
-#ifdef DIRECTSOUND_VERSION		
-#if DIRECTSOUND_VERSION == 0x0800
-	__declspec(dllimport) HRESULT WINAPI EAXDirectSoundCreate8(GUID*, LPDIRECTSOUND8*, IUnknown FAR *);
-	typedef HRESULT (FAR PASCAL *LPEAXDIRECTSOUNDCREATE8)(GUID*, LPDIRECTSOUND8*, IUnknown FAR*);
-#endif
-#endif
-	
-	__declspec(dllimport) HRESULT WINAPI EAXDirectSoundCreate(GUID*, LPDIRECTSOUND*, IUnknown FAR *);
-	typedef HRESULT (FAR PASCAL *LPEAXDIRECTSOUNDCREATE)(GUID*, LPDIRECTSOUND*, IUnknown FAR*);
-
-#else // OPENAL
 	//#include <al.h>
 	
 	#ifndef GUID_DEFINED
@@ -75,7 +41,6 @@ extern "C" {
 	 */
 	typedef ALenum (*EAXSet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 	typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
-#endif
 
 #pragma pack(push, 4)
 

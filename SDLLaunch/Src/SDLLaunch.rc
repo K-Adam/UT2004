@@ -1,2 +1,2 @@
 // SDL uses the executable's first icon for its windows.
-1 ICON "../../Launch/Src/Res/Unreal.ico"
+1 ICON "Unreal.ico"

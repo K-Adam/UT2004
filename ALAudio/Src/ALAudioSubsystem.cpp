@@ -25,7 +25,6 @@ Revision history:
 // OpenAL functions.
 #define INITGUID 1
 #undef DEFINE_GUID
-#define OPENAL
 
 #if DYNAMIC_BIND
 #define AL_EXT(name) UBOOL UALAudioSubsystem::SUPPORTS##name;
@@ -272,15 +271,8 @@ UBOOL UALAudioSubsystem::Init()
 	unguard;
 #endif
 
-	if( UseEAX )
-		Use3DSound = true;
-
-	char *Device = NULL;
-	#if USE_DIRECTSOUND
-		Device = UseMMSYSTEM ? "MMSYSTEM" : Use3DSound ? "DirectSound3D" : "DirectSound";
-	#endif
 	guard(alcOpenDevice);
-	SoundDevice = alcOpenDevice( (unsigned char *)Device );
+	SoundDevice = alcOpenDevice( NULL );
 	unguard;
 	if( !SoundDevice )
 	{

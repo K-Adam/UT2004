@@ -1,4 +1,11 @@
-ut_module(SDLLaunch EXECUTABLE OUTPUT ut2004-bin SOURCES SDLLaunch.cpp DEPS Engine SDL3::SDL3 ZLIB::ZLIB)
+if(WIN32)
+  set(SDLLAUNCH_OUTPUT UT2004)
+else()
+  set(SDLLAUNCH_OUTPUT ut2004-bin)
+endif()
+ut_module(SDLLaunch WIN32 OUTPUT ${SDLLAUNCH_OUTPUT} SOURCES SDLLaunch.cpp DEPS Engine SDL3::SDL3 ZLIB::ZLIB)
 if(WIN32)
   target_sources(SDLLaunch PRIVATE Src/SDLLaunch.rc)
+  # A GUI subsystem exe that still enters through main.
+  target_link_options(SDLLaunch PRIVATE /ENTRY:mainCRTStartup)
 endif()

@@ -17,5 +17,5 @@ ut_module(Editor SHARED
           USurfaceTypeCommandlet.cpp UTextureInfoCommandlet.cpp UTextureLODCommandlet.cpp
           UTextureStripCommandlet.cpp xEdInt.cpp xObjExporters.cpp xTextureConversions.cpp
   PCH EditorPrivate.h Editor.cpp
-  DEPS Engine $<$<PLATFORM_ID:Windows>:Window>)
+  DEPS Engine)
 target_compile_definitions(Editor PRIVATE _EDITOR_)

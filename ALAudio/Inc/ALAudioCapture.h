@@ -21,12 +21,6 @@
 #include "AL/al.h"
 #include "AL/alc.h"
 
-#if USE_DIRECTSOUND
-#pragma pack(push,8)
-#include <dsound.h>
-#pragma pack(pop)
-#endif
-
 /*------------------------------------------------------------------------------------
 	FALAudioCaptureDevice.
 ------------------------------------------------------------------------------------*/
@@ -49,18 +43,12 @@ public:
 	virtual DWORD GetSamplesPerSecond();
 
 protected:
-	#if USE_DIRECTSOUND
-	LPDIRECTSOUNDCAPTURE		CaptureDevice;
-	LPDIRECTSOUNDCAPTUREBUFFER	CaptureBuffer;
-	#endif
-
 	// ALC_EXT_capture support...
 	UBOOL						HaveALCaptureExt;
 	ALCdevice*					ALCaptureDevice;
 	BYTE*						ALCaptureBuffer;
 	ALenum						alc_capture_samples;  // !!! FIXME: put this in the headers.
  
-	DWORD						CaptureBufferSize;
 	FCriticalSection			CriticalSection;
 	INT							RecordCount;
 

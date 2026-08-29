@@ -780,8 +780,9 @@ const TCHAR* UInput::GetLocalizedKeyName( EInputKey Key ) const
 		else	
 			appStrncpy( KeyName, Viewport->GetLocalizedKeyName( Key ), 1024);		
 		
-		// Sanity fallback and hack for more mouse buttons.
-		if( appStrcmp( KeyName, TEXT("UNKNOWN")) == 0 
+		// Sanity fallback and hack for more mouse buttons. SDLDrv returns no name at all.
+		if( !*KeyName
+		||	appStrcmp( KeyName, TEXT("UNKNOWN")) == 0 
 		||	Key == IK_Mouse4
 		||	Key == IK_Mouse5
 		||	Key == IK_Mouse6

@@ -5,7 +5,6 @@ ut_module(ALAudio SHARED
   DEPS Engine speex)
 if(WIN32)
   target_include_directories(ALAudio PRIVATE $<TARGET_PROPERTY:OpenAL::OpenAL,INTERFACE_INCLUDE_DIRECTORIES>)
-  target_link_libraries(ALAudio PRIVATE dsound dxguid)
   # Nothing links OpenAL, so it is not copied next to the executables on its own.
   add_custom_command(TARGET ALAudio POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:OpenAL::OpenAL> ${UT_SYSTEM_DIR})

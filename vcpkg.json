@@ -2,7 +2,6 @@
   "dependencies": [
     "zlib",
     "libvorbis",
-    "dxsdk-d3dx",
     "sdl3",
     "openal-soft",
     "bullet3",

@@ -16,14 +16,8 @@ extern "C" { void filter_mem2(float *x, float *num, float* den, float *y, int N,
 //
 FALAudioCaptureDevice::FALAudioCaptureDevice()
 {
-#if USE_DIRECTSOUND
-	CaptureDevice		= NULL;
-	CaptureBuffer		= NULL;
-#endif
-                                                                                
 	ALCaptureDevice         = NULL;
 	ALCaptureBuffer         = NULL;
-	CaptureBufferSize	= 0;
 
 	RecordCount			= 0;
 
@@ -35,21 +29,6 @@ FALAudioCaptureDevice::FALAudioCaptureDevice()
 //
 FALAudioCaptureDevice::~FALAudioCaptureDevice()
 {
-#if USE_DIRECTSOUND
-	if( CaptureBuffer )
-	{
-		CaptureBuffer->Stop();	
-		CaptureBuffer->Release();
-		CaptureBuffer = NULL;
-	}
-
-	if( CaptureDevice )
-	{
-		CaptureDevice->Release();
-		CaptureDevice = NULL;
-	}
-#endif
-
 	if (ALCaptureDevice != NULL)
 	{
 		UALAudioSubsystem::alcCaptureStop(ALCaptureDevice);
@@ -89,47 +68,6 @@ UBOOL FALAudioCaptureDevice::Init()
 		}
 	}
 
-#if USE_DIRECTSOUND
-	HRESULT hr;
-	if( SUCCEEDED( hr = DirectSoundCaptureCreate( &DSDEVID_DefaultVoiceCapture, &CaptureDevice, NULL ) ) )
-	{
-		DSCCAPS CaptureCaps;
-		CaptureCaps.dwSize = sizeof(CaptureCaps);
-
-		if( SUCCEEDED( hr = CaptureDevice->GetCaps( &CaptureCaps ) ) )
-		{		
-			WAVEFORMATEX WaveFormat;
-			memset( &WaveFormat, 0, sizeof(WaveFormat));
-			WaveFormat.wFormatTag			= WAVE_FORMAT_PCM;
-			WaveFormat.nSamplesPerSec		= 16000;
-			WaveFormat.wBitsPerSample		= 16;
-			WaveFormat.nChannels			= 1;
-			WaveFormat.nBlockAlign			= WaveFormat.nChannels * ( WaveFormat.wBitsPerSample / 8 );
-			WaveFormat.nAvgBytesPerSec		= WaveFormat.nBlockAlign * WaveFormat.nSamplesPerSec;
-
-			DSCBUFFERDESC BufferDesc;
-			memset( &BufferDesc, 0, sizeof(BufferDesc) );
-			BufferDesc.dwSize				= sizeof(BufferDesc);
-			BufferDesc.dwBufferBytes		= WaveFormat.nAvgBytesPerSec * 5;
-			BufferDesc.lpwfxFormat			= &WaveFormat;
-
-			if( SUCCEEDED( hr=CaptureDevice->CreateCaptureBuffer( &BufferDesc, &CaptureBuffer, NULL ) ) )
-			{
-				debugf(TEXT("ALAudio: Using DirectSound to record audio."));
-				CaptureBufferSize = BufferDesc.dwBufferBytes;
-				return 1;
-			}
-		}
-	}
-
-	// Clean up if anything failed.
-	if( CaptureDevice )
-	{
-		CaptureDevice->Release();
-		CaptureDevice = NULL;
-	}
-#endif
-
 	debugf(TEXT("ALAudio: Couldn't find a means to record audio."));
 	return 0;
 }
@@ -143,11 +81,6 @@ void FALAudioCaptureDevice::Record()
 
 	if( RecordCount++ >= 0 )
 	{
-		#if USE_DIRECTSOUND
-		if( CaptureDevice )
-			CaptureBuffer->Start( DSCBSTART_LOOPING );
-		#endif
-
 		if( ALCaptureDevice )
 			UALAudioSubsystem::alcCaptureStart(ALCaptureDevice);
 	}
@@ -162,11 +95,6 @@ void FALAudioCaptureDevice::Stop()
 
 	if( --RecordCount <= 0 )
 	{
-		#if USE_DIRECTSOUND
-		if( CaptureDevice )
-			CaptureBuffer->Stop();
-		#endif
-
 		if( ALCaptureDevice )
 			UALAudioSubsystem::alcCaptureStop(ALCaptureDevice);
 	}
@@ -177,21 +105,6 @@ void FALAudioCaptureDevice::Stop()
 //
 DWORD FALAudioCaptureDevice::GetCurrentOffset()
 {
-#if USE_DIRECTSOUND
-	if( CaptureDevice )
-	{
-		FScopeCriticalSection Lock( &CriticalSection );
-
-		HRESULT hr;
-		DWORD	ReadPosition;
-
-		if( SUCCEEDED(hr=CaptureBuffer->GetCurrentPosition( NULL, &ReadPosition )) )
-			return ReadPosition;
-		else
-			return 0;
-	}
-#endif
-
 	return 0;  // ALC_EXT_capture doesn't expose a ring buffer...
 }
 
@@ -211,37 +124,6 @@ DWORD FALAudioCaptureDevice::GetSamplesPerSecond()
 DWORD FALAudioCaptureDevice::GetAvailableSamples( DWORD Offset, EAudioCaptureType Type )
 {
 	FScopeCriticalSection Lock( &CriticalSection );
-
-#if USE_DIRECTSOUND
-	if( CaptureDevice )
-	{
-		HRESULT hr;
-		DWORD	ReadPosition,
-				AvailableBytes;
-
-		if( FAILED(hr=CaptureBuffer->GetCurrentPosition( NULL, &ReadPosition )) )
-			return 0;
-
-		if( Offset <= ReadPosition )
-			AvailableBytes = ReadPosition - Offset;
-		else
-			AvailableBytes = ReadPosition + CaptureBufferSize - Offset;
-
-		switch( Type )
-		{
-		case CAPTURE_8KHZ_FLOAT:
-			return AvailableBytes / sizeof(SHORT) / 2; // frequency conversion.
-			break;
-		case CAPTURE_16KHZ_FLOAT:
-		case CAPTURE_16KHZ_SHORT:
-			return AvailableBytes / sizeof(SHORT);
-			break;
-		default:
-			return 0;
-			break;
-		}
-	}
-#endif
 
 	if( ALCaptureDevice )
 	{
@@ -274,7 +156,6 @@ FLOAT FALAudioCaptureDevice::GetSampleData( DWORD& Offset, void* Pointer, DWORD&
 	FScopeCriticalSection Lock( &CriticalSection );
 	SHORT*	CaptureData[2]		= {NULL, NULL};
 	DWORD	CaptureLength[2]	= {0,0};
-	DWORD	LockCaptureLength[2]= {0,0};
 	FLOAT	MaximumGain			= 0.f;
 	DWORD	SamplesRead			= 0;
 
@@ -290,25 +171,6 @@ FLOAT FALAudioCaptureDevice::GetSampleData( DWORD& Offset, void* Pointer, DWORD&
 	default:
 		break;
 	}
-
-	#if USE_DIRECTSOUND
-	if (CaptureBuffer)
-	{
-		HRESULT hr;
-
-		// Lock capture buffer.
-		if( FAILED(hr=CaptureBuffer->Lock( Offset, Samples * sizeof(SHORT), (LPVOID*) &CaptureData[0], &LockCaptureLength[0], (LPVOID*) &CaptureData[1], &LockCaptureLength[1], 0 )) )
-		{
-			Samples = 0;
-			Offset  = 0;
-			return 0.f;
-		}
-
-		// Convert from bytes to samples.
-		CaptureLength[0] = LockCaptureLength[0] >> 1;
-		CaptureLength[1] = LockCaptureLength[1] >> 1;
-	}
-	#endif
 
 	if (ALCaptureDevice)
 	{
@@ -401,16 +263,6 @@ FLOAT FALAudioCaptureDevice::GetSampleData( DWORD& Offset, void* Pointer, DWORD&
 	default:
 		break;
 	}
-
-	#if USE_DIRECTSOUND
-		// Unlock capture buffer.
-		if (CaptureBuffer)
-		{
-			CaptureBuffer->Unlock( CaptureData[0], LockCaptureLength[0], CaptureData[1], LockCaptureLength[1] );
-			// Update offset into buffer and amount of samples read.
-			Offset  = (Offset + Samples * sizeof(SHORT)) % CaptureBufferSize;
-		}
-	#endif
 
 	Samples = SamplesRead;
 

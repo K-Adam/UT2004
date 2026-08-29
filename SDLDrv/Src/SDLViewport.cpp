@@ -377,29 +377,6 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		return 1;
 	}
 
-    #if 0  // !!! uh...?
-	else if( ParseCommand(&Cmd,TEXT("PREFERENCES")) )
-	{
-		USDLClient* Client = GetOuterUSDLClient();
-		Client->ConfigReturnFullscreen = 0;
-		if( BlitFlags & BLIT_Fullscreen )
-		{
-			EndFullscreen();
-			Client->ConfigReturnFullscreen = 1;
-		}
-		if( !Client->ConfigProperties )
-		{
-			Client->ConfigProperties = new WConfigProperties( TEXT("Preferences"), LocalizeGeneral("AdvancedOptionsTitle",TEXT("Window")) );
-			Client->ConfigProperties->SetNotifyHook( Client );
-			Client->ConfigProperties->OpenWindow( Window->hWnd );
-			Client->ConfigProperties->ForceRefresh();
-		}
-		GetOuterUSDLClient()->ConfigProperties->Show(1);
-		SetFocus( *GetOuterUSDLClient()->ConfigProperties );
-		return 1;
-	}
-    #endif
-
 	// gam ---
 	else if( ParseCommand(&Cmd,TEXT("SETMOUSE")) )
 	{
@@ -561,95 +538,15 @@ UBOOL USDLViewport::IsFullscreen()
 	unguard;
 }
 
-//
-// Set the mouse cursor according to Unreal or UnrealEd's mode, or to
-// an hourglass if a slow task is active.
-//
 void USDLViewport::SetModeCursor()
 {
-	guard(USDLViewport::SetModeCursor);
-
-// !!! FIXME: What to do with this?
-#if 0 // original WinDrv code follows:
-	if( GIsSlowTask )
-	{
-		SetCursor(LoadCursorIdX(NULL,IDC_WAIT));
-		return;
-	}
-	HCURSOR hCursor = NULL;
-	switch( GetOuterUSDLClient()->Engine->edcamMode(this) )
-	{
-		case EM_ViewportZoom:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_CameraZoom); break;
-		case EM_ActorRotate:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_BrushRot); break;
-		case EM_ActorScale:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_BrushScale); break;
-		case EM_ActorSnapScale:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_BrushSnap); break;
-		case EM_TexturePan:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_TexPan); break;
-		case EM_TextureRotate:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_TexRot); break;
-		case EM_TextureScale:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_TexScale); break;
-		case EM_None: 				hCursor = LoadCursorIdX(NULL,IDC_CROSS); break;
-		case EM_ViewportMove:		hCursor = LoadCursorIdX(NULL,IDC_CROSS); break;
-		case EM_TexView:			hCursor = LoadCursorIdX(NULL,IDC_ARROW); break;
-		case EM_TexBrowser:			hCursor = LoadCursorIdX(NULL,IDC_ARROW); break;
-		case EM_StaticMeshBrowser:	hCursor = LoadCursorIdX(NULL,IDC_CROSS); break;
-		case EM_MeshView:			hCursor = LoadCursorIdX(NULL,IDC_CROSS); break;
-		case EM_Animation:			hCursor = LoadCursorIdX(NULL,IDC_CROSS); break;
-		case EM_VertexEdit:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_VertexEdit); break;
-		case EM_BrushClip:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_BrushClip); break;
-		case EM_FaceDrag:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_FaceDrag); break;
-		case EM_Polygon:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_BrushWarp); break;
-		case EM_TerrainEdit:
-		{
-			switch( GetOuterUSDLClient()->Engine->edcamTerrainBrush() )
-			{
-				case TB_VertexEdit:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_VertexEdit); break;
-				case TB_Paint:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_Paint); break;
-				case TB_Smooth:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_Smooth); break;
-				case TB_Noise:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_Noise); break;
-				case TB_Flatten:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_Flatten); break;
-				case TB_TexturePan:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_TexPan); break;
-				case TB_TextureRotate:	hCursor = LoadCursorIdX(hInstance,IDCURSOR_TexRot); break;
-				case TB_TextureScale:	hCursor = LoadCursorIdX(hInstance,IDCURSOR_TexScale); break;
-				case TB_Select:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_Selection); break;
-				case TB_Visibility:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_Visibility); break;
-				case TB_Color:			hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_Color); break;
-				case TB_EdgeTurn:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_TB_EdgeTurn); break;
-				default:				hCursor = LoadCursorIdX(hInstance,IDCURSOR_TerrainEdit); break;
-			}
-		}
-		break;
-		case EM_PrefabBrowser:	hCursor = LoadCursorIdX(NULL,IDC_CROSS); break;
-		case EM_Matinee:	 	hCursor = LoadCursorIdX(hInstance,IDCURSOR_Matinee); break;
-		case EM_EyeDropper:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_EyeDropper); break;
-		case EM_FindActor:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_FindActor); break;
-		case EM_Geometry:		hCursor = LoadCursorIdX(hInstance,IDCURSOR_Geometry); break;
-		
-		case EM_NewCameraMove:	hCursor = LoadCursorIdX(NULL,IDC_CROSS); break;
-		default: 				hCursor = LoadCursorIdX(NULL,IDC_ARROW); break;
-	}
-	check(hCursor);
-	SetCursor( hCursor );
-#endif
-
-	unguard;
 }
 
 
 void USDLViewport::SetTitleBar()
 {
     TCHAR WindowName[80];
-	// Set viewport window's name to show resolution.
-	if( !GIsEditor || (Actor->ShowFlags&SHOW_PlayerCtrl) )
-	{
-		appSprintf( WindowName, LocalizeGeneral("Product",appPackage()) );
-	}
-	else switch( Actor->RendMap )
-	{
-		case REN_Wire:		appStrcpy(WindowName,LocalizeGeneral(TEXT("ViewPersp"),TEXT("WinDrv"))); break;
-		case REN_OrthXY:	appStrcpy(WindowName,LocalizeGeneral(TEXT("ViewXY")   ,TEXT("WinDrv"))); break;
-		case REN_OrthXZ:	appStrcpy(WindowName,LocalizeGeneral(TEXT("ViewXZ")   ,TEXT("WinDrv"))); break;
-		case REN_OrthYZ:	appStrcpy(WindowName,LocalizeGeneral(TEXT("ViewYZ")   ,TEXT("WinDrv"))); break;
-		default:			appStrcpy(WindowName,LocalizeGeneral(TEXT("ViewOther"),TEXT("WinDrv"))); break;
-	}
+	appSprintf( WindowName, LocalizeGeneral("Product",appPackage()) );
 
 	SDL_SetWindowTitle( GetOuterUSDLClient()->Window, appToAnsi(WindowName) );
 }
@@ -733,7 +630,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 {
 	guard(USDLViewport::UpdateInput);
 
-	// Resets come from SetRes and from inside the event loop below, so like WinDrv they leave the queue alone.
+	// Resets come from SetRes and from inside the event loop below, so they leave the queue alone.
 	if( Reset )
 		return;
 
@@ -764,7 +661,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
         }
 	}
 
-	// Windowed menus use the OS cursor like WinDrv, so the menu cursor is where the mouse is.
+	// Windowed menus use the OS cursor, so the menu cursor is where the mouse is.
 	// UGameEngine::Tick releases and restores the grab for them.
 	if( bShowWindowsMouse != WindowsMouseShown )
 	{
@@ -913,7 +810,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				Resized = true;
 				break;
 
-			// Like WinDrv, the desktop gets its gamma back while the game is in the background.
+			// The desktop gets its gamma back while the game is in the background.
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
 				if( RenDev )
 					RenDev->RestoreGamma();

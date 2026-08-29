@@ -136,7 +136,6 @@ static void ExitSplash(void)
 #endif
 
 
-// !!! FIXME: This is largely cut-and-paste from UnEngineWin.h. Unify! --ryan.
 //
 // Unreal's main message loop.  All windows in Unreal receive messages
 // somewhere below this function on the stack.
@@ -155,8 +154,6 @@ private:
 	UEngine *		Engine;
 	UBOOL			IncludeMessaging;
 
-	DWORD			ThreadId;
-	HANDLE			hThread;
 	DOUBLE			OldTime;
 	DOUBLE			SecondStartTime;
 	INT				TickCount;
@@ -181,18 +178,8 @@ inline CMainLoop::CMainLoop( UEngine* InEngine, UBOOL InIncludeMessaging )
 	guard(MainLoopCtor);
 	check(Engine);
 
-	// Enter main loop.
-    #if 0
-	guard(EnterMainLoop);
-	if( GLogWindow )
-		GLogWindow->SetExec( Engine );
-	unguard;
-    #endif
-
 	// Loop while running.
 	GIsRunning			= 1;
-	//ThreadId			= GetCurrentThreadId();
-	//hThread				= GetCurrentThread();
 	OldTime				= appSeconds();
 	SecondStartTime		= OldTime;
 	TickCount			= 0;
@@ -297,7 +284,7 @@ inline void	CMainLoop::RunLoop(void)
 	}
 	unguard;
 
-	if( IncludeMessaging ) 
+	if( IncludeMessaging && Engine->Client )
 	{
 		// Handle all incoming messages.
 		guard(MessagePump);
@@ -305,34 +292,7 @@ inline void	CMainLoop::RunLoop(void)
 		unguard;
 	}
 
-    #if 0
-	// If editor thread doesn't have the focus, don't suck up too much CPU time.
-	if( GIsEditor && IncludeMessaging )
-	{
-		guard(ThrottleEditor);
-		static UBOOL HadFocus=1;
-		UBOOL HasFocus = (GetWindowThreadProcessId(GetForegroundWindow(),NULL) == ThreadId );
-		if( HadFocus && !HasFocus )
-		{
-			// Drop our priority to speed up whatever is in the foreground.
-			SetThreadPriority( hThread, THREAD_PRIORITY_BELOW_NORMAL );
-		}
-		else if( HasFocus && !HadFocus )
-		{
-			// Boost our priority back to normal.
-			SetThreadPriority( hThread, THREAD_PRIORITY_NORMAL );
-		}
-		if( !HasFocus )
-		{
-			// Surrender the rest of this timeslice.
-			Sleep(0);
-		}
-		HadFocus = HasFocus;
-		unguard;
-	}
-    #endif
-
-	if( RecordingMovie ) //&& BMFrames > 120)
+	if( RecordingMovie && Engine->Client )
 		Engine->Client->Viewports(0)->Exec(TEXT("shot"));
 
 	GStats.DWORDStats( GEngineStats.STATS_Frame_TotalCycles ) = appCycles() - LastFrameCycles;
@@ -454,25 +414,9 @@ inline CMainLoop::~CMainLoop(void)
 		OutputString += FString::Printf(TEXT("%s\r\n%f / %f / %f fps\r\nScore = %f\r\n%s\r\n"), *LevelName, MinFPS, AvgFPS, MaxFPS, Score, *LowFPSString );
 		appSaveStringToFile( OutputString, TEXT("..\\Benchmark\\lowframerate.log") );
 
-		// Output average for benchmark launcher.
-		if( ParseParam(appCmdLine(),TEXT("UPT") ) )
-		{
-			OutputString = FString::Printf(TEXT("%f"), AvgFPS );
-			appSaveStringToFile( OutputString, TEXT("dummy.ben") );
-		}
-
 		GLog->Flush();
 		GFileManager->Copy( *FString::Printf(TEXT("..\\Benchmark\\Logs\\ut2004-%s.log"),*DateTime), TEXT("ut2004.log") );
 	}
-
-	// Exit main loop.
-    #if 0
-	guard(ExitMainLoop);
-	if( GLogWindow )
-		GLogWindow->SetExec( NULL );
-	GExec = NULL;
-	unguard;
-    #endif
 
 	unguard;
 }
@@ -494,7 +438,6 @@ static void MainLoop( UEngine* Engine )
 }
 
 
-// !!! FIXME: This is largely cut-and-paste from UnEngineWin.h. Unify! --ryan.
 static UEngine* InitEngine()
 {
 	guard(InitEngine);
@@ -507,33 +450,19 @@ static UEngine* InitEngine()
 	INT FirstRun=0;
 	GConfig->GetInt( TEXT("FirstRun"), TEXT("FirstRun"), FirstRun );
 
-    // A default config? Force it from WinDrv to SDLDrv...
-	if( appStricmp(GConfig->GetStr(TEXT("Engine.Engine"),TEXT("ViewportManager"),TEXT("System")),TEXT("WinDrv.WindowsClient"))==0 )
-    {
-	    if( !ParseParam(appCmdLine(),TEXT("NoForceSDLDrv")) )
-        {
-            debugf(TEXT("Your ini had WinDrv...Forcing use of SDLDrv instead."));
-			GConfig->SetString(TEXT("Engine.Engine"), TEXT("ViewportManager"), TEXT("SDLDrv.SDLClient"));
-        }
-    }
-
-	if( appStricmp(GConfig->GetStr(TEXT("Engine.Engine"),TEXT("RenderDevice"),TEXT("System")),TEXT("GLESDrv.GLESRenderDevice"))==0 )
+	// Older inis and the retail menu still name drivers that no longer exist.
+	FString Viewport = GConfig->GetStr(TEXT("Engine.Engine"),TEXT("ViewportManager"),TEXT("System"));
+	if( Viewport!=TEXT("SDLDrv.SDLClient") )
+	{
+		debugf(TEXT("Forcing use of SDLDrv instead of %s."),*Viewport);
+		GConfig->SetString(TEXT("Engine.Engine"), TEXT("ViewportManager"), TEXT("SDLDrv.SDLClient"));
+	}
+	FString Renderer = GConfig->GetStr(TEXT("Engine.Engine"),TEXT("RenderDevice"),TEXT("System"));
+	if( Renderer!=TEXT("OpenGLDrv.OpenGLRenderDevice") && Renderer!=TEXT("Engine.NullRenderDevice") )
+	{
+		debugf(TEXT("Forcing use of OpenGLDrv instead of %s."),*Renderer);
 		GConfig->SetString(TEXT("Engine.Engine"), TEXT("RenderDevice"), TEXT("OpenGLDrv.OpenGLRenderDevice"));
-
-    bool isd3d = false;
-    if (appStricmp(GConfig->GetStr(TEXT("Engine.Engine"),TEXT("RenderDevice"),TEXT("System")),TEXT("D3DDrv.D3DRenderDevice"))==0)
-        isd3d = true;
-    else if (appStricmp(GConfig->GetStr(TEXT("Engine.Engine"),TEXT("RenderDevice"),TEXT("System")),TEXT("D3D9Drv.D3D9RenderDevice"))==0)
-        isd3d = true;
-
-    if (isd3d)
-    {
-	    if( !ParseParam(appCmdLine(),TEXT("NoForceSDLDrv")) )
-        {
-            debugf(TEXT("Your ini had D3DDrv...Forcing use of OpenGLDrv instead."));
-			GConfig->SetString(TEXT("Engine.Engine"), TEXT("RenderDevice"), TEXT("OpenGLDrv.OpenGLRenderDevice"));
-        }
-    }
+	}
 
 	if( ParseParam(appCmdLine(),TEXT("FirstRun")) )
 		FirstRun=0;
@@ -604,36 +533,6 @@ static UEngine* InitEngine()
     if( ParseParam(appCmdLine(),TEXT("debugging")) && (GFileManager->FileSize(TEXT("Running.ini")) >= 0) )
         GFileManager->Delete(TEXT("Running.ini"),0,0);
     // --- gam
-
-    #if 0  // nope. --ryan.
-	// Config UI.
-	guard(ConfigUI);
-	if( !GIsEditor && GIsClient )
-	{
-		WConfigWizard D;
-		WWizardPage* Page = NULL;
-		if( ParseParam(appCmdLine(),TEXT("safe")) || appStrfind(appCmdLine(),TEXT("readini")) )
-		{
-			Page = new WConfigPageSafeMode(&D);
-			D.Title=LocalizeGeneral(TEXT("SafeMode"),TEXT("Startup"));
-		}
-		else if( FirstRun<ENGINE_VERSION )
-		{
-			GConfig->SetString(TEXT("Engine.Engine"),TEXT("RenderDevice"),TEXT("D3DDrv.D3DRenderDevice"));
-		}
-		//else if( !AlreadyRunning && GFileManager->FileSize(TEXT("Running.ini"))>=0 )
-		//	{Page = new WConfigPageSafeMode(&D); D.Title=LocalizeGeneral(TEXT("RecoveryMode"),TEXT("Startup"));}
-		if( Page )
-		{
-			ExitSplash();
-			D.Advance( Page );
-			if( !D.DoModal() )
-				return NULL;
-			InitSplash(NULL);
-		}
-	}
-	unguard;
-    #endif
 
 	// Create is-running semaphore file.
 	FArchive* Ar = GFileManager->CreateFileWriter(TEXT("Running.ini"),0);
@@ -709,18 +608,6 @@ int main(int argc, char **argv)
 		// Init core.
 		GIsClient = GIsGuarded = 1;
 		appInit( GPackage, CmdLine, &Malloc, &Log, &Error, &Warn, &FileManager, FConfigCacheIni::Factory, 1 );
-
-		// Launch the bug report monitor.
-#ifndef _DEBUG
-#if 0
-		const TCHAR* Parameters[] = { TEXT("BugReport"), appItoa(GetCurrentProcessId()), NULL };
-		_wspawnv(
-			_P_NOWAIT,
-			TEXT("BugReport"),
-			Parameters
-			);
-#endif
-#endif
 
 #if __STATIC_LINK
         // Clean lookups.
@@ -800,10 +687,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 			GFixedTimeStep		= FixedFPS > 0.f ? 1.f / FixedFPS : 1.f / 30.f;
 		}
 
-		// Render device command line options.
-		if( ParseParam(appCmdLine(),TEXT("OPENGL")) )
-			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("OpenGLDrv.OpenGLRenderDevice"	));
-
 		if( ParseParam(appCmdLine(),TEXT("NULLRENDER")) )
 			GConfig->SetString( TEXT("Engine.Engine"		), TEXT("RenderDevice"		), TEXT("Engine.NullRenderDevice"	));
 
@@ -814,88 +697,20 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 			GConfig->Detach( GUserIni );
 		}
 
-		// Ugly resolution overriding code.
-		FString ScreenWidth;
-		FString ScreenHeight;
-		UBOOL	OverrideResolution = 0;
-
-		//!!vogel: TODO: clean up this code :)
-		if( ParseParam(appCmdLine(),TEXT("320x240")) )
+		static const INT Resolutions[][2] =
 		{
-			ScreenWidth			= TEXT("320");
-			ScreenHeight		= TEXT("240");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("512x384")) )
+			{320,240}, {512,384}, {640,480}, {800,600}, {1024,768}, {1280,960},
+			{1280,1024}, {1600,1024}, {1600,1200}, {1920,1200},
+		};
+		for( INT i=0; i<ARRAY_COUNT(Resolutions); i++ )
 		{
-			ScreenWidth			= TEXT("512");
-			ScreenHeight		= TEXT("384");
-			OverrideResolution	= 1;
+			if( ParseParam(appCmdLine(),*FString::Printf(TEXT("%ix%i"),Resolutions[i][0],Resolutions[i][1])) )
+			{
+				GConfig->SetInt( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportX"), Resolutions[i][0] );
+				GConfig->SetInt( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportY"), Resolutions[i][1] );
+				GConfig->SetBool( TEXT("SDLDrv.SDLClient"), TEXT("AutoResolution"), 0 );
+			}
 		}
-		if( ParseParam(appCmdLine(),TEXT("640x480")) )
-		{
-			ScreenWidth			= TEXT("640");
-			ScreenHeight		= TEXT("480");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("800x600")) )
-		{
-			ScreenWidth			= TEXT("800");
-			ScreenHeight		= TEXT("600");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("1024x768")) )
-		{
-			ScreenWidth			= TEXT("1024");
-			ScreenHeight		= TEXT("768");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("1280x960")) )
-		{
-			ScreenWidth			= TEXT("1280");
-			ScreenHeight		= TEXT("960");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("1280x1024")) )
-		{
-			ScreenWidth			= TEXT("1280");
-			ScreenHeight		= TEXT("1024");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("1600x1024")) )
-		{
-			ScreenWidth			= TEXT("1600");
-			ScreenHeight		= TEXT("1024");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("1600x1200")) )
-		{
-			ScreenWidth			= TEXT("1600");
-			ScreenHeight		= TEXT("1200");
-			OverrideResolution	= 1;
-		}
-		if( ParseParam(appCmdLine(),TEXT("1920x1200")) )
-		{
-			ScreenWidth			= TEXT("1600");
-			ScreenHeight		= TEXT("1200");
-			OverrideResolution	= 1;
-		}
-
-		if( OverrideResolution )
-		{
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportX"), *ScreenWidth  );
-			GConfig->SetString( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportY"), *ScreenHeight );
-			GConfig->SetBool( TEXT("SDLDrv.SDLClient"), TEXT("AutoResolution"), 0 );
-		}
-
-		// Create log window, but only show it if ShowLog.
-        #if 0
-		GLogWindow = new WLog( Log.Filename, Log.LogAr, TEXT("GameLog") );
-		GLogWindow->OpenWindow( ShowLog, 0 );
-		GLogWindow->Log( NAME_Title, LocalizeGeneral(TEXT("Start"),GPackage) );
-		if( GIsClient )
-			SetPropX( *GLogWindow, TEXT("IsBrowser"), (HANDLE)1 );
-        #endif
 
 		// Init engine.
 		UEngine* Engine = InitEngine();
@@ -931,10 +746,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		// Clean shutdown.
 		GFileManager->Delete(TEXT("Running.ini"),0,0);
 
-        #if 0
-		RemovePropX( *GLogWindow, TEXT("IsBrowser") );
-        #endif
-
 		GLog->Log( NAME_Title, LocalizeGeneral(TEXT("Exit"),GPackage) );
 
 		appPreExit();
@@ -946,6 +757,9 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		// Crashed.
 		ErrorLevel = 1;
 		Error.HandleError();
+		// The GUI build has no console, so the error would otherwise only be in the log.
+		if( GIsClient )
+			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(GErrorHist), NULL );
 	}
 #endif
 

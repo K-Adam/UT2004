@@ -22,11 +22,7 @@ Revision history:
 	Dependencies.
 -----------------------------------------------------------------------------*/
 
-#if ((defined WIN32) || (defined _WIN64))
-#define USE_DIRECTSOUND 1
-#endif
-
-#if USE_DIRECTSOUND
+#ifdef WIN32
 #pragma pack(push,8)
 #include <windows.h>
 #pragma pack(pop)

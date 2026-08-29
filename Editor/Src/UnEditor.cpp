@@ -22,11 +22,6 @@ EDITOR_API TCHAR GScriptSourceRoot[1024] = TEXT("..");
 
 IMPLEMENT_CLASS(UEditorEngine);
 
-WObjectProperties* UEditorEngine::ActorProperties = NULL;
-WObjectProperties* UEditorEngine::LevelProperties = NULL;
-WConfigProperties* UEditorEngine::Preferences = NULL;
-WProperties* UEditorEngine::UseDest = NULL;
-
 /*-----------------------------------------------------------------------------
 	Init & Exit.
 -----------------------------------------------------------------------------*/
@@ -127,7 +122,7 @@ void UEditorEngine::Init()
 	//!!check(sizeof(*this)==GetClass()->GetPropertiesSize());
 
 	// Init Render Device
-	UClass* RenDevClass = StaticLoadClass( URenderDevice::StaticClass(), NULL, TEXT("D3D9Drv.D3D9RenderDevice"), NULL, LOAD_NoFail, NULL );
+	UClass* RenDevClass = StaticLoadClass( URenderDevice::StaticClass(), NULL, TEXT("OpenGLDrv.OpenGLRenderDevice"), NULL, LOAD_NoFail, NULL );
 	GRenDev = ConstructObject<URenderDevice>( RenDevClass );
 	GRenDev->Init();
 
