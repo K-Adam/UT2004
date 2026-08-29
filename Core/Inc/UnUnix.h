@@ -18,9 +18,6 @@ int stricmp( const char* s, const char* t );
 int strnicmp( const char* s, const char* t, int n );
 extern "C" char* strupr( char* s );
 
-// Globally Unique Identifiers.
-void appGetGUID( void* GUID );
-
 /*----------------------------------------------------------------------------
 	The End.
 ----------------------------------------------------------------------------*/

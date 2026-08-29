@@ -25,6 +25,7 @@
 #include <sys/param.h>
 #include <unistd.h>
 #include <pwd.h>
+#include <sys/random.h>
 #include <dirent.h>
 #include <utime.h>
 #include <sys/time.h>
@@ -1814,8 +1815,9 @@ CORE_API FGuid appCreateGuid()
 {
 	guard(appCreateGuid);
 
+	// Random like CoCreateGuid on Windows, callers use it for secrets too.
 	FGuid Result;
-	appGetGUID( (void*)&Result );
+	verify( getrandom( &Result, sizeof(Result), 0 )==sizeof(Result) );
 	return Result;
 
 	unguard;

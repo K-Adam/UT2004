@@ -11,6 +11,7 @@
 #include "UnLinker.h"
 
 #include "xForceFeedback.h" // jdf
+#include "UnNicknameWords.h"
 
 /*-----------------------------------------------------------------------------
 	Object class implementation.
@@ -22,6 +23,43 @@ IMPLEMENT_CLASS(APrecacheHack);
 IMPLEMENT_CLASS(AMaplistManagerBase);
 
 extern int QueueScreenShot; // sjs - label hack
+
+// The menus prompt for internet options while the name is Player and for a stats login on stats servers.
+static void SetupFirstRunPlayer()
+{
+	FString Name;
+	GConfig->GetString( TEXT("DefaultPlayer"), TEXT("Name"), Name, GUserIni );
+	if( Name.Len() && Name != TEXT("Player") )
+		return;
+
+	// appCreateGuid draws from the OS random generator.
+	FGuid Random[4] = { appCreateGuid(), appCreateGuid(), appCreateGuid(), appCreateGuid() };
+	DWORD* Rng = (DWORD*)Random;
+
+	Name = appFromAnsi( NicknameAdjectives[Rng[0] % ARRAY_COUNT(NicknameAdjectives)] );
+	Name += appFromAnsi( NicknameNouns[Rng[1] % ARRAY_COUNT(NicknameNouns)] );
+
+	static const ANSICHAR Chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	TCHAR Password[13];
+	for( INT i=0; i<12; i++ )
+		Password[i] = Chars[Rng[2+i] % (ARRAY_COUNT(Chars)-1)];
+	Password[12] = 0;
+
+	GConfig->SetString( TEXT("DefaultPlayer"), TEXT("Name"), *Name, GUserIni );
+	FString StatsUsername;
+	GConfig->GetString( TEXT("Engine.PlayerController"), TEXT("StatsUsername"), StatsUsername, GUserIni );
+	if( !StatsUsername.Len() )
+	{
+		GConfig->SetBool( TEXT("Engine.PlayerController"), TEXT("bEnableStatsTracking"), 1, GUserIni );
+		GConfig->SetString( TEXT("Engine.PlayerController"), TEXT("StatsUsername"), *Name, GUserIni );
+		GConfig->SetString( TEXT("Engine.PlayerController"), TEXT("StatsPassword"), Password, GUserIni );
+	}
+	GConfig->Flush( 0, GUserIni );
+
+	// Engine.u loaded the PlayerController config before this ran.
+	GetDefault<APlayerController>()->LoadConfig( 1 );
+	debugf( NAME_Init, TEXT("Generated player name %s"), *Name );
+}
 
 /*-----------------------------------------------------------------------------
 	cleanup!!
@@ -167,6 +205,8 @@ void UGameEngine::Init()
 		UClass* RenDevClass = StaticLoadClass( URenderDevice::StaticClass(), NULL, TEXT("ini:Engine.Engine.RenderDevice"), NULL, LOAD_NoFail, NULL );
 		GRenDev = ConstructObject<URenderDevice>( RenDevClass );
 		GRenDev->Init();
+
+		SetupFirstRunPlayer();
 	}
     
     KInitGameKarma(); // Init Karma physics.

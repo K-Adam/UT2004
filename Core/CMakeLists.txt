@@ -8,5 +8,5 @@ if(WIN32)
     NOPCH UnAnsi.cpp UnVcWin32.cpp
     DEPS Vorbis::vorbisfile winmm shlwapi)
 else()
-  ut_module(Core SHARED SOURCES ${CORE_SRC} UnUnix.cpp UnGUID.cpp DEPS Vorbis::vorbisfile)
+  ut_module(Core SHARED SOURCES ${CORE_SRC} UnUnix.cpp DEPS Vorbis::vorbisfile)
 endif()
