@@ -6,7 +6,7 @@ if(WIN32)
     SOURCES ${CORE_SRC} UnVcWin32.cpp
     PCH CorePrivate.h Core.cpp
     NOPCH UnAnsi.cpp UnVcWin32.cpp
-    DEPS Vorbis::vorbisfile winmm)
+    DEPS Vorbis::vorbisfile winmm shlwapi)
 else()
   ut_module(Core SHARED SOURCES ${CORE_SRC} UnUnix.cpp UnGUID.cpp DEPS Vorbis::vorbisfile)
 endif()

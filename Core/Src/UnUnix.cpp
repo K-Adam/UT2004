@@ -2034,6 +2034,26 @@ void appPlatformInit()
 		}
 		GSys->CachePath = FString(appFromAnsi(Home)) * TEXT(".cache") * TEXT("ut2004");
 	}
+	// Old mods such as AntiTCC 1.19 locate package files by the ".." that starts a retail relative path.
+	// Relative to the file manager's base dir, because that is where it resolves writes.
+	{
+		FString BaseStr = GFileManager->CalcHomeDir();
+		if( BaseStr.Right(1) != TEXT("/") )
+			BaseStr += TEXT("/");
+		const TCHAR* Base = *BaseStr;
+		FString Target = GSys->CachePath + TEXT("/");
+		INT Common = 0;
+		for( INT i=0; Base[i] && Base[i]==(*Target)[i]; i++ )
+			if( Base[i]=='/' )
+				Common = i+1;
+		FString Relative;
+		for( INT i=Common; Base[i]; i++ )
+			if( Base[i]=='/' )
+				Relative += TEXT("../");
+		Relative += Target.Mid( Common );
+		if( Relative.Len() )
+			GSys->CachePath = Relative.LeftChop( 1 );
+	}
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );
 

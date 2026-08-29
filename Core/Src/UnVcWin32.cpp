@@ -13,6 +13,7 @@
 #pragma pack(push,8)
 #include <windows.h>
 #include <shlobj.h>
+#include <shlwapi.h>
 #pragma pack(pop)
 
 #include <stdio.h>
@@ -1165,6 +1166,10 @@ void appPlatformInit()
 	if( FAILED(SHGetFolderPathW( NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, CacheRoot )) )
 		GetTempPathW( ARRAY_COUNT(CacheRoot), CacheRoot );
 	GSys->CachePath = FString(CacheRoot) * TEXT("UT2004") * TEXT("Cache");
+	// Old mods such as AntiTCC 1.19 locate package files by the ".." that starts a retail relative path.
+	TCHAR Cwd[MAX_PATH+1], Relative[MAX_PATH+1];
+	if( GetCurrentDirectoryW( ARRAY_COUNT(Cwd), Cwd ) && PathRelativePathToW( Relative, Cwd, FILE_ATTRIBUTE_DIRECTORY, *GSys->CachePath, FILE_ATTRIBUTE_DIRECTORY ) )
+		GSys->CachePath = Relative;
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );
 
