@@ -560,7 +560,7 @@ void UPointerProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 void UPointerProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UPointerProperty::ExportTextItem);
-	appSprintf( ValueStr, TEXT("%lu"), *(PTRINT *)PropertyValue );
+	appSprintf( ValueStr, TEXT("%I64u"), (QWORD)*(PTRINT*)PropertyValue );
 	unguardobj;
 }
 const TCHAR* UPointerProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const

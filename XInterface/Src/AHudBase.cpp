@@ -7,6 +7,19 @@
 
 IMPLEMENT_CLASS(AHudBase);
 
+// Widgets are laid out for 4:3. On a wider view the ones near a side stay at that screen edge
+// and the rest move into a centered 4:3 area, so nothing stretches or spreads out.
+static FLOAT WidgetScreenX( UCanvas* Canvas, FLOAT PosX, FLOAT HudCanvasScale )
+{
+	FLOAT Width = Min<FLOAT>( Canvas->SizeX, Canvas->SizeY * 4.f / 3.f );
+	FLOAT Pos = PosX * HudCanvasScale + (1.0f - HudCanvasScale) * 0.5f;
+	if( Pos < 0.1f )
+		return Pos * Width;
+	if( Pos > 0.9f )
+		return Canvas->SizeX - (1.0f - Pos) * Width;
+	return (Canvas->SizeX - Width) * 0.5f + Pos * Width;
+}
+
 void AHudBase::execDrawSpriteWidget( FFrame& Stack, RESULT_DECL )
 {
 	guard(AHudBase::execDrawSpriteWidget);
@@ -33,7 +46,7 @@ void AHudBase::DrawSpriteWidget( UCanvas* Canvas, FSpriteWidget* Widget )
     float ScreenOffsetX, ScreenOffsetY;
     float ScreenX, ScreenY;
 
-    TotalScaleX = Widget->TextureScale * HudCanvasScale * ResScaleX * HudScale;
+    TotalScaleX = Widget->TextureScale * HudCanvasScale * Min(ResScaleX,ResScaleY) * HudScale;
     TotalScaleY = Widget->TextureScale * HudCanvasScale * ResScaleY * HudScale;
 
     TextureX1 = Widget->TextureCoords.X1;
@@ -51,7 +64,7 @@ void AHudBase::DrawSpriteWidget( UCanvas* Canvas, FSpriteWidget* Widget )
     ScreenOffsetX = Widget->OffsetX * TotalScaleX;
     ScreenOffsetY = Widget->OffsetY * TotalScaleY;
 
-    ScreenX = (Widget->PosX * HudCanvasScale * Canvas->SizeX) + (((1.0f - HudCanvasScale) * 0.5f) * Canvas->SizeX);
+    ScreenX = WidgetScreenX( Canvas, Widget->PosX, HudCanvasScale );
     ScreenY = (Widget->PosY * HudCanvasScale * Canvas->SizeY) + (((1.0f - HudCanvasScale) * 0.5f) * Canvas->SizeY);
 
     ScreenX += ScreenOffsetX;
@@ -151,7 +164,7 @@ void AHudBase::DrawNumericWidget( UCanvas* Canvas, FNumericWidget* Widget, FDigi
 
     float TotalScaleX, TotalScaleY;
 
-    TotalScaleX = Widget->TextureScale * HudCanvasScale * ResScaleX * HudScale;
+    TotalScaleX = Widget->TextureScale * HudCanvasScale * Min(ResScaleX,ResScaleY) * HudScale;
     TotalScaleY = Widget->TextureScale * HudCanvasScale * ResScaleY * HudScale;
 
     int AbsValue;
@@ -261,7 +274,7 @@ void AHudBase::DrawNumericWidget( UCanvas* Canvas, FNumericWidget* Widget, FDigi
     ScreenOffsetX = Widget->OffsetX * TotalScaleX;
     ScreenOffsetY = Widget->OffsetY * TotalScaleY;
 
-    ScreenX = (Widget->PosX * HudCanvasScale * Canvas->SizeX) + (((1.0f - HudCanvasScale) * 0.5f) * Canvas->SizeX);
+    ScreenX = WidgetScreenX( Canvas, Widget->PosX, HudCanvasScale );
     ScreenY = (Widget->PosY * HudCanvasScale * Canvas->SizeY) + (((1.0f - HudCanvasScale) * 0.5f) * Canvas->SizeY);
 
     ScreenX += ScreenOffsetX;

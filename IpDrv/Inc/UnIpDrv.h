@@ -100,7 +100,7 @@ class FResolveInfo
 public:
 	// Variables.
 	in_addr		Addr;
-	DWORD		ThreadId;
+	INT			Done;
 	ANSICHAR	HostName[256];
 	TCHAR		Error[256];
 
@@ -115,10 +115,10 @@ public:
 
 		appMemcpy( HostName, appToAnsi(InHostName), appStrlen(InHostName) + 1 );
 		*Error = 0;
-		ThreadId = 1;
+		Done = 0;
 
 #if _MSC_VER
-		HANDLE hThread = CreateThread( NULL, 0, ResolveThreadEntry, this, 0, &ThreadId );
+		HANDLE hThread = CreateThread( NULL, 0, ResolveThreadEntry, this, 0, NULL );
 		check(hThread);
 		CloseHandle( hThread );
 #else
@@ -129,13 +129,14 @@ public:
 #endif
 
 	}
+	// Done is written by the resolve thread.
 	UBOOL Resolved()
 	{
-#if __UNIX__
-		if( ThreadId==0 )
-			pthread_join(ResolveThread, NULL);
+#if _MSC_VER
+		return InterlockedCompareExchange( (volatile LONG*)&Done, 0, 0 ) != 0;
+#else
+		return __atomic_load_n( &Done, __ATOMIC_ACQUIRE ) != 0;
 #endif
-		return ThreadId==0;
 	}
 	const TCHAR* GetError()
 	{

@@ -27,7 +27,6 @@
 #include <pwd.h>
 #include <sys/random.h>
 #include <dirent.h>
-#include <utime.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
@@ -40,6 +39,7 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <spawn.h>
 
 #if __FILE_NOCASE
 #include <dirent.h>
@@ -667,7 +667,6 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
                 {
                     debugf(TEXT("Unknown percent in UnUnix.cpp::wvsnprintf()."));
                     unicode_str_to_stdout(fmt);
-                    appDebugBreak();
                     src++;  // skip it, I guess.
                     break;
                 }
@@ -751,7 +750,6 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
                 src++;  // skip char, I guess.
                 debugf(TEXT("Unknown percent in UnUnix.cpp::wvsnprintf()."));
                 unicode_str_to_stdout(fmt);
-                appDebugBreak();
                 break;
         }
     }
@@ -909,8 +907,7 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 
 	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
 
-    printf("appMsgf(): %s\n", TCHAR_TO_ANSI(TempStr));
-    appDebugBreak();
+    debugf( NAME_Warning, TEXT("appMsgf(): %s"), TempStr );
 
     return 1;
 }
@@ -1118,24 +1115,6 @@ CORE_API void appRequestExit( UBOOL Force )
 		//!UNIX No quit message in UNIX.
 		GIsRequestingExit = 1;
 	}
-	unguard;
-}
-
-/*-----------------------------------------------------------------------------
-	Clipboard.
------------------------------------------------------------------------------*/
-
-CORE_API void ClipboardCopy( const TCHAR* Str )
-{
-	guard(ClipboardCopy);
-	//!UNIX Not supported in UNIX.
-	unguard;
-}
-
-CORE_API void ClipboardPaste( FString& Result )
-{
-	guard(ClipboardPasteString);
-	//!UNIX Not supported in UNIX.
 	unguard;
 }
 
@@ -1493,47 +1472,6 @@ CORE_API const TCHAR* appTimestamp()
 	unguard;
 }
 
-//
-// Get file time.
-//
-CORE_API DWORD appGetTime( const TCHAR* Filename )
-{
-	guard(appGetTime);
-
-	struct utimbuf FileTime;
-	if( utime(TCHAR_TO_ANSI(Filename),&FileTime)!=0 )
-		return 0;
-	//FIXME Is this the right "time" to return?
-	return (DWORD)FileTime.modtime;
-
-	unguard;
-}
-
-//
-// Get time in seconds.
-//
-CORE_API DOUBLE appSecondsSlow()
-{
-	static DOUBLE InitialTime = 0.0;
-	static DOUBLE TimeCounter = 0.0;
-	DOUBLE NewTime;
-	struct timeval TimeOfDay;
-
-	gettimeofday( &TimeOfDay, NULL );
-
-	// Initialize.
-	if( InitialTime == 0.0 )
-		 InitialTime = TimeOfDay.tv_sec + TimeOfDay.tv_usec / 1000000.0;
-
-	// Accumulate difference to prevent wraparound.
-	NewTime = TimeOfDay.tv_sec + TimeOfDay.tv_usec / 1000000.0;
-	TimeCounter += NewTime - InitialTime;
-	InitialTime = NewTime;
-
-	return TimeCounter;
-}
-
-
 #if !DEFINED_appCycles
 // Microseconds, GSecondsPerCycle is set to match in appPlatformInit.
 CORE_API DWORD appCycles()
@@ -1549,7 +1487,12 @@ CORE_API DWORD appCycles()
 #if !DEFINED_appSeconds
 CORE_API DOUBLE appSeconds()
 {
-	return appSecondsSlow();
+	static timespec Start;
+	timespec Now;
+	clock_gettime( CLOCK_MONOTONIC, &Now );
+	if( !Start.tv_sec && !Start.tv_nsec )
+		Start = Now;
+	return (Now.tv_sec - Start.tv_sec) + (Now.tv_nsec - Start.tv_nsec) / 1000000000.0;
 }
 #endif
 
@@ -1662,81 +1605,22 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 {
 	guard(appLaunchURL);
 
-    const char *_envr = getenv("BROWSER");
-    if (!_envr)
-    {
-        debugf(TEXT("Tried to view URL but BROWSER environment var isn't set!"));
-        debugf(TEXT(" URL to view was [%s]."), URL);
-        debugf(TEXT(" Trying some standard browsers..."), URL);
-        //_envr = "opera:netscape -raise -remote \"openURL(%s,new-window)\":mozilla:konqueror:galeon:xterm -e links:xterm -e lynx:";
-        _envr = "opera:mozilla:galeon:konqueror:netscape:xterm -e links:xterm -e lynx:";
-    }
-
-    FString envr(appFromAnsi(_envr));
-
-    bool foundBrowser = false;
-
-    while (true)
-    {
-        INT pos = envr.InStr(TEXT(":"));
-        FString cmd((pos == -1) ? envr : envr.Left(pos));
-        INT had_percent_s = false;
-        INT percentpos = 0;
-        while (percentpos < cmd.Len() - 1)
-        {
-            percentpos++;
-            if (cmd[percentpos - 1] != '%')
-                continue;
-
-            // need to deal with a '%' sequence...
-
-            if (cmd[percentpos] == '%')
-            {
-                cmd = cmd.Left(percentpos) + cmd.Mid(percentpos + 1);
-            }
-            else if (cmd[percentpos] == 's')
-            {
-                cmd = cmd.Left(percentpos - 1) + URL + cmd.Mid(percentpos + 1);
-                percentpos += appStrlen(URL);
-                had_percent_s = true;
-            }
-            else
-            {
-                debugf(TEXT("Unrecognized percent sequence (%%%c) in BROWSER string."), (TCHAR) cmd[percentpos]);
-                percentpos++;
-            }
-        }
-
-        if (!had_percent_s)
-        {
-            cmd += TEXT(" ");
-            cmd += URL;
-        }
-
-        if (FindBinaryInPath(cmd))
-        {
-            foundBrowser = true;
-            debugf(TEXT("Spawning browser: %s"), *cmd);
-            GUnixSpawnOnExit = new TCHAR[cmd.Len() + 1];
-            appStrcpy(GUnixSpawnOnExit, *cmd);
-            break;
-        }
-
-        if (pos == -1)
-            break;
-        envr = envr.Mid(pos + 1);
-    }
-
-    if (!foundBrowser)
-    {
-        debugf(TEXT("Couldn't find any browser to launch!"));
-        debugf(TEXT("Please set the environment variable BROWSER next time."));
-
-        fprintf(stderr, "Couldn't find any browser to launch!\n");
-        fprintf(stderr, "Please set the environment variable BROWSER next time.\n");
-    }
-
-	appRequestExit(0);
+	// HandleChild reaps the process.
+	char Url[PATH_MAX];
+	appToAnsi( URL, Url, sizeof(Url) );
+	char Opener[] = "xdg-open";
+	char* Argv[] = { Opener, Url, NULL };
+	// The browser outlives the game, it must not keep its sockets, log and audio device open.
+	posix_spawn_file_actions_t Actions;
+	posix_spawn_file_actions_init( &Actions );
+	posix_spawn_file_actions_addclosefrom_np( &Actions, 3 );
+	pid_t Pid;
+	UBOOL Failed = posix_spawnp( &Pid, Opener, &Actions, NULL, Argv, environ ) != 0;
+	posix_spawn_file_actions_destroy( &Actions );
+	if( Failed )
+		debugf( NAME_Warning, TEXT("Couldn't run xdg-open for %s"), URL );
+	if( Error )
+		*Error = Failed ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
 
 	unguard;
 }
@@ -1823,23 +1707,6 @@ CORE_API FGuid appCreateGuid()
 	unguard;
 }
 
-/*-----------------------------------------------------------------------------
-	Clipboard
------------------------------------------------------------------------------*/
-static FString ClipboardText;
-CORE_API void appClipboardCopy( const TCHAR* Str )
-{
-	guard(appClipboardCopy);
-	ClipboardText = FString( Str );
-	unguard;
-}
-
-CORE_API FString appClipboardPaste()
-{
-	guard(appClipboardPaste);
-	return ClipboardText;
-	unguard;
-}
 /*-----------------------------------------------------------------------------
 	Command line.
 -----------------------------------------------------------------------------*/

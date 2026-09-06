@@ -1675,6 +1675,31 @@ CORE_API UBOOL appSaveStringToFile( const FString& String, const TCHAR* Filename
 	unguard;
 }
 
+/*-----------------------------------------------------------------------------
+	Clipboard.
+-----------------------------------------------------------------------------*/
+
+void (*GClipboardCopy)( const TCHAR* Str ) = NULL;
+FString (*GClipboardPaste)() = NULL;
+static FString GClipboardText;
+
+CORE_API void appClipboardCopy( const TCHAR* Str )
+{
+	guard(appClipboardCopy);
+	if( GClipboardCopy )
+		GClipboardCopy( Str );
+	else
+		GClipboardText = Str;
+	unguard;
+}
+
+CORE_API FString appClipboardPaste()
+{
+	guard(appClipboardPaste);
+	return GClipboardPaste ? GClipboardPaste() : GClipboardText;
+	unguard;
+}
+
 INT appCreateBitmap( const TCHAR* Pattern, INT Width, INT Height, DWORD* Data, FFileManager* FileManager )
 {
 	TCHAR File[1024];

@@ -52,10 +52,15 @@ DWORD STDCALL ResolveThreadEntry( void* Arg )
 		appSprintf( Info->Error, TEXT("Can't find host %s (%s)"), appFromAnsi(Info->HostName), SocketHostError(e) );
 	else
 		Info->Addr = *(in_addr*)( *HostEnt->h_addr_list );
-	Info->ThreadId = 0;
 
 	if (locked)
 		gethostbyname_mutex->Unlock();
+
+#if _MSC_VER
+	InterlockedExchange( (volatile LONG*)&Info->Done, 1 );
+#else
+	__atomic_store_n( &Info->Done, 1, __ATOMIC_RELEASE );
+#endif
 
 #if __UNIX__
 	pthread_exit( NULL );

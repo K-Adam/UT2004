@@ -1,11 +1,6 @@
 #ifndef HEADER_OPENGLDRV
 #define HEADER_OPENGLDRV
 
-#ifdef WIN32
-#pragma pack(push,8)
-#include <windows.h>
-#pragma pack(pop)
-#endif
 // SDL3.dll uses default packing, the engine builds with /Zp4.
 #pragma pack(push,8)
 #include <SDL3/SDL.h>
@@ -76,6 +71,7 @@ class FOpenGLVertexStream : public FOpenGLResource
 {
 public:
 	GLuint	Buffer;
+	INT		Size;
 
 	FOpenGLVertexStream(UOpenGLRenderDevice* InRenDev,QWORD InCacheId);
 	virtual ~FOpenGLVertexStream();
@@ -87,6 +83,7 @@ class FOpenGLIndexBuffer : public FOpenGLResource
 {
 public:
 	GLuint	Buffer;
+	INT		Size;
 
 	FOpenGLIndexBuffer(UOpenGLRenderDevice* InRenDev,QWORD InCacheId);
 	virtual ~FOpenGLIndexBuffer();
@@ -94,16 +91,19 @@ public:
 	void Cache(FIndexBuffer* Source);
 };
 
-// A ring buffer for per-frame data, filled with glBufferSubData and orphaned when full.
+// A ring buffer for per-frame data, orphaned when full.
 struct FOpenGLDynamicBuffer
 {
 	GLenum	Target;
 	GLuint	Buffer;
 	INT		Size,
 			Used;
+	UBOOL	Mapped;
 
-	FOpenGLDynamicBuffer(GLenum InTarget) : Target(InTarget), Buffer(0), Size(0), Used(0) {}
-	INT Add(const void* Data,INT Bytes,INT Alignment);
+	FOpenGLDynamicBuffer(GLenum InTarget) : Target(InTarget), Buffer(0), Size(0), Used(0), Mapped(0) {}
+	// Maps Bytes at the next aligned offset, which Offset receives. NULL for no bytes or a failed map.
+	BYTE* Lock(INT Bytes,INT Alignment,INT& Offset);
+	void Unlock();
 	void Release();
 };
 
@@ -280,7 +280,7 @@ public:
 	FOpenGLTexture* CacheTexture(FBaseTexture* Texture);
 
 private:
-	INT AddDynamicVertices(const void* Data,INT Size,INT Stride,const FVertexComponent* Components,INT NumComponents);
+	INT UseDynamicVertices(INT Offset,INT Stride,const FVertexComponent* Components,INT NumComponents);
 	void SetQuadIndexBuffer(INT BaseVertexIndex);
 	void Commit();
 	UBOOL CompileMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial);
@@ -292,7 +292,8 @@ class UOpenGLRenderDevice : public URenderDevice
 
 	UBOOL	UseVSync,
 			UseTrilinear,
-			UsePrecaching;
+			UsePrecaching,
+			ReduceMouseLag;
 	INT		LevelOfAnisotropy,
 			MultisampleSamples;
 	FLOAT	DefaultTexMipBias,
@@ -312,6 +313,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	TMap<QWORD,FOpenGLResource*>			Resources;
 	TMultiMap<DWORD,FOpenGLProgram*>		Programs;
 	TMap<DWORD,GLuint>					Samplers;
+	INT									SamplerSettings;
 
 	GLuint	VertexArray,
 			EmptyVertexArray,
@@ -320,6 +322,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			VertexShaderObject,
 			GammaProgram;
 	GLint	GammaRamp;
+	GLsync	FrameFence;
 	FOpenGLDynamicBuffer	DynamicVertexBuffer,
 						DynamicIndexBuffer;
 
@@ -396,6 +399,7 @@ private:
 	void CreateSceneFramebuffer(INT Width,INT Height);
 	void DestroySceneFramebuffer();
 	void ReleaseObjects();
+	void ReleaseSamplers();
 };
 
 extern const ANSICHAR* OpenGLVertexShader;

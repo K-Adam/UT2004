@@ -174,17 +174,7 @@ int MEAPI KPoolMallocGetUnused(MePool* u)
 void MEAPI KMessageShow(const int level,const char *const string)
 {
     guard(KDebugShow);
-#ifdef UNICODE
-    TCHAR tmp[MeMAXMESSAGE];
-    #ifdef WIN32  // !!! FIXME: wtf? --ryan.
-      swprintf(tmp, TEXT("%hs"), string);
-    #else
-      wcscpy(tmp, (const UNICHAR *) string);
-    #endif
-    debugf(tmp);
-#else
-    debugf((TCHAR*)string);
-#endif
+    debugf(TEXT("%s"), appFromAnsi(string));
     unguard;
 }
 
@@ -752,7 +742,7 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 		if(!scale3D.IsUniform() && uGeom->GetElementCount() > 0)
 			debugf(TEXT("(Karma:) KAggregateGeomInstance: (%s) Cannot 3D-Scale Karma primitives (sphere, box, cylinder)."), name);
 		else
-			debugf(TEXT("(Karma:) KAggregateGeomInstance: (%S) No geometries in FKAggregateGeom."), name);
+			debugf(TEXT("(Karma:) KAggregateGeomInstance: (%s) No geometries in FKAggregateGeom."), name);
 
 		return 0;
 	}

@@ -1204,7 +1204,11 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	guard(FOpenGLRenderInterface::CompileMaterial);
 
 	FOpenGLMaterialState& State = CurrentState->Material;
-	TArray<BYTE> Key;
+	// Kept across calls, this runs for every draw.
+	static TArray<BYTE> Key;
+	static TArray<FOpenGLProgram*> Candidates;
+	Key.Empty(Key.Num());
+	Candidates.Empty(Candidates.Num());
 	State.Reset();
 	FOpenGLCompiler Compiler(this,State,Key,NULL,ErrorString,ErrorMaterial);
 	if( !Compiler.Compile(Material) )
@@ -1214,7 +1218,6 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	Compiler.K(State.NumConstants);
 
 	DWORD Hash = appMemCrc(&Key(0),Key.Num());
-	TArray<FOpenGLProgram*> Candidates;
 	RenDev->Programs.MultiFind(Hash,Candidates);
 	for( INT i=0; i<Candidates.Num(); i++ )
 	{

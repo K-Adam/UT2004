@@ -276,7 +276,6 @@ extern CORE_API DOUBLE GSecondsPerCycle;
 
 char *strlwr(char *str);
 
-CORE_API DOUBLE appSecondsSlow();
 
 
 // Math intrinsics.

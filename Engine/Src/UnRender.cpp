@@ -1430,12 +1430,16 @@ void FCameraSceneNode::UpdateMatrices()
 	}
 	else
 	{
+		// The FOV is the horizontal one of a 4:3 view, wider views keep its vertical extent.
+		FLOAT Aspect = (FLOAT) RenderTarget->GetWidth() / RenderTarget->GetHeight();
 		FLOAT FOV = ViewFOV * PI / 360.0f;
+		if( Aspect > 4.f / 3.f )
+			FOV = appAtan( appTan(FOV) * Aspect * 0.75f );
 		CameraToScreen = FPerspectiveMatrix(
 								FOV,
 								FOV,
 								1.f,
-								(FLOAT) RenderTarget->GetWidth() / RenderTarget->GetHeight(),
+								Aspect,
 								NEAR_CLIPPING_PLANE,
 								FAR_CLIPPING_PLANE
 		);

@@ -273,11 +273,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 			Fullscreen = 1;
 		USDLClient* Client = GetOuterUSDLClient();
 		Client->AutoResolution = Auto;
-		if( Auto && Client->DesktopX && Client->DesktopY )
-		{
-			Client->FullscreenViewportX = Client->DesktopX;
-			Client->FullscreenViewportY = Client->DesktopY;
-		}
+		Client->UpdateDesktopSize();
 		if( Auto && (Fullscreen || FullscreenOnly) )
 		{
 			X = Client->FullscreenViewportX;
@@ -636,7 +632,22 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 	USDLClient* Client = GetOuterUSDLClient();
 
-    if ((Client->UseJoystick) && (USDLClient::Joystick != NULL))
+    if( Client->UseJoystick && USDLClient::Gamepad )
+    {
+        // The hat's keys for the d-pad and the default binds' axes for the sticks. Axes span -0.5 to 0.5, like the raw path.
+        static const EInputKey Buttons[SDL_GAMEPAD_BUTTON_MISC1 + 1] = { IK_Joy1, IK_Joy2, IK_Joy3, IK_Joy4, IK_Joy5, IK_Joy6, IK_Joy7, IK_Joy8, IK_Joy9, IK_Joy10, IK_Joy11, IK_Joy13, IK_Joy14, IK_Joy15, IK_Joy16, IK_Joy12 };
+        static const EInputKey Axes[SDL_GAMEPAD_AXIS_COUNT] = { IK_JoyX, IK_JoyY, IK_JoyV, IK_JoySlider1, IK_JoyZ, IK_JoyR };
+        SDL_UpdateGamepads();
+        for( INT i=0; i<ARRAY_COUNT(Buttons); i++ )
+        {
+            UBOOL Pressed = SDL_GetGamepadButton( USDLClient::Gamepad, (SDL_GamepadButton)i );
+            if( Pressed != (Input->KeyDown( Buttons[i] ) != 0) )
+                CauseInputEvent( Buttons[i], Pressed ? IST_Press : IST_Release );
+        }
+        for( INT i=0; i<ARRAY_COUNT(Axes); i++ )
+            Input->DirectAxis( Axes[i], SDL_GetGamepadAxis( USDLClient::Gamepad, (SDL_GamepadAxis)i ) / 65535.f, DeltaSeconds );
+    }
+    else if ((Client->UseJoystick) && (USDLClient::Joystick != NULL))
     {
         SDL_UpdateJoysticks();
 
@@ -671,6 +682,16 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 		else
 			SDL_HideCursor();
 		UpdateMouseGrabState();
+	}
+
+	// Text input only while a menu or the console reads it, so an IME does not take game keys.
+	UBOOL WantText = (GUIController && GUIController->bActive) || (Console && Console->IsA(UConsole::StaticClass()) && ((UConsole*)Console)->bTyping);
+	if( WantText != SDL_TextInputActive( Client->Window ) )
+	{
+		if( WantText )
+			SDL_StartTextInput( Client->Window );
+		else
+			SDL_StopTextInput( Client->Window );
 	}
 
 	// Mouse movement management.
@@ -767,6 +788,20 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				DY += Event.motion.yrel;
 				break;
 
+			case SDL_EVENT_JOYSTICK_ADDED:
+				if( Client->UseJoystick && !USDLClient::Joystick )
+					Client->OpenJoystick();
+				break;
+
+			case SDL_EVENT_JOYSTICK_REMOVED:
+				if( Event.jdevice.which == JoystickID )
+				{
+					Client->CloseJoystick();
+					JoystickID = 0;
+					Input->ResetInput();
+				}
+				break;
+
 			case SDL_EVENT_JOYSTICK_BALL_MOTION:
 				if ( Event.jball.which != JoystickID || !Client->UseJoystick )
 	                break;
@@ -776,7 +811,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	                break;
 
 			case SDL_EVENT_JOYSTICK_HAT_MOTION:
-				if ( (Event.jhat.which != JoystickID) ||
+				if ( (Event.jhat.which != JoystickID) || USDLClient::Gamepad ||
 				     (Event.jhat.hat != Client->JoystickHatNumber) ||
 				     (!Client->UseJoystick) ||
 				     (Client->IgnoreHat) )
@@ -808,6 +843,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 			case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
 				Resized = true;
+				break;
+
+			// Auto resolution follows the window to another display.
+			case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+				Client->UpdateDesktopSize();
 				break;
 
 			// The desktop gets its gamma back while the game is in the background.
@@ -1078,7 +1118,6 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 		Client->Window = SDL_CreateWindow( "", NewX, NewY, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN );
 		if( !Client->Window )
 			appErrorf( TEXT("Couldn't create window: %s"), appFromAnsi(SDL_GetError()) );
-		SDL_StartTextInput( Client->Window );
 
 		// The menus need 640x480, a smaller window makes the GUI switch to a fixed resolution.
 		if( !GIsEditor )
@@ -1112,6 +1151,7 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 		{
 			// The desktop size, which Auto uses, stays borderless so switching away is instant. Other sizes change the display mode.
 			SDL_DisplayMode Mode;
+			Client->UpdateDesktopSize();
 			UBOOL Exclusive = (NewX != Client->DesktopX || NewY != Client->DesktopY)
 				&& SDL_GetClosestFullscreenDisplayMode( SDL_GetDisplayForWindow(Window), NewX, NewY, 0.f, false, &Mode );
 			SDL_SetWindowFullscreenMode( Window, Exclusive ? &Mode : NULL );

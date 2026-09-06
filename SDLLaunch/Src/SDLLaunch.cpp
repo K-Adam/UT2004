@@ -276,10 +276,16 @@ inline void	CMainLoop::RunLoop(void)
 	if( !GUseFixedTimeStep && IncludeMessaging )
 	{		
 		FLOAT MaxTickRate = Engine->GetMaxTickRate();
+		// Nobody sees a minimized or covered window, so it does not need more frames than the game needs ticks.
+		SDL_Window* Window = SDL_GL_GetCurrentWindow();
+		if( Window && (SDL_GetWindowFlags( Window ) & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) )
+			MaxTickRate = MaxTickRate > 0.f ? Min( MaxTickRate, 30.f ) : 30.f;
 		if( MaxTickRate>0.0 )
 		{
-			FLOAT Delta = (1.0/MaxTickRate) - (appSeconds()-OldTime);
-			appSleep( Max(0.f,Delta) );
+			// Sleep alone wakes up to a millisecond late.
+			DOUBLE Delta = 1.0 / MaxTickRate - (appSeconds() - OldTime);
+			if( Delta > 0.0 )
+				SDL_DelayPrecise( (Uint64)(Delta * 1000000000.0) );
 		}
 	}
 	unguard;

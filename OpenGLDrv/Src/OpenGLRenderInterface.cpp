@@ -250,9 +250,8 @@ INT FOpenGLRenderInterface::SetVertexStreams(EVertexShader Shader,FVertexStream*
 	return Size;
 }
 
-INT FOpenGLRenderInterface::AddDynamicVertices(const void* Data,INT Size,INT Stride,const FVertexComponent* Components,INT NumComponents)
+INT FOpenGLRenderInterface::UseDynamicVertices(INT Offset,INT Stride,const FVertexComponent* Components,INT NumComponents)
 {
-	INT Offset = RenDev->DynamicVertexBuffer.Add(Data,Size,Stride);
 	FOpenGLStream& Out = CurrentState->Streams[0];
 	Out.Buffer			= RenDev->DynamicVertexBuffer.Buffer;
 	Out.Stride			= Stride;
@@ -264,14 +263,12 @@ INT FOpenGLRenderInterface::AddDynamicVertices(const void* Data,INT Size,INT Str
 
 INT FOpenGLRenderInterface::SetDynamicStream(EVertexShader Shader,FVertexStream* Stream)
 {
-	static TArray<BYTE> Data;
-	INT Size = Stream->GetSize();
-	if( Data.Num() < Size )
-		Data.Add(Size - Data.Num());
-	Stream->GetStreamData(&Data(0));
 	FVertexComponent Components[MAX_VERTEX_COMPONENTS];
-	INT NumComponents = Stream->GetComponents(Components);
-	return AddDynamicVertices(&Data(0),Size,Stream->GetStride(),Components,NumComponents);
+	INT NumComponents = Stream->GetComponents(Components), Stride = Stream->GetStride(), Offset;
+	if( BYTE* Dest = RenDev->DynamicVertexBuffer.Lock(Stream->GetSize(),Stride,Offset) )
+		Stream->GetStreamData(Dest);
+	RenDev->DynamicVertexBuffer.Unlock();
+	return UseDynamicVertices(Offset,Stride,Components,NumComponents);
 }
 
 INT FOpenGLRenderInterface::SetIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseVertexIndex)
@@ -300,12 +297,10 @@ INT FOpenGLRenderInterface::SetIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseVer
 
 INT FOpenGLRenderInterface::SetDynamicIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseVertexIndex)
 {
-	static TArray<BYTE> Data;
-	INT Size = IndexBuffer->GetSize(), IndexSize = IndexBuffer->GetIndexSize();
-	if( Data.Num() < Size )
-		Data.Add(Size - Data.Num());
-	IndexBuffer->GetContents(&Data(0));
-	INT Offset = RenDev->DynamicIndexBuffer.Add(&Data(0),Size,IndexSize);
+	INT IndexSize = IndexBuffer->GetIndexSize(), Offset;
+	if( BYTE* Dest = RenDev->DynamicIndexBuffer.Lock(IndexBuffer->GetSize(),IndexSize,Offset) )
+		IndexBuffer->GetContents(Dest);
+	RenDev->DynamicIndexBuffer.Unlock();
 	RenDev->GL.ElementBuffer		= RenDev->DynamicIndexBuffer.Buffer;
 	CurrentState->IndexBuffer		= RenDev->DynamicIndexBuffer.Buffer;
 	CurrentState->IndexSize			= IndexSize;
@@ -340,7 +335,11 @@ int FOpenGLRenderInterface::UnlockDynBuffer()
 	if( DynamicComponents & VF_Specular )	Components[NumComponents++] = FVertexComponent(CT_Color,FVF_Specular);
 	if( DynamicComponents & VF_Tex1 )		Components[NumComponents++] = FVertexComponent(CT_Float2,FVF_TexCoord0);
 	if( DynamicComponents & VF_Tex2 )		Components[NumComponents++] = FVertexComponent(CT_Float2,FVF_TexCoord1);
-	return AddDynamicVertices(&DynamicVertices(0),DynamicSize,DynamicStride,Components,NumComponents);
+	INT Offset;
+	if( BYTE* Dest = RenDev->DynamicVertexBuffer.Lock(DynamicSize,DynamicStride,Offset) )
+		appMemcpy(Dest,&DynamicVertices(0),DynamicSize);
+	RenDev->DynamicVertexBuffer.Unlock();
+	return UseDynamicVertices(Offset,DynamicStride,Components,NumComponents);
 }
 
 void FOpenGLRenderInterface::SetQuadIndexBuffer(INT BaseVertexIndex)

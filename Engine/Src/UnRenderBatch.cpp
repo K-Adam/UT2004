@@ -363,8 +363,10 @@ void FStaticMeshBatchVertexStream::GetStreamData(void* Dest)
 				*DestLighting = CustomVertexColor;
 			else if(StaticMeshInstance)
 			{
-				*DestLighting = StaticMeshInstance->ColorStream.Colors(VertexIndex);
-				*DestLighting += DynamicActor->AmbientColor;
+				// Built locally, the destination may be write only GPU memory.
+				FColor Color = StaticMeshInstance->ColorStream.Colors(VertexIndex);
+				Color += DynamicActor->AmbientColor;
+				*DestLighting = Color;
 			}
 			else
 				*DestLighting = DynamicActor->AmbientColor;

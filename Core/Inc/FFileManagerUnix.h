@@ -11,6 +11,7 @@
 #define _INCL_FFILEMANAGERUNIX_H_
 
 #include <dirent.h>
+#include <fnmatch.h>
 #include <unistd.h>
 #include "FFileManagerGeneric.h"
 #include <pwd.h>
@@ -619,9 +620,9 @@ public:
     		TCHAR* tmp = appStaticString1024();
     		appStrcpy( tmp, BaseDir );
 		    TCHAR* Filename = appStrcat( tmp, FakeFilename );
-			SearchDirectory( Result, Filename );
+			SearchDirectory( Result, Filename, Files, Directories );
         }
-		SearchDirectory( Result, FakeFilename );
+		SearchDirectory( Result, FakeFilename, Files, Directories );
 
 		return Result;
 		unguard;
@@ -724,117 +725,41 @@ public:
 
 
 protected:
-	void SearchDirectory( TArray<FString> &Result, const TCHAR* Filename )
+	// Matches like Windows: case-insensitive, without "." and "..", and "*.*" takes names without a dot too.
+	// The home and game directories can hold the same name, it is listed once.
+	void SearchDirectory( TArray<FString> &Result, const TCHAR* Filename, UBOOL Files, UBOOL Directories )
 	{
 		guard(FFileManagerUnix::SearchDirectory);
-		DIR *Dirp;
-		struct dirent* Direntp;
-		char Path[PATH_MAX];
-		char File[PATH_MAX];
-		char *Filestart;
-		char *Cur;
-		UBOOL Match;
+		char Path[PATH_MAX], Pattern[PATH_MAX];
+		unixToANSI( Pattern, Filename );
+		strcpy( Path, appUnixPath(Pattern) );
 
-		// Initialize Path to Filename.
-        unixToANSI( File, Filename );
-		strcpy( Path, appUnixPath(File) );
+		char* Slash = strrchr( Path, '/' );
+		strcpy( Pattern, Slash ? Slash + 1 : Path );
+		if( Slash )
+			Slash[1] = '\0';
+		else
+			strcpy( Path, "./" );
+		if( strcmp( Pattern, "*.*" ) == 0 )
+			strcpy( Pattern, "*" );
 
-        /* Do this (and case sensitivity check) in appUnixPath, above. --ryan.
-		// Convert MS "\" to Unix "/".
-		for( Cur = Path; *Cur != '\0'; Cur++ )
-			if( *Cur == '\\' )
-				*Cur = '/';
-        */
-	
-		// Separate path and filename.
-		Filestart = Path;
-		for( Cur = Path; *Cur != '\0'; Cur++ )
-        {
-			if( *Cur == '/' )
-				Filestart = Cur + 1;
-        }
-
-		// Store filename and remove it from Path.
-		strcpy( File, Filestart );
-		*Filestart = '\0';
-
-		// Check for empty path.
-		if (strlen( Path ) == 0)
-			sprintf( Path, "./" );
-
-		// Open directory, get first entry.
-		Dirp = opendir( Path );
-		if (Dirp == NULL)
+		DIR* Dir = opendir( Path );
+		if( !Dir )
 			return;
-	
-		Direntp = readdir( Dirp );
-
-		// Check each entry.
-		while( Direntp != NULL )
+		while( struct dirent* Entry = readdir( Dir ) )
 		{
-			Match = false;
-
-			if( strcmp( File, "*" ) == 0 )
-			{
-				// Any filename.
-				Match = true;
-			}
-			else if( strcmp( File, "*.*" ) == 0 )
-			{
-				// Any filename with a '.'.
-				if( strchr( Direntp->d_name, '.' ) != NULL )
-					Match = true;
-			}
-			else if( File[0] == '*' )
-			{
-				// "*.ext" filename.
-				if( strstr( Direntp->d_name, (File + 1) ) != NULL )
-					Match = true;
-			}
-			else if( File[strlen( File ) - 1] == '*' )
-			{
-				// "name.*" filename.
-				if( strncmp( Direntp->d_name, File, strlen( File ) - 1 ) == 0 )
-					Match = true;
-			}
-			else if( strstr( File, "*" ) != NULL )
-			{
-				// single str.*.str match.
-				char* star = strstr( File, "*" );
-				INT filelen = strlen( File );
-				INT starlen = strlen( star );
-				INT starpos = filelen - (starlen - 1);
-				char prefix[256];
-				strncpy( prefix, File, starpos );
-				star++;
-				if( strncmp( Direntp->d_name, prefix, starpos - 1 ) == 0 )
-				{
-					// part before * matches
-					char* postfix = Direntp->d_name + (strlen(Direntp->d_name) - starlen) + 1;
-					if ( strcmp( postfix, star ) == 0 )
-						Match = true;
-				}
-			}
-			else
-			{
-				// Literal filename.
-				if( strcmp( Direntp->d_name, File ) == 0 )
-					Match = true;
-			}
-
-			// Does this entry match the Filename?
-			if( Match )
-			{
-				// Yes, add the file name to Result.
-				new(Result)FString(Direntp->d_name);
-			}
-		
-			// Get next entry.
-			Direntp = readdir( Dirp );
+			if( !strcmp( Entry->d_name, "." ) || !strcmp( Entry->d_name, ".." ) || fnmatch( Pattern, Entry->d_name, FNM_CASEFOLD ) != 0 )
+				continue;
+			char Full[PATH_MAX * 2];
+			snprintf( Full, sizeof(Full), "%s%s", Path, Entry->d_name );
+			struct stat Info;
+			if( stat( Full, &Info ) != 0 || !(S_ISDIR( Info.st_mode ) ? Directories : Files) )
+				continue;
+			FString Name( appFromAnsi( Entry->d_name ) );
+			if( Result.FindItemIndex( Name ) == INDEX_NONE )
+				new(Result)FString( Name );
 		}
-	
-		// Close directory.
-		closedir( Dirp );
+		closedir( Dir );
 		unguard;
 	}
 

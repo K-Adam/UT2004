@@ -94,6 +94,9 @@ CORE_API INT appCreateBitmap( const TCHAR* Pattern, INT Width, INT Height, DWORD
 
 CORE_API void appClipboardCopy( const TCHAR* Str );
 CORE_API FString appClipboardPaste();
+// The client sets these to the system clipboard, without them the clipboard only works inside the game.
+CORE_API extern void (*GClipboardCopy)( const TCHAR* Str );
+CORE_API extern FString (*GClipboardPaste)();
 
 /*-----------------------------------------------------------------------------
 	Guard macros for call stack display.
@@ -294,7 +297,6 @@ CORE_API DOUBLE appSeconds();
 
 CORE_API void appSystemTime( INT& Year, INT& Month, INT& DayOfWeek, INT& Day, INT& Hour, INT& Min, INT& Sec, INT& MSec );
 CORE_API const TCHAR* appTimestamp();
-CORE_API DOUBLE appSecondsSlow();
 CORE_API void appSleep( FLOAT Seconds );
 
 /*-----------------------------------------------------------------------------

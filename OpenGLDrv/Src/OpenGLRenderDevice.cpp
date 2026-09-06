@@ -39,6 +39,8 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = GammaProgram = VertexShaderObject = 0;
 	SceneFramebuffer = SceneTexture = SceneDepthStencil = MultisampleFramebuffer = MultisampleColor = 0;
 	SceneWidth = SceneHeight = SceneSamples = 0;
+	FrameFence = NULL;
+	SamplerSettings = 0;
 }
 
 void UOpenGLRenderDevice::StaticConstructor()
@@ -46,6 +48,7 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("UseVSync"),			RF_Public)UBoolProperty	(CPP_PROPERTY(UseVSync),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("UseTrilinear"),		RF_Public)UBoolProperty	(CPP_PROPERTY(UseTrilinear),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("UsePrecaching"),		RF_Public)UBoolProperty	(CPP_PROPERTY(UsePrecaching),		TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("ReduceMouseLag"),		RF_Public)UBoolProperty	(CPP_PROPERTY(ReduceMouseLag),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("LevelOfAnisotropy"),	RF_Public)UIntProperty	(CPP_PROPERTY(LevelOfAnisotropy),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("MultisampleSamples"),	RF_Public)UIntProperty	(CPP_PROPERTY(MultisampleSamples),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("DefaultTexMipBias"),	RF_Public)UFloatProperty(CPP_PROPERTY(DefaultTexMipBias),	TEXT("Options"),CPF_Config);
@@ -330,11 +333,17 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 	unguard;
 }
 
-void UOpenGLRenderDevice::ReleaseObjects()
+void UOpenGLRenderDevice::ReleaseSamplers()
 {
 	for( TMap<DWORD,GLuint>::TIterator It(Samplers); It; ++It )
 		glDeleteSamplers(1,&It.Value());
 	Samplers.Empty();
+	appMemset(GL.Samplers,0xff,sizeof(GL.Samplers));
+}
+
+void UOpenGLRenderDevice::ReleaseObjects()
+{
+	ReleaseSamplers();
 	DestroySceneFramebuffer();
 	DynamicVertexBuffer.Release();
 	DynamicIndexBuffer.Release();
@@ -344,6 +353,8 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	if( EmptyVertexArray )		glDeleteVertexArrays(1,&EmptyVertexArray);
 	if( GammaProgram )			glDeleteProgram(GammaProgram);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
+	if( FrameFence )			glDeleteSync(FrameFence);
+	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = GammaProgram = VertexShaderObject = 0;
 	SceneWidth = SceneHeight = SceneSamples = 0;
 }
@@ -428,6 +439,13 @@ FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,IN
 	// User resizing reaches the viewport without SetRes.
 	if( Viewport->SizeX != SceneWidth || Viewport->SizeY != SceneHeight )
 		CreateSceneFramebuffer(Viewport->SizeX,Viewport->SizeY);
+	// The menu changes filtering with set ini, which does not flush.
+	INT Settings = LevelOfAnisotropy * 2 + (UseTrilinear ? 1 : 0);
+	if( Settings != SamplerSettings )
+	{
+		ReleaseSamplers();
+		SamplerSettings = Settings;
+	}
 	LockedViewport = Viewport;
 	SceneResolved = 0;
 	RenderInterface.Locked(Viewport);
@@ -504,6 +522,16 @@ void UOpenGLRenderDevice::Present(UViewport* Viewport)
 
 	SDL_GL_SwapWindow(Window);
 
+	// Waiting for the previous frame keeps the driver from queueing more, each queued frame is input lag.
+	if( FrameFence )
+	{
+		glClientWaitSync(FrameFence,GL_SYNC_FLUSH_COMMANDS_BIT,100000000);
+		glDeleteSync(FrameFence);
+		FrameFence = NULL;
+	}
+	if( ReduceMouseLag )
+		FrameFence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);
+
 	unguard;
 }
 
@@ -534,6 +562,6 @@ FRenderCaps* UOpenGLRenderDevice::GetRenderCaps()
 {
 	RenderCaps.HardwareTL					= 1;
 	RenderCaps.PixelShaderVersion			= 14;
-	RenderCaps.MaxSimultaneousTerrainLayers	= 3;
+	RenderCaps.MaxSimultaneousTerrainLayers	= 4;
 	return &RenderCaps;
 }

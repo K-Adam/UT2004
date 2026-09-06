@@ -73,6 +73,7 @@ class USDLClient : public UClient, public FNotifyHook
 	SDL_GLContext		GLContext;
 
     static SDL_Joystick *Joystick;
+    static SDL_Gamepad *Gamepad;
     static int JoystickAxes;
     static int JoystickButtons;
     static int JoystickHats;
@@ -100,6 +101,10 @@ class USDLClient : public UClient, public FNotifyHook
 	UViewport* GetLastCurrent();
 	class UViewport* NewViewport( const FName Name );
     void TeardownSR();
+
+	void OpenJoystick();
+	void CloseJoystick();
+	void UpdateDesktopSize();
 };
 
 /*-----------------------------------------------------------------------------

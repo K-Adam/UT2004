@@ -2921,13 +2921,7 @@ void UGameEngine::Draw( UViewport* Viewport, UBOOL Blit, BYTE* HitData, INT* Hit
 	if( Viewport->RenDev->PrecacheOnFlip ) // && !Viewport->Actor->Level->bNeverPrecache )
 		Viewport->Actor->Level->LevelAction = LEVACT_Precaching;
 
-	static UBOOL LastbNoPresent = 0;
-	UBOOL bNoPresent = ( Ugly3dfxHack || LastbNoPresent );
-	LastbNoPresent = (Viewport->Canvas && !Viewport->Canvas->bRenderLevel && Viewport->Actor && Viewport->Actor->bDemoOwner);
-
-	// Present the last frame.
-	if( !bNoPresent && Viewport->PendingFrame && (!(Viewport->RenDev->PrecacheOnFlip) )  )  // && (!Viewport->Actor->Level->bNeverPrecache) )
-			Viewport->Present();
+	UBOOL bNoPresent = Ugly3dfxHack || (Viewport->Canvas && !Viewport->Canvas->bRenderLevel && Viewport->Actor && Viewport->Actor->bDemoOwner);
 
 	// Precache now if desired.
 	if( Viewport->RenDev->PrecacheOnFlip )//&& !Viewport->Actor->Level->bNeverPrecache )
@@ -3136,6 +3130,10 @@ void UGameEngine::Draw( UViewport* Viewport, UBOOL Blit, BYTE* HitData, INT* Hit
 		Viewport->LodSceneNode = NULL;
 		Viewport->Unlock();
 		Viewport->PendingFrame = Blit ? 1 : 0;
+
+		// Presented right away, not at the start of the next frame, so the next tick does not delay it.
+		if( Viewport->PendingFrame && !bNoPresent )
+			Viewport->Present();
 	}
 
 	Viewport->Actor->Level->LevelAction = SavedAction;

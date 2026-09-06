@@ -22,6 +22,7 @@ IMPLEMENT_CLASS(USDLClient);
 -----------------------------------------------------------------------------*/
 
 SDL_Joystick *USDLClient::Joystick = NULL;
+SDL_Gamepad *USDLClient::Gamepad = NULL;
 int USDLClient::JoystickAxes = 0;
 int USDLClient::JoystickButtons = 0;
 int USDLClient::JoystickHats = 0;
@@ -58,6 +59,34 @@ void USDLClient::StaticConstructor()
 }
 
 
+// TCHAR is UTF-16 on every platform, SDL takes UTF-8.
+static void SDLClipboardCopy( const TCHAR* Str )
+{
+	char* Text = SDL_iconv_string( "UTF-8", "UTF-16LE", (const char*)Str, (appStrlen(Str) + 1) * sizeof(TCHAR) );
+	if( Text )
+	{
+		SDL_SetClipboardText( Text );
+		SDL_free( Text );
+	}
+}
+
+static FString SDLClipboardPaste()
+{
+	FString Result;
+	char* Text = SDL_GetClipboardText();
+	if( Text )
+	{
+		TCHAR* Wide = (TCHAR*)SDL_iconv_string( "UTF-16LE", "UTF-8", Text, SDL_strlen(Text) + 1 );
+		if( Wide )
+		{
+			Result = Wide;
+			SDL_free( Wide );
+		}
+		SDL_free( Text );
+	}
+	return Result;
+}
+
 // just in case.  :)  --ryan.
 static void sdl_atexit_handler(void)
 {
@@ -84,7 +113,7 @@ void USDLClient::Init( UEngine* InEngine )
 	// Init base.
 	UClient::Init( InEngine );
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK))
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
     {
         const TCHAR *err = appFromAnsi(SDL_GetError());
 		appErrorf(TEXT("Couldn't initialize SDL: %s\n"), err);
@@ -92,6 +121,8 @@ void USDLClient::Init( UEngine* InEngine )
 	}
 
     atexit(sdl_atexit_handler);
+	GClipboardCopy = SDLClipboardCopy;
+	GClipboardPaste = SDLClipboardPaste;
 
 	// Note configuration.
 	PostEditChange();
@@ -106,87 +137,8 @@ void USDLClient::Init( UEngine* InEngine )
 		AutoResolution = 0;
 	}
 
-	const SDL_DisplayMode* Desktop = SDL_GetDesktopDisplayMode( SDL_GetPrimaryDisplay() );
-	if( Desktop )
-	{
-		DesktopX = Desktop->w;
-		DesktopY = Desktop->h;
-	}
-	if( AutoResolution && DesktopX && DesktopY )
-	{
-		FullscreenViewportX = DesktopX;
-		FullscreenViewportY = DesktopY;
-	}
+	UpdateDesktopSize();
 
-	// Joystick.
-    int joystickCount = 0;
-    SDL_JoystickID* Joysticks = SDL_GetJoysticks( &joystickCount );
-    JoystickButtons = 0;
-    JoystickAxes = 0;
-    debugf( NAME_Init, TEXT("Detected %d joysticks"), joystickCount);
-    if (joystickCount > 0)
-    {
-    	if ( JoystickNumber >= joystickCount )
-    	{
-    	    debugf( NAME_Init, TEXT("JoystickNumber exceeds the number of detected joysticks, setting to 0."));
-            JoystickNumber = 0;
-    	}
-
-		const char *joyNameAnsi = SDL_GetJoystickNameForID(Joysticks[JoystickNumber]);
-		if (joyNameAnsi == NULL)
-			joyNameAnsi = "Unknown Joystick";
-        const TCHAR *joyName = appFromAnsi(joyNameAnsi);
-    	debugf( NAME_Init, TEXT("Joystick [%i] : %s") ,
-				JoystickNumber , joyName);
-    			
-    	Joystick = SDL_OpenJoystick( Joysticks[JoystickNumber] );
-		if ( Joystick == NULL )
-		{
-		    debugf( NAME_Init, TEXT("Couldn't open joystick [%s]"), joyName );
-			UseJoystick = false;
-  		}
-   	    else
-   		{
-   			JoystickButtons = SDL_GetNumJoystickButtons( Joystick );
-   		    debugf( NAME_Init, TEXT("Joystick has %i buttons"), JoystickButtons );
-
-   			JoystickHats = SDL_GetNumJoystickHats( Joystick );
-   		    debugf( NAME_Init, TEXT("Joystick has %i hats"), JoystickHats );
-
-   			JoystickBalls = SDL_GetNumJoystickBalls( Joystick );
-   		    debugf( NAME_Init, TEXT("Joystick has %i balls"), JoystickBalls );
-
-            if ((JoystickHatNumber < 0) || (JoystickHatNumber >= JoystickHats))
-            {
-    	        debugf( NAME_Init, TEXT("JoystickHatNumber exceeds the number of detected hats, setting to 0."));
-                JoystickHatNumber = 0;
-            }
-
-            if (JoystickButtons > 16)
-                JoystickButtons = 16;
-
-            if ((JoystickButtons > 12) && (JoystickHats > 0) && (!IgnoreHat))
-                JoystickButtons = 12;  /* joy13 is first hat "button" */
-
-            if (JoystickButtons != SDL_GetNumJoystickButtons(Joystick))
-            {
-                debugf( NAME_Init, TEXT("Too many joystick buttons; clamped to %d."), JoystickButtons);
-                if ((JoystickHats > 0) && (!IgnoreHat))
-                    debugf( NAME_Init, TEXT("(Disable hat switches with \"IgnoreHat=True\" to raise this.)"));
-            }
-
-   			JoystickAxes    = SDL_GetNumJoystickAxes( Joystick );
-   			debugf( NAME_Init, TEXT("Joystick has %i axes"   ), JoystickAxes );
-
-            // x + y + z + r + u + v + 2 "sliders" == 8 axes.
-            if (JoystickAxes > 8)
-            {
-                debugf( NAME_Init, TEXT("Too many joystick axes; clamped to 8."));
-                JoystickAxes = 8;
-            }
-   	    }
-	}
-	SDL_free( Joysticks );
 
 	// Success.
 	debugf( NAME_Init, TEXT("SDLClient initialized.") );
@@ -194,6 +146,83 @@ void USDLClient::Init( UEngine* InEngine )
 	unguard;
 }
 
+
+//
+// Opens joystick JoystickNumber, or the first one. Devices SDL knows a gamepad mapping for open as
+// gamepads, so every pad gets the same button and axis layout.
+//
+void USDLClient::OpenJoystick()
+{
+	guard(USDLClient::OpenJoystick);
+
+	int Count = 0;
+	SDL_JoystickID* Joysticks = SDL_GetJoysticks( &Count );
+	JoystickButtons = JoystickAxes = JoystickHats = JoystickBalls = 0;
+	if( Count > 0 )
+	{
+		SDL_JoystickID ID = Joysticks[JoystickNumber >= 0 && JoystickNumber < Count ? JoystickNumber : 0];
+		if( SDL_IsGamepad( ID ) )
+		{
+			Gamepad = SDL_OpenGamepad( ID );
+			Joystick = Gamepad ? SDL_GetGamepadJoystick( Gamepad ) : NULL;
+		}
+		else
+			Joystick = SDL_OpenJoystick( ID );
+
+		const char* Name = SDL_GetJoystickNameForID( ID );
+		if( !Name )
+			Name = "?";
+		if( !Joystick )
+			debugf( NAME_Init, TEXT("Couldn't open joystick %s: %s"), appFromAnsi(Name), appFromAnsi(SDL_GetError()) );
+		else if( Gamepad )
+			debugf( NAME_Init, TEXT("Gamepad: %s"), appFromAnsi(Name) );
+		else
+		{
+			// Joy13 to Joy16 are the hat, x + y + z + r + u + v + 2 sliders are the 8 axes.
+			JoystickHats	= SDL_GetNumJoystickHats( Joystick );
+			JoystickBalls	= SDL_GetNumJoystickBalls( Joystick );
+			JoystickButtons	= Min( SDL_GetNumJoystickButtons( Joystick ), (JoystickHats > 0 && !IgnoreHat) ? 12 : 16 );
+			JoystickAxes	= Min( SDL_GetNumJoystickAxes( Joystick ), 8 );
+			if( JoystickHatNumber < 0 || JoystickHatNumber >= JoystickHats )
+				JoystickHatNumber = 0;
+			debugf( NAME_Init, TEXT("Joystick: %s, %i buttons, %i axes, %i hats, %i balls"), appFromAnsi(Name), JoystickButtons, JoystickAxes, JoystickHats, JoystickBalls );
+		}
+	}
+	SDL_free( Joysticks );
+
+	unguard;
+}
+
+void USDLClient::CloseJoystick()
+{
+	guard(USDLClient::CloseJoystick);
+	if( Gamepad )
+		SDL_CloseGamepad( Gamepad );
+	else if( Joystick )
+		SDL_CloseJoystick( Joystick );
+	Gamepad = NULL;
+	Joystick = NULL;
+	unguard;
+}
+
+//
+// Reads the desktop size of the display the window is on, or of the primary one before there is a window.
+//
+void USDLClient::UpdateDesktopSize()
+{
+	guard(USDLClient::UpdateDesktopSize);
+	const SDL_DisplayMode* Desktop = SDL_GetDesktopDisplayMode( Window ? SDL_GetDisplayForWindow( Window ) : SDL_GetPrimaryDisplay() );
+	if( !Desktop )
+		return;
+	DesktopX = Desktop->w;
+	DesktopY = Desktop->h;
+	if( AutoResolution )
+	{
+		FullscreenViewportX = DesktopX;
+		FullscreenViewportY = DesktopY;
+	}
+	unguard;
+}
 
 //
 // Shut down the platform-specific viewport manager subsystem.
@@ -216,10 +245,11 @@ void USDLClient::Destroy()
 	GLContext = NULL;
 	Window = NULL;
 
-	if ( Joystick != NULL )
-		SDL_CloseJoystick( Joystick );
+	CloseJoystick();
+	GClipboardCopy = NULL;
+	GClipboardPaste = NULL;
 
-    SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
 
 	debugf( NAME_Exit, TEXT("SDL client shut down") );
 	Super::Destroy();
@@ -315,6 +345,11 @@ void USDLClient::PostEditChange()
 {
 	guard(USDLClient::PostEditChange);
 	Super::PostEditChange();
+	// The menu turns UseJoystick on and off with set ini, which ends up here.
+	if( UseJoystick && !Joystick )
+		OpenJoystick();
+	else if( !UseJoystick )
+		CloseJoystick();
 	unguard;
 }
 

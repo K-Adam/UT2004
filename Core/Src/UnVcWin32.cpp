@@ -319,97 +319,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 IMPLEMENT_CLASS(USystem);
 
 /*-----------------------------------------------------------------------------
-	Clipboard.
------------------------------------------------------------------------------*/
-
-//
-// Copy text to clipboard.
-//
-CORE_API void appClipboardCopy( const TCHAR* Str )
-{
-	guard(appClipboardCopy);
-	if( OpenClipboard(GetActiveWindow()) )
-	{
-		verify(EmptyClipboard());
-#if UNICODE
-		HGLOBAL GlobalMem;
-		if( GUnicode && !GUnicodeOS )
-		{
-			INT Count = WideCharToMultiByte(CP_ACP,0,Str,-1,NULL,0,NULL,NULL);
-			GlobalMem = GlobalAlloc( GMEM_DDESHARE | GMEM_MOVEABLE, Count+1 );
-			check(GlobalMem);
-			ANSICHAR* Data = (ANSICHAR*) GlobalLock( GlobalMem );
-			WideCharToMultiByte(CP_ACP,0,Str,-1,Data,Count,NULL,NULL);
-			Data[Count] = 0;
-			GlobalUnlock( GlobalMem );
-			if( SetClipboardData( CF_TEXT, GlobalMem ) == NULL )
-				appErrorf(TEXT("SetClipboardData(A) failed with error code %i"), GetLastError() );
-		}
-		else
-#endif
-		{
-			GlobalMem = GlobalAlloc( GMEM_DDESHARE | GMEM_MOVEABLE, sizeof(TCHAR)*(appStrlen(Str)+1) );
-			check(GlobalMem);
-			TCHAR* Data = (TCHAR*) GlobalLock( GlobalMem );
-			appStrcpy( Data, Str );
-			GlobalUnlock( GlobalMem );
-			if( SetClipboardData( GUnicode ? CF_UNICODETEXT : CF_TEXT, GlobalMem ) == NULL )
-				appErrorf(TEXT("SetClipboardData(%s) failed with error code %i"), GUnicode ? TEXT("W") : TEXT("A"), GetLastError() );
-		}
-		verify(CloseClipboard());
-	}
-	unguard;
-}
-
-//
-// Paste text from clipboard.
-//
-CORE_API FString appClipboardPaste()
-{
-	guard(appClipboardPaste);
-	FString Result;
-	if( OpenClipboard(GetActiveWindow()) )
-	{
-		HGLOBAL GlobalMem = NULL;
-		UBOOL Unicode = 0;
-		if( GUnicode && GUnicodeOS )
-		{
-			GlobalMem = GetClipboardData( CF_UNICODETEXT );
-			Unicode = 1;
-		}
-		if( !GlobalMem )
-		{	
-			GlobalMem = GetClipboardData( CF_TEXT );
-			Unicode = 0;
-		}
-		if( !GlobalMem )
-			Result = TEXT("");
-		else
-		{
-			void* Data = GlobalLock( GlobalMem );
-			check( Data );	
-			if( Unicode )
-				Result = (TCHAR*) Data;
-			else
-			{
-				ANSICHAR* ACh = (ANSICHAR*) Data;
-				INT i;
-				for( i=0; ACh[i]; i++ );
-				TArray<TCHAR> Ch(i+1);
-				for( i=0; i<Ch.Num(); i++ )
-					Ch(i)=FromAnsi(ACh[i]);
-				Result = &Ch(0);
-			}
-			GlobalUnlock( GlobalMem );
-		}
-		verify(CloseClipboard());
-	}
-	else Result=TEXT("");
-	return Result;
-	unguard;
-}
-
-/*-----------------------------------------------------------------------------
 	DLLs.
 -----------------------------------------------------------------------------*/
 
@@ -619,22 +528,15 @@ UBOOL appIsDebuggerPresent()
 #if !DEFINED_appSeconds
 CORE_API DOUBLE appSeconds()
 {
-	static DWORD  InitialTime = timeGetTime();
-	static DOUBLE TimeCounter = 0.0;
-
-	// Accumulate difference to prevent wraparound.
-	DWORD NewTime = timeGetTime();
-	DWORD DeltaTime;
-
-	if (NewTime < InitialTime) // Ignore any timewarps backwards (including wraparound)
-		DeltaTime = 0.0;
-	else
-		DeltaTime = NewTime - InitialTime;
-	
-	TimeCounter += DeltaTime * 0.001;	// Convert to Seconds.millseconds
-	InitialTime = NewTime;
-
-	return TimeCounter;
+	static LARGE_INTEGER Frequency, Start;
+	if( !Frequency.QuadPart )
+	{
+		QueryPerformanceFrequency( &Frequency );
+		QueryPerformanceCounter( &Start );
+	}
+	LARGE_INTEGER Counter;
+	QueryPerformanceCounter( &Counter );
+	return (DOUBLE)(Counter.QuadPart - Start.QuadPart) / (DOUBLE)Frequency.QuadPart;
 }
 #endif
 
@@ -681,19 +583,6 @@ CORE_API void appSystemTime( INT& Year, INT& Month, INT& DayOfWeek, INT& Day, IN
 	unguard;
 }
 
-//
-// Return seconds counter.
-//
-CORE_API DOUBLE appSecondsSlow()
-{
-	static INT LastTickCount=0;
-	static DOUBLE TickCount=0.0;
-	INT ThisTickCount = GetTickCount();
-	TickCount += (ThisTickCount-LastTickCount) / 1000.0;
-	LastTickCount = ThisTickCount;
-	return TickCount;
-}
-
 /*-----------------------------------------------------------------------------
 	Link functions.
 -----------------------------------------------------------------------------*/
@@ -703,35 +592,9 @@ CORE_API DOUBLE appSecondsSlow()
 // This is expected to return immediately as the URL is launched by another
 // task.
 //
-
-// This naty hack is because fullscreen toggling appears to be broken on Win64.  :/  --ryan.
-#ifdef _WIN64
-static TCHAR *urlOnExit = NULL;
-static TCHAR *urlParmsOnExit = NULL;
-#endif
-
 void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 {
 	guard(appLaunchURL);
-
-    #ifdef _WIN64
-    if (!GIsRequestingExit)
-    {
-        if (URL == NULL)
-            return;
-        urlOnExit = new TCHAR[appStrlen(URL)];
-        appStrcpy(urlOnExit, URL);
-        if (Parms != NULL)
-        {
-            urlParmsOnExit = new TCHAR[appStrlen(Parms)];
-            appStrcpy(urlParmsOnExit, Parms);
-        }
-        if (Error)
-            *Error = TEXT("");
-        appRequestExit(0);
-        return;
-    }
-    #endif
 
 	//debugf( NAME_Log, TEXT("LaunchURL %s %s"), URL, Parms?Parms:TEXT("") );
 	PTRINT Code = (PTRINT)TCHAR_CALL_OS(ShellExecuteW(NULL,TEXT("open"),URL,Parms?Parms:TEXT(""),TEXT(""),SW_SHOWNORMAL),ShellExecuteA(NULL,"open",TCHAR_TO_ANSI(URL),Parms?TCHAR_TO_ANSI(Parms):"","",SW_SHOWNORMAL));
@@ -1233,12 +1096,6 @@ void appPlatformExit()
 {
 	guard(appPlatformExit);
 	timeEndPeriod( 1 );
-
-#ifdef _WIN64
-    if (urlOnExit != NULL)
-        appLaunchURL(urlOnExit, urlParmsOnExit, NULL);
-#endif
-
 	unguard;
 }
 

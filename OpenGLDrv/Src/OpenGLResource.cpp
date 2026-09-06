@@ -1,4 +1,5 @@
 #include "OpenGLDrv.h"
+#include <squish.h>
 
 FOpenGLResource::FOpenGLResource(UOpenGLRenderDevice* InRenDev,QWORD InCacheId)
 :	RenDev(InRenDev), CacheId(InCacheId), CachedRevision(0)
@@ -75,31 +76,27 @@ void FOpenGLTexture::Upload(GLenum Face,INT Level,FTexture* Source,INT SourceMip
 	if( !Source )
 		return;
 
-	if( InternalFormat != GL_RGBA8 )
+	if( IsDXTC(Format) )
 	{
 		INT Pitch = ((MipWidth + 3) / 4) * (Format == TEXF_DXT1 ? 8 : 16);
 		INT Size = Pitch * ((MipHeight + 3) / 4);
-		TArray<BYTE> Data(Size);
-		Source->GetTextureData(SourceMip,&Data(0),Pitch,Format);
-		glCompressedTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,InternalFormat,Size,&Data(0));
+		TArray<BYTE> Blocks(Size);
+		Source->GetTextureData(SourceMip,&Blocks(0),Pitch,Format);
+		if( InternalFormat != GL_RGBA8 )
+		{
+			glCompressedTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,InternalFormat,Size,&Blocks(0));
+			return;
+		}
+		// Static lightmaps have no UTexture to decompress them, so squish decodes every DXT texture. It writes RGBA, as GL wants it.
+		TArray<BYTE> Data(MipWidth * MipHeight * 4);
+		squish::DecompressImage(&Data(0),MipWidth,MipHeight,&Blocks(0),Format == TEXF_DXT1 ? squish::kDxt1 : Format == TEXF_DXT3 ? squish::kDxt3 : squish::kDxt5);
+		glTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,GL_RGBA,GL_UNSIGNED_BYTE,&Data(0));
 		return;
 	}
 
 	TArray<BYTE> Data(MipWidth * MipHeight * 4);
 	appMemzero(&Data(0),Data.Num());
-	if( IsDXTC(Format) )
-	{
-		BYTE* Decompressed = NULL;
-		UTexture* Texture = Source->GetUTexture();
-		if( Texture )
-			Texture->ConvertDXT(SourceMip,1,0,&Decompressed);
-		if( Decompressed )
-		{
-			appMemcpy(&Data(0),Decompressed,Data.Num());
-			delete [] Decompressed;
-		}
-	}
-	else if( Format == TEXF_L8 || Format == TEXF_RGB8 )
+	if( Format == TEXF_L8 || Format == TEXF_RGB8 )
 	{
 		BYTE* Raw = (BYTE*)Source->GetRawTextureData(SourceMip);
 		for( INT i=0; Raw && i<MipWidth*MipHeight; i++ )
@@ -223,7 +220,7 @@ void FOpenGLTexture::Cache(FBaseTexture* Source)
 }
 
 FOpenGLVertexStream::FOpenGLVertexStream(UOpenGLRenderDevice* InRenDev,QWORD InCacheId)
-:	FOpenGLResource(InRenDev,InCacheId), Buffer(0)
+:	FOpenGLResource(InRenDev,InCacheId), Buffer(0), Size(-1)
 {}
 
 FOpenGLVertexStream::~FOpenGLVertexStream()
@@ -233,21 +230,33 @@ FOpenGLVertexStream::~FOpenGLVertexStream()
 	glDeleteBuffers(1,&Buffer);
 }
 
+// Maps the whole store with invalidation, so a buffer refilled every frame, like a skinned mesh, never waits for the GPU.
+// NULL for an empty buffer.
+static BYTE* MapWholeBuffer(GLenum Target,GLuint Buffer,INT& Size,INT NewSize,GLenum Usage)
+{
+	glBindBuffer(Target,Buffer);
+	if( Size != NewSize )
+	{
+		glBufferData(Target,NewSize,NULL,Usage);
+		Size = NewSize;
+	}
+	return Size ? (BYTE*)glMapBufferRange(Target,0,Size,GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT) : NULL;
+}
+
 void FOpenGLVertexStream::Cache(FVertexStream* Source)
 {
-	INT Size = Source->GetSize();
-	TArray<BYTE> Data(Size);
-	if( Size )
-		Source->GetStreamData(&Data(0));
 	if( !Buffer )
 		glGenBuffers(1,&Buffer);
-	glBindBuffer(GL_ARRAY_BUFFER,Buffer);
-	glBufferData(GL_ARRAY_BUFFER,Size,Size ? &Data(0) : NULL,Source->HintDynamic() ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+	if( BYTE* Dest = MapWholeBuffer(GL_ARRAY_BUFFER,Buffer,Size,Source->GetSize(),Source->HintDynamic() ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW) )
+	{
+		Source->GetStreamData(Dest);
+		glUnmapBuffer(GL_ARRAY_BUFFER);
+	}
 	CachedRevision = Source->GetRevision();
 }
 
 FOpenGLIndexBuffer::FOpenGLIndexBuffer(UOpenGLRenderDevice* InRenDev,QWORD InCacheId)
-:	FOpenGLResource(InRenDev,InCacheId), Buffer(0)
+:	FOpenGLResource(InRenDev,InCacheId), Buffer(0), Size(-1)
 {}
 
 FOpenGLIndexBuffer::~FOpenGLIndexBuffer()
@@ -259,22 +268,21 @@ FOpenGLIndexBuffer::~FOpenGLIndexBuffer()
 
 void FOpenGLIndexBuffer::Cache(FIndexBuffer* Source)
 {
-	INT Size = Source->GetSize();
-	TArray<BYTE> Data(Size);
-	if( Size )
-		Source->GetContents(&Data(0));
 	if( !Buffer )
 		glGenBuffers(1,&Buffer);
 	// The element binding belongs to the VAO, which is always bound.
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,Buffer);
+	if( BYTE* Dest = MapWholeBuffer(GL_ELEMENT_ARRAY_BUFFER,Buffer,Size,Source->GetSize(),GL_STATIC_DRAW) )
+	{
+		Source->GetContents(Dest);
+		glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+	}
 	RenDev->GL.ElementBuffer = Buffer;
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER,Size,Size ? &Data(0) : NULL,GL_STATIC_DRAW);
 	CachedRevision = Source->GetRevision();
 }
 
-INT FOpenGLDynamicBuffer::Add(const void* Data,INT Bytes,INT Alignment)
+BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 {
-	INT Offset = ((Used + Alignment - 1) / Alignment) * Alignment;
+	Offset = ((Used + Alignment - 1) / Alignment) * Alignment;
 	if( !Buffer )
 		glGenBuffers(1,&Buffer);
 	glBindBuffer(Target,Buffer);
@@ -285,9 +293,21 @@ INT FOpenGLDynamicBuffer::Add(const void* Data,INT Bytes,INT Alignment)
 		glBufferData(Target,Size,NULL,GL_DYNAMIC_DRAW);
 		Offset = 0;
 	}
-	glBufferSubData(Target,Offset,Bytes,Data);
 	Used = Offset + Bytes;
-	return Offset;
+	// Unsynchronized, nothing has drawn from this range since the store was orphaned.
+	BYTE* Result = Bytes > 0 ? (BYTE*)glMapBufferRange(Target,Offset,Bytes,GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_UNSYNCHRONIZED_BIT) : NULL;
+	Mapped = Result != NULL;
+	return Result;
+}
+
+void FOpenGLDynamicBuffer::Unlock()
+{
+	// Lock left the buffer bound.
+	if( Mapped )
+	{
+		glUnmapBuffer(Target);
+		Mapped = 0;
+	}
 }
 
 void FOpenGLDynamicBuffer::Release()
