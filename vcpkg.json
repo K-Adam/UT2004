@@ -5,6 +5,7 @@
     "sdl3",
     "openal-soft",
     "bullet3",
+    "libsquish",
     { "name": "angle", "platform": "windows" }
   ],
   "builtin-baseline": "300239058e33420acd153135b3f6e6b187828992"

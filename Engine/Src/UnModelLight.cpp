@@ -1275,106 +1275,72 @@ void UModel::Illuminate(AActor* Owner,UBOOL ChangedOnly)
 	}
 
 //
-//	DXT compress hacks.
-//
-#if WITH_NVDXT
-#pragma pack (push,8)
-typedef long HRESULT; 
-#include "../../nvDXT/Inc/dxtlib.h"
-#pragma pack (pop)
-
-static FStaticLightMapTexture*	CurrentLightMapTexture = NULL;
-static HRESULT LightMapCompressionCallback(void* Data,INT MipIndex,DWORD Size,INT Width, INT Height, void* UserData )
-{
-	if(CurrentLightMapTexture && MipIndex < 2)
-	{
-		CurrentLightMapTexture->Data[MipIndex].Empty(Size);
-		CurrentLightMapTexture->Data[MipIndex].Add(Size);
-		appMemcpy(&CurrentLightMapTexture->Data[MipIndex](0),Data,Size);
-	}
-	return 0;
-}
-#endif
-
-//
 //	UModel::CompressLightmaps
 //
 void UModel::CompressLightmaps()
 {
 	guard(UModel::CompressLightmaps);
-#if !__UNIX__ && !_WIN64
 	GWarn->BeginSlowTask(TEXT("Compressing lightmaps..."),1);
+	FRebuildOptions* Options = GRebuildTools.GetCurrent();
 	for(INT TextureIndex = 0;TextureIndex < LightMapTextures.Num();TextureIndex++)
 	{
 		FLightMapTexture*	Texture		= &LightMapTextures(TextureIndex);
 	
 		if( Texture->StaticTexture.Revision != Texture->Revision )
 		{
-			if(!WITH_NVDXT || GRebuildTools.GetCurrent()->LightmapFormat == TEXF_RGBA8)
+			if(Options->LightmapFormat == TEXF_RGBA8)
 			{
 				Texture->StaticTexture.Data[0].Empty();
 				Texture->StaticTexture.Data[1].Empty();
 			}
-#if WITH_NVDXT
 			else
 			{
-				FColor*				TextureData = new FColor[LIGHTMAP_TEXTURE_WIDTH * LIGHTMAP_TEXTURE_HEIGHT];
+				const INT		Width		= LIGHTMAP_TEXTURE_WIDTH,
+								Height		= LIGHTMAP_TEXTURE_HEIGHT;
+				TArray<FColor>	TextureData(Width * Height),
+								Mip1(Width / 2 * Height / 2);
 
+				appMemzero(&TextureData(0),TextureData.Num() * sizeof(FColor));
 				GWarn->StatusUpdatef(TextureIndex,LightMapTextures.Num(),TEXT("Compressing lightmaps..."));
-
-				// Calculate the lightmap.
 
 				for(INT LightMapIndex = 0;LightMapIndex < Texture->LightMaps.Num();LightMapIndex++)
 				{
 					FLightMap*		LightMap	= &LightMaps(Texture->LightMaps(LightMapIndex));
-					FColor*			LightMapData= TextureData + LightMap->OffsetX + LightMap->OffsetY * LIGHTMAP_TEXTURE_WIDTH;
+					FColor*			LightMapData= &TextureData(LightMap->OffsetX + LightMap->OffsetY * Width);
 
-					LightMap->GetTextureData(0,LightMapData,LIGHTMAP_TEXTURE_WIDTH * 4,TEXF_RGBA8,0);
+					LightMap->GetTextureData(0,LightMapData,Width * 4,TEXF_RGBA8,0);
 				}
-				
-				// Setup compression options.
-				FRebuildOptions*	Options		= GRebuildTools.GetCurrent();
-				UBOOL				UseDXT3		= Options->LightmapFormat == TEXF_DXT3 ? 1 : 0;
-				CompressionOptions	nvOptions;
 
 				// Save out lightmaps for debugging purposes.
 				if( Options->SaveOutLightmaps )
-					appCreateBitmap( TEXT("LM-"), LIGHTMAP_TEXTURE_WIDTH, LIGHTMAP_TEXTURE_HEIGHT, (DWORD*) TextureData );
-						
-				nvOptions.bMipMapsInImage		= 0;
-				nvOptions.MipMapType			= dGenerateMipMaps;
-				nvOptions.MIPFilterType			= kMIPFilterCubic;
-				nvOptions.bDitherColor			= Options->DitherLightmaps ? 1 : 0;
-				nvOptions.bDitherEachMIPLevel	= Options->DitherLightmaps ? 1 : 0;
-				nvOptions.bGreyScale			= Options->DitherLightmaps ? 1 : 0;
-				nvOptions.TextureType			= dTextureType2D;
-				nvOptions.TextureFormat			= UseDXT3 ? kDXT3 : kDXT1;
+					appCreateBitmap( TEXT("LM-"), Width, Height, (DWORD*) &TextureData(0) );
 
-				// Compress...
-				CurrentLightMapTexture			= &Texture->StaticTexture;
-				nvDXTcompress(
-					(BYTE*) TextureData,			// src
-					LIGHTMAP_TEXTURE_WIDTH,			// width
-					LIGHTMAP_TEXTURE_HEIGHT,		// height
-					LIGHTMAP_TEXTURE_WIDTH * 4,		// pitch
-					&nvOptions,						// compression options
-					4,								// depth
-					LightMapCompressionCallback		// callback
-				);
+				// nvDXT turned greyscale on together with dithering.
+				if( Options->DitherLightmaps )
+					for(INT i = 0;i < TextureData.Num();i++)
+					{
+						FColor&	C = TextureData(i);
+						C.R = C.G = C.B = (C.R * 77 + C.G * 150 + C.B * 29) >> 8;
+					}
 
-				CurrentLightMapTexture			= NULL;
+				for(INT Y = 0;Y < Height / 2;Y++)
+					for(INT X = 0;X < Width / 2;X++)
+					{
+						const FColor* S = &TextureData(Y * 2 * Width + X * 2);
+						Mip1(Y * Width / 2 + X) = FColor((S[0].Plane() + S[1].Plane() + S[Width].Plane() + S[Width + 1].Plane()) / 4.f);
+					}
 
-				Texture->StaticTexture.Width	= LIGHTMAP_TEXTURE_WIDTH;
-				Texture->StaticTexture.Height	= LIGHTMAP_TEXTURE_HEIGHT;
-				Texture->StaticTexture.Format	= UseDXT3 ? TEXF_DXT3 : TEXF_DXT1;
+				ETextureFormat	Format = Options->LightmapFormat == TEXF_DXT3 ? TEXF_DXT3 : TEXF_DXT1;
+				CompressDXT(&TextureData(0),Width,Height,Format,Texture->StaticTexture.Data[0]);
+				CompressDXT(&Mip1(0),Width / 2,Height / 2,Format,Texture->StaticTexture.Data[1]);
+
+				Texture->StaticTexture.Width	= Width;
+				Texture->StaticTexture.Height	= Height;
+				Texture->StaticTexture.Format	= Format;
 				Texture->StaticTexture.Revision	= Texture->Revision;
-
-				delete [] TextureData;
 			}
-#endif
 		}		
 	}		
 	GWarn->EndSlowTask();
-#endif
 	unguard;
 }

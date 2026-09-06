@@ -469,6 +469,8 @@ struct ENGINE_API FDXTCompressionOptions
 	INT			FadeAmount;
 };
 
+void CompressDXT( const FColor* Src, INT Width, INT Height, ETextureFormat Format, TArray<BYTE>& Out );
+
 #pragma pack(pop)
 
 /*----------------------------------------------------------------------------

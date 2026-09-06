@@ -13,13 +13,7 @@
 =============================================================================*/
 
 #include "EnginePrivate.h"
-
-#if WITH_NVDXT
-#pragma pack (push,8)
-typedef long HRESULT; 
-#include "../../nvDXT/Inc/dxtlib.h"
-#pragma pack (pop)
-#endif
+#include <squish.h>
 
 /*-----------------------------------------------------------------------------
 	FColor functions.
@@ -886,110 +880,78 @@ UPalette* UPalette::ReplaceWithExisting()
 	DXT functions.
 -----------------------------------------------------------------------------*/
 
-// Hacks required by nvDXT library...
-#if WITH_NVDXT
-static UTexture* CurrentTexture = NULL;
-
-static HRESULT CompressionCallback(void * Data, INT MipIndex, DWORD Size, INT Width, INT Height, void* UserData )
+// Src may point into Out.
+void CompressDXT( const FColor* Src, INT Width, INT Height, ETextureFormat Format, TArray<BYTE>& Out )
 {
-	if( CurrentTexture )
+	guard(CompressDXT);
+	INT Flags = Format == TEXF_DXT1 ? squish::kDxt1 : Format == TEXF_DXT3 ? squish::kDxt3 : squish::kDxt5;
+	TArray<BYTE> RGBA(Width * Height * 4);
+	for( INT i=0; i<Width*Height; i++ )
 	{
-		INT UBits = appCeilLogTwo(CurrentTexture->USize >> MipIndex);
-		INT VBits = appCeilLogTwo(CurrentTexture->VSize >> MipIndex);
-		new(CurrentTexture->Mips)FMipmap( UBits, VBits, Size );
-		appMemcpy( &CurrentTexture->Mips(MipIndex).DataArray(0), Data, Size );
+		RGBA(i*4+0) = Src[i].R;
+		RGBA(i*4+1) = Src[i].G;
+		RGBA(i*4+2) = Src[i].B;
+		// Opaque, otherwise squish picks DXT1's punch-through mode for texels below half alpha.
+		RGBA(i*4+3) = Format == TEXF_DXT1 ? 255 : Src[i].A;
 	}
-	return 0;
+	Out.Empty();
+	Out.Add( squish::GetStorageRequirements(Width, Height, Flags) );
+	squish::CompressImage( &RGBA(0), Width, Height, &Out(0), Flags );
+	unguard;
 }
-void WriteDTXnFile (DWORD count, void *buffer)
-{
-}
-void ReadDTXnFile (DWORD count, void *buffer)
-{
-}
-#endif
 
 UBOOL UTexture::Compress( ETextureFormat InFormat, UBOOL Mipmaps, FDXTCompressionOptions* Options )
 {
 	guard(UTexture::Compress);
-#if WITH_NVDXT
-	// Only compresses to DXTx
-	TextureFormatTypes TextureFormat;
-	switch( InFormat )
-	{
-	case TEXF_DXT1:
-		TextureFormat = kDXT1;
-		break;
-	case TEXF_DXT3:
-		TextureFormat = kDXT3;
-		break;
-	case TEXF_DXT5:
-		TextureFormat = kDXT5;
-		break;
-	default:
+	if( InFormat != TEXF_DXT1 && InFormat != TEXF_DXT3 && InFormat != TEXF_DXT5 )
 		return 0;
-	}
-
-	// Only P8 and RGBA8 are valid source formats.
-	if( ! ((Format == TEXF_RGBA8) || (Format == TEXF_P8)) )
+	if( Format != TEXF_RGBA8 && Format != TEXF_P8 )
 		return 0;
 
 	// Textures are always lazy loaded.
 	Mips(0).DataArray.Load();
-	BYTE* Data = new BYTE[USize * VSize * 4];
-
+	TArray<BYTE> Data(USize * VSize * 4);
 	if( Format == TEXF_RGBA8 )
-	{
-		appMemcpy( Data, &Mips(0).DataArray(0), USize * VSize * 4 );
-	}
+		appMemcpy( &Data(0), &Mips(0).DataArray(0), Data.Num() );
 	else
-	{
-		RenderInterface->GetTextureData(0,Data,RenderInterface->GetWidth()*sizeof(FColor),TEXF_RGBA8);
-	}
-	
+		RenderInterface->GetTextureData(0,&Data(0),RenderInterface->GetWidth()*sizeof(FColor),TEXF_RGBA8);
+
+	// A new mip 0 drops the lazy loader, which would otherwise reload the uncompressed source.
 	Mips.Empty();
+	new(Mips)FMipmap( UBits, VBits, Data.Num() );
+	appMemcpy( &Mips(0).DataArray(0), &Data(0), Data.Num() );
+	Format = TEXF_RGBA8;
 
-	CompressionOptions nvOptions;
+	// CreateMips clears bMasked for anything but P8.
+	UBOOL Masked = bMasked;
+	UBOOL Border = Options && Options->Border;
+	CreateMips( Mipmaps, 1, Border, Border ? Options->BorderColor : FColor(0,0,0,0) );
+	bMasked = Masked;
 
-	nvOptions.bMipMapsInImage	= 0;
-    nvOptions.MipMapType		= Mipmaps ? dGenerateMipMaps : dNoMipMaps;
-	nvOptions.MIPFilterType		= kMIPFilterBox;//dMIPFilterKaiser;
-	if( Options )
+	for( INT MipIndex=0; MipIndex<Mips.Num(); MipIndex++ )
 	{
-		nvOptions.bBorder		= Options->Border		? 1 : 0;
-		nvOptions.BorderColor.u	= (DWORD) Options->BorderColor;
-		nvOptions.bFadeColor	= Options->Fade			? 1 : 0;
-		nvOptions.FadeToColor.u	= (DWORD) Options->FadeToColor;
-		nvOptions.FadeAmount	= (DWORD) Options->FadeAmount;
+		FMipmap& Mip    = Mips(MipIndex);
+		FColor*  Colors = (FColor*)&Mip.DataArray(0);
+		if( Options && Options->Fade )
+		{
+			// FadeAmount is the percentage faded per mip level, as nvDXT defined it.
+			FLOAT  Alpha = Min( MipIndex * Options->FadeAmount / 100.f, 1.f );
+			FColor To    = Options->FadeToColor;
+			for( INT i=0; i<Mip.USize*Mip.VSize; i++ )
+			{
+				Colors[i].R = appRound( Colors[i].R + (To.R - Colors[i].R) * Alpha );
+				Colors[i].G = appRound( Colors[i].G + (To.G - Colors[i].G) * Alpha );
+				Colors[i].B = appRound( Colors[i].B + (To.B - Colors[i].B) * Alpha );
+			}
+		}
+		CompressDXT( Colors, Mip.USize, Mip.VSize, InFormat, Mip.DataArray );
 	}
-	nvOptions.bDitherColor		= 0;
-	nvOptions.TextureType		= dTextureType2D;
-	nvOptions.TextureFormat		= TextureFormat;
-	nvOptions.bSwapRGB			= 0;
-
-	// Compress...
-	CurrentTexture = this;
-	nvDXTcompress(
-		Data,					// src
-		USize,					// width
-		VSize,					// height
-		USize * 4,				// pitch
-		&nvOptions,				// compression options
-		4,						// depth
-		CompressionCallback		// callback
-		);
-	CurrentTexture = NULL;
-	
 	Format = InFormat;
-	delete [] Data;
 
 	// Make sure it gets reuploaded.
 	bRealtimeChanged = 1;
 
 	return 1;
-#else
-	return 0;
-#endif
 	unguard;
 }
 

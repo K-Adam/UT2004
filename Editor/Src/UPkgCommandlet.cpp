@@ -5,8 +5,6 @@
 Revision history:
 	* Created by Warren Marshall.
         * 6/27/02  Fixes, and 'insert' mode added - Erik de Neve
-		* TODO: Fix erratic crash on multiple texture INSERTs when using DXT=x 
-		        compression, in UTexture->Compress: nvDXTcompress
 =============================================================================*/
 
 #include "EditorPrivate.h"
