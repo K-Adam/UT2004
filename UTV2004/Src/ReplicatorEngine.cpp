@@ -115,7 +115,7 @@ void UReplicatorEngine::Init(FString IniFileName)
 		NoPrimary=false;
 	}
 
-	INT RemoteControllPort;
+	INT RemoteControllPort = 0;
 	CacheIni.GetInt(TEXT("UTV2004"),TEXT("RemoteControlPort"),RemoteControllPort,*iniFile);
 	if(RemoteControllPort){
 		RemoteController=new UTVRemoteControll(RemoteControllPort);

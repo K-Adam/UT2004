@@ -351,24 +351,7 @@ static void* GetDllHandleHelper( const TCHAR* Filename )
     }
 #endif
 
-	void* Result = TCHAR_CALL_OS(LoadLibraryW(Filename),LoadLibraryA(TCHAR_TO_ANSI(Filename)));
-	if (Result)
-	{
-		const TCHAR* FN = Filename + appStrlen(Filename);
-		while ( FN!=Filename && FN[0] != '\\' )
-			FN--;
-
-		FN++;
-		if ( appStrstr(GCPUType,FN) <0 )
-		{
-			for (INT i=0;i<4;i++)
-				if ( i>appStrlen(FN) )
-					GMD5[i+3] = 0;
-				else
-					GMD5[i+3] = FN[i];
-		}
-	}
-	return Result;
+	return TCHAR_CALL_OS(LoadLibraryW(Filename),LoadLibraryA(TCHAR_TO_ANSI(Filename)));
 }
 
 CORE_API void* appGetDllHandle( const TCHAR* Filename )
@@ -738,7 +721,7 @@ FCriticalSection::FCriticalSection()
 	unguard;
 }
 
-FCriticalSection::~FCriticalSection()
+FCriticalSection::~FCriticalSection() noexcept(false)
 {
 	guard(FCriticalSection::~FCriticalSection);
 	DeleteCriticalSection( (CRITICAL_SECTION*) Handle );

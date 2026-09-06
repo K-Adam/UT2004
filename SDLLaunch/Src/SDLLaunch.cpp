@@ -145,7 +145,7 @@ class CMainLoop
 {
 public:
 	inline CMainLoop( UEngine* InEngine, UBOOL InIncludeMessaging = true );
-	inline ~CMainLoop(void);
+	inline ~CMainLoop(void) noexcept(false);
 
 	inline void	RunLoop(void);
 	inline bool	Finished(void) const	{return !GIsRunning || GIsRequestingExit;}
@@ -324,7 +324,7 @@ inline void	CMainLoop::RunLoop(void)
 	}
 }
 
-inline CMainLoop::~CMainLoop(void)
+inline CMainLoop::~CMainLoop(void) noexcept(false)
 {
 	guard(CMainLoopDtor);
 

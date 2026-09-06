@@ -15,6 +15,7 @@ Revision history:
 class FCodec
 {
 public:
+	virtual ~FCodec() noexcept(false) {}
 	virtual UBOOL Encode( FArchive& In, FArchive& Out )=0;
 	virtual UBOOL Decode( FArchive& In, FArchive& Out )=0;
 };

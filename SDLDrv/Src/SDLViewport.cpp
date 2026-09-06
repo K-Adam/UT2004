@@ -685,7 +685,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	}
 
 	// Text input only while a menu or the console reads it, so an IME does not take game keys.
-	UBOOL WantText = (GUIController && GUIController->bActive) || (Console && Console->IsA(UConsole::StaticClass()) && ((UConsole*)Console)->bTyping);
+	bool WantText = (GUIController && GUIController->bActive) || (Console && Console->IsA(UConsole::StaticClass()) && ((UConsole*)Console)->bTyping);
 	if( WantText != SDL_TextInputActive( Client->Window ) )
 	{
 		if( WantText )

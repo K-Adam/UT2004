@@ -89,7 +89,7 @@ class UCheckUnicodeCommandlet : public UCommandlet
 		INT Pages[256];
 		BYTE* Chars = (BYTE*)appMalloc(65536*sizeof(BYTE), TEXT("UnicodeCheck") );
 		appMemzero(Pages,sizeof(Pages));
-		appMemzero(Chars,sizeof(65536*sizeof(BYTE)));
+		appMemzero(Chars,65536*sizeof(BYTE));
 		for( TArray<FString>::TIterator i(Files); i; ++i )
 		{
 			FString S;

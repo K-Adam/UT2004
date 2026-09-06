@@ -33,7 +33,7 @@ struct FRiffChunk
 	FRiffChunk( DWORD InFourCC )
 	: FourCC(InFourCC)
 	{}
-	virtual ~FRiffChunk()
+	virtual ~FRiffChunk() noexcept(false)
 	{
 		guard(FRiffChunk::~FRiffChunk);
 		for( INT i=0; i<SubChunks.Num(); i++ )

@@ -1475,7 +1475,7 @@ FALSoundSource::FALSoundSource( UALAudioSubsystem* InAudioSubsystem )
 //
 //	FALSoundSource::~FALSoundSource
 //
-FALSoundSource::~FALSoundSource()
+FALSoundSource::~FALSoundSource() noexcept(false)
 {
 	guard(FALSoundSource::~FALSoundSource());
 	Stop();
@@ -1727,7 +1727,7 @@ FALSoundBuffer::FALSoundBuffer( UALAudioSubsystem* InAudioSubsystem )
 //
 //	FALSoundBuffer::~FALSoundBuffer
 //
-FALSoundBuffer::~FALSoundBuffer()
+FALSoundBuffer::~FALSoundBuffer() noexcept(false)
 {
 	guard(FALSoundBuffer::~FALSoundBuffer);
 	Reset();

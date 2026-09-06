@@ -28,7 +28,7 @@ class FALVoiceModule
 {
 public:
 	FALVoiceModule( class UALAudioSubsystem* InAudioSubsystem );
-	~FALVoiceModule();
+	~FALVoiceModule() noexcept(false);
 
 	void SetEncoder( EVoiceCodec InVoiceCodec );
 

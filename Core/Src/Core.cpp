@@ -216,9 +216,6 @@ CORE_API TCHAR					GModName[256]						= TEXT("");
 CORE_API TCHAR					GModPath[1024]						= TEXT("");
 CORE_API TCHAR					GModDef[1024]						= TEXT("");
 
-
-CORE_API TCHAR					GCPUType[255]					= TEXT("oggvorbisUTV2004DefOpenAL32dinterfaceImpersonatorLib_rdIFC23libMySQLMSVCR71pixomatic_debugCorevorbisfileEngineWindowIpDrvUWebXGameFireEditorALAudioD3DDrvXInterfaceWinrvMasterServerOpenGLDrvPixoDrvOnslaughtD3D9DrvGUIDesigner");
-
 // Unicode.
 #if UNICODE
 CORE_API UBOOL GUnicode=1;

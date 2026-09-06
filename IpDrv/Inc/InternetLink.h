@@ -221,7 +221,7 @@ public:
 	FTcpLink();
 	FTcpLink(FSocketData InSocketData);
 
-	virtual ~FTcpLink();
+	virtual ~FTcpLink() noexcept(false);
 
 	// FTcpLink interface.
 	virtual INT Send( BYTE* Data, INT Count );

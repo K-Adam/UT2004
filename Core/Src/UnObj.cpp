@@ -453,7 +453,7 @@ void UObject::ConditionalPostLoad()
 // UObject destructor.
 //warning: Called at shutdown.
 //
-UObject::~UObject()
+UObject::~UObject() noexcept(false)
 {
 	guard(UObject::~UObject);
 
@@ -2853,14 +2853,9 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 	}
 	else if( ParseCommand(&Str,TEXT("DUMPNATIVES")) )
 	{
-		// Linux: Defined out because of error: "taking
-		// the address of a bound member function to form
-		// a pointer to member function, say '&Object::execUndefined'
-		#if _MSC_VER
 		for( INT i=0; i<EX_Max; i++ )
-			if( GNatives[i] == &execUndefined )
+			if( GNatives[i] == &UObject::execUndefined )
 				debugf( TEXT("Native index %i is available"), i );
-		#endif
 		return 1;
 	}
 	else if( ParseCommand(&Str,TEXT("GET")) )

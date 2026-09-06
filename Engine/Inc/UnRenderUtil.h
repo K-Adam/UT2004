@@ -450,7 +450,7 @@ public:
 	// Constructor.
 
 	FAuxRenderTarget(INT InWidth,INT InHeight,ETextureFormat InFormat);
-	~FAuxRenderTarget();
+	~FAuxRenderTarget() noexcept(false);
 
 	// FRenderResource interface.
 

@@ -319,7 +319,7 @@ enum EAudioCaptureType
 class FAudioCaptureDevice
 {
 public:
-	virtual ~FAudioCaptureDevice() {}
+	virtual ~FAudioCaptureDevice() noexcept(false) {}
 
 	virtual UBOOL Init() = 0;
 	virtual void Record() = 0;

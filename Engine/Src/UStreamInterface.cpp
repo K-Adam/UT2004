@@ -461,7 +461,7 @@ UBOOL UStreamTag::HasV2Tag( FArchive* InReader ) const
 	if ( InReader->TotalSize() < sizeof(FID3TagV2) )
 		return 0;
 
-	BYTE Test[3], Compare[3] = { 'I','D','3' };
+	BYTE Test[3] = { 0 }, Compare[3] = { 'I','D','3' };
 
 	InReader->Seek(0);
 	InReader->Serialize( Test, 3 );
@@ -486,7 +486,7 @@ UBOOL UStreamTag::HasV1Tag( FArchive* InReader ) const
 	if ( size < 128 )
 		return false;
 
-	BYTE Test[3], Compare[3] = { 'T','A','G' };
+	BYTE Test[3] = { 0 }, Compare[3] = { 'T','A','G' };
 
 	InReader->Seek( size - 128 );
 	InReader->Serialize( &Test, 3 );

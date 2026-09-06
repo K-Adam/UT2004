@@ -13,7 +13,7 @@ public:
 	class FOctreeNode*		Children;	// Child nodes. If NULL, this is a leaf. Otherwise, always size 8.
 
 	FOctreeNode();
-	~FOctreeNode();
+	~FOctreeNode() noexcept(false);
 
 	void ActorNonZeroExtentLineCheck(class FCollisionOctree* octree, const FPlane* nodeBox);
 	void ActorZeroExtentLineCheck(class FCollisionOctree* octree, 

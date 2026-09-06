@@ -343,7 +343,7 @@ FOctreeNode::FOctreeNode()
 	unguard;
 }
 
-FOctreeNode::~FOctreeNode()
+FOctreeNode::~FOctreeNode() noexcept(false)
 {
 	guard(FOctreeNode::~FOctreeNode);
 

@@ -1704,7 +1704,7 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 		for(INT ZoneIndex = 1;ZoneIndex < Model->NumZones;ZoneIndex++)
 			RenderState.ActiveZones = new(GSceneMem) TList<INT>(ZoneIndex,RenderState.ActiveZones);
 
-		RenderState.ActiveZoneMask = ((QWORD) 1 << Model->NumZones) - 1;
+		RenderState.ActiveZoneMask = Model->NumZones >= 64 ? ~(QWORD)0 : ((QWORD) 1 << Model->NumZones) - 1;
 
 		for(INT ZoneIndex = 0;ZoneIndex < Model->NumZones;ZoneIndex++)
 			RenderState.Zones[ZoneIndex].Portals = new(GSceneMem) TList<FConvexVolume*>(new(GSceneMem) FConvexVolume());

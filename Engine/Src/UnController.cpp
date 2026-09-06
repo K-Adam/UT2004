@@ -1982,7 +1982,7 @@ INT AController::CanHear(FVector NoiseLoc, FLOAT Loudness, AActor *Other)
 
 	// check if in adjacent zone 
 	if ( Pawn->bAdjacentZoneHearing 
-		&& (GetLevel()->Model->Zones[Pawn->Region.ZoneNumber].Connectivity & ((QWORD)(1<<Other->Region.ZoneNumber))) )
+		&& (GetLevel()->Model->Zones[Pawn->Region.ZoneNumber].Connectivity & (((QWORD)1)<<Other->Region.ZoneNumber)) )
 		return 1;
 
 	if ( !Pawn->bLOSHearing )

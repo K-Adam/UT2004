@@ -290,7 +290,7 @@ public:
 	virtual void Init( const TCHAR* InSystem, const TCHAR* InUser, UBOOL RequireConfig )=0;
 	virtual void Exit()=0;
 	virtual void Dump( FOutputDevice& Ar )=0;
-	virtual ~FConfigCache() {};
+	virtual ~FConfigCache() noexcept(false) {};
 };
 
 // Any object that is capable of taking commands.
@@ -450,7 +450,7 @@ class CORE_API FCriticalSection
 {
 public:
 	FCriticalSection();
-	~FCriticalSection();
+	~FCriticalSection() noexcept(false);
 
 	void Lock();
 	void Unlock();
@@ -583,8 +583,6 @@ CORE_API extern TCHAR					GModDef[1024];		// Full filename of the Definition fil
 // Demo Recording
 
 CORE_API extern UBOOL					GDemoPlayback;	// True if a demo is being replayed
-
-CORE_API extern TCHAR					GCPUType[255]; // Obscured: Make sure the DLL name is within this string
 
 // Per module globals.
 extern "C" DLL_EXPORT TCHAR GPackage[];

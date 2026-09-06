@@ -169,7 +169,7 @@ struct TVertex
 	TVertex*			ColTarget;      //  candidate vertex for collapse
 
 	                 TVertex(FVector v, INT OrigIndex, INT FlagInit);  
-	                 ~TVertex();        
+	                 ~TVertex() noexcept(false);        
 	INT              RemoveIfNonNeighbor(TVertex *n);
 	INT              IsBorder();
 };
@@ -188,7 +188,7 @@ struct TFace
 	UBOOL	HasVertex( TVertex *U );
 	int     GetVertexIndex(TVertex *U);
 			TFace( INT MatID, TWedge *v0, TWedge *v1,TWedge *v2, INT StartIndex);
-			~TFace();
+			~TFace() noexcept(false);
 	void    ComputeNormal();
 	void    ReplaceVertex( TVertex *VOld, TVertex *VNew );
 };
@@ -278,7 +278,7 @@ TFace::TFace(INT MatID, TWedge *v0, TWedge *v1,TWedge *v2, INT StartIndex)
 	unguard;
 }
 
-TFace::~TFace()
+TFace::~TFace() noexcept(false)
 {
 	guard(TFace::~TFace);
 	TModel.GFaces.RemoveItem( this );
@@ -419,7 +419,7 @@ TVertex::TVertex(FVector V,INT OrigIdx, INT FlagInit)
 	unguard;
 }
 
-TVertex::~TVertex()
+TVertex::~TVertex() noexcept(false)
 {
 	guard(TVertex::~TVertex);
 

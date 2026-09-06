@@ -59,7 +59,7 @@ class FALSoundBuffer
 {
 public:
 	FALSoundBuffer( UALAudioSubsystem* AudioSubsystem );
-	~FALSoundBuffer();
+	~FALSoundBuffer() noexcept(false);
 
 	void Reset();
 
@@ -82,7 +82,7 @@ class ALAUDIO_API FALSoundSource : public FSoundSource
 {
 public:
 	FALSoundSource( UALAudioSubsystem* AudioSubsystem );
-	~FALSoundSource();
+	~FALSoundSource() noexcept(false);
 
 	UBOOL Update( FLOAT DeltaTime );
 

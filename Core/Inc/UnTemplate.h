@@ -935,7 +935,7 @@ public:
 	: TArray<T>( InNum )
 	, FLazyLoader()
 	{}
-	~TLazyArray()
+	~TLazyArray() noexcept(false)
 	{
 		guard(TLazyArray::~TLazyArray);
 		if( SavedAr )

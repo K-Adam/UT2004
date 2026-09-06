@@ -656,8 +656,8 @@ public:
 		{ new( (EInternal*)X )UObject(); }
 
 	// Destructors.
-	virtual ~UObject();
-	void operator delete( void* Object, size_t Size )
+	virtual ~UObject() noexcept(false);
+	void operator delete( void* Object, size_t Size ) noexcept(false)
 		{guard(UObject::operator delete); appFree( Object ); unguard;}
 
 	// FUnknown interface.

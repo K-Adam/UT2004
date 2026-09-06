@@ -1819,7 +1819,7 @@ FCriticalSection::FCriticalSection()
 	unguard;
 }
 
-FCriticalSection::~FCriticalSection()
+FCriticalSection::~FCriticalSection() noexcept(false)
 {
 	guard(FCriticalSection::~FCriticalSection);
 	pthread_mutex_block *block = (pthread_mutex_block *) Handle;

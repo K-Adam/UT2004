@@ -1324,7 +1324,7 @@ FAuxRenderTarget::FAuxRenderTarget(INT InWidth,INT InHeight,ETextureFormat InFor
 //	FAuxRenderTarget::~FAuxRenderTarget
 //
 
-FAuxRenderTarget::~FAuxRenderTarget()
+FAuxRenderTarget::~FAuxRenderTarget() noexcept(false)
 {
 	guard(FAuxRenderTarget::~FAuxRenderTarget);
 	if( UTexture::__Client

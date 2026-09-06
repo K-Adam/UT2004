@@ -197,7 +197,7 @@ protected:
 
 	public:
 		FCacheFile( const TCHAR* Name = NULL, DWORD Flags = 0, const FCacheFileManager* InManager = NULL, INT PIndex=0 );
-		virtual ~FCacheFile();
+		virtual ~FCacheFile() noexcept(false);
 
 		// Interface
 		const TCHAR* GetFileName() const;
@@ -233,7 +233,7 @@ private:
 
 public:
 	FCacheFileManager( DWORD Flags = 0 );
-	~FCacheFileManager(void);
+	~FCacheFileManager(void) noexcept(false);
 
 	void	Init();
 	void    Reset();
@@ -263,7 +263,7 @@ class FCacheTracker
 
 public:
 	FCacheTracker();
-	~FCacheTracker();
+	~FCacheTracker() noexcept(false);
 
 	UBOOL   Initialized() const;
 	void    Reset();

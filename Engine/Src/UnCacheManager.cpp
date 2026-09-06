@@ -5,8 +5,6 @@
 Revision history:
 	* Created by Ron Prestenback
 =============================================================================*/
-#define DEBUGTEST
-
 #include "EnginePrivate.h"
 #include "UnNet.h"
 #include "UnLinker.h"
@@ -2138,7 +2136,7 @@ FCacheTracker::FCacheTracker()
 	unguard;
 }
 
-FCacheTracker::~FCacheTracker()
+FCacheTracker::~FCacheTracker() noexcept(false)
 {
 	guard(FCacheTracker::~FCacheTracker);
 
@@ -2395,7 +2393,7 @@ FCacheFileManager::FCacheFileManager( DWORD Flags )
 {
 }
 
-FCacheFileManager::~FCacheFileManager()
+FCacheFileManager::~FCacheFileManager() noexcept(false)
 {
 	guard(FCacheFileManager::~FCacheFileManager);
 
@@ -2589,7 +2587,7 @@ FCacheFileManager::FCacheFile::FCacheFile( const TCHAR* Name, DWORD Flags, const
 	unguard;
 }
 
-FCacheFileManager::FCacheFile::~FCacheFile()
+FCacheFileManager::FCacheFile::~FCacheFile() noexcept(false)
 {
 	guard(FCacheFile::~FCacheFile);
 

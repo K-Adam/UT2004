@@ -344,7 +344,7 @@ FTcpLink::FTcpLink(FSocketData InSocketData)
 	unguard;
 }
 
-FTcpLink::~FTcpLink()
+FTcpLink::~FTcpLink() noexcept(false)
 {
 	guard(FTcpLink::~FTcpLink);
 	if( LinkState != LINK_Closed )

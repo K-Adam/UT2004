@@ -46,7 +46,7 @@ class FCollisionHashBase
 {
 public:
 	// FCollisionHashBase interface.
-	virtual ~FCollisionHashBase() {};
+	virtual ~FCollisionHashBase() noexcept(false) {};
 	virtual void Tick()=0;
 	virtual void AddActor( AActor *Actor )=0;
 	virtual void RemoveActor( AActor *Actor )=0;

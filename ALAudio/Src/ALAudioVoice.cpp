@@ -40,7 +40,7 @@ FALVoiceModule::FALVoiceModule( UALAudioSubsystem* InAudioSubsystem )
 //
 //	FALVoiceModule::~FALVoiceModule.
 //
-FALVoiceModule::~FALVoiceModule()
+FALVoiceModule::~FALVoiceModule() noexcept(false)
 {
 	guard(FALVoiceModule::~FALVoiceModule);
 	

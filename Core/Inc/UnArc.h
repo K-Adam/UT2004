@@ -19,7 +19,7 @@ class CORE_API FArchive
 {
 public:
 	// FArchive interface.
-	virtual ~FArchive()
+	virtual ~FArchive() noexcept(false)
 	{}
 	virtual void Serialize( void* V, INT Length )
 	{}

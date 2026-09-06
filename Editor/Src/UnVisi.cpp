@@ -319,7 +319,7 @@ public:
 	FEditorVisibility( ULevel* InLevel, UModel* InModel, INT InDebug );
 
 	// Destructor.
-	~FEditorVisibility();
+	~FEditorVisibility() noexcept(false);
 
 	// Portal functions.
 	void AddPortal( FPoly &Poly, INT iFrontLeaf, INT iBackLeaf, INT iGeneratingNode, INT iGeneratingBase );
@@ -1695,7 +1695,7 @@ FEditorVisibility::FEditorVisibility( ULevel* InLevel, UModel* InModel, INT InEx
 //
 // Destructor.
 //
-FEditorVisibility::~FEditorVisibility()
+FEditorVisibility::~FEditorVisibility() noexcept(false)
 {
 	guard(FEditorVisibility::FEditorVisibility);
 	Mark.Pop();
