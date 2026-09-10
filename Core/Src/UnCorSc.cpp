@@ -4930,7 +4930,7 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
 
 		// Execute the code.
             if( !SkipIt )
-                ProcessInternal( NewStack, Result );
+                (this->*Function->Func)( NewStack, Result );
         }
         else // Parameters and/or locals
         {
@@ -4966,7 +4966,7 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
 
 		// Execute the code.
 		if( !SkipIt )
-			ProcessInternal( NewStack, Result );
+			(this->*Function->Func)( NewStack, Result );
 
 		// Copy back outparms.
 		while( --Out >= Outs )

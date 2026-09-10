@@ -9,15 +9,16 @@ IMPLEMENT_CLASS(AHudBase);
 
 // Widgets are laid out for 4:3. On a wider view the ones near a side stay at that screen edge
 // and the rest move into a centered 4:3 area, so nothing stretches or spreads out.
+// Uses the clip region because UnCanvas.cpp narrows it for some retail HUD parts.
 static FLOAT WidgetScreenX( UCanvas* Canvas, FLOAT PosX, FLOAT HudCanvasScale )
 {
-	FLOAT Width = Min<FLOAT>( Canvas->SizeX, Canvas->SizeY * 4.f / 3.f );
+	FLOAT Width = Min<FLOAT>( Canvas->ClipX, Canvas->ClipY * 4.f / 3.f );
 	FLOAT Pos = PosX * HudCanvasScale + (1.0f - HudCanvasScale) * 0.5f;
 	if( Pos < 0.1f )
 		return Pos * Width;
 	if( Pos > 0.9f )
-		return Canvas->SizeX - (1.0f - Pos) * Width;
-	return (Canvas->SizeX - Width) * 0.5f + Pos * Width;
+		return Canvas->ClipX - (1.0f - Pos) * Width;
+	return (Canvas->ClipX - Width) * 0.5f + Pos * Width;
 }
 
 void AHudBase::execDrawSpriteWidget( FFrame& Stack, RESULT_DECL )

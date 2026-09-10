@@ -1648,6 +1648,8 @@ UProperty* UFunction::GetReturnProperty()
 	return NULL;
 	unguard;
 }
+CORE_API void (*GBindScriptFunction)( UFunction* Function ) = NULL;
+
 void UFunction::Bind()
 {
 	guard(UFunction::Bind);
@@ -1656,6 +1658,8 @@ void UFunction::Bind()
 		// Use UnrealScript processing function.
 		check(iNative==0);
 		Func = &UObject::ProcessInternal;
+		if( GBindScriptFunction )
+			GBindScriptFunction( this );
 	}
 	else if( iNative != 0 )
 	{

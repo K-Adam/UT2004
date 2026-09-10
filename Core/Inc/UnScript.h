@@ -15,6 +15,8 @@
 //
 typedef void (UObject::*Native)( FFrame& TheStack, RESULT_DECL );
 extern CORE_API Native GNatives[];
+// Called for every script function as it binds, so a module can wrap one natively without changing its package.
+extern CORE_API void (*GBindScriptFunction)( UFunction* Function );
 BYTE CORE_API GRegisterNative( INT iNative, const Native& Func );
 
 extern CORE_API Native GCasts[];

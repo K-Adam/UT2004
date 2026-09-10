@@ -1850,6 +1850,50 @@ void VARARGS UCanvas::DrawTextJustified(BYTE Justification, FLOAT x1, FLOAT y1, 
 
 IMPLEMENT_CLASS(UCanvas);
 
+// These retail script functions size right edge HUD parts by the canvas width, which stretches them on a
+// view wider than 4:3 and pulls them away from the native widgets, so they run on a 4:3 region at the right edge.
+static const TCHAR* WideRightHudFunctions[][2] =
+{
+	{ TEXT("HudCDeathmatch"),		TEXT("DrawChargeBar") },
+	{ TEXT("HudCDeathmatch"),		TEXT("DrawVehicleChargeBar") },
+	{ TEXT("AssaultRifle"),			TEXT("NewDrawWeaponInfo") },
+	{ TEXT("ONSGrenadeLauncher"),	TEXT("NewDrawWeaponInfo") },
+	{ TEXT("ONSMineLayer"),			TEXT("NewDrawWeaponInfo") },
+};
+
+class UWideRightHud : public UObject
+{
+public:
+	void Run( FFrame& Stack, RESULT_DECL )
+	{
+		UCanvas* Canvas = *(UCanvas**)Stack.Locals;
+		if( !Canvas || Canvas->ClipX <= Canvas->ClipY * 4.f / 3.f )
+		{
+			ProcessInternal( Stack, Result );
+			return;
+		}
+		FLOAT Width = Canvas->ClipY * 4.f / 3.f;
+		FLOAT OrgX = Canvas->OrgX, ClipX = Canvas->ClipX;
+		Canvas->OrgX += ClipX - Width;
+		Canvas->ClipX = Width;
+		ProcessInternal( Stack, Result );
+		Canvas->OrgX = OrgX;
+		Canvas->ClipX = ClipX;
+	}
+};
+
+static void BindWideRightHud( UFunction* Function )
+{
+	UObjectProperty* Parm = Cast<UObjectProperty>( Function->Children );
+	if( !Parm || Parm->PropertyClass != UCanvas::StaticClass() )
+		return;
+	for( INT i=0; i<ARRAY_COUNT(WideRightHudFunctions); i++ )
+		if( !appStricmp( Function->GetName(), WideRightHudFunctions[i][1] ) && !appStricmp( Function->GetOwnerClass()->GetName(), WideRightHudFunctions[i][0] ) )
+			Function->Func = (Native)&UWideRightHud::Run;
+}
+
+static INT InstallWideRightHud = (GBindScriptFunction = BindWideRightHud, 0);
+
 /*-----------------------------------------------------------------------------
 	The End.
 -----------------------------------------------------------------------------*/
