@@ -8,8 +8,19 @@
 
 #include "ALAudioPrivate.h"
 
-// Speex filter.
-extern "C" { void filter_mem2(float *x, float *num, float* den, float *y, int N, int ord, float *mem); }
+// Direct form II transposed IIR filter, den[0] is 1. May filter in place.
+static void FilterMem( const FLOAT* X, const FLOAT* Num, const FLOAT* Den, FLOAT* Y, INT N, INT Ord, FLOAT* Mem )
+{
+	for( INT i=0; i<N; i++ )
+	{
+		FLOAT Xi = X[i];
+		FLOAT Yi = Num[0]*Xi + Mem[0];
+		for( INT j=0; j<Ord-1; j++ )
+			Mem[j] = Mem[j+1] + Num[j+1]*Xi - Den[j+1]*Yi;
+		Mem[Ord-1] = Num[Ord]*Xi - Den[Ord]*Yi;
+		Y[i] = Yi;
+	}
+}
 
 //
 //	FALAudioCaptureDevice::FALAudioCaptureDevice.
@@ -214,7 +225,7 @@ FLOAT FALAudioCaptureDevice::GetSampleData( DWORD& Offset, void* Pointer, DWORD&
 			}
 
 			// Filter 16kHz input.
-			filter_mem2( FloatSrc, FilterNumerator, FilterDenominator, FloatSrc, RawSamples, FILTER_8K_SIZE-1, FilterMemory );
+			FilterMem( FloatSrc,FilterNumerator, FilterDenominator, FloatSrc, RawSamples, FILTER_8K_SIZE-1, FilterMemory );
 
 			// Frequency conversion.
 			SamplesRead = RawSamples / 2;

@@ -15,9 +15,8 @@
 
 // Speex is built with default packing, the engine with 4-byte packing on MSVC.
 #pragma pack(push,8)
-#define EPIC_48K
-#include "speex.h"
-#include "speex_preprocess.h"
+#include <speex/speex.h>
+#include <speex/speex_preprocess.h>
 #pragma pack(pop)
 
 /*------------------------------------------------------------------------------------

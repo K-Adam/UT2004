@@ -237,6 +237,7 @@ INT FALVoiceModule::Encode()
 			FLOAT	MaximumGain	= CaptureDevice->GetSampleData( CaptureOffset, CaptureData, SamplesRead, CaptureType );
 			check( AvailableSamples == SamplesRead );
 
+			SHORT*	Frame = new SHORT[FrameSize];
 			INT VoiceBandwidth = 0;
 			for( DWORD PacketIndex=0; PacketIndex<(SamplesRead / FrameSize); PacketIndex++ )
 			{	
@@ -253,13 +254,17 @@ INT FALVoiceModule::Encode()
 				for(INT i=0; i<FrameSize; i++)
 					*(Before++) = Src[i];
 #endif
-				// Denoise.
+				// Denoise. The preprocessor takes 16-bit samples, the encoder floats.
 				UBOOL IsSpeech = 0;
-	
+
+				for( INT i=0; i<FrameSize; i++ )
+					Frame[i] = Clamp( Src[i], -32768.f, 32767.f );
 				if( CapturingVoice || VADActive )
-					IsSpeech = speex_preprocess( SpeexPreprocessor, Src, NULL );
+					IsSpeech = speex_preprocess_run( SpeexPreprocessor, Frame );
 				else
-					speex_preprocess_estimate_update( SpeexPreprocessor, Src, NULL );
+					speex_preprocess_estimate_update( SpeexPreprocessor, Frame );
+				for( INT i=0; i<FrameSize; i++ )
+					Src[i] = Frame[i];
 
 #if SAVE_SOUNDS
 				for(INT i=0; i<FrameSize; i++)
@@ -301,6 +306,7 @@ INT FALVoiceModule::Encode()
 
 			// Delete temporary data.
 			delete [] CaptureData;
+			delete [] Frame;
 
 			// So high level code can make correct predictions about bandwidth usage.
 			ServerConnection->CurrentVoiceBandwidth = VoiceBandwidth;
@@ -484,8 +490,10 @@ UBOOL FALVoiceModule::Decode( FVoiceInfo* VoiceInfo )
 
 		// Decode.
 		guard(Decode);
-		speex_bits_read_from( SpeexData, (char*) PacketData, FrameSize );
-		speex_decode( SpeexDecoder, SpeexData, FDest );
+		// The packet size comes from the network, so never read past either buffer.
+		speex_bits_read_from( SpeexData, (char*) PacketData, Min( VoiceInfo->PacketSize, UAudioSubsystem::CodecPacketSize[CODEC_TO_INDEX(VoiceSound->VoiceCodec)] ) );
+		if( speex_decode( SpeexDecoder, SpeexData, FDest ) != 0 )
+			appMemzero( FDest, FrameSize * sizeof(FLOAT) );
 		unguard;
 
 		// Float to int.

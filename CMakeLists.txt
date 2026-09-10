@@ -145,6 +145,13 @@ if(WIN32)
   set(GLES_TARGET unofficial::angle::libGLESv2)
   find_package(unofficial-libsquish CONFIG REQUIRED)
   set(SQUISH_TARGET unofficial::libsquish::squish)
+  # ports/speex patches in the voice formats retail clients use, see ports/speex/ut2004.patch.
+  find_path(SPEEX_INCLUDE_DIR speex/speex.h REQUIRED)
+  find_library(SPEEX_LIBRARY speex REQUIRED)
+  find_library(SPEEXDSP_LIBRARY speexdsp REQUIRED)
+  add_library(speex INTERFACE)
+  target_include_directories(speex INTERFACE ${SPEEX_INCLUDE_DIR})
+  target_link_libraries(speex INTERFACE ${SPEEX_LIBRARY} ${SPEEXDSP_LIBRARY})
 else()
   find_path(OPENAL_INCLUDE_DIR AL/al.h REQUIRED)
   find_package(PkgConfig REQUIRED)
@@ -158,6 +165,22 @@ else()
   add_library(squish UNKNOWN IMPORTED)
   set_target_properties(squish PROPERTIES IMPORTED_LOCATION ${SQUISH_LIBRARY} INTERFACE_INCLUDE_DIRECTORIES ${SQUISH_INCLUDE_DIR})
   set(SQUISH_TARGET squish)
+  # No distribution ships the patched Speex, so it is built from the same source and patch as the vcpkg port.
+  include(FetchContent)
+  # A changed patch or build file gets a fresh source dir, since patching an already patched tree fails.
+  file(SHA256 ${CMAKE_SOURCE_DIR}/ports/speex/ut2004.patch SPEEX_PATCH_HASH)
+  file(SHA256 ${CMAKE_SOURCE_DIR}/ports/speex/CMakeLists.txt SPEEX_CMAKE_HASH)
+  string(SHA256 SPEEX_HASH "${SPEEX_PATCH_HASH}${SPEEX_CMAKE_HASH}")
+  string(SUBSTRING ${SPEEX_HASH} 0 12 SPEEX_HASH)
+  FetchContent_Declare(speex
+    SOURCE_DIR ${CMAKE_BINARY_DIR}/_deps/speex-src-${SPEEX_HASH}
+    URL https://github.com/xiph/speex/archive/5dceaaf3e23ee7fd17c80cb5f02a838fd6c18e01.tar.gz
+    URL_HASH SHA512=d03da906ec26ddcea2e1dc4157ac6dd056e1407381b0f37edd350552a02a7372e9108b4e39ae522f1b165be04b813ee11db0b47d17607e4dad18118b9041636b
+    PATCH_COMMAND patch -p1 -i ${CMAKE_SOURCE_DIR}/ports/speex/ut2004.patch
+          COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/ports/speex/CMakeLists.txt <SOURCE_DIR>)
+  FetchContent_MakeAvailable(speex)
+  pkg_check_modules(SPEEXDSP REQUIRED IMPORTED_TARGET GLOBAL speexdsp)
+  target_link_libraries(speex PUBLIC PkgConfig::SPEEXDSP)
 endif()
 find_package(SDL3 CONFIG REQUIRED)
 if(NOT MSVC)
@@ -169,8 +192,6 @@ if(NOT MSVC)
   endif()
   set_property(TARGET ${SDL3_TARGET} APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS _WCHAR_H=1)
 endif()
-# Speex stays vendored for Epic's 48 kHz mode (EPIC_48K), which upstream lacks.
-add_subdirectory(Speex)
 add_subdirectory(Tools/NVTriStrip)
 # Static, but linked into Engine.so.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

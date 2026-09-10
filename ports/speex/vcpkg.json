@@ -1,0 +1,10 @@
+{
+  "name": "speex",
+  "version": "1.2.1",
+  "description": "Speex 1.2.1 with the 4.8 kbps narrowband mode and wideband framing of the Speex build UT2004 shipped with.",
+  "homepage": "https://github.com/xiph/speex",
+  "license": "BSD-3-Clause",
+  "dependencies": [
+    { "name": "vcpkg-cmake", "host": true }
+  ]
+}
