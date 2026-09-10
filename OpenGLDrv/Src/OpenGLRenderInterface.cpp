@@ -464,23 +464,34 @@ void FOpenGLRenderInterface::Commit()
 	}
 
 	// Per draw uniforms. Normals take the inverse transpose, so scaled meshes light correctly.
-	static FMatrix	LastLocalToWorld(FPlane(0,0,0,0),FPlane(0,0,0,0),FPlane(0,0,0,0),FPlane(0,0,0,0));
-	static FLOAT	NormalToWorld[9];
-	if( appMemcmp(&LastLocalToWorld,&S->LocalToWorld,sizeof(FMatrix)) != 0 )
+	if( appMemcmp(&Program->SentLocalToWorld,&S->LocalToWorld,sizeof(FMatrix)) != 0 )
 	{
-		LastLocalToWorld = S->LocalToWorld;
+		Program->SentLocalToWorld = S->LocalToWorld;
 		FMatrix Inverse = S->LocalToWorld.Inverse();
+		FLOAT	NormalToWorld[9];
 		for( INT Row=0; Row<3; Row++ )
 			for( INT Column=0; Column<3; Column++ )
 				NormalToWorld[Row * 3 + Column] = Inverse.M[Column][Row];
+		glUniformMatrix4fv(Program->LocalToWorld,1,GL_FALSE,&S->LocalToWorld.M[0][0]);
+		glUniformMatrix3fv(Program->NormalToWorld,1,GL_FALSE,NormalToWorld);
 	}
-	glUniformMatrix4fv(Program->LocalToWorld,1,GL_FALSE,&S->LocalToWorld.M[0][0]);
-	glUniformMatrix3fv(Program->NormalToWorld,1,GL_FALSE,NormalToWorld);
-	glUniform1f(Program->AlphaRef,M.AlphaRef);
+	if( M.AlphaTest && Program->SentAlphaRef != M.AlphaRef )
+	{
+		Program->SentAlphaRef = M.AlphaRef;
+		glUniform1f(Program->AlphaRef,M.AlphaRef);
+	}
 	for( INT i=0; i<M.NumMatrices; i++ )
-		glUniformMatrix4fv(Program->Matrices[i],1,GL_FALSE,&M.Matrices[i].M[0][0]);
+		if( appMemcmp(&Program->SentMatrices[i],&M.Matrices[i],sizeof(FMatrix)) != 0 )
+		{
+			Program->SentMatrices[i] = M.Matrices[i];
+			glUniformMatrix4fv(Program->Matrices[i],1,GL_FALSE,&M.Matrices[i].M[0][0]);
+		}
 	for( INT i=0; i<M.NumConstants; i++ )
-		glUniform4fv(Program->Constants[i],1,&M.Constants[i].X);
+		if( appMemcmp(&Program->SentConstants[i],&M.Constants[i],sizeof(FPlane)) != 0 )
+		{
+			Program->SentConstants[i] = M.Constants[i];
+			glUniform4fv(Program->Constants[i],1,&M.Constants[i].X);
+		}
 
 	for( INT i=0; i<M.NumTextures; i++ )
 	{
@@ -557,12 +568,25 @@ void FOpenGLRenderInterface::Commit()
 	}
 }
 
-// Points the attributes at the streams. ES 3.0 has no base vertex draws, so the base goes into the offsets.
+static UBOOL SameStream(const FOpenGLStream& A,const FOpenGLStream& B)
+{
+	// Components past NumComponents are stale.
+	return A.Buffer == B.Buffer && A.Stride == B.Stride && A.NumComponents == B.NumComponents
+		&& appMemcmp(A.Components,B.Components,A.NumComponents * sizeof(FVertexComponent)) == 0;
+}
+
+// Points the attributes at the streams. Without base vertex draws the base goes into the offsets.
 static void CommitStreams(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FSavedState* S,INT BaseVertex)
 {
 	UOpenGLRenderDevice::FGLState& GL = RenDev->GL;
-	if( GL.NumStreams == S->NumStreams && GL.BaseVertex == BaseVertex && appMemcmp(GL.Streams,S->Streams,S->NumStreams * sizeof(FOpenGLStream)) == 0 )
-		return;
+	if( GL.NumStreams == S->NumStreams && GL.BaseVertex == BaseVertex )
+	{
+		INT i = 0;
+		while( i < S->NumStreams && SameStream(GL.Streams[i],S->Streams[i]) )
+			i++;
+		if( i == S->NumStreams )
+			return;
+	}
 
 	UBOOL Used[GLA_Max];
 	appMemzero(Used,sizeof(Used));
@@ -624,7 +648,8 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 
 	Commit();
 	UBOOL Indexed = CurrentState->IndexBuffer != 0;
-	CommitStreams(RenDev,CurrentState,Indexed ? CurrentState->IndexBufferBase : 0);
+	INT Base = Indexed ? CurrentState->IndexBufferBase : 0, DrawBase = RenDev->DrawElementsBaseVertex ? Base : 0;
+	CommitStreams(RenDev,CurrentState,Base - DrawBase);
 
 	// Without a colour stream D3D lights with its black material emissive, and unlit draws get white.
 	UBOOL BlackDiffuse = CurrentState->UseDynamicLighting;
@@ -644,7 +669,11 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 		}
 		GLenum	Type = CurrentState->IndexSize == 4 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
 		// Not glDrawRangeElements, ANGLE rejects draws whose indices leave the range and D3D treats it as a hint.
-		glDrawElements(Mode,Count,Type,(void*)(PTRINT)(FirstIndex * CurrentState->IndexSize));
+		void*	Indices = (void*)(PTRINT)(FirstIndex * CurrentState->IndexSize);
+		if( DrawBase )
+			RenDev->DrawElementsBaseVertex(Mode,Count,Type,Indices,DrawBase);
+		else
+			glDrawElements(Mode,Count,Type,Indices);
 	}
 	else
 		glDrawArrays(Mode,FirstIndex,Count);

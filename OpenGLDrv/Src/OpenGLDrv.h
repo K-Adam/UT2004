@@ -116,6 +116,11 @@ struct FOpenGLProgram
 					AlphaRef,
 					Matrices[OGL_MAX_MATRICES],
 					Constants[OGL_MAX_CONSTANTS];
+	// Last values sent, uniforms belong to the program so unchanged ones are skipped.
+	FMatrix			SentLocalToWorld,
+					SentMatrices[OGL_MAX_MATRICES];
+	FPlane			SentConstants[OGL_MAX_CONSTANTS];
+	FLOAT			SentAlphaRef;
 };
 
 enum EOpenGLSamplerFlags
@@ -323,6 +328,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			GammaProgram;
 	GLint	GammaRamp;
 	GLsync	FrameFence;
+	PFNGLDRAWELEMENTSBASEVERTEXOESPROC	DrawElementsBaseVertex;
 	FOpenGLDynamicBuffer	DynamicVertexBuffer,
 						DynamicIndexBuffer;
 

@@ -293,8 +293,7 @@ public:
 	void Emit(const TCHAR* Fmt,...)
 	{
 		PTRINT Site = (PTRINT)Fmt;
-		for( INT i=0; i<(INT)sizeof(Site); i++ )
-			K((INT)((Site >> (i * 8)) & 0xff));
+		appMemcpy(&Key(Key.Add(sizeof(Site))),&Site,sizeof(Site));
 		if( Code )
 		{
 			TCHAR Line[1024];
@@ -1238,6 +1237,11 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	FString Fragment = FString(OpenGLFragmentPrologue) + Writer.Declarations() + TEXT("void main()\n{\n") + Body + TEXT("}\n");
 	FOpenGLProgram* Program = new FOpenGLProgram;
 	Program->Key = Key;
+	// No real value has this pattern, so the first draw sends everything.
+	appMemset(&Program->SentLocalToWorld,0xff,sizeof(Program->SentLocalToWorld));
+	appMemset(Program->SentMatrices,0xff,sizeof(Program->SentMatrices));
+	appMemset(Program->SentConstants,0xff,sizeof(Program->SentConstants));
+	appMemset(&Program->SentAlphaRef,0xff,sizeof(Program->SentAlphaRef));
 	Program->Program = RenDev->CompileProgram(RenDev->VertexShaderObject,&ToAnsi(Fragment)(0));
 	RenDev->Programs.Add(Hash,Program);
 	if( Program->Program )
@@ -1248,7 +1252,7 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 		glUseProgram(Program->Program);
 		RenDev->GL.Program = Program->Program;
 		ANSICHAR Name[8];
-		for( INT i=0; i<OGL_MAX_TEXTURES; i++ )
+		for( INT i=0; i<State.NumTextures; i++ )
 		{
 			sprintf(Name,"s%i",i);
 			glUniform1i(glGetUniformLocation(Program->Program,Name),i);

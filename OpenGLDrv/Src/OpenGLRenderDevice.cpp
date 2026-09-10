@@ -40,6 +40,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	SceneFramebuffer = SceneTexture = SceneDepthStencil = MultisampleFramebuffer = MultisampleColor = 0;
 	SceneWidth = SceneHeight = SceneSamples = 0;
 	FrameFence = NULL;
+	DrawElementsBaseVertex = NULL;
 	SamplerSettings = 0;
 }
 
@@ -196,7 +197,13 @@ UBOOL UOpenGLRenderDevice::InitContext()
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT,&Max);
 		MaxAnisotropy = appFloor(Max);
 	}
-	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize);
+	// Without it every base vertex change respecifies the attributes.
+	DrawElementsBaseVertex = NULL;
+	if( HasExtension("GL_OES_draw_elements_base_vertex") )
+		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexOES");
+	else if( HasExtension("GL_EXT_draw_elements_base_vertex") )
+		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexEXT");
+	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL);
 
 	VertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader);
 	GLuint GammaVertex = CompileShader(GL_VERTEX_SHADER,GammaVertexShader);
@@ -488,7 +495,12 @@ void UOpenGLRenderDevice::Present(UViewport* Viewport)
 
 	int Width = SceneWidth, Height = SceneHeight;
 	SDL_GetWindowSizeInPixels(Window,&Width,&Height);
+	// Depth is not needed past the frame and the gamma pass covers the whole window.
+	GLenum DepthStencil = GL_DEPTH_STENCIL_ATTACHMENT, Color = GL_COLOR;
+	glBindFramebuffer(GL_FRAMEBUFFER,SceneFramebuffer);
+	glInvalidateFramebuffer(GL_FRAMEBUFFER,1,&DepthStencil);
 	glBindFramebuffer(GL_FRAMEBUFFER,0);
+	glInvalidateFramebuffer(GL_FRAMEBUFFER,1,&Color);
 	glViewport(0,0,Width,Height);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DEPTH_TEST);
