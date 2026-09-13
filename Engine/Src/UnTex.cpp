@@ -5,7 +5,7 @@
 	Revision history:
 		* Created by Tim Sweeney
 
-	DXT3/5 -> DXT1/RGBA conversion by PowerVR Technologies.
+	DXT3/5 -> DXT1 conversion by PowerVR Technologies.
 
 	Copyright 2001, PowerVR Technologies. 
 	PowerVR Technologies is a division of Imagination Technologies Limited. 
@@ -1155,23 +1155,15 @@ ETextureFormat UTexture::ConvertDXT()
 }
 
 
-/*****************************************************************************
-  Name : DXTConv.c
-  Date : October 2001
-
-  * Description : 
-  List of DXT conversion functions.
-
-  This code may be fully used and modified.
-
-  Copyright 2001, PowerVR Technologies. 
-  PowerVR Technologies is a division of Imagination Technologies Limited. 
-  All Rights Reserved.
-******************************************************************************/
-
-static void DXT1DecompressTexture32bpp(void *pSrcData, int x, int y, void *pDestData);
-static void DXT3DecompressTexture32bpp(void *pSrcData, int x, int y, void *pDestData);
-static void DXT5DecompressTexture32bpp(void *pSrcData, int x, int y, void *pDestData);
+// squish writes RGBA, the engine stores BGRA.
+static BYTE* DecompressDXT( void* Src, INT X, INT Y, INT Flags )
+{
+	BYTE* Dest = new BYTE[4*X*Y];
+	squish::DecompressImage( Dest, X, Y, Src, Flags );
+	for( INT i=0; i<X*Y; i++ )
+		Exchange( Dest[i*4], Dest[i*4+2] );
+	return Dest;
+}
 
 static UBOOL ConvertDXT1(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDestData, UBOOL ForceRGBA )
 {
@@ -1185,8 +1177,7 @@ static UBOOL ConvertDXT1(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 	else
 	{
 		//debugf(TEXT("DXT CONVERT: DXT1 texture - converting to 8888"));
-		*ppDestData = new BYTE[4*x*y];
-		DXT1DecompressTexture32bpp(pSrcData, x, y, *ppDestData);
+		*ppDestData = DecompressDXT( pSrcData, x, y, squish::kDxt1 );
 	}
 	return false;
 }
@@ -1246,8 +1237,7 @@ static UBOOL ConvertDXT3(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 		else
 		{
 			//debugf(TEXT("DXT CONVERT: DXT3 texture isn't opaque: converting to 8888"));
-			*ppDestData = new BYTE[4*x*y];
-			DXT3DecompressTexture32bpp(pSrcData, x, y, *ppDestData);
+			*ppDestData = DecompressDXT( pSrcData, x, y, squish::kDxt3 );
 		}
 		// Texture was converted to RGBA.
 		return false;
@@ -1340,8 +1330,7 @@ static UBOOL ConvertDXT5(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 		else
 		{
 			//debugf(TEXT("DXT CONVERT: DXT5 texture isn't opaque: converting to 8888"));
-			*ppDestData = new BYTE[4*x*y];
-			DXT5DecompressTexture32bpp(pSrcData, x, y, *ppDestData);
+			*ppDestData = DecompressDXT( pSrcData, x, y, squish::kDxt5 );
 		}
 		// Texture was converted to RGBA.
 		return false;
@@ -1378,336 +1367,6 @@ static UBOOL ConvertDXT5(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 	return true;
 }
 
-
-/*******************************************************************************
- * Function Name  : DXT1DecompressTexture32bpp
- * Returns		  : TRUE or FALSE
- * Inputs		  : *pSrcData, x, y
- * Outputs		  : *pDestData
- * Global Used    : None
- * Description    : Decompress DXT1 textures to 8888 data.
- *					pDestData must point to a buffer large enough to receive 
- *					destination data.
- *					
- *******************************************************************************/
-static void DXT1DecompressTexture32bpp(void *pSrcData, int x, int y, void *pDestData)
-{
-	DWORD	*pdwSrc;
-	DWORD	*pdwDestBlock;
-	DWORD	*pdwDest;
-	DWORD	*pdwEnd;
-	DWORD	dwColours[4];
-	DWORD	dwR1, dwG1, dwB1;
-	DWORD	dwR2, dwG2, dwB2;
-	DWORD	dwRawColour;
-	DWORD	dwRawColourIndexes;
-	INT		i, j, a, b;	
-	INT		MinX = Min(4,x);
-	INT		MinY = Min(4,y);
-
-	pdwEnd = (DWORD*) pDestData + x * y;
-
-	/* Compute pointers */
-	pdwSrc = (DWORD *)pSrcData;
-	pdwDestBlock = (DWORD *)pDestData;
-
-	/* Main loop */
-	for (i=0; i<Max(y/4,1); i++)
-	{
-		for (j=0; j<Max(x/4,1); j++)
-		{
-			/* Get the data for this 4*4 block */
-			dwRawColour		= INTEL_ORDER32(pdwSrc[0]);
-			dwRawColourIndexes	= INTEL_ORDER32(pdwSrc[1]);
-			pdwSrc += 2;
-
-			/* Get the RGB components of the two colours */
-			dwR1 = ((dwRawColour & 0x0000f800) << 8)  | ((dwRawColour & 0x0000e000) << 3);
-			dwG1 = ((dwRawColour & 0x000007e0) << 5)  | ((dwRawColour & 0x00000600) >> 1);
-			dwB1 = ((dwRawColour & 0x0000001f) << 3)  | ((dwRawColour & 0x0000001c) >> 2);
-			dwR2 = ((dwRawColour & 0xf8000000) >> 8)  | ((dwRawColour & 0xe0000000) >> 13);
-			dwG2 = ((dwRawColour & 0x07e00000) >> 11) | ((dwRawColour & 0x06000000) >> 17);
-			dwB2 = ((dwRawColour & 0x001f0000) >> 13) | ((dwRawColour & 0x001c0000) >> 18);
-
-			/* Create the first colour (3/3 col1) */
-			dwColours[0] = dwR1 | dwG1 | dwB1;
-
-			/* Create the second colour (3/3 col2) */
-			dwColours[1] = dwR2 | dwG2 | dwB2;
-
-			/* Create first average colour (2/3 col0 and 1/3 col1) */
-//!! 1/2 + 1/2
-			dwColours[2] = (((dwR1 * 21 + dwR2 * 11) >> 5) & 0x00ff0000) |
-						   (((dwG1 * 21 + dwG2 * 11) >> 5) & 0x0000ff00) |
-						   (((dwB1 * 21 + dwB2 * 11) >> 5) & 0x000000ff);
-
-			/* Create second average colour (1/3 col0 and 2/3 col1) */
-			dwColours[3] = (((dwR1 * 11 + dwR2 * 21) >> 5) & 0x00ff0000) |
-						   (((dwG1 * 11 + dwG2 * 21) >> 5) & 0x0000ff00) |
-						   (((dwB1 * 11 + dwB2 * 21) >> 5) & 0x000000ff);
-
-			UBOOL PossibleAlpha = dwColours[0] <= dwColours[1];
-
-			/* Fill in the destination data */
-			pdwDest = pdwDestBlock;
-			for (b=0; b<MinY; b++)
-			{
-				for (a=0; a<MinX; a++)
-				{
-					if( pdwDest + a >= pdwEnd )
-						return;
-					
-					if( ((dwRawColourIndexes & 0x03) == 0x03) && PossibleAlpha )
-						pdwDest[a] = INTEL_ORDER32(dwColours[dwRawColourIndexes & 0x03]);
-					else
-						pdwDest[a] = INTEL_ORDER32(dwColours[dwRawColourIndexes & 0x03] | 0xFF000000);
-					dwRawColourIndexes = dwRawColourIndexes >> 2;
-				}
-				pdwDest += x;
-			}
-
-			pdwDestBlock += 4;
-		}
-
-		/* Next block */
-		pdwDestBlock += 3*x;
-	}
-}
-
-
-/*******************************************************************************
- * Function Name  : DXT3DecompressTexture32bpp
- * Returns		  : TRUE or FALSE
- * Inputs		  : *pSrcData, x, y
- * Outputs		  : *pDestData
- * Global Used    : None
- * Description    : Decompress DXT3 textures to 8888 data.
- *					pDestData must point to a buffer large enough to receive 
- *					destination data.
- *					
- *******************************************************************************/
-static void DXT3DecompressTexture32bpp(void *pSrcData, int x, int y, void *pDestData)
-{
-	DWORD	*pdwSrc;
-	DWORD	*pdwDestBlock;
-	DWORD	*pdwDest;
-	DWORD	*pdwEnd;
-	DWORD	dwColours[4];
-	DWORD	dwR1, dwG1, dwB1;
-	DWORD	dwR2, dwG2, dwB2;
-	DWORD	dwRawAlpha1;
-	DWORD	dwRawAlpha2;
-	DWORD	dwRawColour;
-	DWORD	dwRawColourIndexes;
-	INT		i, j, a, b;
-	INT		MinX = Min(4,x);
-	INT		MinY = Min(4,y);
-
-	pdwEnd = (DWORD*) pDestData + x * y;
-
-	/* Compute pointers */
-	pdwSrc = (DWORD *)pSrcData;
-	pdwDestBlock = (DWORD *)pDestData;
-
-	/* Main loop */
-	for (i=0; i<Max(y/4,1); i++)
-	{
-		for (j=0; j<Max(x/4,1); j++)
-		{
-			/* Get the data for this 4*4 block */
-			dwRawAlpha1			= INTEL_ORDER32(pdwSrc[0]);
-			dwRawAlpha2			= INTEL_ORDER32(pdwSrc[1]);
-			dwRawColour			= INTEL_ORDER32(pdwSrc[2]);
-			dwRawColourIndexes		= INTEL_ORDER32(pdwSrc[3]);
-			pdwSrc += 4;
-
-			/* Get the RGB components of the two colours */
-			dwR1 = ((dwRawColour & 0x0000f800) << 8)  | ((dwRawColour & 0x0000e000) << 3);
-			dwG1 = ((dwRawColour & 0x000007e0) << 5)  | ((dwRawColour & 0x00000600) >> 1);
-			dwB1 = ((dwRawColour & 0x0000001f) << 3)  | ((dwRawColour & 0x0000001c) >> 2);
-			dwR2 = ((dwRawColour & 0xf8000000) >> 8)  | ((dwRawColour & 0xe0000000) >> 13);
-			dwG2 = ((dwRawColour & 0x07e00000) >> 11) | ((dwRawColour & 0x06000000) >> 17);
-			dwB2 = ((dwRawColour & 0x001f0000) >> 13) | ((dwRawColour & 0x001c0000) >> 18);
-
-			/* Create the first colour (3/3 col1) */
-			dwColours[0] = dwR1 | dwG1 | dwB1;
-
-			/* Create the second colour (3/3 col2) */
-			dwColours[1] = dwR2 | dwG2 | dwB2;
-
-			/* Create first average colour (2/3 col0 and 1/3 col1) */
-			dwColours[2] = (((dwR1 * 21 + dwR2 * 11) >> 5) & 0x00ff0000) |
-						   (((dwG1 * 21 + dwG2 * 11) >> 5) & 0x0000ff00) |
-						   (((dwB1 * 21 + dwB2 * 11) >> 5) & 0x000000ff);
-
-			/* Create second average colour (1/3 col0 and 2/3 col1) */
-			dwColours[3] = (((dwR1 * 11 + dwR2 * 21) >> 5) & 0x00ff0000) |
-						   (((dwG1 * 11 + dwG2 * 21) >> 5) & 0x0000ff00) |
-						   (((dwB1 * 11 + dwB2 * 21) >> 5) & 0x000000ff);
-
-			/* Fill in the destination data */
-			pdwDest = pdwDestBlock;
-			for( b=0; b<MinY; b++ )
-			{
-				for( a=0; a<MinX; a++ )
-				{
-					if( pdwDest + a >= pdwEnd )
-						return;
-
-					if( b < 2 )
-					{
-						pdwDest[a] = INTEL_ORDER32(dwColours[dwRawColourIndexes & 0x03] | (dwRawAlpha1 << 28) | ((dwRawAlpha1 & 0x0000000f) << 24));
-						dwRawAlpha1 = dwRawAlpha1 >> 4;
-						dwRawColourIndexes = dwRawColourIndexes >> 2;
-					}
-					else
-					{
-						pdwDest[a] = INTEL_ORDER32(dwColours[dwRawColourIndexes & 0x03] | (dwRawAlpha2 << 28) | ((dwRawAlpha2 & 0x0000000f) << 24));
-						dwRawAlpha2 = dwRawAlpha2 >> 4;
-						dwRawColourIndexes = dwRawColourIndexes >> 2;
-					}
-				}
-				pdwDest += x;
-			}
-			pdwDestBlock += MinX;
-		}
-
-		/* Next block */
-		pdwDestBlock += 3*x;
-	}
-}
-
-
-/*******************************************************************************
- * Function Name  : DXT5DecompressTexture32bpp
- * Returns		  : TRUE or FALSE
- * Inputs		  : *pSrcData, x, y
- * Outputs		  : *pDestData
- * Global Used    : None
- * Description    : Decompress DXT5 textures to 8888 data.
- *					pDestData must point to a buffer large enough to receive 
- *					destination data.
- *					
- *******************************************************************************/
-static void DXT5DecompressTexture32bpp(void *pSrcData, int x, int y, void *pDestData)
-{
-	DWORD	*pdwSrc;
-	DWORD	*pdwDestBlock;
-	DWORD	*pdwSubBlock;
-	DWORD	*pdwEnd;
-	DWORD	dwColours[4];
-	DWORD	dwAlphas[8];
-	DWORD	dwR1, dwG1, dwB1;
-	DWORD	dwR2, dwG2, dwB2;
-	DWORD	dwAlphaData;
-	DWORD	dwRawAlpha1;
-	DWORD	dwRawAlpha2;
-	DWORD	dwRawColour;
-	DWORD	dwRawColourIndexes;
-	INT		i, j, a, b;
-	INT		MinX = Min(4,x);
-	INT		MinY = Min(4,y);
-
-	pdwEnd = (DWORD*) pDestData + x * y;
-
-	/* Compute pointers */
-	pdwSrc = (DWORD *)pSrcData;
-	pdwDestBlock = (DWORD *)pDestData;
-
-	/* Main loop */
-	for (i=0; i<Max(y/4,1); i++)
-	{
-		for (j=0; j<Max(x/4,1); j++)
-		{
-			/* Get the data for this 4*4 block */
-			dwRawAlpha1			= INTEL_ORDER32(pdwSrc[0]);
-			dwRawAlpha2			= INTEL_ORDER32(pdwSrc[1]);
-			dwRawColour			= INTEL_ORDER32(pdwSrc[2]);
-			dwRawColourIndexes		= INTEL_ORDER32(pdwSrc[3]);
-			pdwSrc += 4;
-
-			/* Get two alpha values */
-			dwAlphas[0] = dwRawAlpha1 & 0x000000ff;
-			dwAlphas[1] = (dwRawAlpha1 & 0x0000ff00) >> 8;
-
-			/* Calculate the interpolated alpha values */
-			if (dwAlphas[0] > dwAlphas[1])
-			{
-				dwAlphas[2] = ((6 * dwAlphas[0] + dwAlphas[1]) / 7)     << 24;
-				dwAlphas[3] = ((5 * dwAlphas[0] + dwAlphas[1] * 2) / 7) << 24;
-				dwAlphas[4] = ((4 * dwAlphas[0] + dwAlphas[1] * 3) / 7) << 24;
-				dwAlphas[5] = ((3 * dwAlphas[0] + dwAlphas[1] * 4) / 7) << 24;
-				dwAlphas[6] = ((2 * dwAlphas[0] + dwAlphas[1] * 5) / 7) << 24;
-				dwAlphas[7] = ((dwAlphas[0] + dwAlphas[1] * 6) / 7)     << 24;
-			}
-			else
-			{
-				dwAlphas[2] = ((4 * dwAlphas[0] + dwAlphas[1]) / 5)     << 24;
-				dwAlphas[3] = ((3 * dwAlphas[0] + dwAlphas[1] * 2) / 5) << 24;
-				dwAlphas[4] = ((2 * dwAlphas[0] + dwAlphas[1] * 3) / 5) << 24;
-				dwAlphas[5] = ((dwAlphas[0] + dwAlphas[1] * 4) / 5)     << 24;
-				dwAlphas[6] = 0x00000000;
-				dwAlphas[7] = 0xff000000;
-			}
-			dwAlphas[0] = dwAlphas[0] << 24;
-			dwAlphas[1] = dwAlphas[1] << 24;
-
-
-			/* Get the RGB components of the two colours */
-			dwR1 = ((dwRawColour & 0x0000f800) << 8)  | ((dwRawColour & 0x0000e000) << 3);
-			dwG1 = ((dwRawColour & 0x000007e0) << 5)  | ((dwRawColour & 0x00000600) >> 1);
-			dwB1 = ((dwRawColour & 0x0000001f) << 3)  | ((dwRawColour & 0x0000001c) >> 2);
-			dwR2 = ((dwRawColour & 0xf8000000) >> 8)  | ((dwRawColour & 0xe0000000) >> 13);
-			dwG2 = ((dwRawColour & 0x07e00000) >> 11) | ((dwRawColour & 0x06000000) >> 17);
-			dwB2 = ((dwRawColour & 0x001f0000) >> 13) | ((dwRawColour & 0x001c0000) >> 18);
-
-			/* Create the first colour (3/3 col1) */
-			dwColours[0] = dwR1 | dwG1 | dwB1;
-
-			/* Create the second colour (3/3 col2) */
-			dwColours[1] = dwR2 | dwG2 | dwB2;
-
-			/* Create first average colour (2/3 col0 and 1/3 col1) */
-			dwColours[2] = (((dwR1 * 21 + dwR2 * 11) >> 5) & 0x00ff0000) |
-						   (((dwG1 * 21 + dwG2 * 11) >> 5) & 0x0000ff00) |
-						   (((dwB1 * 21 + dwB2 * 11) >> 5) & 0x000000ff);
-			
-			/* Create second average colour (1/3 col0 and 2/3 col1) */
-			dwColours[3] = (((dwR1 * 11 + dwR2 * 21) >> 5) & 0x00ff0000) |
-						   (((dwG1 * 11 + dwG2 * 21) >> 5) & 0x0000ff00) |
-						   (((dwB1 * 11 + dwB2 * 21) >> 5) & 0x000000ff);
-
-			/* Fill in the destination data */
-			pdwSubBlock = pdwDestBlock;
-			dwAlphaData = dwRawAlpha1 >> 16;
-			for (b=0; b<MinY; b++)
-			{
-				switch (b)
-				{
-					case 1:		dwAlphaData = (dwRawAlpha1 >> 28) | (dwRawAlpha2 << 4); break;								
-					case 2:		dwAlphaData = (dwRawAlpha2 >> 8); break;
-				}
-
-				for (a=0; a<MinX; a++)
-				{
-					if( pdwSubBlock + a >= pdwEnd )
-						return;
-
-					pdwSubBlock[a] = INTEL_ORDER32(dwColours[dwRawColourIndexes & 0x03] | dwAlphas[dwAlphaData & 0x07]);
-					dwRawColourIndexes = dwRawColourIndexes >> 2;
-					dwAlphaData = dwAlphaData >> 3;
-				}
-
-				pdwSubBlock += x;
-			}
-
-			pdwDestBlock += MinX;
-		}
-
-		/* Next block */
-		pdwDestBlock += 3*x;
-	}
-}
 
 /*-----------------------------------------------------------------------------
 	FStaticTexture.
