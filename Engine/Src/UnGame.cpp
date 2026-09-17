@@ -2027,6 +2027,25 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	// Verify that we can load all packages we need.
 	UObject* MapParent = NULL;
 	guard(VerifyPackages);
+	if( Pending )
+	{
+		// A content package may already be loaded from another version of the file, such as a cut down copy, so it is reloaded from the server's version.
+		// Code and the current level are in use and would be replaced in place, so they keep failing with a version error.
+		TArray<UObject*> Loaders = GetLoaderList();
+		for( INT j=0; j<Loaders.Num(); j++ )
+		{
+			ULinkerLoad* Linker = (ULinkerLoad*)Loaders(j);
+			UBOOL InUse = GLevel && Linker->LinkerRoot==GLevel->GetOuter();
+			for( INT k=0; k<Linker->ExportMap.Num() && !InUse; k++ )
+				InUse = Linker->ExportMap(k).ClassIndex==0 && Linker->ExportMap(k).ObjectName!=NAME_None;
+			for( INT i=0; i<PackageMap->List.Num() && !InUse; i++ )
+				if( Linker->LinkerRoot==PackageMap->List(i).Parent && Linker->Summary.Guid!=PackageMap->List(i).Guid )
+				{
+					ResetLoaders( Linker->LinkerRoot, 0, 1 );
+					break;
+				}
+		}
+	}
 	try
 	{
 		BeginLoad();

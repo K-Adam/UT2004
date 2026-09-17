@@ -23,6 +23,7 @@ class UPendingLevel : public ULevelBase
 	UBOOL		SentJoin;
 	UBOOL		LonePlayer;
 	INT			FilesNeeded;
+	INT			FilesTotal;
 	FString		Error;
 
 	// Constructors.

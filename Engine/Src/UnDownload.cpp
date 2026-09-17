@@ -82,7 +82,8 @@ void UDownload::ReceiveData( BYTE* Data, INT Count )
 			Transfered += Count;
 			TCHAR Msg1[256], Msg2[256];
 			appSprintf( Msg1, (Info->PackageFlags&PKG_ClientOptional)?LocalizeProgress(TEXT("ReceiveOptionalFile"),TEXT("Engine")):LocalizeProgress(TEXT("ReceiveFile"),TEXT("Engine")), Info->Parent->GetName() );
-			appSprintf( Msg2, LocalizeProgress(TEXT("ReceiveSize"),TEXT("Engine")), Info->DownloadSize/1024, 100.f*Transfered/Info->DownloadSize );
+			appSprintf( Msg2, FileCount ? TEXT("%i/%i, ") : TEXT(""), FileNumber, FileCount );
+			appSprintf( Msg2 + appStrlen(Msg2), LocalizeProgress(TEXT("ReceiveSize"),TEXT("Engine")), Info->DownloadSize/1024, 100.f*Transfered/Info->DownloadSize );
 			Connection->Driver->Notify->NotifyProgress( TEXT(""), Msg1, Msg2, 4.f );
 		}
 	}	

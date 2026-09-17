@@ -24,9 +24,16 @@ IMPLEMENT_CLASS(UPendingLevel);
 void UPendingLevel::ReceiveNextFile( UNetConnection* Connection, INT Attempt )
 {
 	guard(UPendingLevel::ReceiveNextFile);
+	if( !FilesTotal )
+		FilesTotal = FilesNeeded;
 	for( INT i=0; i<Connection->PackageMap->List.Num(); i++ )
 		if( Connection->PackageMap->List(i).PackageFlags & PKG_Need )
-		{Connection->ReceiveFile( i, Attempt ); return;}
+		{
+			Connection->ReceiveFile( i, Attempt );
+			Connection->Download->FileNumber = FilesTotal - FilesNeeded + 1;
+			Connection->Download->FileCount = FilesTotal;
+			return;
+		}
 		if( Connection->Download )
 			delete Connection->Download;
 		unguard;

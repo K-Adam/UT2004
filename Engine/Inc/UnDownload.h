@@ -24,6 +24,8 @@ class ENGINE_API UDownload : public UObject
 	UBOOL			SkippedFile;		// File was skipped.
 	UBOOL			IsCompressed;		// Use file compression.
 	INT				AttemptNumber;		// Attempt number
+	INT				FileNumber;			// Position of this file among the files to download.
+	INT				FileCount;
 
 	// Constructors.
 	void StaticConstructor();
