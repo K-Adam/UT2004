@@ -244,6 +244,8 @@ public:
 	FMatrix				ViewWorldToCamera,
 						ViewCameraToScreen;
 	TArray<FDynamicLight*>	WorldLights;	// The lights actors in the world were lit by.
+	FLOAT				FocusDiopters;
+	DOUBLE				FocusTime;
 
 	TArray<BYTE>		DynamicVertices;
 	INT					DynamicStride,
@@ -297,6 +299,7 @@ private:
 	void Commit();
 	UBOOL CompileMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial);
 	FPlane PickShadowLight();
+	FLOAT PickFocus();
 };
 
 // A colour texture with optional depth and stencil and reflection textures. With multisampling the drawing goes to
@@ -330,7 +333,8 @@ class UOpenGLRenderDevice : public URenderDevice
 			AmbientOcclusion,
 			ContactShadows,
 			Bloom,
-			ScreenSpaceReflections;
+			ScreenSpaceReflections,
+			DepthOfField;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
@@ -357,7 +361,8 @@ class UOpenGLRenderDevice : public URenderDevice
 			OcclusionProgram,
 			BloomDownProgram,
 			BloomUpProgram,
-			CompositeProgram;
+			CompositeProgram,
+			DepthOfFieldProgram;
 	GLsync	FrameFence;
 	PFNGLDRAWELEMENTSBASEVERTEXOESPROC	DrawElementsBaseVertex;
 	FOpenGLDynamicBuffer	DynamicVertexBuffer,
@@ -368,6 +373,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	FOpenGLFramebuffer	Scene,
 						World,
 						Occlusion,				// Ambient occlusion and contact shadow at half the world size.
+						Focus,					// The lit world with its signed circle of confusion in alpha.
 						BloomLevels[BLOOM_LEVELS];
 	AActor*				ShadowLight;			// Only compared, never dereferenced, the actor may be gone.
 	DWORD				FrameCount;
@@ -428,7 +434,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	void UseProgram(GLuint Program);
 	// Covers the framebuffer with Program. Units 0 to 2 and 4 sample linearly, unit 3 is the depth texture.
 	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Texture2 = 0,GLuint Depth = 0,UBOOL Additive = 0,GLuint Texture4 = 0);
-	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma);
+	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance);
 
 private:
 	UBOOL InitContext();

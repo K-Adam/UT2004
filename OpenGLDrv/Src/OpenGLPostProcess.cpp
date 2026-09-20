@@ -1,5 +1,5 @@
 // Post processing of the world: screen space reflections, ambient occlusion and contact shadows from
-// depth, bloom, gamma and film grain. The HUD draws over the result unchanged.
+// depth, depth of field, bloom, gamma and film grain. The HUD draws over the result unchanged.
 
 #include "OpenGLDrv.h"
 
@@ -191,22 +191,38 @@ static const ANSICHAR* BloomUpFragmentShader =
 	"	FragColor = vec4(S * Params.z / 16.0, 1.0);\n"
 	"}\n";
 
-// Params holds the inverse gamma and the occlusion, bloom and reflection switches. Where the ray finds
-// the reflected surface on screen it replaces the env map, fading out toward the screen edges and the
-// ray's end so misses blend back into it. The half size occlusion is gathered 4x4 with depth
-// weights, which also averages out its noise.
+// Params holds the inverse gamma and the occlusion, bloom and reflection switches. Focus holds the
+// circle of confusion in world pixels of a sharp point at infinity, the focus distance and the largest
+// circle, zero X turns depth of field off. The film grain is strongest in the midtones like on film,
+// it also breaks up banding.
+#define POST_FINISH \
+	"uniform sampler2D Bloom;\n" \
+	"uniform vec4 Params;\n" \
+	"uniform vec3 Focus;\n" \
+	"uniform uint Seed;\n" \
+	"float Hash(uvec3 V)\n" \
+	"{\n" \
+	"	uint H = V.x * 1973u + V.y * 9277u + V.z * 26699u;\n" \
+	"	H = (H ^ (H >> 16)) * 0x7feb352du;\n" \
+	"	H = (H ^ (H >> 15)) * 0x846ca68bu;\n" \
+	"	return float(H ^ (H >> 16)) / 4294967295.0;\n" \
+	"}\n" \
+	"vec3 Finish(vec3 Color)\n" \
+	"{\n" \
+	"	Color += texture(Bloom, UV).rgb * Params.z;\n" \
+	"	Color = pow(clamp(Color, 0.0, 1.0), vec3(Params.x));\n" \
+	"	float Luma = dot(Color, vec3(0.299, 0.587, 0.114));\n" \
+	"	return Color + (Hash(uvec3(uvec2(gl_FragCoord.xy), Seed)) - 0.5) * 0.024 * (0.3 + 2.8 * Luma * (1.0 - Luma));\n" \
+	"}\n"
+
+// Where the ray finds the reflected surface on screen it replaces the env map, fading out toward the
+// screen edges and the ray's end so misses blend back into it. The half size occlusion is gathered
+// 4x4 with depth weights, which also averages out its noise. With depth of field the lit world goes
+// to Focus with the signed circle of confusion of a thin lens, which grows with depth.
 static const ANSICHAR* CompositeFragmentShader =
 	POST_COMMON
-	"uniform sampler2D Frame, Occlusion, Bloom, Reflection;\n"
-	"uniform vec4 Params;\n"
-	"uniform uint Seed;\n"
-	"float Hash(uvec3 V)\n"
-	"{\n"
-	"	uint H = V.x * 1973u + V.y * 9277u + V.z * 26699u;\n"
-	"	H = (H ^ (H >> 16)) * 0x7feb352du;\n"
-	"	H = (H ^ (H >> 15)) * 0x846ca68bu;\n"
-	"	return float(H ^ (H >> 16)) / 4294967295.0;\n"
-	"}\n"
+	POST_FINISH
+	"uniform sampler2D Frame, Occlusion, Reflection;\n"
 	"void main()\n"
 	"{\n"
 	"	vec3 Color = texture(Frame, UV).rgb;\n"
@@ -278,12 +294,47 @@ static const ANSICHAR* CompositeFragmentShader =
 	"		vec3 A = 2.0404 * Color - 0.3324, B = -4.7951 * Color + 0.6417, K = 2.7552 * Color + 0.6903;\n"
 	"		Color *= max(vec3(O.x), ((O.x * A + B) * O.x + K) * O.x) * O.y;\n"
 	"	}\n"
-	"	Color += texture(Bloom, UV).rgb * Params.z;\n"
-	"	Color = pow(clamp(Color, 0.0, 1.0), vec3(Params.x));\n"
-	// Film grain, strongest in the midtones like on film. It also breaks up banding.
-	"	float Luma = dot(Color, vec3(0.299, 0.587, 0.114));\n"
-	"	Color += (Hash(uvec3(uvec2(gl_FragCoord.xy), Seed)) - 0.5) * 0.024 * (0.3 + 2.8 * Luma * (1.0 - Luma));\n"
-	"	FragColor = vec4(Color, 1.0);\n"
+	"	if (Focus.x > 0.0)\n"
+	"	{\n"
+	"		float CoC = D < Split ? 0.0 : D >= 1.0 ? Focus.x : Focus.x * (1.0 - Focus.y / LinearZ(D));\n"
+	"		FragColor = vec4(Color, clamp(CoC / Focus.z, -1.0, 1.0) * 0.5 + 0.5);\n"
+	"	}\n"
+	"	else\n"
+	"		FragColor = vec4(Finish(Color), 1.0);\n"
+	"}\n";
+
+// Single pass scatter as gather on a golden angle spiral. Each tap counts where its own circle reaches
+// the centre. Taps behind the centre are limited to twice its circle, so blurred backgrounds stay out
+// of sharp foregrounds while blurred foregrounds spread over sharp backgrounds. The weapon is
+// nearest of all and stays sharp.
+static const ANSICHAR* DepthOfFieldFragmentShader =
+	POST_COMMON
+	POST_FINISH
+	"uniform sampler2D Frame;\n"
+	"void main()\n"
+	"{\n"
+	"	vec2 Texel = 1.0 / vec2(textureSize(Frame, 0));\n"
+	"	vec4 Centre = texture(Frame, UV);\n"
+	"	if (DepthAt(ivec2(UV * vec2(textureSize(Depth, 0)))) < Split)\n"
+	"	{\n"
+	"		FragColor = vec4(Finish(Centre.rgb), 1.0);\n"
+	"		return;\n"
+	"	}\n"
+	"	float CentreCoC = Centre.a * 2.0 - 1.0;\n"
+	"	vec3 Sum = Centre.rgb;\n"
+	"	float Count = 1.0, Radius = 1.0;\n"
+	"	for (float Angle = 0.0; Radius < Focus.z; Angle += 2.3999632)\n"
+	"	{\n"
+	"		vec4 Tap = textureLod(Frame, UV + vec2(cos(Angle), sin(Angle)) * Texel * Radius, 0.0);\n"
+	"		float CoC = Tap.a * 2.0 - 1.0;\n"
+	"		float Size = abs(CoC) * Focus.z;\n"
+	"		if (CoC > CentreCoC)\n"
+	"			Size = min(Size, abs(CentreCoC) * Focus.z * 2.0);\n"
+	"		Sum += mix(Sum / Count, Tap.rgb, smoothstep(Radius - 0.5, Radius + 0.5, Size));\n"
+	"		Count += 1.0;\n"
+	"		Radius += 1.0 / Radius;\n"
+	"	}\n"
+	"	FragColor = vec4(Finish(Sum / Count), 1.0);\n"
 	"}\n";
 
 UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
@@ -293,8 +344,9 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 	BloomDownProgram	= CompileProgram(VertexShader,BloomDownFragmentShader);
 	BloomUpProgram		= CompileProgram(VertexShader,BloomUpFragmentShader);
 	CompositeProgram	= CompileProgram(VertexShader,CompositeFragmentShader);
+	DepthOfFieldProgram	= CompileProgram(VertexShader,DepthOfFieldFragmentShader);
 
-	GLuint Programs[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram };
+	GLuint Programs[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram, DepthOfFieldProgram };
 	for( INT i=0; i<ARRAY_COUNT(Programs); i++ )
 	{
 		if( !Programs[i] )
@@ -310,7 +362,7 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 	return 1;
 }
 
-void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma)
+void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance)
 {
 	FPlane	Proj(1.f / CameraToScreen.M[0][0],1.f / CameraToScreen.M[1][1],CameraToScreen.M[2][2],CameraToScreen.M[3][2]);
 	UBOOL	DepthPasses = ViewValid && (AmbientOcclusion || ContactShadows),
@@ -350,13 +402,55 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		}
 	}
 
+	// A thin lens in front of a 24 mm high frame at f/1.4, which at this wide view blurs only gently.
+	// The circle of confusion is limited to 1% of the height. A unit is 1.905 cm. Focusing closer than
+	// twice the focal length would leave no image.
+	UBOOL	Defocus = FocusDistance > 0.f;
+	FLOAT	FocalLength = 12.f / Proj.Y,
+			FocusMM = Max(FocusDistance * 19.05f,FocalLength * 2.f);
+	FVector	Lens(Defocus ? Square(FocalLength) / 1.4f / (FocusMM - FocalLength) / 24.f * World.Height : 0.f,FocusDistance,0.01f * World.Height);
+	FPlane	Params(1.f / Max(Gamma,0.1f),DepthPasses ? 1.f : 0.f,Bloom ? 1.f : 0.f,Reflections ? 1.f : 0.f);
+	GLuint	BloomTexture = Bloom ? BloomLevels[0].Texture : World.Texture;
+	DWORD	Seed = FrameCount++;
+
 	// Disabled inputs still get a valid texture, their weight is zero.
 	UseProgram(CompositeProgram);
 	glUniform4fv(glGetUniformLocation(CompositeProgram,"Proj"),1,&Proj.X);
-	glUniform4f(glGetUniformLocation(CompositeProgram,"Params"),1.f / Max(Gamma,0.1f),DepthPasses ? 1.f : 0.f,Bloom ? 1.f : 0.f,Reflections ? 1.f : 0.f);
-	glUniform1ui(glGetUniformLocation(CompositeProgram,"Seed"),FrameCount++);
-	DrawFullscreen(CompositeProgram,Scene.DrawFramebuffer(),Scene.Width,Scene.Height,World.Texture,
-		DepthPasses ? Occlusion.Texture : World.Texture,Bloom ? BloomLevels[0].Texture : World.Texture,World.DepthTexture,0,World.ReflectionTexture);
+	glUniform4fv(glGetUniformLocation(CompositeProgram,"Params"),1,&Params.X);
+	glUniform3fv(glGetUniformLocation(CompositeProgram,"Focus"),1,&Lens.X);
+	glUniform1ui(glGetUniformLocation(CompositeProgram,"Seed"),Seed);
+	if( Defocus )
+		CreateFramebuffer(Focus,World.Width,World.Height,0,GL_RGBA8,0);
+	FOpenGLFramebuffer& Target = Defocus ? Focus : Scene;
+	DrawFullscreen(CompositeProgram,Target.DrawFramebuffer(),Target.Width,Target.Height,World.Texture,
+		DepthPasses ? Occlusion.Texture : World.Texture,BloomTexture,World.DepthTexture,0,World.ReflectionTexture);
+
+	if( Defocus )
+	{
+		UseProgram(DepthOfFieldProgram);
+		glUniform4fv(glGetUniformLocation(DepthOfFieldProgram,"Params"),1,&Params.X);
+		glUniform3fv(glGetUniformLocation(DepthOfFieldProgram,"Focus"),1,&Lens.X);
+		glUniform1ui(glGetUniformLocation(DepthOfFieldProgram,"Seed"),Seed);
+		DrawFullscreen(DepthOfFieldProgram,Scene.DrawFramebuffer(),Scene.Width,Scene.Height,Focus.Texture,0,BloomTexture,World.DepthTexture);
+	}
+}
+
+// The focus follows what the crosshair rests on, eased in diopters like an eye or a lens refocusing.
+FLOAT FOpenGLRenderInterface::PickFocus()
+{
+	const FLOAT			Range = 16384.f;
+	FMatrix				CameraToWorld = ViewWorldToCamera.Inverse();
+	FVector				Camera = CameraToWorld.TransformFVector(FVector(0,0,0));
+	APlayerController*	Player = Viewport->Actor;
+	FCheckResult		Hit;
+	FLOAT				Distance = Range;
+	if( Player && Player->XLevel && !Player->XLevel->SingleLineCheck(Hit,Player->ViewTarget,CameraToWorld.TransformFVector(FVector(0,0,Range)),Camera,TRACE_World | TRACE_Pawns) )
+		Distance = Max(Hit.Time * Range,16.f);
+	DOUBLE	Now = appSeconds();
+	FLOAT	Target = 1.f / Distance;
+	FocusDiopters = Now - FocusTime > 1.0 ? Target : FocusDiopters + (Target - FocusDiopters) * (1.f - appExp((FocusTime - Now) / 0.15));
+	FocusTime = Now;
+	return 1.f / FocusDiopters;
 }
 
 // The light contact shadows follow: the sun if the level has one, otherwise the light strongest at

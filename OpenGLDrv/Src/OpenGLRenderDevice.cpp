@@ -14,7 +14,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	LockedViewport	= NULL;
 	ContextReady	= 0;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = 0;
+	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
 	ShadowLight = NULL;
@@ -30,10 +30,11 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("ContactShadows"),	RF_Public)UBoolProperty(CPP_PROPERTY(ContactShadows),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("Bloom"),			RF_Public)UBoolProperty(CPP_PROPERTY(Bloom),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ScreenSpaceReflections"),RF_Public)UBoolProperty(CPP_PROPERTY(ScreenSpaceReflections),TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("DepthOfField"),	RF_Public)UBoolProperty(CPP_PROPERTY(DepthOfField),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = Bloom = ScreenSpaceReflections = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = Bloom = ScreenSpaceReflections = DepthOfField = 1;
 	ResolutionScale = 100;
 }
 
@@ -350,6 +351,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	DestroyFramebuffer(Scene);
 	DestroyFramebuffer(World);
 	DestroyFramebuffer(Occlusion);
+	DestroyFramebuffer(Focus);
 	for( INT i=0; i<BLOOM_LEVELS; i++ )
 		DestroyFramebuffer(BloomLevels[i]);
 	DynamicVertexBuffer.Release();
@@ -358,14 +360,14 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	if( SceneBuffer )			glDeleteBuffers(1,&SceneBuffer);
 	if( VertexArray )			glDeleteVertexArrays(1,&VertexArray);
 	if( EmptyVertexArray )		glDeleteVertexArrays(1,&EmptyVertexArray);
-	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram };
+	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram, DepthOfFieldProgram };
 	for( INT i=0; i<ARRAY_COUNT(PostPrograms); i++ )
 		glDeleteProgram(PostPrograms[i]);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
 	if( FrameFence )			glDeleteSync(FrameFence);
 	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = 0;
+	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = 0;
 }
 
 void UOpenGLRenderDevice::Exit(UViewport* Viewport)

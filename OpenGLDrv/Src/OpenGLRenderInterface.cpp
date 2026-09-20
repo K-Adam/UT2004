@@ -4,7 +4,7 @@
 #include "OpenGLDrv.h"
 
 FOpenGLRenderInterface::FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev)
-:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), DynamicStride(0), DynamicSize(0), DynamicComponents(0)
+:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0)
 {
 	CurrentState = &SavedStates[0];
 	FSavedState& S = *CurrentState;
@@ -169,7 +169,7 @@ void FOpenGLRenderInterface::EndWorld()
 	if( ViewValid && RenDev->ContactShadows )
 		Light = PickShadowLight();
 	FLOAT Gamma = ParseParam(appCmdLine(),TEXT("NOGAMMA")) ? 1.f : Viewport->GetOuterUClient()->Gamma;
-	RenDev->PostProcess(ViewValid,ViewCameraToScreen,Light,Gamma);
+	RenDev->PostProcess(ViewValid,ViewCameraToScreen,Light,Gamma,ViewValid && RenDev->DepthOfField ? PickFocus() : 0.f);
 	WorldLights.Empty();
 	Clear(0,FColor(0,0,0),1,1.f,0,0);
 }

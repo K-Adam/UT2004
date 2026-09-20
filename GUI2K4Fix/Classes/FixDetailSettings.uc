@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_Bloom;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_Bloom, ch_DepthOfField;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2], ReflectionsText[2];
 
@@ -26,6 +26,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Options.ManageComponent(ch_AmbientOcclusion);
 	sb_Options.ManageComponent(ch_ContactShadows);
 	sb_Options.ManageComponent(ch_Bloom);
+	sb_Options.ManageComponent(ch_DepthOfField);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -61,6 +62,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_Bloom:
 		ch_Bloom.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice Bloom")), true);
+		break;
+	case ch_DepthOfField:
+		ch_DepthOfField.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice DepthOfField")), true);
 		break;
 	}
 }
@@ -102,6 +106,9 @@ function InternalOnChange(GUIComponent Sender)
 	case ch_Bloom:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Bloom" @ ch_Bloom.IsChecked());
 		break;
+	case ch_DepthOfField:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice DepthOfField" @ ch_DepthOfField.IsChecked());
+		break;
 	}
 }
 
@@ -136,6 +143,7 @@ function ResetClicked()
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ContactShadows True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Bloom True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ScreenSpaceReflections True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice DepthOfField True");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 
@@ -222,7 +230,7 @@ defaultproperties
 		bHeightFromComponent=false
 		OnLoadINI=InternalOnLoadINI
 		OnChange=InternalOnChange
-		TabOrder=8
+		TabOrder=9
 	End Object
 	co_Reflections=ReflectionsCombo
 
@@ -290,6 +298,19 @@ defaultproperties
 		TabOrder=7
 	End Object
 	ch_Bloom=BloomCheck
+
+	Begin Object class=moCheckBox Name=DepthOfFieldCheck
+		Caption="Depth of Field"
+		Hint="Softens what is much nearer or farther than the point you look at, like a camera lens."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=8
+	End Object
+	ch_DepthOfField=DepthOfFieldCheck
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"
