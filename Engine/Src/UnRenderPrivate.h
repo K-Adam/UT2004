@@ -412,26 +412,6 @@ public:
 };
 
 //
-//	FBspStencilDrawList
-//
-
-class FBspStencilDrawList : public FBspNodeList
-{
-public:
-
-	DWORD	StencilMask;
-
-	FBspStencilDrawList(UModel* InModel,INT InSectionIndex,DWORD InStencilMask) : FBspNodeList(InModel,InSectionIndex)
-	{
-		StencilMask = InStencilMask;
-	}
-
-	// Render
-
-	void Render(FLevelSceneNode* SceneNode,FRenderInterface* RI);
-};
-
-//
 //	GetRelevantLights
 //
 

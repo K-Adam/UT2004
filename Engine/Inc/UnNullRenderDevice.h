@@ -95,8 +95,6 @@ public:
 	virtual void Flush(UViewport* Viewport) {}
 	void FlushResource(QWORD CacheId) {}
 
-	virtual void UpdateGamma(UViewport* Viewport) {}
-	virtual void RestoreGamma() {}
 
 	virtual UBOOL Exec(const TCHAR* Cmd,FOutputDevice& Ar) { return 0; }
 

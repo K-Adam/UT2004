@@ -1104,16 +1104,3 @@ void* FStaticLightMapTexture::GetRawTextureData(INT MipIndex)
 	unguard;
 }
 
-//
-//	FStaticLightMapTexture::GetFirstMip
-//
-
-INT FStaticLightMapTexture::GetFirstMip()
-{ 
-	// MERGE_HACK !!vogel
-	if( UTexture::__Client && (UTexture::__Client->GetTextureLODBias(LODSET_Lightmap)>0) )
-		return 1;
-	else
-		return 0;
-}
-

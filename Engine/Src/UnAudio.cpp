@@ -170,7 +170,7 @@ UBOOL UAudioSubsystem::Update( FSceneNode* SceneNode )
 		for( INT i=0; i<Level->Actors.Num(); i++ )
 		{
 			AActor* Actor = Level->Actors(i);
-			if ( Actor && Actor->AmbientSound && !((Actor->bHighDetail && Actor->Level->DetailMode == DM_Low) || (Actor->bSuperHighDetail && Actor->Level->DetailMode != DM_SuperHigh)) )
+			if ( Actor && Actor->AmbientSound )
 			{
 				INT Id = Actor->GetIndex()*16 + SLOT_Ambient*2;
 				INT j;

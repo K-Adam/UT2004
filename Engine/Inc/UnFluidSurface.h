@@ -114,10 +114,8 @@ public:
 	void Init();
 
 	void FillVertexBuffer(void* Dest);
-	void SimpleFillVertexBuffer(void* Dest);
 
 	void FillIndexBuffer(void* Data);
-	void SimpleFillIndexBuffer(void* Data);
 
 	void RebuildClampedBitmap();
 

@@ -703,21 +703,6 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 			GConfig->Detach( GUserIni );
 		}
 
-		static const INT Resolutions[][2] =
-		{
-			{320,240}, {512,384}, {640,480}, {800,600}, {1024,768}, {1280,960},
-			{1280,1024}, {1600,1024}, {1600,1200}, {1920,1200},
-		};
-		for( INT i=0; i<ARRAY_COUNT(Resolutions); i++ )
-		{
-			if( ParseParam(appCmdLine(),*FString::Printf(TEXT("%ix%i"),Resolutions[i][0],Resolutions[i][1])) )
-			{
-				GConfig->SetInt( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportX"), Resolutions[i][0] );
-				GConfig->SetInt( TEXT("SDLDrv.SDLClient"), TEXT("FullscreenViewportY"), Resolutions[i][1] );
-				GConfig->SetBool( TEXT("SDLDrv.SDLClient"), TEXT("AutoResolution"), 0 );
-			}
-		}
-
 		// Init engine.
 		UEngine* Engine = InitEngine();
 

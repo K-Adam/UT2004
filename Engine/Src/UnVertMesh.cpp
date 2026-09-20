@@ -1232,16 +1232,14 @@ void UVertMeshInstance::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,T
 	// Determine desired VertexSubset for LOD
 	INT VertexSubset = VertMesh->ModelVerts;
 	FLOAT FovBias = (SceneNode->Viewport && SceneNode->Viewport->Actor) ? SceneNode->Viewport->Actor->FOVBias : 1.f;  // calculated in RenderLevel
-	
-	// Global framerate dependent LOD factor.
-	FLOAT GlobalLODFactor = GIsEditor ? 1.0f : ( Actor->GetLevel() ? Actor->GetLevel()->GetLevelInfo()->AnimMeshGlobalLOD : 1.0f );
+
 
 	// Complexity bias: effectively, stronger LOD for more complex meshes.
 	FLOAT CpxBias =  0.25f + 0.75f*VertMesh->ModelVerts/250.f; // about even for 250-vertex meshes.
 	FLOAT ResolutionBias = 0.3f + 0.7f*SceneNode->Viewport->SizeX/640.f; // Moderated resolution influence.
 	// Z coordinate :in units. 60 units is about the player's height. 
 	FLOAT Z = SceneNode->Project(Actor->Location).W - VertMesh->LODZDisplace;
-	FLOAT DetailDiv = VertMesh->LODStrength * /*GlobalShapeLOD * GlobalShapeLODAdjust **/ FovBias * Max(1.f,Z) * CpxBias * GlobalLODFactor;
+	FLOAT DetailDiv = VertMesh->LODStrength * /*GlobalShapeLOD * GlobalShapeLODAdjust **/ FovBias * Max(1.f,Z) * CpxBias;
 	FLOAT MeshVertLOD  = 530.f * ResolutionBias * Actor->DrawScale3D.GetAbsMax() * Abs(Actor->DrawScale) * Actor->LODBias * VertMesh->MeshScaleMax / DetailDiv;  	
 
 	FLOAT TargetSubset    = Max( (FLOAT)VertMesh->LODMinVerts, (FLOAT)VertMesh->ModelVerts * MeshVertLOD  );

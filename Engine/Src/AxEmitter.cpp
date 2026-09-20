@@ -65,15 +65,7 @@ UBOOL AxEmitter::IsForceAffected()
 		return false;
 
 	ULevel* level = GetLevel();
-	if(!level || level->Actors.Num() == 0 || level->Actors(0) == NULL)
-		return false;
-
-	ALevelInfo* lInfo = level->GetLevelInfo();
-
-	if(lInfo && lInfo->PhysicsDetailLevel == PDL_High)
-		return true;
-	else
-		return false;
+	return level && level->Actors.Num() && level->Actors(0);
 	unguard;
 }
 
@@ -297,7 +289,6 @@ void AxEmitter::PostBeginPlay()
         SourceStaticMesh->StaticMesh &&
         bStasis == 1 && 
         bHidden == 1
-		&& (Level->DetailMode != DM_Low)
 		&& (Level->NetMode != NM_DedicatedServer)
     )
     {

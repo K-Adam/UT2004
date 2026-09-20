@@ -1040,7 +1040,7 @@ void AProjector::Attach( FLOAT FadeInTime )
 {
 	guard(AProjector::Attach);
 	
-	if( (UTexture::__Client && (!UTexture::__Client->Projectors || !UTexture::__Client->Engine->GRenDev->SupportsZBIAS))  
+	if( (UTexture::__Client && !UTexture::__Client->Engine->GRenDev->SupportsZBIAS)  
 	||  !ProjTexture 
 	||  Level->NetMode == NM_DedicatedServer		// sjs - dedicated server need not attach projectors!
 	)

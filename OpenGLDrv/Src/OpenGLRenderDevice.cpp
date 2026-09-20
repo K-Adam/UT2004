@@ -1,6 +1,6 @@
 // SDLDrv creates the window and the ES context, through ANGLE on Windows. The device draws into
-// its own framebuffer, which a final pass copies to the window while applying gamma, so brightness
-// works without OS gamma ramps.
+// its own framebuffers. The world pass applies gamma, so it works without OS gamma ramps and leaves
+// the HUD and menus alone.
 
 #include "OpenGLDrv.h"
 
@@ -20,13 +20,12 @@ static const ANSICHAR* GammaFragmentShader =
 	"#version 300 es\n"
 	"precision mediump float;\n"
 	"uniform sampler2D Frame;\n"
-	"uniform vec3 Ramp;\n"
+	"uniform float InvGamma;\n"
 	"in vec2 UV;\n"
 	"out vec4 FragColor;\n"
 	"void main()\n"
 	"{\n"
-	"	vec3 C = texture(Frame, UV).rgb;\n"
-	"	FragColor = vec4(clamp(Ramp.x * pow(C, vec3(Ramp.y)) + Ramp.z, 0.0, 1.0), 1.0);\n"
+	"	FragColor = vec4(pow(texture(Frame, UV).rgb, vec3(InvGamma)), 1.0);\n"
 	"}\n";
 
 UOpenGLRenderDevice::UOpenGLRenderDevice()
@@ -37,23 +36,16 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	LockedViewport	= NULL;
 	ContextReady	= 0;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = GammaProgram = VertexShaderObject = 0;
-	SceneFramebuffer = SceneTexture = SceneDepthStencil = MultisampleFramebuffer = MultisampleColor = 0;
-	SceneWidth = SceneHeight = SceneSamples = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
-	SamplerSettings = 0;
 }
 
 void UOpenGLRenderDevice::StaticConstructor()
 {
-	new(GetClass(),TEXT("UseVSync"),			RF_Public)UBoolProperty	(CPP_PROPERTY(UseVSync),			TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("UseTrilinear"),		RF_Public)UBoolProperty	(CPP_PROPERTY(UseTrilinear),		TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("UsePrecaching"),		RF_Public)UBoolProperty	(CPP_PROPERTY(UsePrecaching),		TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("ReduceMouseLag"),		RF_Public)UBoolProperty	(CPP_PROPERTY(ReduceMouseLag),		TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("LevelOfAnisotropy"),	RF_Public)UIntProperty	(CPP_PROPERTY(LevelOfAnisotropy),	TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("MultisampleSamples"),	RF_Public)UIntProperty	(CPP_PROPERTY(MultisampleSamples),	TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("DefaultTexMipBias"),	RF_Public)UFloatProperty(CPP_PROPERTY(DefaultTexMipBias),	TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("DetailTexMipBias"),	RF_Public)UFloatProperty(CPP_PROPERTY(DetailTexMipBias),	TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("UseVSync"),		RF_Public)UBoolProperty(CPP_PROPERTY(UseVSync),			TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("ReduceMouseLag"),	RF_Public)UBoolProperty(CPP_PROPERTY(ReduceMouseLag),	TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("Antialiasing"),	RF_Public)UBoolProperty(CPP_PROPERTY(Antialiasing),		TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("HalfResolution"),	RF_Public)UBoolProperty(CPP_PROPERTY(HalfResolution),	TEXT("Options"),CPF_Config);
 }
 
 UBOOL UOpenGLRenderDevice::Init()
@@ -153,9 +145,9 @@ GLuint UOpenGLRenderDevice::GetSampler(DWORD Flags)
 	glSamplerParameteri(Sampler,GL_TEXTURE_WRAP_T,(Flags & GSF_ClampV) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
 	glSamplerParameteri(Sampler,GL_TEXTURE_WRAP_R,GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(Sampler,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-	glSamplerParameteri(Sampler,GL_TEXTURE_MIN_FILTER,!(Flags & GSF_Mipmapped) ? GL_LINEAR : UseTrilinear ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_NEAREST);
-	if( SupportsAnisotropy && LevelOfAnisotropy > 1 )
-		glSamplerParameterf(Sampler,GL_TEXTURE_MAX_ANISOTROPY_EXT,(FLOAT)Min(LevelOfAnisotropy,MaxAnisotropy));
+	glSamplerParameteri(Sampler,GL_TEXTURE_MIN_FILTER,(Flags & GSF_Mipmapped) ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+	if( MaxAnisotropy > 1 )
+		glSamplerParameterf(Sampler,GL_TEXTURE_MAX_ANISOTROPY_EXT,(FLOAT)MaxAnisotropy);
 	Samplers.Set(Flags,Sampler);
 	return Sampler;
 }
@@ -177,7 +169,6 @@ void UOpenGLRenderDevice::ResetStateCache()
 		GL.Viewport[i] = -1;
 	appMemset(GL.Textures,0xff,sizeof(GL.Textures));
 	appMemset(GL.Samplers,0xff,sizeof(GL.Samplers));
-	appMemset(GL.StencilKey,0xff,sizeof(GL.StencilKey));
 }
 
 UBOOL UOpenGLRenderDevice::InitContext()
@@ -188,15 +179,15 @@ UBOOL UOpenGLRenderDevice::InitContext()
 
 	SupportsDXT1		= HasExtension("GL_EXT_texture_compression_s3tc") || HasExtension("GL_EXT_texture_compression_dxt1");
 	SupportsDXT35		= HasExtension("GL_EXT_texture_compression_s3tc") || (HasExtension("GL_ANGLE_texture_compression_dxt3") && HasExtension("GL_ANGLE_texture_compression_dxt5"));
-	SupportsAnisotropy	= HasExtension("GL_EXT_texture_filter_anisotropic");
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE,&MaxTextureSize);
 	MaxAnisotropy = 1;
-	if( SupportsAnisotropy )
+	if( HasExtension("GL_EXT_texture_filter_anisotropic") )
 	{
 		GLfloat Max = 1.f;
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT,&Max);
 		MaxAnisotropy = appFloor(Max);
 	}
+	glGetIntegerv(GL_MAX_SAMPLES,&MaxSamples);
 	// Without it every base vertex change respecifies the attributes.
 	DrawElementsBaseVertex = NULL;
 	if( HasExtension("GL_OES_draw_elements_base_vertex") )
@@ -211,7 +202,7 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	glDeleteShader(GammaVertex);
 	if( !VertexShaderObject || !GammaProgram )
 		return 0;
-	GammaRamp = glGetUniformLocation(GammaProgram,"Ramp");
+	GammaUniform = glGetUniformLocation(GammaProgram,"InvGamma");
 
 	glGenVertexArrays(1,&EmptyVertexArray);
 	glGenVertexArrays(1,&VertexArray);
@@ -234,59 +225,61 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	return 1;
 }
 
-void UOpenGLRenderDevice::CreateSceneFramebuffer(INT Width,INT Height)
+void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples)
 {
-	GLint MaxSamples = 0;
-	glGetIntegerv(GL_MAX_SAMPLES,&MaxSamples);
-	INT Samples = MultisampleSamples > 1 ? Min<INT>(MultisampleSamples,MaxSamples) : 0;
-	if( SceneFramebuffer && Width == SceneWidth && Height == SceneHeight && Samples == SceneSamples )
+	if( F.Framebuffer && Width == F.Width && Height == F.Height && Samples == F.Samples )
 		return;
 
-	DestroySceneFramebuffer();
-	SceneWidth		= Width;
-	SceneHeight		= Height;
-	SceneSamples	= Samples;
+	DestroyFramebuffer(F);
+	F.Width		= Width;
+	F.Height	= Height;
+	F.Samples	= Samples;
 
-	glGenTextures(1,&SceneTexture);
+	glGenTextures(1,&F.Texture);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D,SceneTexture);
+	glBindTexture(GL_TEXTURE_2D,F.Texture);
 	glTexStorage2D(GL_TEXTURE_2D,1,GL_RGBA8,Width,Height);
-	GL.Textures[0]			= SceneTexture;
+	GL.Textures[0]			= F.Texture;
 	GL.TextureTargets[0]	= GL_TEXTURE_2D;
-	glGenFramebuffers(1,&SceneFramebuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER,SceneFramebuffer);
-	glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,SceneTexture,0);
+	glGenFramebuffers(1,&F.Framebuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER,F.Framebuffer);
+	glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,F.Texture,0);
 
-	glGenRenderbuffers(1,&SceneDepthStencil);
-	glBindRenderbuffer(GL_RENDERBUFFER,SceneDepthStencil);
-	if( SceneSamples )
+	glGenRenderbuffers(1,&F.DepthStencil);
+	glBindRenderbuffer(GL_RENDERBUFFER,F.DepthStencil);
+	if( Samples )
 	{
-		glRenderbufferStorageMultisample(GL_RENDERBUFFER,SceneSamples,GL_DEPTH24_STENCIL8,Width,Height);
-		glGenRenderbuffers(1,&MultisampleColor);
-		glBindRenderbuffer(GL_RENDERBUFFER,MultisampleColor);
-		glRenderbufferStorageMultisample(GL_RENDERBUFFER,SceneSamples,GL_RGBA8,Width,Height);
-		glGenFramebuffers(1,&MultisampleFramebuffer);
-		glBindFramebuffer(GL_FRAMEBUFFER,MultisampleFramebuffer);
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_RENDERBUFFER,MultisampleColor);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER,Samples,GL_DEPTH24_STENCIL8,Width,Height);
+		glGenRenderbuffers(1,&F.MultisampleColor);
+		glBindRenderbuffer(GL_RENDERBUFFER,F.MultisampleColor);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER,Samples,GL_RGBA8,Width,Height);
+		glGenFramebuffers(1,&F.MultisampleFramebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER,F.MultisampleFramebuffer);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_RENDERBUFFER,F.MultisampleColor);
 	}
 	else
 		glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH24_STENCIL8,Width,Height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_RENDERBUFFER,SceneDepthStencil);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_RENDERBUFFER,F.DepthStencil);
 
 	if( glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE )
-		debugf(NAME_Warning,TEXT("OpenGLDrv: Incomplete scene framebuffer %ix%i, %i samples"),Width,Height,SceneSamples);
-	GL.Framebuffer = SceneSamples ? MultisampleFramebuffer : SceneFramebuffer;
-	debugf(TEXT("OpenGLDrv: Scene %ix%i, %i samples"),Width,Height,SceneSamples);
+		debugf(NAME_Warning,TEXT("OpenGLDrv: Incomplete framebuffer %ix%i, %i samples"),Width,Height,Samples);
+	GL.Framebuffer = F.DrawFramebuffer();
+	debugf(TEXT("OpenGLDrv: Framebuffer %ix%i, %i samples"),Width,Height,Samples);
 }
 
-void UOpenGLRenderDevice::DestroySceneFramebuffer()
+void UOpenGLRenderDevice::DestroyFramebuffer(FOpenGLFramebuffer& F)
 {
-	if( SceneFramebuffer )			glDeleteFramebuffers(1,&SceneFramebuffer);
-	if( MultisampleFramebuffer )	glDeleteFramebuffers(1,&MultisampleFramebuffer);
-	if( SceneTexture )				glDeleteTextures(1,&SceneTexture);
-	if( SceneDepthStencil )			glDeleteRenderbuffers(1,&SceneDepthStencil);
-	if( MultisampleColor )			glDeleteRenderbuffers(1,&MultisampleColor);
-	SceneFramebuffer = MultisampleFramebuffer = SceneTexture = SceneDepthStencil = MultisampleColor = 0;
+	if( !F.Framebuffer )
+		return;
+	glDeleteFramebuffers(1,&F.Framebuffer);
+	glDeleteTextures(1,&F.Texture);
+	glDeleteRenderbuffers(1,&F.DepthStencil);
+	if( F.Samples )
+	{
+		glDeleteFramebuffers(1,&F.MultisampleFramebuffer);
+		glDeleteRenderbuffers(1,&F.MultisampleColor);
+	}
+	F = FOpenGLFramebuffer();
 	GL.Framebuffer = (GLuint)-1;
 	for( INT i=0; i<OGL_MAX_TEXTURES; i++ )
 		GL.Textures[i] = (GLuint)-1;
@@ -312,7 +305,7 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE,8);
 	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,8);
 	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,8);
-	// The scene framebuffer has the depth and stencil, the window only receives the gamma pass.
+	// The scene framebuffer has the depth and stencil, the window only receives the final copy.
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,0);
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER,1);
@@ -332,7 +325,6 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 	if( !ContextReady && !InitContext() )
 		return 0;
 
-	CreateSceneFramebuffer(Viewport->SizeX,Viewport->SizeY);
 	SDL_GL_SetSwapInterval(UseVSync ? 1 : 0);
 	Viewport->PendingFrame = 0;
 	return 1;
@@ -340,18 +332,14 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 	unguard;
 }
 
-void UOpenGLRenderDevice::ReleaseSamplers()
+void UOpenGLRenderDevice::ReleaseObjects()
 {
 	for( TMap<DWORD,GLuint>::TIterator It(Samplers); It; ++It )
 		glDeleteSamplers(1,&It.Value());
 	Samplers.Empty();
 	appMemset(GL.Samplers,0xff,sizeof(GL.Samplers));
-}
-
-void UOpenGLRenderDevice::ReleaseObjects()
-{
-	ReleaseSamplers();
-	DestroySceneFramebuffer();
+	DestroyFramebuffer(Scene);
+	DestroyFramebuffer(World);
 	DynamicVertexBuffer.Release();
 	DynamicIndexBuffer.Release();
 	if( QuadIndices )			glDeleteBuffers(1,&QuadIndices);
@@ -363,7 +351,6 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	if( FrameFence )			glDeleteSync(FrameFence);
 	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = GammaProgram = VertexShaderObject = 0;
-	SceneWidth = SceneHeight = SceneSamples = 0;
 }
 
 void UOpenGLRenderDevice::Exit(UViewport* Viewport)
@@ -406,7 +393,7 @@ void UOpenGLRenderDevice::Flush(UViewport* Viewport)
 	Base.NumStreams				= 0;
 	Base.IndexBuffer			= 0;
 
-	PrecacheOnFlip = UsePrecaching;
+	PrecacheOnFlip = 1;
 
 	unguard;
 }
@@ -427,34 +414,17 @@ UBOOL UOpenGLRenderDevice::ResourceCached(QWORD CacheId)
 	return GetCachedResource(CacheId) != NULL;
 }
 
-UBOOL UOpenGLRenderDevice::Exec(const TCHAR* Cmd,FOutputDevice& Ar)
-{
-	if( ParseCommand(&Cmd,TEXT("SUPPORTEDRESOLUTION")) )
-	{
-		INT Width = 0, Height = 0, BitDepth = 0;
-		// SDLDrv picks the closest display mode.
-		Ar.Logf(TEXT("%u"),Parse(Cmd,TEXT("WIDTH="),Width) && Parse(Cmd,TEXT("HEIGHT="),Height) && Parse(Cmd,TEXT("BITDEPTH="),BitDepth));
-		return 1;
-	}
-	return 0;
-}
-
 FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,INT* HitSize)
 {
 	guard(UOpenGLRenderDevice::Lock);
 
-	// User resizing reaches the viewport without SetRes.
-	if( Viewport->SizeX != SceneWidth || Viewport->SizeY != SceneHeight )
-		CreateSceneFramebuffer(Viewport->SizeX,Viewport->SizeY);
-	// The menu changes filtering with set ini, which does not flush.
-	INT Settings = LevelOfAnisotropy * 2 + (UseTrilinear ? 1 : 0);
-	if( Settings != SamplerSettings )
-	{
-		ReleaseSamplers();
-		SamplerSettings = Settings;
-	}
+	// Window resizes and the menu's set ini reach the device without SetRes.
+	INT Samples = Antialiasing ? Min<INT>(4,MaxSamples) : 0;
+	CreateFramebuffer(Scene,Viewport->SizeX,Viewport->SizeY,Samples);
+	INT Shift = HalfResolution ? 1 : 0;
+	CreateFramebuffer(World,(Viewport->SizeX + Shift) >> Shift,(Viewport->SizeY + Shift) >> Shift,Samples);
 	LockedViewport = Viewport;
-	SceneResolved = 0;
+	Scene.Resolved = World.Resolved = 0;
 	RenderInterface.Locked(Viewport);
 	return &RenderInterface;
 
@@ -467,54 +437,36 @@ void UOpenGLRenderDevice::Unlock(FRenderInterface* RI)
 	LockedViewport = NULL;
 }
 
-void UOpenGLRenderDevice::ResolveScene()
+void UOpenGLRenderDevice::ResolveFramebuffer(FOpenGLFramebuffer& F)
 {
-	if( SceneSamples && !SceneResolved )
+	if( F.Samples && !F.Resolved )
 	{
 		glDisable(GL_SCISSOR_TEST);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER,MultisampleFramebuffer);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER,SceneFramebuffer);
-		glBlitFramebuffer(0,0,SceneWidth,SceneHeight,0,0,SceneWidth,SceneHeight,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER,F.MultisampleFramebuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER,F.Framebuffer);
+		glBlitFramebuffer(0,0,F.Width,F.Height,0,0,F.Width,F.Height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
 		glEnable(GL_SCISSOR_TEST);
-		glBindFramebuffer(GL_FRAMEBUFFER,MultisampleFramebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER,F.MultisampleFramebuffer);
 		GLenum Attachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT };
 		glInvalidateFramebuffer(GL_FRAMEBUFFER,2,Attachments);
-		GL.Framebuffer = MultisampleFramebuffer;
+		GL.Framebuffer = F.MultisampleFramebuffer;
 	}
-	SceneResolved = 1;
+	F.Resolved = 1;
 }
 
-void UOpenGLRenderDevice::Present(UViewport* Viewport)
+// Stretches the texture over the framebuffer. ES 3 cannot scale a blit into a multisampled target, a draw can.
+void UOpenGLRenderDevice::DrawFullscreen(GLuint Texture,GLuint Framebuffer,INT Width,INT Height,FLOAT Gamma)
 {
-	guard(UOpenGLRenderDevice::Present);
-
-	SDL_Window* Window = SDL_GL_GetCurrentWindow();
-	if( !SceneFramebuffer || !Window )
-		return;
-	ResolveScene();
-
-	int Width = SceneWidth, Height = SceneHeight;
-	SDL_GetWindowSizeInPixels(Window,&Width,&Height);
-	// Depth is not needed past the frame and the gamma pass covers the whole window.
-	GLenum DepthStencil = GL_DEPTH_STENCIL_ATTACHMENT, Color = GL_COLOR;
-	glBindFramebuffer(GL_FRAMEBUFFER,SceneFramebuffer);
-	glInvalidateFramebuffer(GL_FRAMEBUFFER,1,&DepthStencil);
-	glBindFramebuffer(GL_FRAMEBUFFER,0);
-	glInvalidateFramebuffer(GL_FRAMEBUFFER,1,&Color);
+	glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 	glViewport(0,0,Width,Height);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 	glDisable(GL_CULL_FACE);
-	glDisable(GL_STENCIL_TEST);
 	glUseProgram(GammaProgram);
-	UClient* Client = Viewport->GetOuterUClient();
-	UBOOL Neutral = ParseParam(appCmdLine(),TEXT("NOGAMMA"));
-	FLOAT Gamma = Neutral ? 1.f : Client->Gamma, Brightness = Neutral ? 0.5f : Client->Brightness, Contrast = Neutral ? 0.5f : Client->Contrast;
-	// D3D9Drv's gamma ramp: (Contrast + 0.5) * x ^ (1 / Gamma) + (Brightness - 0.5) / 2 - Contrast / 2 + 0.25
-	glUniform3f(GammaRamp,Contrast + 0.5f,1.f / Max(Gamma,0.1f),(Brightness - 0.5f) * 0.5f - Contrast * 0.5f + 0.25f);
+	glUniform1f(GammaUniform,1.f / Max(Gamma,0.1f));
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D,SceneTexture);
+	glBindTexture(GL_TEXTURE_2D,Texture);
 	GLuint Sampler = GetSampler(GSF_ClampU | GSF_ClampV);
 	glBindSampler(0,Sampler);
 	// Attribute free, so the scene's enabled arrays stay out of it.
@@ -524,13 +476,33 @@ void UOpenGLRenderDevice::Present(UViewport* Viewport)
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_SCISSOR_TEST);
 
-	GL.Framebuffer			= 0;
+	GL.Framebuffer			= Framebuffer;
 	GL.Program				= GammaProgram;
-	GL.Textures[0]			= SceneTexture;
+	GL.Textures[0]			= Texture;
 	GL.TextureTargets[0]	= GL_TEXTURE_2D;
 	GL.Samplers[0]			= Sampler;
-	GL.Blend = GL.Cull = GL.Stencil = 0;
+	GL.Blend = GL.Cull = 0;
 	appMemset(GL.Viewport,0xff,sizeof(GL.Viewport));
+}
+
+void UOpenGLRenderDevice::Present(UViewport* Viewport)
+{
+	guard(UOpenGLRenderDevice::Present);
+
+	SDL_Window* Window = SDL_GL_GetCurrentWindow();
+	if( !Scene.Framebuffer || !Window )
+		return;
+	ResolveFramebuffer(Scene);
+
+	int Width = Scene.Width, Height = Scene.Height;
+	SDL_GetWindowSizeInPixels(Window,&Width,&Height);
+	// Depth is not needed past the frame and the copy covers the whole window.
+	GLenum DepthStencil = GL_DEPTH_STENCIL_ATTACHMENT, Color = GL_COLOR;
+	glBindFramebuffer(GL_FRAMEBUFFER,Scene.Framebuffer);
+	glInvalidateFramebuffer(GL_FRAMEBUFFER,1,&DepthStencil);
+	glBindFramebuffer(GL_FRAMEBUFFER,0);
+	glInvalidateFramebuffer(GL_FRAMEBUFFER,1,&Color);
+	DrawFullscreen(Scene.Texture,0,Width,Height,1.f);
 
 	SDL_GL_SwapWindow(Window);
 
@@ -551,13 +523,13 @@ void UOpenGLRenderDevice::ReadPixels(UViewport* Viewport,FColor* Pixels,UBOOL Fl
 {
 	guard(UOpenGLRenderDevice::ReadPixels);
 
-	if( !Viewport || !Pixels || !SceneFramebuffer )
+	if( !Viewport || !Pixels || !Scene.Framebuffer )
 		return;
-	ResolveScene();
-	glBindFramebuffer(GL_FRAMEBUFFER,SceneFramebuffer);
-	GL.Framebuffer = SceneFramebuffer;
+	ResolveFramebuffer(Scene);
+	glBindFramebuffer(GL_FRAMEBUFFER,Scene.Framebuffer);
+	GL.Framebuffer = Scene.Framebuffer;
 
-	INT Width = Min(Viewport->SizeX,SceneWidth), Height = Min(Viewport->SizeY,SceneHeight);
+	INT Width = Min(Viewport->SizeX,Scene.Width), Height = Min(Viewport->SizeY,Scene.Height);
 	glReadPixels(0,0,Width,Height,GL_RGBA,GL_UNSIGNED_BYTE,Pixels);
 	for( INT i=0; i<Width*Height; i++ )
 		Exchange(Pixels[i].R,Pixels[i].B);

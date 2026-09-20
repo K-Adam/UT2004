@@ -104,7 +104,6 @@ class USDLClient : public UClient, public FNotifyHook
 
 	void OpenJoystick();
 	void CloseJoystick();
-	void UpdateDesktopSize();
 };
 
 /*-----------------------------------------------------------------------------
@@ -157,6 +156,7 @@ class USDLViewport : public UViewport
 	// USDLViewport interface.
 	void UpdateMouseGrabState();
 	void ToggleFullscreen();
+	void SetResolution( const TCHAR* Cmd, UBOOL bSaveSize );
 	void EndFullscreen();
 	void SetTopness();
 	DWORD GetViewportButtonFlags( DWORD wParam );

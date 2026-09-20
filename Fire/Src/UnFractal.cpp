@@ -3176,27 +3176,7 @@ void UFractalTexture::Prime()
 
 	if (PrimeCurrent != 0) return;
 
-	// See if animation disabled, if so warm up the animation to obtain reasonably looking static texture.
-	if ( __Client && __Client->NoFractalAnim )
-	{		
-		// Suspend NoFractalAnim freezing temporarily.
-		__Client->NoFractalAnim = 0;
-		// Force a priming update of at least 48 frames.
-		PrimeCount = Max( PrimeCount, (BYTE)48 );
-		while( PrimeCurrent < PrimeCount )
-		{
-			PrimeCurrent++;
-			ConstantTimeTick();
-		}	
-		__Client->NoFractalAnim = 1;
-		// No more special uploading required.
-		bRealtime = 0;
-	}
-	else
-	{
-		// Regular priming.
-		Super::Prime();
-	}
+	Super::Prime();
 	unguard;
 }
 
@@ -3379,7 +3359,7 @@ void UFireTexture::TouchTexture(INT UPos, INT VPos, FLOAT Magnitude)
 void UFireTexture::ConstantTimeTick()
 {
 	guard(UFireTexture::ConstantTimeTick);
-	if( __Client && (! __Client->NoFractalAnim) )
+	if( __Client )
 	{
 		if( (USize>=8) && (VSize>=8) ) // safe sizes ?
 		{
@@ -3760,7 +3740,7 @@ void UWaveTexture::Clear( DWORD ClearFlags )
 void UWaveTexture::ConstantTimeTick()
 {
 	guard(UWaveTexture::ConstantTimeTick);
-	if( __Client && (! __Client->NoFractalAnim) )
+	if( __Client )
 	{
 		if( (USize>=8) && (VSize>=8) ) // safe sizes ?
 		{
@@ -4329,7 +4309,7 @@ void UFluidTexture::CalculateFluid()
 void UFluidTexture::ConstantTimeTick()
 {
 	guard(UFluidTexture::ConstantTimeTick);
-	if( __Client && (! __Client->NoFractalAnim) )
+	if( __Client )
 	{
 		if( (USize>=8) && (VSize>=8) ) // safe sizes ?
 		{
@@ -4465,7 +4445,7 @@ void UWetTexture::ConstantTimeTick()
 {
 	guard(UWetTexture::ConstantTimeTick);
 	
-	if( __Client && (! __Client->NoFractalAnim) )
+	if( __Client )
 	{
 		if( SourceTexture && USize>=8 && VSize>=8 ) // safe sizes ?
 		{
@@ -4669,7 +4649,7 @@ void UIceTexture::Clear( DWORD ClearFlags )
 void UIceTexture::ConstantTimeTick()
 {
 	guard(UIceTexture::ConstantTimeTick);
-	if( __Client && (! __Client->NoFractalAnim) )
+	if( __Client )
 	{
 		// Make sure referred textures are updated/loaded also.
 		if( SourceTexture )
@@ -4705,7 +4685,7 @@ void UIceTexture::ConstantTimeTick()
 void UIceTexture::Tick(FLOAT DeltaSeconds)  //"raw tick" override
 {
 	guard(UIceTexture::Tick);
-	if( __Client && (! __Client->NoFractalAnim) )
+	if( __Client )
 	{
 		// Revert to parent Tick() if panning stile is 'FrameSynced'. 
 		if( TimeMethod == 0 ) 

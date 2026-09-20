@@ -193,8 +193,6 @@ void USDLViewport::Destroy()
 //
 void USDLViewport::ShutdownAfterError()
 {
-	if( RenDev )
-		RenDev->RestoreGamma();
 	SDL_Quit();
 	Super::ShutdownAfterError();
 }
@@ -241,16 +239,6 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		Ar.Logf( TEXT("%ix%i"), SizeX, SizeY ); // gam
 		return 1;
 	}
-	else if( ParseCommand(&Cmd,TEXT("GETCURRENTCOLORDEPTH")) )
-	{
-		Ar.Logf( TEXT("%i"), (ColorBytes?ColorBytes:2)*8 );
-		return 1;
-	}
-	else if( ParseCommand(&Cmd,TEXT("GETCOLORDEPTHS")) )
-	{
-		Ar.Log( TEXT("32") ); //16
-		return 1;
-	}
 	else if( ParseCommand(&Cmd,TEXT("GETCURRENTRENDERDEVICE")) )
 	{
 		Ar.Log( RenDev->GetClass()->GetPathName() );
@@ -258,118 +246,12 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	}
 	else if( ParseCommand(&Cmd,TEXT("SETRES")) )
 	{
-		UBOOL Auto = appStrfind(Cmd,TEXT("AUTO")) != NULL;
-		INT X=appAtoi(Cmd);
-		const TCHAR* CmdTemp = appStrchr(Cmd,'x') ? appStrchr(Cmd,'x')+1 : appStrchr(Cmd,'X') ? appStrchr(Cmd,'X')+1 : TEXT("");
-		INT Y=appAtoi(CmdTemp);
-		Cmd = CmdTemp;
-		CmdTemp = appStrchr(Cmd,'x') ? appStrchr(Cmd,'x')+1 : appStrchr(Cmd,'X') ? appStrchr(Cmd,'X')+1 : TEXT("");
-		INT BPP=appAtoi(CmdTemp);
-		Cmd = CmdTemp;
-		UBOOL	Fullscreen = IsFullscreen() || FullscreenOnly;
-		if(appStrchr(Cmd,'w') || appStrchr(Cmd,'W'))
-			Fullscreen = 0;
-		else if(appStrchr(Cmd,'f') || appStrchr(Cmd,'F'))
-			Fullscreen = 1;
-		USDLClient* Client = GetOuterUSDLClient();
-		Client->AutoResolution = Auto;
-		Client->UpdateDesktopSize();
-		if( Auto && (Fullscreen || FullscreenOnly) )
-		{
-			X = Client->FullscreenViewportX;
-			Y = Client->FullscreenViewportY;
-		}
-		else if( Auto && IsFullscreen() )
-		{
-			X = Client->WindowedViewportX;
-			Y = Client->WindowedViewportY;
-		}
-		if( X && Y )
-		{
-			INT ColorBytes = 0;
-			switch( BPP )
-			{
-			case 16:
-				ColorBytes = 2;
-				break;
-			case 24:
-			case 32:
-				ColorBytes = 4;
-				break;
-			}
-			UBOOL Result = RenDev->SetRes( this, X, Y, Fullscreen || FullscreenOnly, ColorBytes );
-			if( !Result )
-				EndFullscreen();
-
-			if ( GUIController )
-				GUIController->ResolutionChanged(SizeX, SizeY);
-		}
-		Client->SaveConfig();
+		SetResolution( Cmd, 1 );
 		return 1;
 	}
-
 	else if( ParseCommand(&Cmd,TEXT("TEMPSETRES")) )
 	{
-		INT X=appAtoi(Cmd);
-		const TCHAR* CmdTemp = appStrchr(Cmd,'x') ? appStrchr(Cmd,'x')+1 : appStrchr(Cmd,'X') ? appStrchr(Cmd,'X')+1 : TEXT("");
-		INT Y=appAtoi(CmdTemp);
-		Cmd = CmdTemp;
-		CmdTemp = appStrchr(Cmd,'x') ? appStrchr(Cmd,'x')+1 : appStrchr(Cmd,'X') ? appStrchr(Cmd,'X')+1 : TEXT("");
-		INT BPP=appAtoi(CmdTemp);
-		Cmd = CmdTemp;
-		UBOOL	Fullscreen = IsFullscreen() || FullscreenOnly;
-		if(appStrchr(Cmd,'w') || appStrchr(Cmd,'W'))
-			Fullscreen = 0;
-		else if(appStrchr(Cmd,'f') || appStrchr(Cmd,'F'))
-			Fullscreen = 1;
-
-		USDLClient*	Client = GetOuterUSDLClient();
-		INT				SavedX,
-						SavedY;
-		if(Fullscreen)
-		{
-			SavedX = Client->FullscreenViewportX;
-			SavedY = Client->FullscreenViewportY;
-		}
-		else
-		{
-			SavedX = Client->WindowedViewportX;
-			SavedY = Client->WindowedViewportY;
-		}
-
-		if( X && Y )
-		{
-			INT ColorBytes = 0;
-			switch( BPP )
-			{
-			case 16:
-				ColorBytes = 2;
-				break;
-			case 24:
-			case 32:
-				ColorBytes = 4;
-				break;
-			}
-			UBOOL Result = RenDev->SetRes( this, X, Y, Fullscreen || FullscreenOnly, ColorBytes,0 );
-			if( !Result )
-				EndFullscreen();
-
-			if ( GUIController )
-				GUIController->ResolutionChanged(SizeX, SizeY);
-		}
-
-		if(Fullscreen)
-		{
-			Client->FullscreenViewportX = SavedX;
-			Client->FullscreenViewportY = SavedY;
-		}
-		else
-		{
-			Client->WindowedViewportX = SavedX;
-			Client->WindowedViewportY = SavedY;
-		}
-		Client->SaveConfig();
-
+		SetResolution( Cmd, 0 );
 		return 1;
 	}
 
@@ -482,7 +364,6 @@ void USDLViewport::OpenWindow( PTRINT InParentWindow, UBOOL IsTemporary, INT New
 		TryRenderDevice( TEXT("ini:Engine.Engine.RenderDevice"), NewX, NewY, GIsEditor ? 0 : C->StartupFullscreen );
 
 	check(RenDev);
-	RenDev->UpdateGamma( this );
 	UpdateWindowFrame();
 
 	unguard;
@@ -845,24 +726,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				Resized = true;
 				break;
 
-			// Auto resolution follows the window to another display.
-			case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
-				Client->UpdateDesktopSize();
-				break;
-
-			// The desktop gets its gamma back while the game is in the background.
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
-				if( RenDev )
-					RenDev->RestoreGamma();
 				if( GUIController )
 					GUIController->ResetInput();
 				if( Input )
 					Input->ResetInput();
-				break;
-
-			case SDL_EVENT_WINDOW_FOCUS_GAINED:
-				if( RenDev )
-					RenDev->UpdateGamma( this );
 				break;
 
 			default:;
@@ -976,9 +844,9 @@ UBOOL USDLViewport::TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY,
 	// Use appropriate defaults.
 	USDLClient* C = GetOuterUSDLClient();
 	if( NewX==INDEX_NONE )
-		NewX = (Fullscreen || FullscreenOnly) ? C->FullscreenViewportX : C->WindowedViewportX;
+		NewX = C->WindowedViewportX;
 	if( NewY==INDEX_NONE )
-		NewY = (Fullscreen || FullscreenOnly) ? C->FullscreenViewportY : C->WindowedViewportY;
+		NewY = C->WindowedViewportY;
 
 	// Find device driver.
 	UClass* RenderClass = UObject::StaticLoadClass( URenderDevice::StaticClass(), NULL, ClassName, NULL, 0, NULL );
@@ -995,16 +863,7 @@ UBOOL USDLViewport::TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY,
 		}
 
         // !!! FIXME: "ColorBytes" should be zero unless we need to fallback. It's complicated. Check this later. --ryan.
-		if( RenDev->SetRes( this, NewX, NewY, Fullscreen | FullscreenOnly, ColorBytes ) )
-		{
-			if( GIsRunning )
-				Actor->GetLevel()->DetailChange(
-					RenDev->SuperHighDetailActors ? DM_SuperHigh :
-					RenDev->HighDetailActors ? DM_High :
-					DM_Low
-					);
-		}
-		else
+		if( !RenDev->SetRes( this, NewX, NewY, Fullscreen | FullscreenOnly, ColorBytes ) )
 		{
 			debugf( NAME_Log, LocalizeError(TEXT("Failed3D"),TEXT("SDLDrv")) );
 			if( RenDev != GetOuterUSDLClient()->Engine->GRenDev ) 
@@ -1075,6 +934,32 @@ void USDLViewport::ToggleFullscreen()
 		debugf(TEXT("AttemptFullscreen"));
 		TryRenderDevice( TEXT("ini:Engine.Engine.RenderDevice"), INDEX_NONE, INDEX_NONE, 1 );
 	}
+	USDLClient* Client = GetOuterUSDLClient();
+	Client->StartupFullscreen = IsFullscreen();
+	Client->SaveConfig();
+	unguard;
+}
+
+//
+// SETRES WxH[w|f]. Fullscreen always covers the desktop, so the size only applies to the window.
+//
+void USDLViewport::SetResolution( const TCHAR* Cmd, UBOOL bSaveSize )
+{
+	guard(USDLViewport::SetResolution);
+	INT X = appAtoi(Cmd);
+	const TCHAR* Rest = appStrchr(Cmd,'x') ? appStrchr(Cmd,'x')+1 : appStrchr(Cmd,'X') ? appStrchr(Cmd,'X')+1 : TEXT("");
+	INT Y = appAtoi(Rest);
+	UBOOL Fullscreen = IsFullscreen() || FullscreenOnly;
+	if( appStrchr(Rest,'w') || appStrchr(Rest,'W') )
+		Fullscreen = 0;
+	else if( appStrchr(Rest,'f') || appStrchr(Rest,'F') )
+		Fullscreen = 1;
+	if( !X || !Y )
+		return;
+	if( !RenDev->SetRes( this, X, Y, Fullscreen || FullscreenOnly, 0, bSaveSize ) )
+		EndFullscreen();
+	if( GUIController )
+		GUIController->ResolutionChanged(SizeX, SizeY);
 	unguard;
 }
 
@@ -1094,13 +979,9 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	if( Client->Engine->Audio && !GIsEditor && !(GetFlags() & RF_Destroyed) )
 		SavedViewport = Client->Engine->Audio->GetViewport();
 
-	// Accept default parameters.
-	INT NewX          = InNewX         ==INDEX_NONE ? SizeX      : InNewX;
-	INT NewY          = InNewY         ==INDEX_NONE ? SizeY      : InNewY;
-
-	// Default resolution handling.
-	NewX = InNewX!=INDEX_NONE ? InNewX : (NewBlitFlags&BLIT_Fullscreen) ? Client->FullscreenViewportX : Client->WindowedViewportX;
-	NewY = InNewX!=INDEX_NONE ? InNewY : (NewBlitFlags&BLIT_Fullscreen) ? Client->FullscreenViewportY : Client->WindowedViewportY;
+	// Fullscreen takes the desktop size below.
+	INT NewX = InNewX!=INDEX_NONE ? InNewX : Client->WindowedViewportX;
+	INT NewY = InNewX!=INDEX_NONE ? InNewY : Client->WindowedViewportY;
 
 	check(NewX>=0);
 	check(NewY>=0);
@@ -1149,12 +1030,8 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	{
 		if( NewBlitFlags & BLIT_Fullscreen )
 		{
-			// The desktop size, which Auto uses, stays borderless so switching away is instant. Other sizes change the display mode.
-			SDL_DisplayMode Mode;
-			Client->UpdateDesktopSize();
-			UBOOL Exclusive = (NewX != Client->DesktopX || NewY != Client->DesktopY)
-				&& SDL_GetClosestFullscreenDisplayMode( SDL_GetDisplayForWindow(Window), NewX, NewY, 0.f, false, &Mode );
-			SDL_SetWindowFullscreenMode( Window, Exclusive ? &Mode : NULL );
+			// Borderless at the desktop size, so switching away is instant.
+			SDL_SetWindowFullscreenMode( Window, NULL );
 			SDL_SetWindowFullscreen( Window, true );
 		}
 		else
@@ -1166,7 +1043,7 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 		SDL_ShowWindow( Window );
 		SDL_SyncWindow( Window );
 
-		// SDL may pick another display mode, and the OS may limit the window.
+		// The OS may limit the window.
 		int W, H;
 		SDL_GetWindowSizeInPixels( Window, &W, &H );
 		NewX = W;
@@ -1192,24 +1069,10 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	UpdateWindowFrame();
 
 	// Save info.
-	if( RenDev && !GIsEditor && bSaveSize )
+	if( RenDev && !GIsEditor && bSaveSize && !(NewBlitFlags & BLIT_Fullscreen) && NewX && NewY )
 	{
-		if( NewBlitFlags & BLIT_Fullscreen )
-		{
-			if( NewX && NewY )
-			{
-				Client->FullscreenViewportX  = NewX;
-				Client->FullscreenViewportY  = NewY;
-			}
-		}
-		else
-		{
-			if( NewX && NewY )
-			{
-				Client->WindowedViewportX  = NewX;
-				Client->WindowedViewportY  = NewY;
-			}
-		}
+		Client->WindowedViewportX  = NewX;
+		Client->WindowedViewportY  = NewY;
 		Client->SaveConfig();
 	}
 

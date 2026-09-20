@@ -365,11 +365,6 @@ void UGameEngine::Init()
 
 		Viewport->Input->Init( Viewport );
 		Viewport->OpenWindow( 0, 0, (INT) INDEX_NONE, (INT) INDEX_NONE, (INT) INDEX_NONE, (INT) INDEX_NONE );
-		GLevel->DetailChange(
-			Viewport->RenDev->SuperHighDetailActors ? DM_SuperHigh :
-			Viewport->RenDev->HighDetailActors ? DM_High :
-			DM_Low
-			);
 
 		// jdf ---
 		if( GIsClient )
@@ -2327,52 +2322,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 		GLevel->TravelInfo = *TravelInfo;
 	unguard;
 
-	// Remove cubemaps.
-#if 1
-	if( GLevel->Engine->GRenDev && GLevel->Engine->GRenDev->Is3dfx )
-	{
-		for( TObjectIterator<UModifier> It; It; ++It )
-		{
-			if( It->Material && It->Material->IsA(UCubemap::StaticClass()) )
-				It->Material = NULL;
-		}
-
-		for( TObjectIterator<UCombiner> It; It; ++It )
-		{
-			if( It->Material1 && It->Material1->IsA(UCubemap::StaticClass()) )
-			{
-				It->Material1 = It->Material2;
-				It->Material2 = NULL;
-			}
-			if( It->Material2 && It->Material2->IsA(UCubemap::StaticClass()) )
-				It->Material2 = NULL;
-		}
-
-		for( TObjectIterator<UShader> It; It; ++It )
-		{
-			if( It->Diffuse && It->Diffuse->IsA(UCubemap::StaticClass()) )
-				It->Diffuse = NULL;
-
-			if( It->Opacity && It->Opacity->IsA(UCubemap::StaticClass()) )
-				It->Opacity = NULL;
-
-			if( It->Specular && It->Specular->IsA(UCubemap::StaticClass()) )
-				It->Specular = NULL;
-
-			if( It->SpecularityMask && It->SpecularityMask->IsA(UCubemap::StaticClass()) )
-				It->SpecularityMask = NULL;
-
-			if( It->SelfIllumination && It->SelfIllumination->IsA(UCubemap::StaticClass()) )
-				It->SelfIllumination = NULL;
-
-			if( It->SelfIlluminationMask && It->SelfIlluminationMask->IsA(UCubemap::StaticClass()) )
-				It->SelfIlluminationMask = NULL;
-
-			if( It->Detail && It->Detail->IsA(UCubemap::StaticClass()) )
-				It->Detail = NULL;
-		}
-	}
-#endif
 
 	// Purge unused objects and flush caches.
 	guard(Cleanup);
@@ -2510,17 +2459,9 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	unguard;
 
 
-	// Init detail.
+	// Detail is always the highest, script reads these while actors initialize.
 	Info->DetailMode = DM_SuperHigh;
-	if(Client && Client->Viewports.Num() && Client->Viewports(0)->RenDev)
-	{
-		if(Client->Viewports(0)->RenDev->SuperHighDetailActors)
-			Info->DetailMode = DM_SuperHigh;
-		else if(Client->Viewports(0)->RenDev->HighDetailActors)
-			Info->DetailMode = DM_High;
-		else
-			Info->DetailMode = DM_Low;
-	}
+	Info->PhysicsDetailLevel = PDL_High;
 
 	// Clear any existing stat graphs.
 	if(GStatGraph)
@@ -2533,13 +2474,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	{
 		// fix up level problems
 		FixUpLevel();
-
-		// Update draw distance.
-		if (GIsClient)
-		{
-			GLevel->GetLevelInfo()->InitDistanceFogLOD();
-			GLevel->GetLevelInfo()->UpdateDistanceFogLOD( Client->DrawDistanceLOD );
-		}
 
 		// Lock the level.
 		debugf( NAME_Log, TEXT("Bringing %s up for play (%i) appSeconds: %f..."), GLevel->GetFullName(), appRound(GetMaxTickRate()), appSeconds() ); // sjs
@@ -2692,10 +2626,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 
 				UKarmaParams* kparams = Cast<UKarmaParams>(actor->KParams);
 
-				// If running below HighDetailPhysics, turn off karma dynamics for actors with bHighDetailOnly set true.
-				if(	GLevel->GetLevelInfo()->PhysicsDetailLevel < PDL_High && kparams->bHighDetailOnly )
-					KTermActorDynamics(actor);
-
 				// If dedicated server, turn off karma for actors with bHighDetailOnly or bClientsOnly
 				if(	GLevel->GetLevelInfo()->NetMode == NM_DedicatedServer && (kparams->bHighDetailOnly || kparams->bClientOnly) )					
 					KTermActorDynamics(actor);
@@ -2706,13 +2636,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	}
 	else if ( Info->bIsSaveGame )
 	{
-		// Update draw distance.
-		if (GIsClient)
-		{
-			GLevel->GetLevelInfo()->InitDistanceFogLOD();
-			GLevel->GetLevelInfo()->UpdateDistanceFogLOD( Client->DrawDistanceLOD );
-		}
-
 		// Lock the level.
 		debugf( NAME_Log, TEXT("Bringing %s up for play (%i) appSeconds: %f..."), GLevel->GetFullName(), appRound(GetMaxTickRate()), appSeconds() ); // sjs
 		GLevel->FinishedPrecaching = 0;
@@ -2755,10 +2678,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 						continue;
 
 					UKarmaParams* kparams = Cast<UKarmaParams>(actor->KParams);
-
-					// If running below HighDetailPhysics, turn off karma dynamics for actors with bHighDetailOnly set true.
-					if(	GLevel->GetLevelInfo()->PhysicsDetailLevel < PDL_High && kparams->bHighDetailOnly )
-						KTermActorDynamics(actor);
 
 					// If dedicated server, turn off karma for actors with bHighDetailOnly or bClientsOnly
 					if(	GLevel->GetLevelInfo()->NetMode == NM_DedicatedServer && (kparams->bHighDetailOnly || kparams->bClientOnly) )					
@@ -2828,8 +2747,7 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	}
 	unguard;
 
-	// Init detail.
-	GLevel->DetailChange( (EDetailMode)Info->DetailMode );
+	GLevel->DetailChange();
 
 	// Remember the URL.
 	guard(RememberURL);
@@ -2933,14 +2851,12 @@ void UGameEngine::Draw( UViewport* Viewport, UBOOL Blit, BYTE* HitData, INT* Hit
 	// Render the level.
 	UpdateConnectingMessage();
 
-	UBOOL Ugly3dfxHack = Viewport->RenDev->Is3dfx && (appStricmp( Viewport->Actor->XLevel->GetPathName(), TEXT("ut2-intro.mylevel") ) == 0); 
-
 	BYTE SavedAction = Viewport->Actor->Level->LevelAction;
 	
 	if( Viewport->RenDev->PrecacheOnFlip ) // && !Viewport->Actor->Level->bNeverPrecache )
 		Viewport->Actor->Level->LevelAction = LEVACT_Precaching;
 
-	UBOOL bNoPresent = Ugly3dfxHack || (Viewport->Canvas && !Viewport->Canvas->bRenderLevel && Viewport->Actor && Viewport->Actor->bDemoOwner);
+	UBOOL bNoPresent = (Viewport->Canvas && !Viewport->Canvas->bRenderLevel && Viewport->Actor && Viewport->Actor->bDemoOwner);
 
 	// Precache now if desired.
 	if( Viewport->RenDev->PrecacheOnFlip )//&& !Viewport->Actor->Level->bNeverPrecache )
@@ -2962,8 +2878,7 @@ void UGameEngine::Draw( UViewport* Viewport, UBOOL Blit, BYTE* HitData, INT* Hit
 
 			Viewport->LodSceneNode = &SceneNode;
 			Viewport->RI->SetPrecacheMode( PRECACHE_VertexBuffers );
-			if( !Ugly3dfxHack )	
-				SceneNode.Render(Viewport->RI);
+			SceneNode.Render(Viewport->RI);
 
 			// Precache "dynamic" static meshes (e.g. weapon effects).
 			for( INT i=0; i<Viewport->Actor->Level->PrecacheStaticMeshes.Num(); i++ )
@@ -3015,8 +2930,7 @@ void UGameEngine::Draw( UViewport* Viewport, UBOOL Blit, BYTE* HitData, INT* Hit
 
 			Viewport->LodSceneNode = &SceneNode;
 			Viewport->RI->SetPrecacheMode( PRECACHE_All );
-			if( !Ugly3dfxHack )	
-				SceneNode.Render(Viewport->RI);
+			SceneNode.Render(Viewport->RI);
 
 			// Precache dynamic materials (e.g. player skins).
 			for( INT i=0; i<Viewport->Actor->Level->PrecacheMaterials.Num(); i++ )
@@ -3095,8 +3009,7 @@ void UGameEngine::Draw( UViewport* Viewport, UBOOL Blit, BYTE* HitData, INT* Hit
 			unclock(GStats.DWORDStats(GEngineStats.STATS_Game_AudioTickCycles));
 		}
 
-		if( !Ugly3dfxHack )	
-			SceneNode.Render(Viewport->RI);
+		SceneNode.Render(Viewport->RI);
 
 		if ( Viewport->Canvas->pCanvasUtil )
             Viewport->Canvas->pCanvasUtil->Flush();
@@ -3528,24 +3441,6 @@ void UGameEngine::Tick( FLOAT DeltaSeconds )
 	clock(GameCycles);
 	if( GLevel )
 	{
-		// Decide whether to drop high detail because of frame rate
-		if ( Client )
-		{
-			GLevel->GetLevelInfo()->bDropDetail		= (DeltaSeconds > 1.f/Clamp(Client->MinDesiredFrameRate,1.f,100.f)) && !GUseFixedTimeStep;
-			GLevel->GetLevelInfo()->bAggressiveLOD	= (DeltaSeconds > 1.f/Clamp(Client->MinDesiredFrameRate - 5.f,1.f,100.f)) && !GUseFixedTimeStep;
-			
-			//Set the framerate-dependent  global animating mesh Level-Of-Detail drop.
-			if( GLevel->GetLevelInfo()->bDropDetail ) 
-			{				
-				FLOAT FrameSlowness	=  DeltaSeconds  *  Clamp(Client->MinDesiredFrameRate,1.f,100.f)  - 1.0f; 
-				FLOAT NewGlobalLOD	= Clamp( 1.0f + Client->AnimMeshDynamicLOD *  FrameSlowness, 1.f, 3.f ); // Maximum: 3x the LOD reduction..
-				GLevel->GetLevelInfo()->AnimMeshGlobalLOD  = 0.5f * ( GLevel->GetLevelInfo()->AnimMeshGlobalLOD + NewGlobalLOD );  // "Tween" it with the previous setting.							
-			}
-			else
-			{
-				GLevel->GetLevelInfo()->AnimMeshGlobalLOD =1.0f;
-			}
-		}
 		// tick the level
 		GLevel->Tick( LEVELTICK_All, DeltaSeconds );
 	}

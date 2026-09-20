@@ -447,22 +447,22 @@ void ALevelInfo::execDetailChange( FFrame& Stack, RESULT_DECL )
 {
 	guard(ALevelInfo::execDetailChange);
 
+	// Detail is always the highest.
 	P_GET_BYTE(NewDetailMode);
 	P_FINISH;
 
-	XLevel->DetailChange((EDetailMode)NewDetailMode);
+	XLevel->DetailChange();
 
 	unguard;
 }
 
+// The fog distance is always the level's own.
 void ALevelInfo::execUpdateDistanceFogLOD( FFrame& Stack, RESULT_DECL )
 {
 	guard(ALevelInfo::execUpdateDistanceFogLOD);
 
 	P_GET_FLOAT( DistanceFogLOD);
 	P_FINISH;
-
-	UpdateDistanceFogLOD( DistanceFogLOD );
 
 	unguard;
 }

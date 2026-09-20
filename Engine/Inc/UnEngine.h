@@ -103,8 +103,6 @@ class ENGINE_API UEngine : public USubsystem
 	virtual void Init();
 	virtual UBOOL Exec( const TCHAR* Cmd, FOutputDevice& Out=*GLog );
 	virtual void Flush( UBOOL AllowPrecache );
-	virtual void UpdateGamma();
-	virtual void RestoreGamma();
 	virtual UBOOL Key( UViewport* Viewport, EInputKey Key, TCHAR Unicode );
 	virtual UBOOL InputEvent( UViewport* Viewport, EInputKey iKey, EInputAction State, FLOAT Delta=0.f );
 	virtual void Tick( FLOAT DeltaSeconds )=0;

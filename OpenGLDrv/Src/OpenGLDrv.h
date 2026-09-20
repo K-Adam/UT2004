@@ -196,13 +196,6 @@ public:
 							ViewportHeight;
 		INT					ZBias;
 
-		ECompareFunction	StencilTest;
-		EStencilOp			StencilFailOp,
-							StencilZFailOp,
-							StencilPassOp;
-		DWORD				StencilRef,
-							StencilMask,
-							StencilWriteMask;
 
 		FMatrix				LocalToWorld,
 							WorldToCamera,
@@ -241,6 +234,7 @@ public:
 	FSavedState*		CurrentState;
 	INT					SavedStateIndex;
 	EPrecacheMode		PrecacheMode;
+	UBOOL				InWorld;
 
 	TArray<BYTE>		DynamicVertices;
 	INT					DynamicStride,
@@ -258,6 +252,8 @@ public:
 	virtual UBOOL SetRenderTarget(FRenderTarget* RenderTarget);
 	virtual void SetViewport(INT X,INT Y,INT Width,INT Height);
 	virtual void Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FLOAT Depth,UBOOL UseStencil,DWORD Stencil);
+	virtual void BeginWorld();
+	virtual void EndWorld();
 	virtual void PushHit(const BYTE* Data,INT Count) {}
 	virtual void PopHit(INT Count,UBOOL Force) {}
 	virtual void SetCullMode(ECullMode CullMode);
@@ -269,7 +265,8 @@ public:
 	virtual void SetGlobalColor(FColor Color);
 	virtual void SetTransform(ETransformType Type,const FMatrix& Matrix);
 	virtual void SetMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial,INT* NumPasses);
-	virtual void SetStencilOp(ECompareFunction Test,DWORD Ref,DWORD Mask,EStencilOp FailOp,EStencilOp ZFailOp,EStencilOp PassOp,DWORD WriteMask);
+	// Retail renders without stencil, its portals and sky draw child scenes first.
+	virtual void SetStencilOp(ECompareFunction Test,DWORD Ref,DWORD Mask,EStencilOp FailOp,EStencilOp ZFailOp,EStencilOp PassOp,DWORD WriteMask) {}
 	virtual void SetPrecacheMode(EPrecacheMode InPrecacheMode) { PrecacheMode = InPrecacheMode; }
 	virtual void SetZBias(INT ZBias);
 	virtual INT SetVertexStreams(EVertexShader Shader,FVertexStream** Streams,INT NumStreams);
@@ -291,24 +288,37 @@ private:
 	UBOOL CompileMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial);
 };
 
+// A colour texture with depth and stencil. With multisampling the drawing goes to separate buffers that Resolve copies into the texture.
+struct FOpenGLFramebuffer
+{
+	GLuint	Framebuffer,
+			Texture,
+			DepthStencil,
+			MultisampleFramebuffer,
+			MultisampleColor;
+	INT		Width,
+			Height,
+			Samples;
+	UBOOL	Resolved;
+
+	FOpenGLFramebuffer() { appMemzero(this,sizeof(*this)); }
+	GLuint DrawFramebuffer() const { return Samples ? MultisampleFramebuffer : Framebuffer; }
+};
+
 class UOpenGLRenderDevice : public URenderDevice
 {
 	DECLARE_CLASS(UOpenGLRenderDevice,URenderDevice,CLASS_Config,OpenGLDrv)
 
 	UBOOL	UseVSync,
-			UseTrilinear,
-			UsePrecaching,
-			ReduceMouseLag;
-	INT		LevelOfAnisotropy,
-			MultisampleSamples;
-	FLOAT	DefaultTexMipBias,
-			DetailTexMipBias;
+			ReduceMouseLag,
+			Antialiasing,
+			HalfResolution;
 
 	UBOOL	SupportsDXT1,
-			SupportsDXT35,
-			SupportsAnisotropy;
+			SupportsDXT35;
 	INT		MaxTextureSize,
-			MaxAnisotropy;
+			MaxAnisotropy,
+			MaxSamples;
 
 	FRenderCaps				RenderCaps;
 	FOpenGLRenderInterface	RenderInterface;
@@ -318,7 +328,6 @@ class UOpenGLRenderDevice : public URenderDevice
 	TMap<QWORD,FOpenGLResource*>			Resources;
 	TMultiMap<DWORD,FOpenGLProgram*>		Programs;
 	TMap<DWORD,GLuint>					Samplers;
-	INT									SamplerSettings;
 
 	GLuint	VertexArray,
 			EmptyVertexArray,
@@ -326,22 +335,15 @@ class UOpenGLRenderDevice : public URenderDevice
 			QuadIndices,
 			VertexShaderObject,
 			GammaProgram;
-	GLint	GammaRamp;
+	GLint	GammaUniform;
 	GLsync	FrameFence;
 	PFNGLDRAWELEMENTSBASEVERTEXOESPROC	DrawElementsBaseVertex;
 	FOpenGLDynamicBuffer	DynamicVertexBuffer,
 						DynamicIndexBuffer;
 
-	// The scene is drawn here and copied to the window by the gamma pass.
-	GLuint	SceneFramebuffer,
-			SceneTexture,
-			SceneDepthStencil,
-			MultisampleFramebuffer,
-			MultisampleColor;
-	INT		SceneWidth,
-			SceneHeight,
-			SceneSamples;
-	UBOOL	SceneResolved;
+	// The world is drawn into World, at half size with HalfResolution, and copied into Scene with gamma. Scene then goes to the window.
+	FOpenGLFramebuffer	Scene,
+						World;
 
 	// Last state sent to GL, so Commit only changes what differs.
 	struct FGLState
@@ -356,7 +358,6 @@ class UOpenGLRenderDevice : public URenderDevice
 		UBOOL			Blend,
 						DepthTest,
 						Cull,
-						Stencil,
 						PolygonOffset;
 		GLenum			SrcBlend,
 						DstBlend,
@@ -364,7 +365,6 @@ class UOpenGLRenderDevice : public URenderDevice
 						CullFace;
 		GLboolean		DepthMask;
 		INT				ZBias;
-		DWORD			StencilKey[7];
 		FOpenGLStream		Streams[OGL_MAX_STREAMS];
 		INT				NumStreams,
 						BaseVertex;
@@ -384,9 +384,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	virtual void Flush(UViewport* Viewport);
 	virtual void FlushResource(QWORD CacheId);
 	virtual UBOOL ResourceCached(QWORD CacheId);
-	virtual void UpdateGamma(UViewport* Viewport) {}
-	virtual void RestoreGamma() {}
-	virtual UBOOL Exec(const TCHAR* Cmd,FOutputDevice& Ar);
+	virtual UBOOL Exec(const TCHAR* Cmd,FOutputDevice& Ar) { return 0; }
 	virtual FRenderInterface* Lock(UViewport* Viewport,BYTE* HitData,INT* HitSize);
 	virtual void Unlock(FRenderInterface* RI);
 	virtual void Present(UViewport* Viewport);
@@ -397,15 +395,15 @@ class UOpenGLRenderDevice : public URenderDevice
 	FOpenGLResource* GetCachedResource(QWORD CacheId);
 	GLuint GetSampler(DWORD Flags);
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
-	void ResolveScene();
+	void ResolveFramebuffer(FOpenGLFramebuffer& F);
+	void DrawFullscreen(GLuint Texture,GLuint Framebuffer,INT Width,INT Height,FLOAT Gamma);
 
 private:
 	UBOOL InitContext();
 	void ResetStateCache();
-	void CreateSceneFramebuffer(INT Width,INT Height);
-	void DestroySceneFramebuffer();
+	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples);
+	void DestroyFramebuffer(FOpenGLFramebuffer& F);
 	void ReleaseObjects();
-	void ReleaseSamplers();
 };
 
 extern const ANSICHAR* OpenGLVertexShader;

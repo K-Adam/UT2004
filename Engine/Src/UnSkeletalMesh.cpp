@@ -4803,33 +4803,6 @@ static FColor CalcCollisionPrimRenderColor(UBOOL bBlockKarma, UBOOL bBlockZeroEx
 }
 
 
-// Assign detail factors to the discrete skeletal mesh detail level options.
-inline FLOAT DetermineGlobalDetailBias( AActor* MeshActor)
-{
-	FLOAT GlobalDetailBias = 1.0f;
-	if( MeshActor && MeshActor->GetLevel() && MeshActor->GetLevel()->GetLevelInfo() )
-	{
-		BYTE DetailLevel = MeshActor->GetLevel()->GetLevelInfo()->MeshLODDetailLevel;
-		switch( DetailLevel)
-		{
-			case MDL_Low:
-				GlobalDetailBias = 1.22f;
-			break;
-			case MDL_Medium:
-				GlobalDetailBias = 1.00f;
-			break;
-			case MDL_High:
-				GlobalDetailBias = 0.72f;
-			break;
-			case MDL_Ultra:
-				GlobalDetailBias = 0.33f;
-			break;
-		}
-	}	
-	return GlobalDetailBias;
-}
-
-
 // Very Rough approximation of rigid wedge count, used for LOD-scaling only.
 FORCEINLINE INT GetTotalWedgeCountEstimate( const FStaticLODModel& LODModel)
 {	
@@ -4920,7 +4893,8 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 	FLOAT ResolutionBias = 0.3f + 0.7f* ResolutionX/640.f; // Moderated resolution influence.
 	// Z coordinate :in units. 60 units is about the player's height. 
 	FLOAT Z = (LodSceneNode->Project( MeshLODOrigin ) ).W - SkelMesh->LODZDisplace;
-	FLOAT GlobalLODFactor =    GIsEditor ? 1.0f : ( Actor->GetLevel() ? Actor->GetLevel()->GetLevelInfo()->AnimMeshGlobalLOD : 1.0f )  * DetermineGlobalDetailBias( Actor ) ;	
+	// MDL_Ultra's detail bias.
+	FLOAT GlobalLODFactor = 0.33f;	
 	FLOAT DetailDiv = SkelMesh->LODStrength * FovBias * Max( 1.f, Z ) * CpxBias * GlobalLODFactor;
 	FLOAT MeshVertLODFactor  = 420.0f * ResolutionBias * Actor->DrawScale3D.GetMax() * Actor->DrawScale * Actor->LODBias * SkelMesh->MeshScaleMax / DetailDiv;   
 	// 530.0f seems reasonable LOD factor ( early Warfare portal-based build )	
@@ -5129,7 +5103,7 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 				}
 				else // Regular textured.
 				{
-					RI->SetMaterial( ApplyOverlayMaterial(Material, Actor->OverlayMaterial, (Actor->Level->DetailMode == DM_Low) ? NULL : Actor->HighDetailOverlay) );			
+					RI->SetMaterial( ApplyOverlayMaterial(Material, Actor->OverlayMaterial, Actor->HighDetailOverlay) );			
 				}
 			
 			
@@ -5318,7 +5292,7 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 					}
 					else // Regular textured.
 					{
-						RI->SetMaterial( ApplyOverlayMaterial(Material, Actor->OverlayMaterial, (Actor->Level->DetailMode == DM_Low) ? NULL : Actor->HighDetailOverlay) );			
+						RI->SetMaterial( ApplyOverlayMaterial(Material, Actor->OverlayMaterial, Actor->HighDetailOverlay) );			
 					}					
 				}
 

@@ -127,18 +127,11 @@ void USDLClient::Init( UEngine* InEngine )
 	// Note configuration.
 	PostEditChange();
 
-	// Default res option.
 	if( ParseParam(appCmdLine(),TEXT("defaultres")) )
 	{
-	    // gam ---
-		WindowedViewportX  = FullscreenViewportX  = MenuViewportX   = 640;
-		WindowedViewportY  = FullscreenViewportY  = MenuViewportY   = 480;
-		// --- gam
-		AutoResolution = 0;
+		WindowedViewportX = 640;
+		WindowedViewportY = 480;
 	}
-
-	UpdateDesktopSize();
-
 
 	// Success.
 	debugf( NAME_Init, TEXT("SDLClient initialized.") );
@@ -202,25 +195,6 @@ void USDLClient::CloseJoystick()
 		SDL_CloseJoystick( Joystick );
 	Gamepad = NULL;
 	Joystick = NULL;
-	unguard;
-}
-
-//
-// Reads the desktop size of the display the window is on, or of the primary one before there is a window.
-//
-void USDLClient::UpdateDesktopSize()
-{
-	guard(USDLClient::UpdateDesktopSize);
-	const SDL_DisplayMode* Desktop = SDL_GetDesktopDisplayMode( Window ? SDL_GetDisplayForWindow( Window ) : SDL_GetPrimaryDisplay() );
-	if( !Desktop )
-		return;
-	DesktopX = Desktop->w;
-	DesktopY = Desktop->h;
-	if( AutoResolution )
-	{
-		FullscreenViewportX = DesktopX;
-		FullscreenViewportY = DesktopY;
-	}
 	unguard;
 }
 

@@ -477,34 +477,12 @@ class ENGINE_API UClient : public UObject
 	// Configurable.
 	BITFIELD	CaptureMouse;
 	BITFIELD	ScreenFlashes;
-	BITFIELD	NoLighting;
-	BITFIELD	Decals;
-	BITFIELD	NoDynamicLights;
-	BITFIELD    NoFractalAnim;
-	BITFIELD	Coronas;
-	BITFIELD	DecoLayers;
-	BITFIELD	Projectors;
 	BITFIELD	ReportDynamicUploads;
-	BITFIELD	WeatherEffects;
-	BITFIELD	AutoResolution;
 	INT			WindowedViewportX;
 	INT			WindowedViewportY;
-	INT			FullscreenViewportX;
-	INT			FullscreenViewportY;
-	INT			MenuViewportX;
-	INT			MenuViewportY;
-	FLOAT		Brightness;
-	FLOAT		Contrast;
 	FLOAT		Gamma;
-	INT			TextureLODSet[LODSET_MAX];
-	FLOAT		MinDesiredFrameRate;
 	UViewport*	LastCurrent;		// The viewport that was last current
 	FLOAT		ScaleHUDX;
-	FLOAT		AnimMeshDynamicLOD; //Maximum framerate-induced animating mesh LOD reduction.
-	FLOAT		DrawDistanceLOD;
-	INT			DesktopX, DesktopY;
-
-    UEnum *PTextureDetail; // gam
 
 	class UInteractionMaster* InteractionMaster;	// Input router
 
@@ -520,8 +498,6 @@ class ENGINE_API UClient : public UObject
 	// UClient interface.
 	virtual void Init( UEngine* InEngine )=0;
 	virtual void Flush( UBOOL AllowPrecache );
-	virtual void UpdateGamma();
-	virtual void RestoreGamma();
 	virtual void ShowViewportWindows( DWORD ShowFlags, int DoShow )=0;
 	virtual void EnableViewportWindows( DWORD ShowFlags, int DoEnable )=0;
 	virtual void Tick()=0;
@@ -530,10 +506,6 @@ class ENGINE_API UClient : public UObject
 	virtual void MakeCurrent( UViewport* NewViewport )=0;
 	virtual UViewport* GetLastCurrent()=0;
 	virtual void TeardownSR()=0;
-
-    // gam ---
-    INT GetTextureLODBias (ELODSet LODSet);
-    // --- gam
 };
 
 /*-----------------------------------------------------------------------------

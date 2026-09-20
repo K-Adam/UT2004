@@ -17,22 +17,6 @@ IMPLEMENT_CLASS(AFluidSurfaceOscillator);
 
 const DOUBLE MyU2Rad = (DOUBLE)0.000095875262;
 
-inline UBOOL UsingLowDetail(AFluidSurfaceInfo* Fluid)
-{
-	ULevel* level = Fluid->GetLevel();
-	if(!level)
-		return 0;
-
-	ALevelInfo* info = level->GetLevelInfo();
-	if(!info)
-		return 0;
-
-	if(info->PhysicsDetailLevel == PDL_Low)
-		return 1;
-	else
-		return 0;
-}
-
 /* ********************* UFLUIDSURFACEPRIM ***************** */
 
 UBOOL UFluidSurfacePrimitive::LineCheck
@@ -186,10 +170,6 @@ void AFluidSurfaceInfo::Pling(const FVector& Position, FLOAT Strength, FLOAT Rad
 {
 	guard(AFluidSurfaceInfo::Pling);
 
-	// Do nothing if on low detail level.
-	if( UsingLowDetail(this) )
-		return;
-
 	// Transform pling position to local space.
 	INT hitY, hitX;
 	GetNearestIndex(Position, hitX, hitY);
@@ -240,10 +220,6 @@ void AFluidSurfaceInfo::Pling(const FVector& Position, FLOAT Strength, FLOAT Rad
 void AFluidSurfaceInfo::PlingVertex(INT x, INT y, FLOAT Strength)
 {
 	guard(AFluidSurfaceInfo::PlingVertex);
-
-	// Do nothing if on low detail level.
-	if( UsingLowDetail(this) )
-		return;
 
 	// If we are trying to pling outside the fluid surface - do nothing.
 	if(x < 1 || x > FluidXSize-2)
@@ -542,27 +518,15 @@ void AFluidSurfaceInfo::Render(FDynamicActor* Actor,
 		INT	BaseVertexIndex = RI->SetDynamicStream(VS_FixedFunction,&FluidSurfaceVertices);
 		INT BaseIndex		= RI->SetDynamicIndexBuffer(&FluidSurfaceIndices,BaseVertexIndex);
 
-		if( UsingLowDetail(this) )
-		{
-			RI->DrawPrimitive(
-				PT_TriangleList, 
-				BaseIndex,
-				2,
-				0,
-				3);
-		}
-		else
-		{
-			// Two tris per square.
-			INT NumTris = (FluidXSize-1) * (FluidYSize-1) * 2;
+		// Two tris per square.
+		INT NumTris = (FluidXSize-1) * (FluidYSize-1) * 2;
 
-			RI->DrawPrimitive(
-				PT_TriangleList, 
-				BaseIndex,
-				NumTris,
-				0,
-				(FluidXSize * FluidYSize) - 1);
-		}
+		RI->DrawPrimitive(
+			PT_TriangleList,
+			BaseIndex,
+			NumTris,
+			0,
+			(FluidXSize * FluidYSize) - 1);
 		
 		RI->PopState();
 	}
@@ -736,10 +700,6 @@ UPrimitive* AFluidSurfaceInfo::GetPrimitive()
 void AFluidSurfaceInfo::UpdateSimulation( FLOAT DeltaTime )
 {
 	guard(AFluidSurfaceInfo::UpdateSimulation);
-
-	// Do nothing if on low detail level.
-	if( UsingLowDetail(this) )
-		return;
 
 	// Add ripples for actors in the water
 	for (INT i=0; i<Touching.Num(); i++)
@@ -929,10 +889,6 @@ UBOOL AFluidSurfaceInfo::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 	if(bDeleteMe || TickType == LEVELTICK_ViewportsOnly && !GIsEditor)
 		return true;
 
-	// Do nothing if on low detail level.
-	if( UsingLowDetail(this) )
-		return true;
-
 	FLOAT simStep = 1/UpdateRate;
 
 	if(!bHasWarmedUp)
@@ -973,10 +929,7 @@ UBOOL AFluidSurfaceInfo::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 
 INT FFluidSurfaceVertexStream::GetSize()
 {
-	if( UsingLowDetail(Fluid) )
-		return (2 * 2 * sizeof(FFluidSurfaceVertex));
-	else
-		return (this->Fluid->FluidXSize * this->Fluid->FluidYSize * sizeof(FFluidSurfaceVertex));
+	return (this->Fluid->FluidXSize * this->Fluid->FluidYSize * sizeof(FFluidSurfaceVertex));
 }
 
 INT FFluidSurfaceVertexStream::GetComponents(FVertexComponent* OutComponents)
@@ -995,10 +948,7 @@ INT FFluidSurfaceVertexStream::GetComponents(FVertexComponent* OutComponents)
 
 void FFluidSurfaceVertexStream::GetStreamData(void* Dest)
 {
-	if( UsingLowDetail(Fluid) )
-		Fluid->SimpleFillVertexBuffer(Dest);
-	else
-		Fluid->FillVertexBuffer(Dest);
+	Fluid->FillVertexBuffer(Dest);
 }
 
 
@@ -1006,83 +956,16 @@ void FFluidSurfaceVertexStream::GetStreamData(void* Dest)
 
 INT FFluidSurfaceIndexBuffer::GetSize()
 {
-	if( UsingLowDetail(Fluid) )
-		return (1 * 1 * 2 * 3 * sizeof(_WORD));
-	else
-		return ((Fluid->FluidXSize-1) * (Fluid->FluidYSize-1) * 2 * 3 * sizeof(_WORD));
+	return ((Fluid->FluidXSize-1) * (Fluid->FluidYSize-1) * 2 * 3 * sizeof(_WORD));
 }
 
 
 void FFluidSurfaceIndexBuffer::GetContents(void* Data)
 {
-	if( UsingLowDetail(Fluid) )
-		Fluid->SimpleFillIndexBuffer(Data);
-	else
-		Fluid->FillIndexBuffer(Data);
+	Fluid->FillIndexBuffer(Data);
 }
 
 /* ********************* BUFFER FILLERS ************************* */
-
-void AFluidSurfaceInfo::SimpleFillVertexBuffer(void* Dest)
-{
-	guard(AFluidSurfaceInfo::SimpleFillVertexBuffer);
-
-	INT StartVertGenTime = appCycles();
-
-	FFluidSurfaceVertex* Vertex = (FFluidSurfaceVertex*)Dest;
-	const FVector defNorm = FVector(0, 0, 1);
-
-	FColor Color = FluidColor;
-	Color.A = 0;
-    Color = Color.RenderColor();
-
-	// //
-	Vertex->Position.X = FluidBoundingBox.Min.X;
-	Vertex->Position.Y = FluidBoundingBox.Min.Y;
-	Vertex->Position.Z = FluidOrigin.Z;
-
-	Vertex->Normal		= defNorm;
-	Vertex->U			= UOffset;
-	Vertex->V			= VOffset;
-	Vertex->Color		= Color;
-	Vertex++;
-
-	// //
-	Vertex->Position.X = FluidBoundingBox.Max.X;
-	Vertex->Position.Y = FluidBoundingBox.Min.Y;
-	Vertex->Position.Z = FluidOrigin.Z;
-
-	Vertex->Normal		= defNorm;
-	Vertex->U			= UOffset + UTiles;
-	Vertex->V			= VOffset;
-	Vertex->Color		= Color;
-	Vertex++;
-
-	// //
-	Vertex->Position.X = FluidBoundingBox.Min.X;
-	Vertex->Position.Y = FluidBoundingBox.Max.Y;
-	Vertex->Position.Z = FluidOrigin.Z;
-
-	Vertex->Normal		= defNorm;
-	Vertex->U			= UOffset;
-	Vertex->V			= VOffset + VTiles;
-	Vertex->Color		= Color;
-	Vertex++;
-
-	// //
-	Vertex->Position.X = FluidBoundingBox.Max.X;
-	Vertex->Position.Y = FluidBoundingBox.Max.Y;
-	Vertex->Position.Z = FluidOrigin.Z;
-
-	Vertex->Normal		= defNorm;
-	Vertex->U			= UOffset + UTiles;
-	Vertex->V			= VOffset + VTiles;
-	Vertex->Color		= Color;
-
-	GStats.DWORDStats( GEngineStats.STATS_Fluid_VertexGenCycles ) += (appCycles() - StartVertGenTime);
-
-	unguard;
-}
 
 void AFluidSurfaceInfo::FillVertexBuffer(void* Dest)
 {
@@ -1451,23 +1334,6 @@ void AFluidSurfaceInfo::FillVertexBuffer(void* Dest)
 	}
 
 	GStats.DWORDStats( GEngineStats.STATS_Fluid_VertexGenCycles ) += (appCycles() - StartVertGenTime);
-
-	unguard;
-}
-
-void AFluidSurfaceInfo::SimpleFillIndexBuffer(void* Data)
-{
-	guard(AFluidSurfaceInfo::SimpleFillIndexBuffer);
-
-	_WORD* WordData = (_WORD*)Data;
-
-	*(WordData++) = 0;
-	*(WordData++) = 3;
-	*(WordData++) = 1;
-
-	*(WordData++) = 0;
-	*(WordData++) = 2;
-	*(WordData++) = 3;	
 
 	unguard;
 }

@@ -204,7 +204,6 @@ struct FRenderState
 	FRenderInterface*				RI;						// The renderer.
 	ULevel*							Level;					// The level being rendered.
 	UModel*							Model;					// The level's BSP tree.
-	UClient*						Client;					// UClient for detail options.
 
 	TList<FDynamicActor*>**			LeafActors;				// Maps a leaf index to a list of actors in the leaf.
 	TList<FDynamicActor*>*			OutsideActors;			// A list of actors that are entirely outside of the level.
@@ -226,10 +225,6 @@ struct FRenderState
 
 	FBspDrawList**					BspDrawLists;			// An array of BSP draw list pointers.
 	TList<INT>*						SectionDrawList;		// A list of BSP sections to draw.
-
-	TList<FBspStencilDrawList*>*	StencilDrawLists;		// A list of BSP stencil draw lists.
-
-	DWORD							SkyStencilMask;			// The stencil mask to initialize untouched pixels to before drawing the sky.
 };
 
 TList<FProjectorRenderBatch*>*	GProjectorBatchList;
@@ -962,8 +957,7 @@ static void ProcessLeaf(FRenderState& RenderState,INT iLeaf)
 						else
 							RenderState.ActorDrawList = new(GSceneMem) TList<FDynamicActor*>(DynamicActor,RenderState.ActorDrawList);
 
-						if( RenderState.Client->Coronas
-						&&	DynamicActor->Actor->bCorona 
+						if( DynamicActor->Actor->bCorona 
 						&&  (FDistSquared(RenderState.SceneNode->ViewOrigin, DynamicActor->Actor->Location) < Square(DynamicActor->Actor->WorldLightRadius()) || DynamicActor->Actor->LightRadius == 0 )
 						&&  RenderState.Zones[iZone].Visible(FBox(DynamicActor->Actor->Location,DynamicActor->Actor->Location)) 
 						&&  CheckCullDistance(RenderState.SceneNode->ViewOrigin,DynamicActor,RenderState.SceneNode->Viewport)   // sjs
@@ -1016,8 +1010,7 @@ static void ProcessLeaf(FRenderState& RenderState,INT iLeaf)
 				else
 					RenderState.ActorDrawList = new(GSceneMem) TList<FDynamicActor*>(DynamicActor,RenderState.ActorDrawList);
 
-				if( RenderState.Client->Coronas
-				&&	DynamicActor->Actor->bCorona 
+				if( DynamicActor->Actor->bCorona 
 				&&  (FDistSquared(RenderState.SceneNode->ViewOrigin, DynamicActor->Actor->Location) < Square(DynamicActor->Actor->WorldLightRadius()) || DynamicActor->Actor->LightRadius == 0 )
 				&&  RenderState.Zones[iZone].Visible(FBox(DynamicActor->Actor->Location,DynamicActor->Actor->Location)) 
 				&&  CheckCullDistance(RenderState.SceneNode->ViewOrigin,DynamicActor,RenderState.SceneNode->Viewport)   // sjs
@@ -1087,7 +1080,6 @@ static void ProcessNode(FRenderState& RenderState,INT iNode,FDynamicLight** Dyna
 
 		if(RenderState.Zones[RenderState.SceneNode->ViewZone ? Node.iZone[IsFront] : 0].Visible(Node.ExclusiveSphereBound))
 		{
-			DWORD	StencilMask = 0;
 			UBOOL	RenderNode = 0;
 
 			if(Surf.PolyFlags & PF_FakeBackdrop)
@@ -1130,7 +1122,6 @@ static void ProcessNode(FRenderState& RenderState,INT iNode,FDynamicLight** Dyna
 							RenderState.ChildSceneNodes = new(GSceneMem) TList<FLevelSceneNode*>(SkySceneNode,RenderState.ChildSceneNodes);
 						}
 
-						RenderState.SkyStencilMask = SkySceneNode->StencilMask;
 						RenderNode = 0;
 					}
 				}
@@ -1156,8 +1147,6 @@ static void ProcessNode(FRenderState& RenderState,INT iNode,FDynamicLight** Dyna
 						MirrorSceneNode = new FMirrorSceneNode(RenderState.SceneNode,Node.Plane,Node.iZone[IsFront],Node.iSurf);
 						RenderState.ChildSceneNodes = new(GSceneMem) TList<FLevelSceneNode*>(MirrorSceneNode,RenderState.ChildSceneNodes);
 					}
-
-					StencilMask = MirrorSceneNode->StencilMask;
 				}
 			}
 			else if(RenderState.SceneNode->ViewZone && (Surf.PolyFlags & PF_Portal))
@@ -1296,8 +1285,6 @@ static void ProcessNode(FRenderState& RenderState,INT iNode,FDynamicLight** Dyna
 										WarpZoneSceneNode = new FWarpZoneSceneNode(RenderState.SceneNode,WarpZone);
 										RenderState.ChildSceneNodes = new(GSceneMem) TList<FLevelSceneNode*>(WarpZoneSceneNode,RenderState.ChildSceneNodes);
 									}
-
-									StencilMask = WarpZoneSceneNode->StencilMask;
 								}
 							}
 
@@ -1351,30 +1338,6 @@ static void ProcessNode(FRenderState& RenderState,INT iNode,FDynamicLight** Dyna
 
 			if(RenderNode && Node.iZone[IsFront] != RenderState.SceneNode->InvisibleZone && Node.iSection != INDEX_NONE && (RenderState.SceneNode->Viewport->Actor->ShowFlags & SHOW_BSP))
 			{
-				if(StencilMask)
-				{
-					// Add the node to a stencil draw list.
-
-					FBspStencilDrawList*	StencilDrawList = NULL;
-
-					for(TList<FBspStencilDrawList*>* List = RenderState.StencilDrawLists;List;List = List->Next)
-					{
-						if(List->Element->StencilMask == StencilMask && List->Element->SectionIndex == Node.iSection)
-						{
-							StencilDrawList = List->Element;
-							break;
-						}
-					}
-
-					if(!StencilDrawList)
-					{
-						StencilDrawList = new(GSceneMem) FBspStencilDrawList(RenderState.Model,Node.iSection,StencilMask);
-						RenderState.StencilDrawLists = new(GSceneMem) TList<FBspStencilDrawList*>(StencilDrawList,RenderState.StencilDrawLists);
-					}
-
-					StencilDrawList->AddNode(iNode);
-				}
-
 				if(!(Surf.PolyFlags & PF_Mirrored) || !(Surf.PolyFlags & PF_Invisible))
 				{
 					if(Surf.Material && Surf.Material->RequiresSorting())
@@ -1495,7 +1458,6 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 
 	RenderState.Level		= Level;
 	RenderState.Model		= Model;
-	RenderState.Client		= SceneNode->Viewport->GetOuterUClient();
 
 	CurrentVisibilityTag++;
 
@@ -1566,8 +1528,7 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 		RenderState.LeafActors		= NewZeroed<TList<FDynamicActor*>*>(GSceneMem,Model->Leaves.Num());
 
 		// Iterate through all actors, except for the level info and builder brush.
-		UBOOL	IsLit = SceneNode->Viewport->IsLit(),
-				IsDynamicLit = !SceneNode->Viewport->GetOuterUClient()->NoDynamicLights;
+		UBOOL	IsLit = SceneNode->Viewport->IsLit();
 
 		INT ActorIndex;
 
@@ -1605,7 +1566,7 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 					if(!SceneNode->Parent && (((Actor->bDynamicLight || CachedLight->Dynamic) || ((Actor->bLightChanged || Actor->bDeleteMe) || CachedLight->Changed))))
 						CachedLight->Update();
 
-					if((CachedLight->Dynamic || CachedLight->Changed) && NumDynamicLights < 256 && IsDynamicLit)
+					if((CachedLight->Dynamic || CachedLight->Changed) && NumDynamicLights < 256)
 						DynamicLights[NumDynamicLights++] = CachedLight;
 				}
 			}
@@ -1691,9 +1652,7 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 
 	RenderState.BspDrawLists = NewZeroed<FBspDrawList*>(GSceneMem,Model->Sections.Num());
 	RenderState.SectionDrawList = NULL;
-	RenderState.StencilDrawLists = NULL;
 
-	RenderState.SkyStencilMask		= 0;
 	RenderState.ChildSceneNodes		= NULL;
 
 	// Setup the view frustum.
@@ -1969,19 +1928,14 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 	GStats.DWORDStats( GEngineStats.STATS_Visibility_TraverseCycles ) += (appCycles() - TraverseStartTime);
 
 
-	// Render child scene nodes first if not using stencil.
-	if( !(GIsEditor || SceneNode->Viewport->RenDev->UseStencil ) )
+	// Child scene nodes go first, the level then draws over them with fresh depth.
+	for(TList<FLevelSceneNode*>* Child = RenderState.ChildSceneNodes;Child;Child = Child->Next)
 	{
-		UBOOL RequiresClear = 0;
-		for(TList<FLevelSceneNode*>* Child = RenderState.ChildSceneNodes;Child;Child = Child->Next)
-		{
-			RequiresClear = 1;
-			Child->Element->Render(RI);
-			delete Child->Element;
-		}
-		if( RequiresClear )
-			RI->Clear(0,FColor(0,0,0),1,1.0f,0,0);
+		Child->Element->Render(RI);
+		delete Child->Element;
 	}
+	if( RenderState.ChildSceneNodes )
+		RI->Clear(0,FColor(0,0,0),1,1.0f,0,0);
 
 	// Render terrain.
 	if(SceneNode->Viewport->Actor->ShowFlags & SHOW_Terrain)
@@ -1998,8 +1952,6 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 				{
 					ATerrainInfo*	TerrainInfo = ZoneActor->Terrains(TerrainIndex);
 					
-					if((TerrainInfo->bHighDetail && TerrainInfo->Level->DetailMode == DM_Low) || (TerrainInfo->bSuperHighDetail && TerrainInfo->Level->DetailMode != DM_SuperHigh))
-						continue;
 						
 					RI->PushState();
 
@@ -2045,62 +1997,6 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 
 	RI->PopState();
 
-	if( GIsEditor || SceneNode->Viewport->RenDev->UseStencil )
-	{
-		// Render stencil surfaces.
-		for(TList<FBspStencilDrawList*>* StencilDrawList = RenderState.StencilDrawLists;StencilDrawList;StencilDrawList = StencilDrawList->Next)
-			StencilDrawList->Element->Render(SceneNode,RI);
-
-		// Write the sky stencil mask to untouched pixels.
-		if(RenderState.SkyStencilMask)
-		{
-			INT	SkyStencilStartCycle = appCycles();
-
-			RI->PushState();
-
-			DECLARE_STATIC_UOBJECT(
-				UProxyBitmapMaterial,
-				HackMaterial,
-				{
-					static FSolidColorTexture	BlackTexture(FColor(0,0,0));
-					HackMaterial->SetTextureInterface(&BlackTexture);
-				}
-				);
-
-			DECLARE_STATIC_UOBJECT(
-				UFinalBlend,
-				SkyStencilFinalBlend,
-				{
-					SkyStencilFinalBlend->Material = HackMaterial;
-					SkyStencilFinalBlend->FrameBufferBlending = FB_Invisible;
-					SkyStencilFinalBlend->ZWrite = 0;
-					SkyStencilFinalBlend->TwoSided = 1;
-				}
-				);
-
-			RI->SetStencilOp(CF_Always,~RenderState.SkyStencilMask,~0,SO_Keep,SO_Keep,SO_Replace,RenderState.SkyStencilMask);
-			FCanvasUtil(&SceneNode->Viewport->RenderTarget,RI).DrawTile(
-				0,0,
-				SceneNode->Viewport->SizeX,SceneNode->Viewport->SizeY,
-				0,0,
-				0,0,
-				1,
-				SkyStencilFinalBlend,
-				FColor(0,0,0)
-				);
-
-			RI->PopState();
-
-			GStats.DWORDStats( GEngineStats.STATS_Stencil_RenderCycles ) += (appCycles() - SkyStencilStartCycle);
-		}
-
-		// Render child scene nodes.
-		for(TList<FLevelSceneNode*>* Child = RenderState.ChildSceneNodes;Child;Child = Child->Next)
-		{
-			Child->Element->Render(RI);
-			delete Child->Element;
-		}
-	}
 
 	// Render translucent actors.
 
@@ -2145,7 +2041,7 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 	GProjectorBatchList = SavedGProjectorBatchList;
 
 	// Render terrain decorations.
-	if( SceneNode->Viewport->GetOuterUClient()->DecoLayers && (SceneNode->Viewport->Actor->ShowFlags & SHOW_Terrain) )
+	if( SceneNode->Viewport->Actor->ShowFlags & SHOW_Terrain )
 	{
 		INT	TerrainDecoStartTime = appCycles();
 

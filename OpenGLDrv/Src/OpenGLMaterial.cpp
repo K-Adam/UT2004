@@ -400,12 +400,13 @@ public:
 		if( TC == INDEX_NONE )
 			return INDEX_NONE;
 		INT T = NewTemp();
+		// The -0.5 mip bias sharpens like D3D9Drv's default, detail textures stay unbiased.
 		if( Cube[Unit] )
-			Emit(TEXT("\tvec4 r%i = texture(s%i, r%i.xyz, Options.w);\n"),T,Unit,TC);
+			Emit(TEXT("\tvec4 r%i = texture(s%i, r%i.xyz, -0.5);\n"),T,Unit,TC);
 		else if( Detail )
-			Emit(TEXT("\tvec4 r%i = texture(s%i, r%i.xy, Fog.w);\n"),T,Unit,TC);
+			Emit(TEXT("\tvec4 r%i = texture(s%i, r%i.xy);\n"),T,Unit,TC);
 		else
-			Emit(TEXT("\tvec4 r%i = texture(s%i, r%i.xy, Options.w);\n"),T,Unit,TC);
+			Emit(TEXT("\tvec4 r%i = texture(s%i, r%i.xy, -0.5);\n"),T,Unit,TC);
 		return T;
 	}
 
@@ -557,7 +558,7 @@ public:
 
 	INT ApplyDetail(INT C,UMaterial* DetailMaterial,FLOAT Scale,FOpenGLModifierInfo Mod)
 	{
-		if( !DetailMaterial || !RI->RenDev->DetailTextures )
+		if( !DetailMaterial )
 			return C;
 		Mod.ModifyTextureTransforms = 1;
 		Mod.Matrix *= FMatrix(FPlane(Scale,0,0,0),FPlane(0,Scale,0,0),FPlane(0,0,1,0),FPlane(0,0,0,1));

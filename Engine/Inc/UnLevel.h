@@ -387,7 +387,7 @@ class ENGINE_API ULevel : public ULevelBase
 	virtual UBOOL SingleLineCheck( FCheckResult& Hit, AActor* SourceActor, const FVector& End, const FVector& Start, DWORD TraceFlags, FVector Extent=FVector(0,0,0) );
 	virtual FCheckResult* MultiPointCheck( FMemStack& Mem, const FVector& Location, const FVector& Extent, DWORD ExtraNodeFlags, ALevelInfo* Level, UBOOL bActors, UBOOL bOnlyWorldGeometry=0, UBOOL bSingleResult=0 );
 	virtual FCheckResult* MultiLineCheck( FMemStack& Mem, const FVector& End, const FVector& Start, const FVector& Size, ALevelInfo* LevelInfo, DWORD TraceFlags, AActor* SourceActor );
-	virtual void DetailChange( EDetailMode NewDetailMode );
+	virtual void DetailChange();
 	virtual INT TickDemoRecord( FLOAT DeltaSeconds );
 	virtual INT TickDemoPlayback( FLOAT DeltaSeconds );
 	virtual void UpdateTime( ALevelInfo* Info );

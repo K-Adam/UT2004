@@ -9,12 +9,6 @@ FOpenGLRenderInterface::FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev)
 	CurrentState = &SavedStates[0];
 	FSavedState& S = *CurrentState;
 	appMemzero(&S,sizeof(S));
-	S.StencilTest		= CF_Always;
-	S.StencilFailOp		= SO_Keep;
-	S.StencilZFailOp	= SO_Keep;
-	S.StencilPassOp		= SO_Keep;
-	S.StencilMask		= 0xff;
-	S.StencilWriteMask	= 0xff;
 	S.LocalToWorld		= FMatrix::Identity;
 	S.WorldToCamera		= FMatrix::Identity;
 	S.CameraToScreen	= FMatrix::Identity;
@@ -33,6 +27,7 @@ void FOpenGLRenderInterface::Locked(UViewport* InViewport)
 	CurrentState->ViewportY			= 0;
 	CurrentState->ViewportWidth		= Viewport->SizeX;
 	CurrentState->ViewportHeight	= Viewport->SizeY;
+	InWorld = 0;
 	PushState();
 }
 
@@ -88,17 +83,34 @@ void FOpenGLRenderInterface::SetViewport(INT X,INT Y,INT Width,INT Height)
 }
 
 // Binds the target and sets viewport and scissor, which D3D's top left origin flips for the scene.
-static void CommitTarget(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FSavedState* S)
+// A half size world maps the viewport's pixels onto half as many.
+static void CommitTarget(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FSavedState* S,UBOOL InWorld)
 {
 	FOpenGLTexture*	Target = S->RenderTarget;
-	GLuint			Framebuffer = Target ? Target->Framebuffer : (RenDev->SceneSamples ? RenDev->MultisampleFramebuffer : RenDev->SceneFramebuffer);
+	INT				Rect[4] = { S->ViewportX, S->ViewportY, S->ViewportWidth, S->ViewportHeight };
+	GLuint			Framebuffer;
+	if( Target )
+		Framebuffer = Target->Framebuffer;
+	else
+	{
+		FOpenGLFramebuffer&	Main = InWorld ? RenDev->World : RenDev->Scene;
+		INT					Shift = Main.Width < RenDev->Scene.Width ? 1 : 0;
+		INT					X0 = S->ViewportX >> Shift,
+							Y0 = S->ViewportY >> Shift,
+							X1 = (S->ViewportX + S->ViewportWidth + Shift) >> Shift,
+							Y1 = (S->ViewportY + S->ViewportHeight + Shift) >> Shift;
+		Framebuffer = Main.DrawFramebuffer();
+		Rect[0] = X0;
+		Rect[1] = Main.Height - Y1;
+		Rect[2] = X1 - X0;
+		Rect[3] = Y1 - Y0;
+	}
 	if( RenDev->GL.Framebuffer != Framebuffer )
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 		RenDev->GL.Framebuffer = Framebuffer;
 	}
 
-	INT Rect[4] = { S->ViewportX, Target ? S->ViewportY : RenDev->SceneHeight - S->ViewportY - S->ViewportHeight, S->ViewportWidth, S->ViewportHeight };
 	if( appMemcmp(Rect,RenDev->GL.Viewport,sizeof(Rect)) != 0 )
 	{
 		glViewport(Rect[0],Rect[1],Rect[2],Rect[3]);
@@ -107,9 +119,27 @@ static void CommitTarget(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FSa
 	}
 }
 
+void FOpenGLRenderInterface::BeginWorld()
+{
+	InWorld = 1;
+	// The engine's clears before the world began reached Scene.
+	Clear(1,FColor(0,0,0),1,1.f,0,0);
+}
+
+// Gamma only applies to the world. The HUD and menus draw over it unchanged and with their own depth,
+// as after the weapon's Z clear.
+void FOpenGLRenderInterface::EndWorld()
+{
+	InWorld = 0;
+	RenDev->ResolveFramebuffer(RenDev->World);
+	FLOAT Gamma = ParseParam(appCmdLine(),TEXT("NOGAMMA")) ? 1.f : Viewport->GetOuterUClient()->Gamma;
+	RenDev->DrawFullscreen(RenDev->World.Texture,RenDev->Scene.DrawFramebuffer(),RenDev->Scene.Width,RenDev->Scene.Height,Gamma);
+	Clear(0,FColor(0,0,0),1,1.f,0,0);
+}
+
 void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FLOAT Depth,UBOOL UseStencil,DWORD Stencil)
 {
-	CommitTarget(RenDev,CurrentState);
+	CommitTarget(RenDev,CurrentState,InWorld);
 	GLbitfield Mask = 0;
 	if( UseColor )
 	{
@@ -123,13 +153,6 @@ void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FL
 		RenDev->GL.DepthMask = GL_TRUE;
 		glClearDepthf(Depth);
 		Mask |= GL_DEPTH_BUFFER_BIT;
-	}
-	if( UseStencil && RenDev->UseStencil )
-	{
-		glStencilMask(0xff);
-		RenDev->GL.StencilKey[ARRAY_COUNT(RenDev->GL.StencilKey) - 1] = 0xff;
-		glClearStencil(Stencil & 0xff);
-		Mask |= GL_STENCIL_BUFFER_BIT;
 	}
 	if( Mask )
 		glClear(Mask);
@@ -209,17 +232,6 @@ void FOpenGLRenderInterface::SetTransform(ETransformType Type,const FMatrix& Mat
 		CurrentState->WorldToCamera = Matrix;
 	else if( Type == TT_CameraToScreen )
 		CurrentState->CameraToScreen = Matrix;
-}
-
-void FOpenGLRenderInterface::SetStencilOp(ECompareFunction Test,DWORD Ref,DWORD Mask,EStencilOp FailOp,EStencilOp ZFailOp,EStencilOp PassOp,DWORD WriteMask)
-{
-	CurrentState->StencilTest		= Test;
-	CurrentState->StencilRef		= Ref;
-	CurrentState->StencilMask		= Mask;
-	CurrentState->StencilFailOp		= FailOp;
-	CurrentState->StencilZFailOp	= ZFailOp;
-	CurrentState->StencilPassOp		= PassOp;
-	CurrentState->StencilWriteMask	= WriteMask;
 }
 
 void FOpenGLRenderInterface::SetZBias(INT ZBias)
@@ -376,36 +388,6 @@ void FOpenGLRenderInterface::DrawQuads(INT FirstVertex,INT NumPrimitives)
 	DrawPrimitive(PT_TriangleList,0,NumPrimitives * 2,0,NumPrimitives * 4 - 1);
 }
 
-static GLenum StencilFunc(ECompareFunction Function)
-{
-	switch( Function )
-	{
-	case CF_Never:			return GL_NEVER;
-	case CF_Less:			return GL_LESS;
-	case CF_Equal:			return GL_EQUAL;
-	case CF_LessEqual:		return GL_LEQUAL;
-	case CF_Greater:		return GL_GREATER;
-	case CF_NotEqual:		return GL_NOTEQUAL;
-	case CF_GreaterEqual:	return GL_GEQUAL;
-	default:				return GL_ALWAYS;
-	}
-}
-
-static GLenum StencilOp(EStencilOp Op)
-{
-	switch( Op )
-	{
-	case SO_Zero:			return GL_ZERO;
-	case SO_Replace:		return GL_REPLACE;
-	case SO_IncrementSat:	return GL_INCR;
-	case SO_DecrementSat:	return GL_DECR;
-	case SO_Invert:			return GL_INVERT;
-	case SO_Increment:		return GL_INCR_WRAP;
-	case SO_Decrement:		return GL_DECR_WRAP;
-	default:				return GL_KEEP;
-	}
-}
-
 static void SetCap(GLenum Cap,UBOOL Enable,UBOOL& Cached)
 {
 	if( Cached != Enable )
@@ -425,7 +407,7 @@ void FOpenGLRenderInterface::Commit()
 	FOpenGLMaterialState&				M = S->Material;
 	FOpenGLProgram*					Program = M.Program;
 
-	CommitTarget(RenDev,S);
+	CommitTarget(RenDev,S,InWorld);
 
 	if( GL.Program != Program->Program )
 	{
@@ -438,10 +420,10 @@ void FOpenGLRenderInterface::Commit()
 	appMemzero(&Scene,sizeof(Scene));
 	Scene.WorldToCamera		= S->WorldToCamera;
 	Scene.CameraToScreen	= S->CameraToScreen;
-	Scene.ClipAdjust		= FPlane(Flip,0.f,1.f / Max(S->ViewportWidth,1),-Flip / Max(S->ViewportHeight,1));
-	Scene.Fog				= FPlane(S->FogStart,S->FogEnd,S->FogEnabled ? 1.f : 0.f,RenDev->DetailTexMipBias);
+	Scene.ClipAdjust		= FPlane(Flip,0.f,1.f / Max(GL.Viewport[2],1),-Flip / Max(GL.Viewport[3],1));
+	Scene.Fog				= FPlane(S->FogStart,S->FogEnd,S->FogEnabled ? 1.f : 0.f,0.f);
 	Scene.FogColor			= S->FogColor.Plane();
-	Scene.Options			= FPlane(S->UseDynamicLighting ? 1.f : 0.f,S->UseStaticLighting ? 1.f : 0.f,S->LightingModulate2X ? 1.f : 0.f,RenDev->DefaultTexMipBias);
+	Scene.Options			= FPlane(S->UseDynamicLighting ? 1.f : 0.f,S->UseStaticLighting ? 1.f : 0.f,S->LightingModulate2X ? 1.f : 0.f,0.f);
 	INT NumLights = 0;
 	for( INT i=0; i<OGL_MAX_LIGHTS; i++ )
 	{
@@ -552,19 +534,6 @@ void FOpenGLRenderInterface::Commit()
 		FLOAT Bias = -5.f * S->ZBias / FAR_CLIPPING_PLANE;
 		glPolygonOffset(Bias,Bias * 16777216.f);
 		GL.ZBias = S->ZBias;
-	}
-
-	SetCap(GL_STENCIL_TEST,RenDev->UseStencil,GL.Stencil);
-	if( RenDev->UseStencil )
-	{
-		DWORD Key[7] = { (DWORD)S->StencilTest, S->StencilRef & 0xff, S->StencilMask & 0xff, (DWORD)S->StencilFailOp, (DWORD)S->StencilZFailOp, (DWORD)S->StencilPassOp, S->StencilWriteMask & 0xff };
-		if( appMemcmp(Key,GL.StencilKey,sizeof(Key)) != 0 )
-		{
-			glStencilFunc(StencilFunc(S->StencilTest),Key[1],Key[2]);
-			glStencilOp(StencilOp(S->StencilFailOp),StencilOp(S->StencilZFailOp),StencilOp(S->StencilPassOp));
-			glStencilMask(Key[6]);
-			appMemcpy(GL.StencilKey,Key,sizeof(Key));
-		}
 	}
 }
 

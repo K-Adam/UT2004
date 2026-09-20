@@ -37,13 +37,10 @@ void AEmitter::Initialize()
 		BoundingBox  = BoundingBox.ExpandBy( Abs(DrawScale) * DrawScale3D.GetAbsMax() );
 	}
 
-	// Respect detail settings for dynamic effects and see whether we really need to be lit.
+	// See whether we really need to be lit.
 	UBOOL ShouldBeUnlit = 1;
 	for( INT i=0; i<Emitters.Num(); i++ )
 	{	
-		if( !GIsEditor && Emitters(i) && (Emitters(i)->DetailMode > Level->DetailMode) )
-			Emitters(i)->Disabled = true;
-
 		UMeshEmitter* MeshEmitter = Cast<UMeshEmitter>(Emitters(i));
 		if( MeshEmitter && MeshEmitter->UseMeshBlendMode )
 			ShouldBeUnlit = 0;
@@ -226,11 +223,7 @@ UBOOL AEmitter::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 		// In case it has been imported via T3D (cut & paste)
 		if (!Emitter->Initialized)
 		{
-			if ( ((Level->DetailMode == DM_Low) || Level->bDropDetail)
-				 && (Emitter->MaxParticles > 12) )
-				Emitter->Initialize( Emitter->LowDetailFactor * Emitter->MaxParticles );
-			else
-				Emitter->Initialize( Emitter->MaxParticles );
+			Emitter->Initialize( Emitter->MaxParticles );
 		}
 		// Set the owner.
 		Emitter->Owner = this;

@@ -62,8 +62,8 @@ INT UTexture::DefaultLOD()
 	    LOD = NormalLOD;
     else
     {
-	    LOD = NormalLOD;
-	    LOD += __Client->GetTextureLODBias(ELODSet (LODSet));
+		// Highest texture detail.
+	    LOD = NormalLOD - 4;
 
 		// Apply level specific offset.
 		ALevelInfo* LevelInfo = GIsEditor ? NULL : __Client->Viewports.Num() && __Client->Viewports(0) && __Client->Viewports(0)->Actor ? __Client->Viewports(0)->Actor->Level : NULL;

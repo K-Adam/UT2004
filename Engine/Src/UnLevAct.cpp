@@ -61,7 +61,7 @@ AActor* ULevel::SpawnActor
 	// don't spawn bHighDetail actors if not wanted
 	if( !GIsEditor && Class->GetDefaultActor()->bHighDetail && !bNoFail )
 	{
-	    if( GetLevelInfo()->DetailMode == DM_Low || GetLevelInfo()->bDropDetail || (GetLevelInfo()->NetMode == NM_DedicatedServer) )
+	    if( GetLevelInfo()->NetMode == NM_DedicatedServer )
 		{
 			//debugf(TEXT("%s not spawned"),Class->GetName());
 			return NULL;
@@ -1995,38 +1995,6 @@ void ALevelInfo::SetZone( UBOOL bTest, UBOOL bForceRefresh )
 
 	// handle levelinfo specially.
 	Region = FPointRegion( Level );
-	unguard;
-}
-
-void ALevelInfo::InitDistanceFogLOD()
-{
-	guard(ALevelInfo::InitDistanceFogLOD);
-	for( INT i=0; i<XLevel->Actors.Num(); i++ )
-	{
-		AZoneInfo* Z = Cast<AZoneInfo>(XLevel->Actors(i));
-		if( Z )
-			Z->RealDistanceFogEnd = Z->DistanceFogEnd;
-	}
-	unguard;
-}
-
-void ALevelInfo::UpdateDistanceFogLOD( FLOAT DistanceFogLOD )
-{
-	guard(ALevelInfo::UpdateDistanceFogLOD);
-	if( GIsEditor || !GIsClient || GIsUCC || (NetMode==NM_DedicatedServer) || (NetMode==NM_ListenServer) )
-		return;
-
-	DistanceFogLOD = Clamp<FLOAT>( DistanceFogLOD, 0.f, 1.f );
-
-	for( INT i=0; i<XLevel->Actors.Num(); i++ )
-	{
-		AZoneInfo* Z = Cast<AZoneInfo>(XLevel->Actors(i));
-		if( Z )
-		{
-			FLOAT RealDistanceFogEndMin = Z->DistanceFogEndMin > 0.f ? Z->DistanceFogEndMin : Z->RealDistanceFogEnd;
-			Z->DistanceFogEnd = Lerp( RealDistanceFogEndMin, Z->RealDistanceFogEnd, DistanceFogLOD );
-		}
-	}
 	unguard;
 }
 

@@ -298,7 +298,7 @@ public:
 
 	virtual INT GetWidth() { return Width; }
 	virtual INT GetHeight() { return Height; }
-	virtual INT GetFirstMip();
+	virtual INT GetFirstMip() { return 0; }
 	virtual INT GetNumMips() { return 2; }
 	virtual ETextureFormat GetFormat() { return (ETextureFormat) Format; }
 	virtual ETexClampMode GetUClamp() { return TC_Wrap; }

@@ -481,7 +481,7 @@ void FBspDrawList::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 			{
 				FLightMapTexture* LightMapTexture = &Model->LightMapTextures(Section.iLightMapTexture);
 
-				if( SceneNode->Viewport->RenDev->UseCompressedLightmaps && (LightMapTexture->StaticTexture.Revision == LightMapTexture->Revision) )
+				if( LightMapTexture->StaticTexture.Revision == LightMapTexture->Revision )
 					LightMap = &LightMapTexture->StaticTexture;
 				else
 					LightMap = LightMapTexture;
@@ -1074,73 +1074,4 @@ void FBspLightDrawList::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 	unguard;
 }
 
-//
-//  FBspStencilDrawList::Render
-//
-
-void FBspStencilDrawList::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI)
-{
-	guard(FBspStencilDrawList::Render);
-
-	clock(GStats.DWORDStats(GEngineStats.STATS_Stencil_RenderCycles));
-
-	if(NumTriangles > 0)
-	{
-		RI->PushState();
-
-		// Setup blending.
-
-		static FSolidColorTexture	StencilTexture(FColor(128,128,128));
-
-		DECLARE_STATIC_UOBJECT(
-			UProxyBitmapMaterial,
-			StencilTextureMaterial,
-			{
-				StencilTextureMaterial->SetTextureInterface(&StencilTexture);
-			}
-			);
-
-		DECLARE_STATIC_UOBJECT(
-			UFinalBlend,
-			StencilFinalBlend,
-			{
-				StencilFinalBlend->Material = StencilTextureMaterial;
-				StencilFinalBlend->FrameBufferBlending = FB_Overwrite;
-				StencilFinalBlend->ZWrite = 1;
-				StencilFinalBlend->TwoSided = 1;
-			}
-			);
-
-		RI->EnableLighting(0,0);
-		RI->SetMaterial(StencilFinalBlend);
-
-		if(SceneNode->StencilMask)
-			RI->SetStencilOp(CF_NotEqual,SceneNode->StencilMask,SceneNode->StencilMask,SO_Keep,SO_Keep,SO_Replace,StencilMask);
-		else
-			RI->SetStencilOp(CF_Equal,~StencilMask & ~DEPTH_COMPLEXITY_MASK(SceneNode->Viewport),~StencilMask & ~DEPTH_COMPLEXITY_MASK(SceneNode->Viewport),SO_Keep,SO_Keep,SO_Replace,StencilMask);
-
-		// Set the vertex stream.
-
-		FVertexStream*	Streams[] = { &Model->Sections(SectionIndex).Vertices };
-		RI->SetVertexStreams(VS_FixedFunction,Streams,1);
-
-		// Build an index buffer containing only the nodes in the draw list.
-
-		FBspIndexBuffer	IndexBuffer(this);
-
-		INT	BaseIndex = RI->SetDynamicIndexBuffer(&IndexBuffer,0);
-
-		// Draw the stencil polygons.
-
-		RI->DrawPrimitive(PT_TriangleList,BaseIndex,NumTriangles,IndexBuffer.MinIndex,IndexBuffer.MaxIndex);
-
-		RI->PopState();
-	}
-
-	GStats.DWORDStats(GEngineStats.STATS_Stencil_Nodes) += NumNodes;
-	GStats.DWORDStats(GEngineStats.STATS_Stencil_Triangles) += NumTriangles;
-	unclock(GStats.DWORDStats(GEngineStats.STATS_Stencil_RenderCycles));
-
-	unguard;
-}
 

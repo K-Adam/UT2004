@@ -39,10 +39,6 @@ void UParticleEmitter::execTrigger( FFrame& Stack, RESULT_DECL )
 	guard(UParticleEmitter::execTrigger);
 	P_FINISH;
 
-	// Respect detail settings.
-	if( !GIsEditor && Owner && (DetailMode > Owner->Level->DetailMode) )
-		return;
-
 	if( TriggerDisabled )
 		Disabled = !Disabled;
 	if( ResetOnTrigger )

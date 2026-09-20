@@ -184,32 +184,6 @@ void UEngine::Flush( UBOOL AllowPrecache )
 }
 
 //
-// Update Gamma/Brightness/Contrast settings.
-//
-void UEngine::UpdateGamma()
-{
-	guard(UEngine::UpdateGamma);
-
-	if( Client )
-		Client->UpdateGamma();
-
-	unguard;
-}
-
-//
-// Restore Gamma/Brightness/Contrast settings.
-//
-void UEngine::RestoreGamma()
-{
-	guard(UEngine::RestoreGamma);
-
-	if( Client )
-		Client->RestoreGamma();
-
-	unguard;
-}
-
-//
 // Tick rate.
 //
 FLOAT UEngine::GetMaxTickRate()

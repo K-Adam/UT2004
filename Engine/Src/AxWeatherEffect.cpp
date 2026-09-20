@@ -364,7 +364,7 @@ FORCEINLINE void AxWeatherEffect::InitParticle( FWeatherPcl& t )
 UBOOL AxWeatherEffect::Tick( FLOAT deltaTime, ELevelTick TickType )
 {
 	guard(AxWeatherEffect::Tick);
-	if ( bHidden || (Level->NetMode == NM_DedicatedServer) || (Level->DetailMode == DM_Low) || (bSuperHighDetail && (Level->DetailMode != DM_SuperHigh)) || (UTexture::__Client && !UTexture::__Client->WeatherEffects) )
+	if ( bHidden || (Level->NetMode == NM_DedicatedServer) )
 		return Super::Tick( deltaTime, TickType );
 
 	INT SetupStartTime = appCycles();
@@ -452,7 +452,7 @@ UBOOL AxWeatherEffect::Tick( FLOAT deltaTime, ELevelTick TickType )
 
 void AxWeatherEffect::Render( FLevelSceneNode* SceneNode, FRenderInterface* RI )
 {
-	if ( SceneNode->Viewport->IsOrtho() || (UTexture::__Client && !UTexture::__Client->WeatherEffects) )
+	if ( SceneNode->Viewport->IsOrtho() )
 		return;
 
 	INT	RenderStartTime = appCycles();

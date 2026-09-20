@@ -143,11 +143,11 @@ void ULevel::ShrinkLevel()
 	unguard;
 }
 
-void ULevel::DetailChange( EDetailMode NewDetailMode )
+void ULevel::DetailChange()
 {
 	guard(ULevel::DetailChange);
     GCoronaRender.Reset(); // flag corona rendering to reset, it will have dandling ptrs now
-	GetLevelInfo()->DetailMode = NewDetailMode;
+	GetLevelInfo()->DetailMode = DM_SuperHigh;
 	if( GetLevelInfo()->Game )
 		GetLevelInfo()->Game->eventDetailChange();
 	for(INT ActorIndex = 0;ActorIndex < Actors.Num();ActorIndex++)

@@ -22,17 +22,6 @@ void URenderDevice::StaticConstructor()
 {
 	guard(URenderDevice::StaticConstructor);
 
-	new(GetClass(),TEXT("HighDetailActors"),		RF_Public)UBoolProperty(CPP_PROPERTY(HighDetailActors		), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("SuperHighDetailActors"),	RF_Public)UBoolProperty(CPP_PROPERTY(SuperHighDetailActors	), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("DetailTextures"),			RF_Public)UBoolProperty(CPP_PROPERTY(DetailTextures			), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("UseCompressedLightmaps"),	RF_Public)UBoolProperty(CPP_PROPERTY(UseCompressedLightmaps ), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("UseStencil"),				RF_Public)UBoolProperty(CPP_PROPERTY(UseStencil				), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("Use16bit"),				RF_Public)UBoolProperty(CPP_PROPERTY(Use16bit				), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("Use16bitTextures"),		RF_Public)UBoolProperty(CPP_PROPERTY(Use16bitTextures		), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("LowQualityTerrain"),		RF_Public)UBoolProperty(CPP_PROPERTY(LowQualityTerrain		), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("SkyboxHack"),				RF_Public)UBoolProperty(CPP_PROPERTY(SkyboxHack				), TEXT("Client"), CPF_Config );
-	new(GetClass(),TEXT("TerrainLOD"),				RF_Public)UIntProperty (CPP_PROPERTY(TerrainLOD				), TEXT("Client"), CPF_Config );
-	DecompFormat = TEXF_P8;
 
 	unguard;
 }

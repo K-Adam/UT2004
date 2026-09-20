@@ -952,8 +952,6 @@ FLevelSceneNode::FLevelSceneNode(UViewport* InViewport,FRenderTarget* InRenderTa
 	InvisibleZone = INDEX_NONE;
 	ViewActor = NULL;
 
-	StencilMask = 0;
-
 	// If necessary, build model render data.
 	if(!Model->Sections.Num())
 		Model->BuildRenderData();
@@ -973,7 +971,6 @@ FLevelSceneNode::FLevelSceneNode(FLevelSceneNode* InParent,INT InViewZone,FMatri
 	InvisibleZone	= INDEX_NONE;
 	ViewActor		= NULL;
 
-	StencilMask		= Viewport->NextStencilMask;
 	Viewport->NextStencilMask <<= 1;
 
 	FMatrix	ParentToLocal = LocalToParent.Inverse();
@@ -1099,9 +1096,6 @@ UBOOL FLevelSceneNode::FilterActor(AActor* Actor)
 	//WD: changed if(GIsEditor) to if(!GIsEditor), and swapped instruction blocks
 	if( !GIsEditor )
 	{
-		if((Actor->bHighDetail && Actor->Level->DetailMode == DM_Low) || (Actor->bSuperHighDetail && Actor->Level->DetailMode != DM_SuperHigh))
-			return 0;
-
 		if(Actor->bCorona)
 		{
 			Actor->DrawType = DT_None;
@@ -1162,9 +1156,6 @@ UBOOL FLevelSceneNode::FilterProjector(AProjector* Actor)
         return 0;
     }
 
-	if((Actor->bHighDetail && Actor->Level->DetailMode == DM_Low) || (Actor->bSuperHighDetail && Actor->Level->DetailMode != DM_SuperHigh))
-		return 0;
-
 	return 1;
 }
 
@@ -1176,42 +1167,7 @@ void FLevelSceneNode::Render(FRenderInterface* RI)
 {
 	guard(FLevelSceneNode::Render);
 
-	DECLARE_STATIC_UOBJECT(
-		UProxyBitmapMaterial,
-		HackMaterial,
-		{
-			static FSolidColorTexture	BlackTexture(FColor(0,0,0));
-			HackMaterial->SetTextureInterface(&BlackTexture);
-		}
-		);
-
-	DECLARE_STATIC_UOBJECT(
-		UFinalBlend,
-		StencilFinalBlend,
-		{
-			StencilFinalBlend->Material = HackMaterial;
-			StencilFinalBlend->FrameBufferBlending = FB_Invisible;
-			StencilFinalBlend->ZWrite = 1;
-			StencilFinalBlend->ZTest = 0;
-		}
-		);
-
 	RI->PushState();
-
-	if( StencilMask && (GIsEditor || Viewport->RenDev->UseStencil) )
-	{
-		RI->SetStencilOp(CF_NotEqual,StencilMask,StencilMask,SO_Keep,SO_Keep,SO_Increment,DEPTH_COMPLEXITY_MASK(Viewport));
-
-		FCanvasUtil(&Viewport->RenderTarget,RI).DrawTile(
-			0,0,
-			Viewport->SizeX,Viewport->SizeY,
-			0,0,
-			0,0,
-			1,
-			StencilFinalBlend,
-			FColor(0,0,0)
-			);
-	}
 
 	// Calculate distance fog.
 	UBOOL bVolumeFog = 0;
@@ -1324,19 +1280,6 @@ void FLevelSceneNode::Render(FRenderInterface* RI)
 		// go through world drawing constraints
 		// done here instead of tick, so we get contacts etc. even if Karma is paused etc.
 		KLevelDebugDrawConstraints(Level);
-	}
-
-	if( StencilMask && (GIsEditor || Viewport->RenDev->UseStencil) )
-	{
-		FCanvasUtil(&Viewport->RenderTarget,RI).DrawTile(
-			0,0,
-			Viewport->SizeX,Viewport->SizeY,
-			0,0,
-			0,0,
-			1,
-			StencilFinalBlend,
-			FColor(0,0,0)
-			);
 	}
 
 	// Render lines from elsewhere (collision debugging etc.)
@@ -1637,6 +1580,8 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
     {
 		check( Viewport->Actor );
 
+		RI->BeginWorld();
+
 		// Fiddle with the projection matrix to produce a letterbox viewport.
 
 		if( Viewport->bRenderCinematics )
@@ -1684,6 +1629,8 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
 		    if(Controller->CameraEffects(EffectIndex)->FinalEffect)
 			    break;
 	    }
+
+		RI->EndWorld();
 
         // amb --- notify playercontroller that the level has been rendered
 		if (Viewport->Actor)

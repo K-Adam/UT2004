@@ -18,8 +18,6 @@
 	void SetVolumes();
 	APhysicsVolume* GetDefaultPhysicsVolume();
 	APhysicsVolume* GetPhysicsVolume(FVector Loc, AActor *A, UBOOL bUseTouch);
-	void InitDistanceFogLOD();
-	void UpdateDistanceFogLOD( FLOAT LOD );
 	APlayerController* GetLocalPlayerController() { return LocalPlayerController; };
 
 /*-----------------------------------------------------------------------------

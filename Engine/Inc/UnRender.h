@@ -150,7 +150,6 @@ public:
 	AActor*		ViewActor;
 	INT			ViewZone,
 				InvisibleZone;
-	DWORD		StencilMask;
 
 	// Constructors/destructor.
 	FLevelSceneNode(UViewport* InViewport,FRenderTarget* InRenderTarget);

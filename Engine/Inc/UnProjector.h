@@ -54,10 +54,7 @@ struct FProjectorRenderInfo
 	{
         if( 
 			Expires!=0 
-		&&  (		UTexture::__Client->Decals==0 
-				||	UTexture::__Client->Projectors==0 
-				||	UTexture::__Client->Engine->GRenDev->SupportsZBIAS==0
-			) 
+		&&	UTexture::__Client->Engine->GRenDev->SupportsZBIAS==0 
 		)
         {
             RemoveReference();

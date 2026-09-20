@@ -409,7 +409,7 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 		// Work out the number of passes required for this sector.
 		INT MaxSimultaneousLayers = Info->GetLevel()->Engine->GRenDev ? Info->GetLevel()->Engine->GRenDev->GetRenderCaps()->MaxSimultaneousTerrainLayers : 1;
 
-		UBOOL ForceAlphaMap =  GIsEditor || (Info->GetLevel()->Engine->GRenDev ? Info->GetLevel()->Engine->GRenDev->IsVoodoo3 : 0);
+		UBOOL ForceAlphaMap =  GIsEditor;
 		//INT MaxSimultaneousLayers = GIsEditor ? 1 : Min<INT>( Info->DrawScale, 3 );
 		//UBOOL ForceAlphaMap =  GIsEditor || Info->bActorShadows;
 
@@ -3836,10 +3836,6 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 					
 			// Don't render if it doesn't make sense.
 			if ( !DecoLayer.StaticMesh || !DecoLayer.DensityMap || !DecoLayer.ShowOnTerrain )
-				continue;
-
-			// Don't render if the detail mode is higher than the current one.
-			if( DecoLayer.DetailMode > Level->DetailMode )
 				continue;
 
 			// Early out if nothing to render.

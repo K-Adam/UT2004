@@ -142,6 +142,10 @@ public:
 	virtual void SetViewport(INT X,INT Y,INT Width,INT Height) = 0;
 	virtual void Clear(UBOOL UseColor = 1,FColor Color = FColor(0,0,0),UBOOL UseDepth = 1,FLOAT Depth = 1.0f,UBOOL UseStencil = 1,DWORD Stencil = 0) = 0;
 
+	// Brackets the player's view of the level, which a device may render at a lower resolution than the HUD.
+	virtual void BeginWorld() {}
+	virtual void EndWorld() {}
+
 	virtual void PushHit(const BYTE* Data,INT Count) = 0;
 	virtual void PopHit(INT Count,UBOOL Force) = 0;
 
@@ -227,28 +231,12 @@ class ENGINE_API URenderDevice : public USubsystem
 	DECLARE_ABSTRACT_CLASS(URenderDevice,USubsystem,CLASS_Config,Engine)
 
 	// Variables.
-	BYTE			DecompFormat;
-	INT				RecommendedLOD;
-	DWORD			TerrainLOD;
-	BITFIELD		HighDetailActors;
-	BITFIELD		SuperHighDetailActors;
-	BITFIELD		DetailTextures;
 	BITFIELD		PrecacheOnFlip;
 	BITFIELD		SupportsCubemaps;
 	BITFIELD		SupportsZBIAS;
 	BITFIELD		SupportsRenderToTextureRGBA8888;
 	BITFIELD		SupportsRenderToTextureRGB565;
 	BITFIELD		SupportsRenderToTextureNPOT;
-	BITFIELD		UseCompressedLightmaps;
-	BITFIELD		UseStencil;
-	BITFIELD		Use16bit;
-	BITFIELD		Use16bitTextures;
-	BITFIELD		IsVoodoo3;
-	BITFIELD		Is3dfx;
-	BITFIELD		LowQualityTerrain;
-	BITFIELD		SkyboxHack;
-	BITFIELD		Pad1[8];
-	DWORD			Pad0[8];
 
 	// Constructors.
 	void StaticConstructor();
@@ -262,8 +250,6 @@ class ENGINE_API URenderDevice : public USubsystem
 	virtual void FlushResource( QWORD CacheId )=0;
 	virtual UBOOL ResourceCached( QWORD CacheId ) { return 0; }
 
-	virtual void UpdateGamma( UViewport* Viewport )=0;
-	virtual void RestoreGamma()=0;
 
 	virtual UBOOL Exec( const TCHAR* Cmd, FOutputDevice& Ar ) = 0;
 
