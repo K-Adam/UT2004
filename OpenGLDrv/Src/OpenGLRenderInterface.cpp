@@ -27,12 +27,14 @@ void FOpenGLRenderInterface::Locked(UViewport* InViewport)
 	CurrentState->ViewportY			= 0;
 	CurrentState->ViewportWidth		= Viewport->SizeX;
 	CurrentState->ViewportHeight	= Viewport->SizeY;
-	InWorld = 0;
+	InWorld = ViewModel = 0;
 	PushState();
 }
 
 void FOpenGLRenderInterface::Unlocked()
 {
+	// A frame without HUD never draws in 2D.
+	EndWorld();
 	PopState();
 	check(SavedStateIndex == 0);
 }
@@ -82,64 +84,106 @@ void FOpenGLRenderInterface::SetViewport(INT X,INT Y,INT Width,INT Height)
 	CurrentState->ViewportHeight	= Height;
 }
 
-// Binds the target and sets viewport and scissor, which D3D's top left origin flips for the scene.
-// A half size world maps the viewport's pixels onto half as many.
-static void CommitTarget(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FSavedState* S,UBOOL InWorld)
+// Binds the target and sets viewport, scissor and depth range. D3D's top left origin flips the
+// scene, and a scaled world maps the viewport's pixels onto fewer.
+static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSavedState* S)
 {
-	FOpenGLTexture*	Target = S->RenderTarget;
-	INT				Rect[4] = { S->ViewportX, S->ViewportY, S->ViewportWidth, S->ViewportHeight };
-	GLuint			Framebuffer;
+	UOpenGLRenderDevice*	RenDev = RI->RenDev;
+	FOpenGLTexture*		Target = S->RenderTarget;
+	INT					Rect[4] = { S->ViewportX, S->ViewportY, S->ViewportWidth, S->ViewportHeight };
+	GLuint				Framebuffer;
+	FLOAT				Near = 0.f, Far = 1.f;
 	if( Target )
 		Framebuffer = Target->Framebuffer;
 	else
 	{
-		FOpenGLFramebuffer&	Main = InWorld ? RenDev->World : RenDev->Scene;
-		INT					Shift = Main.Width < RenDev->Scene.Width ? 1 : 0;
-		INT					X0 = S->ViewportX >> Shift,
-							Y0 = S->ViewportY >> Shift,
-							X1 = (S->ViewportX + S->ViewportWidth + Shift) >> Shift,
-							Y1 = (S->ViewportY + S->ViewportHeight + Shift) >> Shift;
+		FOpenGLFramebuffer&	Main = RI->InWorld ? RenDev->World : RenDev->Scene;
+		INT					SW = RenDev->Scene.Width, SH = RenDev->Scene.Height,
+							X0 = S->ViewportX * Main.Width / SW,
+							Y0 = S->ViewportY * Main.Height / SH,
+							X1 = ((S->ViewportX + S->ViewportWidth) * Main.Width + SW - 1) / SW,
+							Y1 = ((S->ViewportY + S->ViewportHeight) * Main.Height + SH - 1) / SH;
 		Framebuffer = Main.DrawFramebuffer();
 		Rect[0] = X0;
 		Rect[1] = Main.Height - Y1;
 		Rect[2] = X1 - X0;
 		Rect[3] = Y1 - Y0;
+		// The weapon gets the front of the depth range, so walls never cut into it and the post
+		// processing can tell its pixels apart.
+		if( RI->InWorld )
+		{
+			Near = RI->ViewModel ? 0.f : VIEW_MODEL_DEPTH;
+			Far = RI->ViewModel ? VIEW_MODEL_DEPTH : 1.f;
+		}
 	}
-	if( RenDev->GL.Framebuffer != Framebuffer )
+	UOpenGLRenderDevice::FGLState& GL = RenDev->GL;
+	if( GL.Framebuffer != Framebuffer )
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
-		RenDev->GL.Framebuffer = Framebuffer;
+		GL.Framebuffer = Framebuffer;
 	}
-
-	if( appMemcmp(Rect,RenDev->GL.Viewport,sizeof(Rect)) != 0 )
+	if( appMemcmp(Rect,GL.Viewport,sizeof(Rect)) != 0 )
 	{
 		glViewport(Rect[0],Rect[1],Rect[2],Rect[3]);
 		glScissor(Rect[0],Rect[1],Rect[2],Rect[3]);
-		appMemcpy(RenDev->GL.Viewport,Rect,sizeof(Rect));
+		appMemcpy(GL.Viewport,Rect,sizeof(Rect));
+	}
+	if( GL.DepthNear != Near || GL.DepthFar != Far )
+	{
+		glDepthRangef(Near,Far);
+		GL.DepthNear = Near;
+		GL.DepthFar = Far;
 	}
 }
 
 void FOpenGLRenderInterface::BeginWorld()
 {
 	InWorld = 1;
+	ViewModel = WorldDrawn = 0;
+	WorldLights.Empty();
 	// The engine's clears before the world began reached Scene.
 	Clear(1,FColor(0,0,0),1,1.f,0,0);
 }
 
-// Gamma only applies to the world. The HUD and menus draw over it unchanged and with their own depth,
-// as after the weapon's Z clear.
+void FOpenGLRenderInterface::BeginViewModel(const FMatrix& WorldToCamera,const FMatrix& CameraToScreen)
+{
+	if( !InWorld )
+		return;
+	ViewModel			= 1;
+	ViewWorldToCamera	= WorldToCamera;
+	ViewCameraToScreen	= CameraToScreen;
+}
+
+// Post processing only applies to the world. The HUD and menus draw over it unchanged and with
+// their own depth.
 void FOpenGLRenderInterface::EndWorld()
 {
-	InWorld = 0;
-	RenDev->ResolveFramebuffer(RenDev->World);
+	if( !InWorld )
+		return;
+	// Depth needs the player's projection and the level in the world framebuffer, letterboxing
+	// moves the projection off the framebuffer.
+	UBOOL DepthPasses = (RenDev->AmbientOcclusion || RenDev->ContactShadows) && ViewModel && WorldDrawn && !Viewport->bRenderCinematics;
+	InWorld = ViewModel = 0;
+	RenDev->ResolveFramebuffer(RenDev->World,1);
+	FPlane Light(0,0,0,0);
+	if( DepthPasses && RenDev->ContactShadows )
+		Light = PickShadowLight();
 	FLOAT Gamma = ParseParam(appCmdLine(),TEXT("NOGAMMA")) ? 1.f : Viewport->GetOuterUClient()->Gamma;
-	RenDev->DrawFullscreen(RenDev->World.Texture,RenDev->Scene.DrawFramebuffer(),RenDev->Scene.Width,RenDev->Scene.Height,Gamma);
+	RenDev->PostProcess(DepthPasses,ViewCameraToScreen,Light,Gamma);
+	WorldLights.Empty();
 	Clear(0,FColor(0,0,0),1,1.f,0,0);
 }
 
 void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FLOAT Depth,UBOOL UseStencil,DWORD Stencil)
 {
-	CommitTarget(RenDev,CurrentState,InWorld);
+	if( ViewModel && !CurrentState->RenderTarget )
+	{
+		// The HUD clears depth for the weapon, its depth range already keeps it in front.
+		if( !UseColor )
+			return;
+		EndWorld();
+	}
+	CommitTarget(this,CurrentState);
 	GLbitfield Mask = 0;
 	if( UseColor )
 	{
@@ -185,6 +229,9 @@ void FOpenGLRenderInterface::SetLight(INT LightIndex,FDynamicLight* Light,FLOAT 
 	CurrentState->LightEnabled[LightIndex] = Light != NULL;
 	if( !Light )
 		return;
+	// Terrain passes lights from its stack, only those an actor owns outlive the call.
+	if( InWorld && Light->Actor && Light->Actor->LightRenderData == Light )
+		WorldLights.AddUniqueItem(Light);
 
 	BYTE	Effect = Light->Actor ? Light->Actor->LightEffect : LE_None;
 	FLOAT	Type;
@@ -407,13 +454,18 @@ void FOpenGLRenderInterface::Commit()
 	FOpenGLMaterialState&				M = S->Material;
 	FOpenGLProgram*					Program = M.Program;
 
-	CommitTarget(RenDev,S,InWorld);
-
-	if( GL.Program != Program->Program )
+	// The first 2D draw after the weapon ends the world.
+	UBOOL Perspective = S->CameraToScreen.M[2][3] == 1.f;
+	if( InWorld && !S->RenderTarget )
 	{
-		glUseProgram(Program->Program);
-		GL.Program = Program->Program;
+		if( !ViewModel )
+			WorldDrawn |= Perspective;
+		else if( !Perspective )
+			EndWorld();
 	}
+	CommitTarget(this,S);
+
+	RenDev->UseProgram(Program->Program);
 
 	FOpenGLSceneBlock	Scene;
 	FLOAT			Flip = S->RenderTarget ? -1.f : 1.f;

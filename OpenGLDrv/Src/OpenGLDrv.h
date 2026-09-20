@@ -12,6 +12,9 @@
 
 class UOpenGLRenderDevice;
 
+// The first person weapon is drawn into the front of the depth range.
+#define VIEW_MODEL_DEPTH 0.015625
+
 enum
 {
 	OGL_MAX_TEXTURES	= 16,
@@ -128,6 +131,7 @@ enum EOpenGLSamplerFlags
 	GSF_ClampU		= 1,
 	GSF_ClampV		= 2,
 	GSF_Mipmapped	= 4,
+	GSF_Nearest		= 8,	// Depth textures are incomplete with linear filtering.
 };
 
 struct FOpenGLMaterialState
@@ -234,7 +238,12 @@ public:
 	FSavedState*		CurrentState;
 	INT					SavedStateIndex;
 	EPrecacheMode		PrecacheMode;
-	UBOOL				InWorld;
+	UBOOL				InWorld,
+						ViewModel,		// Only the first person weapon is left of the world.
+						WorldDrawn;		// The level reached the world framebuffer, a motion blur draws it elsewhere.
+	FMatrix				ViewWorldToCamera,
+						ViewCameraToScreen;
+	TArray<FDynamicLight*>	WorldLights;	// The lights actors in the world were lit by.
 
 	TArray<BYTE>		DynamicVertices;
 	INT					DynamicStride,
@@ -253,7 +262,8 @@ public:
 	virtual void SetViewport(INT X,INT Y,INT Width,INT Height);
 	virtual void Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FLOAT Depth,UBOOL UseStencil,DWORD Stencil);
 	virtual void BeginWorld();
-	virtual void EndWorld();
+	virtual void BeginViewModel(const FMatrix& WorldToCamera,const FMatrix& CameraToScreen);
+	void EndWorld();
 	virtual void PushHit(const BYTE* Data,INT Count) {}
 	virtual void PopHit(INT Count,UBOOL Force) {}
 	virtual void SetCullMode(ECullMode CullMode);
@@ -286,16 +296,19 @@ private:
 	void SetQuadIndexBuffer(INT BaseVertexIndex);
 	void Commit();
 	UBOOL CompileMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial);
+	FPlane PickShadowLight();
 };
 
-// A colour texture with depth and stencil. With multisampling the drawing goes to separate buffers that Resolve copies into the texture.
+// A colour texture with an optional depth and stencil texture. With multisampling the drawing goes to
+// separate buffers that Resolve copies into the textures.
 struct FOpenGLFramebuffer
 {
 	GLuint	Framebuffer,
 			Texture,
-			DepthStencil,
+			DepthTexture,
 			MultisampleFramebuffer,
-			MultisampleColor;
+			MultisampleColor,
+			MultisampleDepth;
 	INT		Width,
 			Height,
 			Samples;
@@ -312,7 +325,10 @@ class UOpenGLRenderDevice : public URenderDevice
 	UBOOL	UseVSync,
 			ReduceMouseLag,
 			Antialiasing,
-			HalfResolution;
+			AmbientOcclusion,
+			ContactShadows,
+			Bloom;
+	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
 			SupportsDXT35;
@@ -334,16 +350,24 @@ class UOpenGLRenderDevice : public URenderDevice
 			SceneBuffer,
 			QuadIndices,
 			VertexShaderObject,
-			GammaProgram;
-	GLint	GammaUniform;
+			CopyProgram,
+			OcclusionProgram,
+			BloomDownProgram,
+			BloomUpProgram,
+			CompositeProgram;
 	GLsync	FrameFence;
 	PFNGLDRAWELEMENTSBASEVERTEXOESPROC	DrawElementsBaseVertex;
 	FOpenGLDynamicBuffer	DynamicVertexBuffer,
 						DynamicIndexBuffer;
 
-	// The world is drawn into World, at half size with HalfResolution, and copied into Scene with gamma. Scene then goes to the window.
+	// The world is drawn into World, scaled by ResolutionScale, and post processed into Scene. Scene then goes to the window.
+	enum { BLOOM_LEVELS = 5 };
 	FOpenGLFramebuffer	Scene,
-						World;
+						World,
+						Occlusion,				// Ambient occlusion and contact shadow at half the world size.
+						BloomLevels[BLOOM_LEVELS];
+	AActor*				ShadowLight;			// Only compared, never dereferenced, the actor may be gone.
+	DWORD				FrameCount;
 
 	// Last state sent to GL, so Commit only changes what differs.
 	struct FGLState
@@ -364,6 +388,8 @@ class UOpenGLRenderDevice : public URenderDevice
 						DepthFunc,
 						CullFace;
 		GLboolean		DepthMask;
+		FLOAT			DepthNear,
+						DepthFar;
 		INT				ZBias;
 		FOpenGLStream		Streams[OGL_MAX_STREAMS];
 		INT				NumStreams,
@@ -395,17 +421,22 @@ class UOpenGLRenderDevice : public URenderDevice
 	FOpenGLResource* GetCachedResource(QWORD CacheId);
 	GLuint GetSampler(DWORD Flags);
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
-	void ResolveFramebuffer(FOpenGLFramebuffer& F);
-	void DrawFullscreen(GLuint Texture,GLuint Framebuffer,INT Width,INT Height,FLOAT Gamma);
+	void ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth = 0);
+	void UseProgram(GLuint Program);
+	// Covers the framebuffer with Program. Units 0 to 2 sample linearly, unit 3 is the depth texture.
+	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Texture2 = 0,GLuint Depth = 0,UBOOL Additive = 0);
+	void PostProcess(UBOOL DepthPasses,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma);
 
 private:
 	UBOOL InitContext();
+	UBOOL InitPostProcess(GLuint VertexShader);
 	void ResetStateCache();
-	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples);
+	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1);
 	void DestroyFramebuffer(FOpenGLFramebuffer& F);
 	void ReleaseObjects();
 };
 
 extern const ANSICHAR* OpenGLVertexShader;
+extern const ANSICHAR* FullscreenVertexShader;
 
 #endif

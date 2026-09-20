@@ -1624,18 +1624,6 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
 			    break;
 	    }
 
-		RI->EndWorld();
-
-        // amb --- notify playercontroller that the level has been rendered
-		if (Viewport->Actor)
-        {
-            Viewport->Actor->PostRender(this);
-
-            if ( Viewport->Canvas->pCanvasUtil ) 
-                Viewport->Canvas->pCanvasUtil->Flush();
-        }
-        // --- amb
-
 	    // Render the screen flash.
 
 	    FPlane	FlashScale = Viewport->GetOuterUClient()->ScreenFlashes ? Viewport->Actor->FlashScale : FVector(1.f,1.f,1.f),
@@ -1687,6 +1675,9 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
 					)
 			);
 	    }
+
+		// The HUD draws the first person weapon before anything 2D.
+		RI->BeginViewModel(WorldToCamera,CameraToScreen);
     } 
 
 	// Center HUD if scaled for multimon support.
@@ -1713,6 +1704,14 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
 
 	if( (ScaleHUDX > 0.f) && (ScaleHUDX < 1.f) )
 		RI->SetViewport( 0, 0, Viewport->SizeX, Viewport->SizeY );
+
+	// Team mate names, after the HUD so they stay out of the world's post processing.
+	if( Viewport->Canvas->bRenderLevel && Viewport->Actor )
+	{
+		Viewport->Actor->PostRender(this);
+		if( Viewport->Canvas->pCanvasUtil )
+			Viewport->Canvas->pCanvasUtil->Flush();
+	}
 
 	// Send along PostRenders to the Interactions
 

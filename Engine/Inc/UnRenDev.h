@@ -142,9 +142,11 @@ public:
 	virtual void SetViewport(INT X,INT Y,INT Width,INT Height) = 0;
 	virtual void Clear(UBOOL UseColor = 1,FColor Color = FColor(0,0,0),UBOOL UseDepth = 1,FLOAT Depth = 1.0f,UBOOL UseStencil = 1,DWORD Stencil = 0) = 0;
 
-	// Brackets the player's view of the level, which a device may render at a lower resolution than the HUD.
+	// The player's view of the level starts at BeginWorld. After BeginViewModel only the first person
+	// weapon belongs to it, the device ends it at the first 2D draw. A device may post process and
+	// scale it apart from the HUD.
 	virtual void BeginWorld() {}
-	virtual void EndWorld() {}
+	virtual void BeginViewModel(const FMatrix& WorldToCamera,const FMatrix& CameraToScreen) {}
 
 	virtual void PushHit(const BYTE* Data,INT Count) = 0;
 	virtual void PopHit(INT Count,UBOOL Force) = 0;

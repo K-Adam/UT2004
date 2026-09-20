@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_Bloom;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2];
 
@@ -19,6 +19,9 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Display.ManageComponent(sl_Gamma);
 	sb_Options.ManageComponent(ch_Shadows);
 	sb_Options.ManageComponent(ch_Antialiasing);
+	sb_Options.ManageComponent(ch_AmbientOcclusion);
+	sb_Options.ManageComponent(ch_ContactShadows);
+	sb_Options.ManageComponent(ch_Bloom);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -29,7 +32,7 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 	switch (Sender)
 	{
 	case co_Resolution:
-		co_Resolution.SilentSetIndex(int(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice HalfResolution"))));
+		co_Resolution.SilentSetIndex(int(int(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ResolutionScale")) < 100));
 		break;
 	case ch_Fullscreen:
 		ch_Fullscreen.SetComponentValue(bool(PC.ConsoleCommand("ISFULLSCREEN")), true);
@@ -42,6 +45,15 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_Antialiasing:
 		ch_Antialiasing.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice Antialiasing")), true);
+		break;
+	case ch_AmbientOcclusion:
+		ch_AmbientOcclusion.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice AmbientOcclusion")), true);
+		break;
+	case ch_ContactShadows:
+		ch_ContactShadows.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ContactShadows")), true);
+		break;
+	case ch_Bloom:
+		ch_Bloom.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice Bloom")), true);
 		break;
 	}
 }
@@ -56,7 +68,7 @@ function InternalOnChange(GUIComponent Sender)
 	switch (Sender)
 	{
 	case co_Resolution:
-		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice HalfResolution" @ (co_Resolution.GetIndex() == 1));
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ResolutionScale" @ (100 - 25 * co_Resolution.GetIndex()));
 		break;
 	case ch_Fullscreen:
 		if (ch_Fullscreen.IsChecked() != bool(PC.ConsoleCommand("ISFULLSCREEN")))
@@ -70,6 +82,15 @@ function InternalOnChange(GUIComponent Sender)
 		break;
 	case ch_Antialiasing:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Antialiasing" @ ch_Antialiasing.IsChecked());
+		break;
+	case ch_AmbientOcclusion:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice AmbientOcclusion" @ ch_AmbientOcclusion.IsChecked());
+		break;
+	case ch_ContactShadows:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ContactShadows" @ ch_ContactShadows.IsChecked());
+		break;
+	case ch_Bloom:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Bloom" @ ch_Bloom.IsChecked());
 		break;
 	}
 }
@@ -99,8 +120,11 @@ function ResetClicked()
 	Super.ResetClicked();
 
 	PC = PlayerOwner();
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice HalfResolution False");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ResolutionScale 100");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Antialiasing True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice AmbientOcclusion True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ContactShadows True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Bloom True");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 
@@ -119,7 +143,7 @@ defaultproperties
 {
 	Begin Object class=GUISectionBackground Name=sbDisplay
 		WinWidth=0.491849
-		WinHeight=0.300000
+		WinHeight=0.400000
 		WinLeft=0.000948
 		WinTop=0.012761
 		Caption="Display"
@@ -129,7 +153,7 @@ defaultproperties
 
 	Begin Object class=GUISectionBackground Name=sbOptions
 		WinWidth=0.502751
-		WinHeight=0.300000
+		WinHeight=0.400000
 		WinLeft=0.495826
 		WinTop=0.012761
 		Caption="Options"
@@ -139,7 +163,7 @@ defaultproperties
 
 	Begin Object class=moComboBox Name=ResolutionCombo
 		Caption="Resolution"
-		Hint="Half renders the world at half the window size, the HUD stays sharp."
+		Hint="75% renders the 3D scene at three quarters of the window size, the HUD stays sharp."
 		IniOption="@Internal"
 		CaptionWidth=0.55
 		bHeightFromComponent=false
@@ -205,8 +229,47 @@ defaultproperties
 	End Object
 	ch_Antialiasing=AntialiasingCheck
 
+	Begin Object class=moCheckBox Name=AmbientOcclusionCheck
+		Caption="Ambient Occlusion"
+		Hint="Darkens corners and creases where light is blocked."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=5
+	End Object
+	ch_AmbientOcclusion=AmbientOcclusionCheck
+
+	Begin Object class=moCheckBox Name=ContactShadowsCheck
+		Caption="Contact Shadows"
+		Hint="Small shadows where objects, pickups and the weapon meet surfaces, cast from the strongest nearby light."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=6
+	End Object
+	ch_ContactShadows=ContactShadowsCheck
+
+	Begin Object class=moCheckBox Name=BloomCheck
+		Caption="Bloom"
+		Hint="Bright lights glow into their surroundings."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=7
+	End Object
+	ch_Bloom=BloomCheck
+
 	ResolutionText(0)="Full"
-	ResolutionText(1)="Half"
+	ResolutionText(1)="75%"
 
 	WinTop=0.15
 	WinLeft=0
