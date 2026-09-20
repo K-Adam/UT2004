@@ -3334,7 +3334,7 @@ void UFireTexture::PostLoad()
 		{
 			// Try culling some transients if needed.
 			if  (ActiveSparkNum > SparksLimit)
-				for( INT t = (ActiveSparkNum-1); t>=0; t-- )
+				for( INT t = Min(ActiveSparkNum,Sparks.Num())-1; t>=0; t-- )
 				{		
 					if( Sparks(t).Type >= ISPARK_TRANSIENTS ) 
 					{
@@ -3357,6 +3357,8 @@ void UFireTexture::PostLoad()
 		}
 		//Sparks.Debug(); 
 	}
+	// ActiveSparkNum is saved with the texture, while Sparks is not.
+	ActiveSparkNum = Clamp( ActiveSparkNum, 0, Sparks.Num() );
 
 	unguard;
 }

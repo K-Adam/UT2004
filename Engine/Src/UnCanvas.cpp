@@ -1219,7 +1219,7 @@ void UCanvas::SetScreenLight( INT Index, const FVector& Position, FColor Color, 
     ColorVect.Y = Color.G / 255.0f;
     ColorVect.Z = Color.B / 255.0f;
 
-    if ( Index > ARRAY_COUNT( screenLights ) -1 )
+    if ( Index < 0 || Index >= ARRAY_COUNT( screenLights ) )
         return;
 
     screenLights[Index].Position = Position;

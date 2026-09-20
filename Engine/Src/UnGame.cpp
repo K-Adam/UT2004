@@ -115,12 +115,12 @@ void UGameEngine::UpdateConnectingMessage()
 			if( GPendingLevel->DemoRecDriver )
 			{
 				appSprintf( Msg1, TEXT("") );
-				appSprintf( Msg2, *GPendingLevel->URL.Map );
+				appSnprintf( Msg2, ARRAY_COUNT(Msg2), TEXT("%s"), *GPendingLevel->URL.Map );
 			}
 			else
 			{
-				appSprintf( Msg1, LocalizeProgress(TEXT("ConnectingText"),TEXT("Engine")) );
-				appSprintf( Msg2, LocalizeProgress(TEXT("ConnectingURL"),TEXT("Engine")), *GPendingLevel->URL.Protocol, *GPendingLevel->URL.Host, *GPendingLevel->URL.Map );
+				appSnprintf( Msg1, ARRAY_COUNT(Msg1), TEXT("%s"), LocalizeProgress(TEXT("ConnectingText"),TEXT("Engine")) );
+				appSnprintf( Msg2, ARRAY_COUNT(Msg2), LocalizeProgress(TEXT("ConnectingURL"),TEXT("Engine")), *GPendingLevel->URL.Protocol, *GPendingLevel->URL.Host, *GPendingLevel->URL.Map );
 			}
 
 			if ( !GUIActive() )
@@ -2449,15 +2449,15 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	GLevel->UpdateTime(Info);
 
 	// Init the game info.
-	TCHAR Options[1024]=TEXT("");
+	FString Options;
 	TCHAR GameClassName[256]=TEXT("");
 	TCHAR MenuClassName[256]=TEXT(""); // gam
 	FString Error=TEXT("");
 	guard(InitGameInfo);
 	for( INT i=0; i<URL.Op.Num(); i++ )
 	{
-		appStrcat( Options, TEXT("?") );
-		appStrcat( Options, *URL.Op(i) );
+		Options += TEXT("?");
+		Options += URL.Op(i);
 		Parse( *URL.Op(i), TEXT("GAME="), GameClassName, ARRAY_COUNT(GameClassName) );
 		Parse( *URL.Op(i), TEXT("MENU="), MenuClassName, ARRAY_COUNT(MenuClassName) ); // gam
 	}

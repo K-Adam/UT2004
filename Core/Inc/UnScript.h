@@ -141,7 +141,7 @@ inline UObject* FFrame::ReadObject()
 
 #if SERIAL_POINTER_INDEX
 	INT idx = *(INT*)Code;
-	check(idx < GTotalSerializedPointers);
+	check(idx >= 0 && idx < GTotalSerializedPointers);
 	Result = (UObject*) GSerializedPointers[idx];
 #else
 	Result = *(UObject**)Code;

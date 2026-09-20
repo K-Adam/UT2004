@@ -30,7 +30,7 @@ public:
 		{	
 			// Just display info and break the debugger.
   			debugf( NAME_Critical, TEXT("appError called while debugging:") );
-			debugf( NAME_Critical, Msg );
+			debugf( NAME_Critical, TEXT("%s"), Msg );
 			debugf( NAME_Critical, TEXT("Breaking debugger") );
 			UObject::StaticShutdownAfterError();
 			appDebugBreak();
@@ -56,7 +56,7 @@ public:
 			GIsCriticalError = 1;
 			ErrorType        = Event;
 			// gam --- debugf( NAME_Critical, TEXT("appError called:") );
-			debugf( NAME_Critical, Msg );
+			debugf( NAME_Critical, TEXT("%s"), Msg );
 
 			// Shut down.
 			UObject::StaticShutdownAfterError();

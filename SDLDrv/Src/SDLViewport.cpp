@@ -542,7 +542,7 @@ void USDLViewport::SetModeCursor()
 void USDLViewport::SetTitleBar()
 {
     TCHAR WindowName[80];
-	appSprintf( WindowName, LocalizeGeneral("Product",appPackage()) );
+	appSnprintf( WindowName, ARRAY_COUNT(WindowName), TEXT("%s"), LocalizeGeneral("Product",appPackage()) );
 
 	SDL_SetWindowTitle( GetOuterUSDLClient()->Window, appToAnsi(WindowName) );
 }

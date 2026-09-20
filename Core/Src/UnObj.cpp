@@ -3978,7 +3978,7 @@ void UObject::EndLoad()
 		catch( const TCHAR* Error )
 		{
 			// Any errors here are fatal.
-			appErrorf( Error );
+			appErrorf( TEXT("%s"), Error );
 		}
 	}
 	unguard;

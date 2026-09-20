@@ -677,6 +677,7 @@ void ATcpLink::execSendBinary( FFrame& Stack, RESULT_DECL )
 	P_GET_INT(Count);
 	P_GET_ARRAY_REF(BYTE,B);
 	P_FINISH;
+	Count = Clamp( Count, 0, 255 );
 
 	if ( GIpDrvInitialized && (GetSocket() != INVALID_SOCKET) )
 	{
@@ -737,6 +738,7 @@ void ATcpLink::execReadBinary( FFrame& Stack, RESULT_DECL )
 	P_GET_INT(Count);
 	P_GET_ARRAY_REF(BYTE,B);
 	P_FINISH;
+	Count = Clamp( Count, 0, 255 );
 
 	int BytesReceived;
 

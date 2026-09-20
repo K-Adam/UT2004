@@ -160,6 +160,8 @@ void UModel::Serialize( FArchive& Ar )
 	Super::Serialize( Ar );
 
 	Ar << Vectors << Points << Nodes << Surfs << Verts << NumSharedSides << NumZones;
+	if( NumZones<0 || NumZones>FBspNode::MAX_ZONES )
+		appErrorf( TEXT("%s has %i zones"), GetFullName(), NumZones );
 	for( INT i=0; i<NumZones; i++ )
 		Ar << Zones[i];
 	Ar << Polys;

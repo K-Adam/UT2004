@@ -131,7 +131,14 @@ FArchive& operator<<( FArchive& Ar, FPackageFileSummary& Sum )
 		Ar << Sum.Guid << GenerationCount;
 		//!!67 had: return
 		if( Ar.IsLoading() )
+		{
+			if( GenerationCount<0 || GenerationCount>Ar.RemainingBytes() )
+			{
+				Ar.SetError();
+				GenerationCount = 0;
+			}
 			Sum.Generations = TArray<FGenerationInfo>( GenerationCount );
+		}
 		for( INT i=0; i<GenerationCount; i++ )
 			Ar << Sum.Generations(i);
 	}
@@ -222,7 +229,7 @@ FString ULinker::GetExportFullName( INT i, const TCHAR* FakeRoot )
 {
 	guard(ULinkerLoad::GetExportFullName);
 	FString S;
-	for( INT j=i+1; j!=0; j=ExportMap(j-1).PackageIndex )
+	for( INT j=i+1; j>0; j=ExportMap(j-1).PackageIndex )
 	{
 		if( j != i+1 )
 			S = US + TEXT(".") + S;
@@ -256,6 +263,27 @@ UBOOL ULinker::LinksToCode()
 /*----------------------------------------------------------------------------
 	ULinkerLoad.
 ----------------------------------------------------------------------------*/
+
+static UBOOL TableFits( INT Count, INT Offset, INT FileSize )
+{
+	return Count>=0 && (Count==0 || (Offset>=0 && Offset<=FileSize && Count<=FileSize-Offset));
+}
+
+// Malformed packages can make CreateExport recurse without end through class, outer and super indices.
+struct FCreateExportDepth
+{
+	static INT Depth;
+	FCreateExportDepth()
+	{
+		if( ++Depth>1024 )
+			appErrorf( TEXT("CreateExport recursion too deep") );
+	}
+	~FCreateExportDepth()
+	{
+		Depth--;
+	}
+};
+INT FCreateExportDepth::Depth = 0;
 
 ULinkerLoad::ULinkerLoad( UObject* InParent, const TCHAR* InFilename, DWORD InLoadFlags )
 :	ULinker( InParent, InFilename )
@@ -339,6 +367,21 @@ ULinkerLoad::ULinkerLoad( UObject* InParent, const TCHAR* InFilename, DWORD InLo
 			throw( LocalizeError(TEXT("Aborted"),TEXT("Core")) );
 	unguard;
 
+	auto RejectFile = [&]()
+	{
+		GWarn->Logf( LocalizeError(TEXT("BinaryFormat"),TEXT("Core")), *Filename );
+		delete Loader;
+		Loader = NULL;
+		throw( LocalizeError(TEXT("Aborted"),TEXT("Core")) );
+	};
+
+	// The tables come from the file, so they must fit in it before anything is allocated for them.
+	INT FileSize = Loader->TotalSize();
+	guard(CheckTables);
+	if( IsError() || !TableFits(Summary.NameCount, Summary.NameOffset, FileSize) || !TableFits(Summary.ImportCount, Summary.ImportOffset, FileSize) || !TableFits(Summary.ExportCount, Summary.ExportOffset, FileSize) )
+		RejectFile();
+	unguard;
+
 	// Slack everything according to summary.
 	ImportMap   .Empty( Summary.ImportCount   );
 	ExportMap   .Empty( Summary.ExportCount   );
@@ -394,6 +437,34 @@ ULinkerLoad::ULinkerLoad( UObject* InParent, const TCHAR* InFilename, DWORD InLo
 			FObjectExport*	Export = new(ExportMap)FObjectExport;
 			*this << *Export;
 		}
+	}
+	unguard;
+
+	// Indices in the tables come from the file. Check them before the export hash and the loaders follow them.
+	guard(CheckIndices);
+	auto ChainEnds = [&]( INT Index )
+	{
+		for( INT Steps=0; Index!=0; Steps++ )
+		{
+			if( Index<-ImportMap.Num() || Index>ExportMap.Num() || Steps>256 )
+				return 0;
+			Index = Index<0 ? ImportMap(-Index-1).PackageIndex : ExportMap(Index-1).PackageIndex;
+		}
+		return 1;
+	};
+	for( INT i=0; i<ImportMap.Num(); i++ )
+		if( ImportMap(i).PackageIndex>0 || !ChainEnds(ImportMap(i).PackageIndex) )
+			RejectFile();
+	for( INT i=0; i<ExportMap.Num(); i++ )
+	{
+		FObjectExport& Export = ExportMap(i);
+		if
+		(	Export.ClassIndex<-ImportMap.Num() || Export.ClassIndex>ExportMap.Num()
+		||	Export.SuperIndex<-ImportMap.Num() || Export.SuperIndex>ExportMap.Num()
+		||	(Export.ClassIndex<0 && ImportMap(-Export.ClassIndex-1).PackageIndex>=0)
+		||	!ChainEnds(Export.PackageIndex)
+		||	!TableFits(Export.SerialSize, Export.SerialOffset, FileSize) )
+			RejectFile();
 	}
 	unguard;
 
@@ -520,7 +591,7 @@ void ULinkerLoad::VerifyImport( INT i )
 		}
 		catch( const TCHAR* Error )//oldver
 		{
-			appThrowf( Error );
+			appThrowf( TEXT("%s"), Error );
 		}
 	}
 	else
@@ -770,6 +841,7 @@ void ULinkerLoad::Preload( UObject* Object )
 UObject* ULinkerLoad::CreateExport( INT Index )
 {
 	guard(ULinkerLoad::CreateExport);
+	FCreateExportDepth Depth;
 
 	// Map the object into our table.
 	FObjectExport& Export = ExportMap( Index );
@@ -777,8 +849,14 @@ UObject* ULinkerLoad::CreateExport( INT Index )
 	{
 		check(Export.ObjectName!=NAME_None || !(Export.ObjectFlags&RF_Public));
 
-		// Get the object's class.
+		// Get the object's class. Index 0 means the export is a class itself.
 		UClass* LoadClass = (UClass*)IndexToObject( Export.ClassIndex );
+		if( !LoadClass && Export.ClassIndex )
+		{
+			// A missing class, such as an editor one, must not turn its objects into classes.
+			debugf( NAME_Warning, TEXT("Skipping %s, its class is missing"), *Export.ObjectName );
+			return NULL;
+		}
 		if( !LoadClass )
 			LoadClass = UClass::StaticClass();
 		check(LoadClass);
@@ -806,7 +884,7 @@ UObject* ULinkerLoad::CreateExport( INT Index )
 
 		// If it's a struct or class, set its parent.
 		if( Export._Object->IsA(UStruct::StaticClass()) && Export.SuperIndex!=0 )
-			((UStruct*)Export._Object)->SuperField = (UStruct*)IndexToObject( Export.SuperIndex );
+			((UStruct*)Export._Object)->SuperField = Cast<UStruct>( IndexToObject( Export.SuperIndex ) );
 
 		// If it's a class, bind it to C++.
 		if( Export._Object->IsA( UClass::StaticClass() ) )
@@ -978,6 +1056,7 @@ void ULinkerLoad::Serialize( void* V, INT Length )
 {
 	guard(ULinkerLoad::Serialize);
 	Loader->Serialize( V, Length );
+	ArIsError |= Loader->IsError();
 	unguard;
 }
 

@@ -20,7 +20,8 @@ Revision history:
 CORE_API void (UObject::*GNatives[EX_Max])( FFrame &Stack, RESULT_DECL );
 CORE_API INT GNativeDuplicate=0;
 
-CORE_API void (UObject::*GCasts[CST_Max])( FFrame &Stack, RESULT_DECL );
+// The cast token is a byte, so every value needs an entry.
+CORE_API void (UObject::*GCasts[256])( FFrame &Stack, RESULT_DECL );
 CORE_API INT GCastDuplicate=0;
 
 #define RUNAWAY_LIMIT 10000000
@@ -351,13 +352,14 @@ static void SkipNullContext( FFrame& Stack, RESULT_DECL )
 	// The stored size follows the 32-bit layout. Where the skipped expression names its
 	// variable or function, its real size is known.
 	BYTE Token = *Stack.Code;
-	if( Token==EX_InstanceVariable || Token==EX_DefaultVariable || Token==EX_StructMember || Token==EX_FinalFunction )
+	if( Token==EX_InstanceVariable || Token==EX_DefaultVariable || Token==EX_StructMember || Token==EX_FinalFunction || Token==EX_DelegateFunction )
 	{
 		BYTE* Expr = Stack.Code++;
 		UObject* Field = Stack.ReadObject();
 		Stack.Code = Expr;
-		UFunction* Function = Cast<UFunction>( Field );
-		UProperty* Property = Function ? Function->GetReturnProperty() : Cast<UProperty>( Field );
+		UDelegateProperty* Delegate = Cast<UDelegateProperty>( Field );
+		UFunction* Function = Delegate ? Delegate->Function : Cast<UFunction>( Field );
+		UProperty* Property = Function ? Function->GetReturnProperty() : Delegate ? NULL : Cast<UProperty>( Field );
 		// A stored 0 means the original engine left the result alone, as it does for strings.
 		if( Property && Size )
 			Size = Property->ElementSize;
@@ -670,7 +672,7 @@ void UObject::execBoolVariable( FFrame& Stack, RESULT_DECL )
 	UBoolProperty* Property;
 #if SERIAL_POINTER_INDEX
 	INT idx = *(INT*)Stack.Code;
-	checkSlow(idx < GTotalSerializedPointers);
+	checkSlow(idx >= 0 && idx < GTotalSerializedPointers);
 	Property = (UBoolProperty*) GSerializedPointers[idx];
 #else
 	Property = *(UBoolProperty**)Stack.Code;
@@ -812,8 +814,11 @@ void UObject::execSwitch( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execSwitch);
 
-	// Get switch size.
+	// Get switch size. It follows the 32-bit layout, so on 64-bit an object needs the full pointer size.
+	// Both buffers are zeroed, so the wider compare is also right for 4-byte values.
 	BYTE bSize = *Stack.Code++;
+	if( bSize==sizeof(INT) )
+		bSize = sizeof(void*);
 
 	// Get switch expression.
 	BYTE SwitchBuffer[1024], Buffer[1024];
@@ -4803,9 +4808,14 @@ BYTE CORE_API GRegisterNative( INT iNative, const Native& Func )
 	}
 	if( iNative != INDEX_NONE )
 	{
-		if( iNative<0 || iNative>ARRAY_COUNT(GNatives) || GNatives[iNative]!=&UObject::execUndefined) 
+		if( iNative<0 || iNative>=ARRAY_COUNT(GNatives) )
 			GNativeDuplicate = iNative;
-		GNatives[iNative] = Func;
+		else
+		{
+			if( GNatives[iNative]!=&UObject::execUndefined )
+				GNativeDuplicate = iNative;
+			GNatives[iNative] = Func;
+		}
 	}
 	return 0;
 }
@@ -4821,9 +4831,14 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func )
 	}
 	if( CastCode != INDEX_NONE )
 	{
-		if( CastCode<0 || CastCode>ARRAY_COUNT(GCasts) || GCasts[CastCode]!=&UObject::execUndefined) 
+		if( CastCode<0 || CastCode>=ARRAY_COUNT(GCasts) )
 			GCastDuplicate = CastCode;
-		GCasts[CastCode] = Func;
+		else
+		{
+			if( GCasts[CastCode]!=&UObject::execUndefined )
+				GCastDuplicate = CastCode;
+			GCasts[CastCode] = Func;
+		}
 	}
 	return 0;
 }

@@ -142,6 +142,7 @@ void AUdpLink::execSendBinary( FFrame& Stack, RESULT_DECL )
 	P_GET_INT(Count);
 	P_GET_ARRAY_REF(BYTE,B);
 	P_FINISH;
+	Count = Clamp( Count, 0, 255 );
 	if( GetSocket() != INVALID_SOCKET )
 	{
 		sockaddr_in Addr;
@@ -250,12 +251,13 @@ void AUdpLink::execReadText( FFrame& Stack, RESULT_DECL )
 	*Str = TEXT("");
 	if( GetSocket() != INVALID_SOCKET )
 	{
-		BYTE Buffer[MAXRECVDATASIZE];
+		BYTE Buffer[MAXRECVDATASIZE+1];
 		sockaddr_in FromAddr;
 		SOCKLEN FromSize = sizeof(FromAddr);
-		INT BytesReceived = recvfrom( (SOCKET)Socket, (char*)Buffer, sizeof(Buffer), MSG_NOSIGNAL, (sockaddr*)&FromAddr, &FromSize );
+		INT BytesReceived = recvfrom( (SOCKET)Socket, (char*)Buffer, MAXRECVDATASIZE, MSG_NOSIGNAL, (sockaddr*)&FromAddr, &FromSize );
 		if( BytesReceived != SOCKET_ERROR )
 		{
+			Buffer[BytesReceived] = 0;
 			Addr->Addr = ntohl( FromAddr.sin_addr.s_addr );
 			Addr->Port = ntohs( FromAddr.sin_port );
 			*Str = appFromAnsi((ANSICHAR*)Buffer);

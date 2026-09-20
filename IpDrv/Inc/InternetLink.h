@@ -91,6 +91,7 @@ struct IPDRV_API FArchiveUdpReader : public FArchive
 	// FArchive interface.
 	virtual void Serialize( void* V, INT l );
 	virtual UBOOL AtEnd();
+	virtual INT RemainingBytes() {return Length;}
 private:
 	BYTE* Data;
 	INT Length;

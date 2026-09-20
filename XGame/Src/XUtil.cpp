@@ -232,7 +232,7 @@ template<class CacheClass> void CacheLoad( CacheClass& Cache )
         for( INT j = 0; j < Files.Num(); j++ )
         {
             Files(j) = Files(j).LeftChop(4);
-            appSprintf( Tmp, *Files(j) );
+            appSprintf( Tmp, TEXT("%s"), *Files(j) );
             TCHAR* End = Tmp + appStrlen( Tmp );
             appSprintf( End, TEXT(".%s"), *Cache.FileExtension );
 

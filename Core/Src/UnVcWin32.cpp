@@ -725,7 +725,7 @@ FCriticalSection::~FCriticalSection() noexcept(false)
 {
 	guard(FCriticalSection::~FCriticalSection);
 	DeleteCriticalSection( (CRITICAL_SECTION*) Handle );
-	delete Handle;
+	delete (CRITICAL_SECTION*) Handle;
 	unguard;
 }
 

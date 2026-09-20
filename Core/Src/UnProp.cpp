@@ -1163,7 +1163,14 @@ UBOOL UObjectProperty::Identical( const void* A, const void* B ) const
 void UObjectProperty::SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const
 {
 	guardSlow(UObjectProperty::SerializeItem);
-	Ar << *(UObject**)Value;
+	UObject*& Object = *(UObject**)Value;
+	Ar << Object;
+	// Native code trusts the declared class, so a package must not put another one here.
+	if( Ar.IsLoading() && Object && PropertyClass && !Object->IsA(PropertyClass) )
+	{
+		debugf( NAME_Warning, TEXT("%s holds %s, expecting %s"), GetFullName(), Object->GetFullName(), PropertyClass->GetName() );
+		Object = NULL;
+	}
 	unguardobjSlow;
 }
 UBOOL UObjectProperty::NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const
@@ -1743,6 +1750,12 @@ void UArrayProperty::SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes 
 	Ar << AR_INDEX(n);
 	if( Ar.IsLoading() )
 	{
+		// Every element takes at least a byte in the data.
+		if( n<0 || n>Ar.RemainingBytes() )
+		{
+			Ar.SetError();
+			n = 0;
+		}
 		((FArray*)Value)->Empty( c );
 		((FArray*)Value)->AddZeroed( c, n );
 	}
@@ -2020,6 +2033,12 @@ void UMapProperty::SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) 
 	Ar << AR_INDEX(n);
 	if( Ar.IsLoading() )
 	{
+		// Every element takes at least a byte in the data.
+		if( n<0 || n>Ar.RemainingBytes() )
+		{
+			Ar.SetError();
+			n = 0;
+		}
 		((FArray*)Value)->Empty( c );
 		((FArray*)Value)->Add( n, c );
 	}

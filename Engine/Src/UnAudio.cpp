@@ -1667,10 +1667,28 @@ IMPLEMENT_CLASS(USoundGroup);
 	WaveModInfo implementation - downsampling of wave files.
 -----------------------------------------------------------------------------*/
 
+// Chunk lengths come from the file, so the walk uses checked offsets.
+static FRiffChunkOld* FindRiffChunk( TArray<BYTE>& WavData, DWORD ChunkID )
+{
+	for( INT Offset=3*4; Offset+8<=WavData.Num(); )
+	{
+		FRiffChunkOld* Chunk = (FRiffChunkOld*)&WavData(Offset);
+		if( INTEL_ORDER32(Chunk->ChunkID) == ChunkID )
+			return Chunk;
+		QWORD Next = Offset + 8 + (((QWORD)(DWORD)INTEL_ORDER32(Chunk->ChunkLen) + 1) & ~(QWORD)1);
+		if( Next > (QWORD)WavData.Num() )
+			break;
+		Offset = (INT)Next;
+	}
+	return NULL;
+}
+
 UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 {
 	guard(FWaveModInfo::ReadWaveInfo);
 	FFormatChunk* FmtChunk;
+	if( WavData.Num() < 3*4 )
+		return 0;
 	FRiffWaveHeader* RiffHdr = (FRiffWaveHeader*)&WavData(0);
 	WaveDataEnd = &WavData(0) + WavData.Num();	
 
@@ -1682,16 +1700,9 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 
 	pMasterSize = &RiffHdr->ChunkLen;
 
-	FRiffChunkOld* RiffChunk = (FRiffChunkOld*)&WavData(3*4);
 	// Look for the 'fmt ' chunk.
-	while( ( ((BYTE*)RiffChunk + 8) < WaveDataEnd)  && ( INTEL_ORDER32(RiffChunk->ChunkID) != mmioFOURCC('f','m','t',' ') ) )
-	{
-		// Go to next chunk.
-		RiffChunk = (FRiffChunkOld*) ( (BYTE*)RiffChunk + Pad16Bit(INTEL_ORDER32(RiffChunk->ChunkLen)) + 8);
-	}
-
-	// Chunk found ?
-	if( INTEL_ORDER32(RiffChunk->ChunkID) != mmioFOURCC('f','m','t',' ') )
+	FRiffChunkOld* RiffChunk = FindRiffChunk( WavData, mmioFOURCC('f','m','t',' ') );
+	if( !RiffChunk || (BYTE*)RiffChunk + 8 + sizeof(FFormatChunk) > WaveDataEnd )
 	{
 		return 0;
 	}
@@ -1704,18 +1715,9 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 	pBlockAlign		= &FmtChunk->nBlockAlign;
 	pChannels       = &FmtChunk->nChannels;
 
-	//GWarn->Logf( TEXT("look for data chunk") );
-	// re-initalize the RiffChunk pointer
-	RiffChunk = (FRiffChunkOld*)&WavData(3*4);
 	// Look for the 'data' chunk.
-	while( ( ((BYTE*)RiffChunk + 8) < WaveDataEnd) && ( INTEL_ORDER32(RiffChunk->ChunkID) != mmioFOURCC('d','a','t','a') ) )
-	{
-		// Go to next chunk.
-		RiffChunk = (FRiffChunkOld*) ( (BYTE*)RiffChunk + Pad16Bit(INTEL_ORDER32(RiffChunk->ChunkLen)) + 8);
-	} 
-
-	// Chunk found ?
-	if( INTEL_ORDER32(RiffChunk->ChunkID) != mmioFOURCC('d','a','t','a') )
+	RiffChunk = FindRiffChunk( WavData, mmioFOURCC('d','a','t','a') );
+	if( !RiffChunk )
 	{
 		return 0;
 	}
@@ -1724,40 +1726,26 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 	pWaveDataSize   = &RiffChunk->ChunkLen;
 	SampleDataSize  =  INTEL_ORDER32(RiffChunk->ChunkLen);
 	OldBitsPerSample = FmtChunk->wBitsPerSample;
-	SampleDataEnd   =  SampleDataStart+SampleDataSize;
 
-	if ((BYTE *) SampleDataEnd > (BYTE *) WaveDataEnd)
+	if( (DWORD)SampleDataSize > (DWORD)(WaveDataEnd - SampleDataStart) )
 	{
 		debugf(NAME_Warning, TEXT("Wave data chunk is too big!"));
 
 		// fix it up by clamping data chunk...
-		SampleDataEnd = (BYTE *) WaveDataEnd;
-		SampleDataSize = SampleDataEnd - SampleDataStart;
+		SampleDataSize = WaveDataEnd - SampleDataStart;
 		RiffChunk->ChunkLen = INTEL_ORDER32(SampleDataSize);
 	}
+	SampleDataEnd   =  SampleDataStart+SampleDataSize;
 
 	NewDataSize	= SampleDataSize;
 
 	if( FmtChunk->wFormatTag != 1 )
 		return 0;
 
-	//GWarn->Logf( TEXT("look for smpl chunk 0x%x"), RiffChunk );
-	// Re-initalize the RiffChunk pointer
-	RiffChunk = (FRiffChunkOld*)&WavData(3*4);
-	// Look for a 'smpl' chunk.
-	while( ( (((BYTE*)RiffChunk) + 8) < WaveDataEnd) && ( INTEL_ORDER32(RiffChunk->ChunkID) != mmioFOURCC('s','m','p','l') ) )
-	{
-		// Go to next chunk.
-		//GWarn->Logf( TEXT("go to next\n") );
-		RiffChunk = (FRiffChunkOld*) ( (BYTE*)RiffChunk + Pad16Bit(INTEL_ORDER32(RiffChunk->ChunkLen)) + 8);
-		//GWarn->Logf( TEXT("riff: 0x%x\n"), RiffChunk );
-		//GWarn->Logf( TEXT("%i"), RiffChunk->ChunkID );
-	} 
-
-	// Chunk found ? smpl chunk is optional.
+	// Look for a 'smpl' chunk. It is optional.
 	// Find the first sample-loop structure, and the total number of them.
-	// GWarn->Logf( TEXT("find sample-loop 0x%x"), RiffChunk );
-	if( (PTRINT)RiffChunk+4<(PTRINT)WaveDataEnd && INTEL_ORDER32(RiffChunk->ChunkID) == mmioFOURCC('s','m','p','l') )
+	RiffChunk = FindRiffChunk( WavData, mmioFOURCC('s','m','p','l') );
+	if( RiffChunk )
 	{
 		//GWarn->Logf( TEXT("loop") );
 		FSampleChunk *pSampleChunk = (FSampleChunk *) ((BYTE*)RiffChunk + 8);
@@ -1769,7 +1757,7 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 		if (((BYTE *)pSampleLoop + sizeof (FSampleLoop)) > (BYTE *)WaveDataEnd)
 			pSampleLoop = NULL;
 
-		SampleLoopsNum = pSampleChunk->cSampleLoops;
+		SampleLoopsNum = pSampleChunk && pSampleLoop ? Min<INT>( pSampleChunk->cSampleLoops, (WaveDataEnd - (BYTE*)pSampleLoop) / sizeof(FSampleLoop) ) : 0;
 
 		/*
 		FSampleChunk* pSampleChunk =  (FSampleChunk*)( (BYTE*)RiffChunk + 8);
@@ -1805,10 +1793,10 @@ UBOOL FWaveModInfo::UpdateWaveData( TArray<BYTE>& WavData )
 		*pAvgBytesPerSec = *pBlockAlign * *pSamplesPerSec; //sample rate * Block align
 
 		// Update 'smpl' chunk data also, if present.
-		if (SampleLoopsNum)
+		INT SampleDivisor = NewDataSize ? ( (SampleDataSize *  *pBitsPerSample) / (NewDataSize ) ) : 0;
+		if (SampleLoopsNum > 0 && SampleDivisor)
 		{
 			FSampleLoop* pTempSampleLoop = pSampleLoop;
-			INT SampleDivisor = ( (SampleDataSize *  *pBitsPerSample) / (NewDataSize ) );
 			for (INT SL = 0; SL<SampleLoopsNum; SL++)
 			{
 				pTempSampleLoop->dwStart = pTempSampleLoop->dwStart  * OldBitsPerSample / SampleDivisor;

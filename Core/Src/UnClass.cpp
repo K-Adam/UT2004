@@ -379,6 +379,9 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 			if( Property )
 			{
 				Property->Link( Ar, Prev );
+				// ArrayDim comes from the package, and every bounds check on the property trusts it.
+				if( Property->ArrayDim<1 || (QWORD)Property->ArrayDim*Property->ElementSize+Property->Offset>MAXINT )
+					appErrorf( TEXT("Property %s has a bad size"), Property->GetFullName() );
 				PropertiesSize = Property->Offset + Property->GetSize();
 				Prev = Property;
 			}
@@ -556,7 +559,8 @@ void UStruct::SerializeTaggedProperties( FArchive& Ar, BYTE* Data, UClass* Defau
 			{
 				debugfSlow( NAME_Warning, TEXT("Property %s of %s not found"), *Tag.Name, GetFullName() );
 			}
-			else if( Cast<UArrayProperty>(Property) && Tag.Type!=NAME_ArrayProperty && Cast<UArrayProperty>(Property)->Inner->GetID()==Tag.Type )
+			// The index comes from the file, and the old fixed arrays it converts were far smaller than 16384.
+			else if( Cast<UArrayProperty>(Property) && Tag.Type!=NAME_ArrayProperty && Cast<UArrayProperty>(Property)->Inner->GetID()==Tag.Type && Tag.ArrayIndex<16384 )
 			{
 				//oldver: Convert fixed-length arrays into dynamic arrays
 				debugf( NAME_Warning, TEXT("Converting in %s of %s to dynamic array."), *Tag.Name, GetName() );
@@ -567,7 +571,7 @@ void UStruct::SerializeTaggedProperties( FArchive& Ar, BYTE* Data, UClass* Defau
 				Tag.SerializeTaggedProperty( Ar, InnerProp, (BYTE*)Arr->GetData()+Tag.ArrayIndex * InnerProp->ElementSize, 0 );
 				continue;
 			}
-			else if( Tag.Type==NAME_ByteProperty && Property->GetID()==NAME_FloatProperty )
+			else if( Tag.Type==NAME_ByteProperty && Property->GetID()==NAME_FloatProperty && Tag.ArrayIndex<Property->ArrayDim )
 			{
 				//oldver: Convert bytes to floats.
 				BYTE B;
@@ -1255,13 +1259,23 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 {
 	EExprToken Expr=(EExprToken)0;
 	guard(SerializeExpr);
-	#define XFER(T) {Ar << *(T*)&Script(iCode); iCode += sizeof(T); }
+
+	// Bytecode comes from the package, so it can run past the script or nest without end.
+	static INT Depth = 0;
+	struct FDepthGuard
+	{
+		FDepthGuard()  { if( ++Depth>1024 ) appErrorf( TEXT("Script nested too deep") ); }
+		~FDepthGuard() { Depth--; }
+	} DepthGuard;
+	#define CHECK_SCRIPT_SPACE(Size) if( iCode+(INT)(Size)>Script.Num() ) appErrorf( TEXT("Script overrun in %s"), GetFullName() );
+	#define XFER(T) {CHECK_SCRIPT_SPACE(sizeof(T)); Ar << *(T*)&Script(iCode); iCode += sizeof(T); }
 
 #if !SERIAL_POINTER_INDEX
     #define XFERPTR(T) XFER(T)
 #else
     #define XFERPTR(T) \
     { \
+        CHECK_SCRIPT_SPACE(sizeof(INT)); \
         T x = NULL; \
         if (!Ar.IsLoading()) \
             x = (T) GSerializedPointers[*(INT*)&Script(iCode)]; \
@@ -1274,7 +1288,7 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 	//DEBUGGER: To mantain compatability between debug and non-debug clases
     // amb, gam: added if conditional
 	#define HANDLE_OPTIONAL_DEBUG_INFO() \
-    if (iCode < Script.Num()) \
+    if (iCode + 1 + (INT)sizeof(INT) <= Script.Num()) \
     { \
 	    int RemPos = Ar.Tell(); \
 	    int OldiCode = iCode;	\
@@ -1578,6 +1592,7 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 	return Expr;
 	#undef XFER
 	#undef XFERPTR
+	#undef CHECK_SCRIPT_SPACE
 	unguardf(( TEXT("(%02X)"), Expr ));
 }
 

@@ -93,7 +93,7 @@ void UDownload::DownloadError( const TCHAR* InError )
 {
 	guard(UDownload::DownloadError);
 	// Failure.
-	appStrcpy( Error, InError );
+	appStrncpy( Error, InError, ARRAY_COUNT(Error) );
 	unguard;
 }
 void UDownload::DownloadDone()

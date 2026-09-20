@@ -902,7 +902,7 @@ void FArchiveTcpReader::ReceiveDataFromLink()
 			FArchiveTcpReaderPacket* Packet = &Packets( Packets.AddZeroed() );
 			// Read the packet length
 			Link->Recv( (BYTE*)&Packet->Length, sizeof(INT) );
-			Packet->Length = INTEL_ORDER32(Packet->Length);
+			Packet->Length = Max( INTEL_ORDER32(Packet->Length), 0 );
 			//GWarn->Logf(TEXT("Received packet: length=%d"), Packet->Length );
 		}
 	}
@@ -1134,6 +1134,7 @@ FArchiveUdpReader::FArchiveUdpReader( BYTE* InData, INT InLength )
 {
 	ArIsLoading = 1;
 	ArIsPersistent = 1;
+	ArMaxSerializeSize = 10000;
 
 	//!! OLDVER
 	INT Version;
@@ -1157,7 +1158,7 @@ FArchiveUdpReader::FArchiveUdpReader( BYTE* InData, INT InLength )
 void FArchiveUdpReader::Serialize( void* V, INT l )
 {
 	guard(FArchiveUdpReader::Serialize);
-	if( l <= Length )
+	if( l>=0 && l<=Length )
 	{
         appMemcpy( V, Data, l );
 		Data += l;

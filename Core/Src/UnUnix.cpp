@@ -246,6 +246,9 @@ CORE_API UNICHAR* wcsncpy( UNICHAR* _Dest, const UNICHAR* Src, INT MaxLen )
 
     UNICHAR *Dest = _Dest;
 
+    if (MaxLen <= 0)
+        return(Dest);
+
     MaxLen--;  // always leave room for null char.
     for (INT i = 0; ((i < MaxLen) && (*Src)); i++)
     {
@@ -547,6 +550,8 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
             *buf = 0;
         return(0);
     }
+    if ((max <= 0) || (buf == NULL))
+        return(0);
 
     TCHAR *src = (TCHAR *) appAlloca((wcslen(fmt) + 1) * sizeof (TCHAR));
     wcscpy(src, fmt);
@@ -572,12 +577,14 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
 
         src++; // skip the '%' char...
 
-        while (*src == ' ')
+        while ((*src == ' ') && (dst < enddst))
         {
             *dst = ' ';
             dst++;
             src++;
         }
+        if (dst >= enddst)
+            break;
 
             // check for field width requests...
         if ((*src == '-') || ((*src >= '0') && (*src <= '9')))
@@ -609,6 +616,14 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
 
         if (*src == 'l')  /* might be meaningless; let it slide. */
             src++;
+
+        // Longer conversions would not fit the ANSI format buffers below.
+        if (src - percent_ptr > 16)
+        {
+            if (*src)
+                src++;
+            continue;
+        }
 
         switch (*src)
         {
@@ -650,7 +665,7 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
                 }
                 fmtbuf[cpyidx] = 0;
 
-                int rc = snprintf(ansinum, sizeof (ansinum), fmtbuf, val);
+                int rc = Min<int>(snprintf(ansinum, sizeof (ansinum), fmtbuf, val), sizeof (ansinum) - 1);
                 if ((dst + rc) > enddst)
                     rc = enddst - dst;
                 for (int i = 0; i < rc; i++)
@@ -663,7 +678,7 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
 
             case 'I':
             {
-                if ((src[1] != '6') || (src[2] != '4'))
+                if ((src[1] != '6') || (src[2] != '4') || (src[3] == 0))
                 {
                     debugf(TEXT("Unknown percent in UnUnix.cpp::wvsnprintf()."));
                     unicode_str_to_stdout(fmt);
@@ -688,7 +703,7 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
                 }
                 fmtbuf[cpyidx] = 0;
 
-                int rc = snprintf(ansinum, sizeof (ansinum), fmtbuf, val);
+                int rc = Min<int>(snprintf(ansinum, sizeof (ansinum), fmtbuf, val), sizeof (ansinum) - 1);
                 if ((dst + rc) > enddst)
                     rc = enddst - dst;
                 for (int i = 0; i < rc; i++)
@@ -716,7 +731,7 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
                 }
                 fmtbuf[cpyidx] = 0;
 
-                int rc = snprintf(ansinum, sizeof (ansinum), fmtbuf, val);
+                int rc = Min<int>(snprintf(ansinum, sizeof (ansinum), fmtbuf, val), sizeof (ansinum) - 1);
                 if ((dst + rc) > enddst)
                     rc = enddst - dst;
                 for (int i = 0; i < rc; i++)
@@ -747,7 +762,8 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
             break;
 
             default:
-                src++;  // skip char, I guess.
+                if (*src)
+                    src++;  // skip char, I guess.
                 debugf(TEXT("Unknown percent in UnUnix.cpp::wvsnprintf()."));
                 unicode_str_to_stdout(fmt);
                 break;

@@ -383,6 +383,7 @@ CORE_API TCHAR* appQtoa( QWORD Num, INT Base=10 );
 CORE_API INT appStrtoi( const TCHAR* Start, TCHAR** End, INT Base );
 CORE_API INT appStrnicmp( const TCHAR* A, const TCHAR* B, INT Count );
 CORE_API INT appSprintf( TCHAR* Dest, const TCHAR* Fmt, ... );
+CORE_API INT appSnprintf( TCHAR* Dest, INT Count, const TCHAR* Fmt, ... );
 CORE_API void appTrimSpaces( ANSICHAR* String);
 CORE_API INT appStrPrefix( const TCHAR* Str, const TCHAR* Prefix ); // gam
 
@@ -515,15 +516,13 @@ CORE_API void appMemzero( void* Dest, INT Count );
 inline void* operator new( size_t Size, const TCHAR* Tag )
 {
 	guardSlow(new);
-// !!! FIXME: Don't cast to DWORD! Fix appMalloc()'s declaration! --ryan.
-	return appMalloc( (DWORD) Size, Tag );
+	return appMalloc( Size, Tag );
 	unguardSlow;
 }
 inline void* operator new( size_t Size )
 {
 	guardSlow(new);
-// !!! FIXME: Don't cast to DWORD! Fix appMalloc()'s declaration! --ryan.
-	return appMalloc( (DWORD) Size, TEXT("new") );
+	return appMalloc( Size, TEXT("new") );
 	unguardSlow;
 }
 inline void operator delete( void* Ptr )
@@ -537,15 +536,13 @@ inline void operator delete( void* Ptr )
 inline void* operator new[]( size_t Size, const TCHAR* Tag )
 {
 	guardSlow(new);
-// !!! FIXME: Don't cast to DWORD! Fix appMalloc()'s declaration! --ryan.
-	return appMalloc( (DWORD) Size, Tag );
+	return appMalloc( Size, Tag );
 	unguardSlow;
 }
 inline void* operator new[]( size_t Size )
 {
 	guardSlow(new);
-// !!! FIXME: Don't cast to DWORD! Fix appMalloc()'s declaration! --ryan.
-	return appMalloc( (DWORD) Size, TEXT("new") );
+	return appMalloc( Size, TEXT("new") );
 	unguardSlow;
 }
 inline void operator delete[]( void* Ptr )

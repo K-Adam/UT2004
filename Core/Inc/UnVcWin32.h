@@ -73,6 +73,7 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 	va_start( ArgPtr, lastarg );	\
 	VSNPRINTF( msg, len, fmt, ArgPtr );	\
 	va_end( ArgPtr );	\
+	(msg)[(len)-1] = 0;	\
 }
 
 #define GET_VARARGS_ANSI(msg,len,lastarg,fmt)	\
@@ -81,6 +82,7 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 	va_start( ArgPtr, lastarg );	\
 	_vsnprintf( msg, len, fmt, ArgPtr );	\
 	va_end( ArgPtr );	\
+	(msg)[(len)-1] = 0;	\
 }
 
 #define GET_VARARGS_RESULT(msg,len,lastarg,fmt,result)	\

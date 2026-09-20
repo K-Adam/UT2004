@@ -257,11 +257,7 @@ public:
 		checkSlow(Index<=ArrayNum);
 
 		INT OldNum = ArrayNum;
-		if( (ArrayNum+=Count)>ArrayMax )
-		{
-			ArrayMax = ArrayNum + 3*ArrayNum/8 + 32;
-			Realloc( ElementSize );
-		}
+		Grow( Count, ElementSize );
 		appMemmove
 		(
 			(BYTE*)Data + (Index+Count )*ElementSize,
@@ -282,12 +278,7 @@ public:
 		checkSlow(ArrayMax>=ArrayNum);
 
 		INT Index = ArrayNum;
-		if( (ArrayNum+=Count)>ArrayMax )
-		{
-			ArrayMax = ArrayNum + 3*ArrayNum/8 + 32;
-			Realloc( ElementSize );
-		}
-
+		Grow( Count, ElementSize );
 		return Index;
 		unguardSlow;
 	}
@@ -372,6 +363,16 @@ public:
 	void Remove( INT Index, INT Count, INT ElementSize );
 protected:
 	void Realloc( INT ElementSize );
+	void Grow( INT Count, INT ElementSize )
+	{
+		if( Count<-ArrayNum || Count>MAXINT-ArrayNum )
+			appErrorf( TEXT("FArray::Grow bad count %i+%i"), ArrayNum, Count );
+		if( (ArrayNum+=Count)>ArrayMax )
+		{
+			ArrayMax = (INT)Min<QWORD>( ArrayNum + 3*(QWORD)ArrayNum/8 + 32, MAXINT );
+			Realloc( ElementSize );
+		}
+	}
 	FArray( INT InNum, INT ElementSize )
 	:	ArrayNum( InNum )
 	,	ArrayMax( InNum )
@@ -502,10 +503,16 @@ public:
 		if( sizeof(T)==1 )
 		{
 			// Serialize simple bytes which require no construction or destruction.
-			Ar << AR_INDEX(A.ArrayNum);
+			INT NewNum = A.ArrayNum;
+			Ar << AR_INDEX(NewNum);
 			if( Ar.IsLoading() )
 			{
-				A.ArrayMax = A.ArrayNum;
+				if( NewNum<0 || NewNum>Ar.RemainingBytes() )
+				{
+					Ar.SetError();
+					NewNum = 0;
+				}
+				A.ArrayMax = A.ArrayNum = NewNum;
 				A.Realloc( sizeof(T) );
 			}
             // gam ---
@@ -520,8 +527,14 @@ public:
 			// Load array.
 			INT NewNum = 0; // gam
 			Ar << AR_INDEX(NewNum);
-			A.Empty( NewNum );
-			for( INT i=0; i<NewNum; i++ )
+			if( NewNum<0 )
+			{
+				Ar.SetError();
+				NewNum = 0;
+			}
+			// The count comes from the data, so reserve at most what the archive holds.
+			A.Empty( Min( NewNum, Min( Ar.RemainingBytes(), 65536 ) ) );
+			for( INT i=0; i<NewNum && !Ar.IsError(); i++ )
 				Ar << *new(A)T;
 		}
 		else
@@ -1555,6 +1568,7 @@ public:
 	void Serialize( void* Data, INT Num )
 	{
 		check(Pos>=0);
+		check(Num>=0);
 		check(Pos+Num<=Bytes.Num());
 		appMemcpy( Data, &Bytes(Pos), Num );
 		Pos += Num;

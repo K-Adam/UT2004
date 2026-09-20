@@ -230,14 +230,16 @@ CORE_API FArchive& operator<<( FArchive& Ar, FNameEntry& E )
 	if( Ar.Ver()<64 )
 	{
 		check(Ar.IsLoading());
-		INT Count;
-		for( Count=0; ; Count++ )
+		INT Count = 0;
+		for( ; ; )
 		{
 			BYTE ACh;
 			Ar << ACh;
-			E.Name[Count] = FromAnsi(ACh);
-			if( ACh == 0 )
+			if( ACh == 0 || Ar.IsError() )
 				break;
+			// Keep reading to the terminator so the file stays in step.
+			if( Count < NAME_SIZE-1 )
+				E.Name[Count++] = FromAnsi(ACh);
 		}
 		E.Name[Count] = 0;
 	}

@@ -63,7 +63,10 @@ void FOutputDevice::Logf( const TCHAR* Fmt, ... )
 void FArray::Realloc( INT ElementSize )
 {
 	guard(FArray::Realloc);
-	Data = appRealloc( Data, ArrayMax*ElementSize, TEXT("FArray") );
+	QWORD Size = (QWORD)ArrayMax * ElementSize;
+	if( ArrayMax<0 || Size>MAXINT )
+		appErrorf( TEXT("FArray::Realloc bad size %i*%i"), ArrayMax, ElementSize );
+	Data = appRealloc( Data, (SIZE_T)Size, TEXT("FArray") );
 	unguardf(( TEXT("%i*%i"), ArrayMax, ElementSize ));
 }
 
@@ -246,8 +249,8 @@ CORE_API FArchive& operator<<( FArchive& Ar, FString& A )
 	Ar << AR_INDEX(SaveNum);
 	if( Ar.IsLoading() )
 	{
-		// Protect against network packets allocating too much memory
-		if( Ar.ArMaxSerializeSize && Abs(SaveNum) > Ar.ArMaxSerializeSize )
+		// The length comes from the data, so it must fit in what is left of it.
+		if( SaveNum==-MAXINT-1 || (Ar.ArMaxSerializeSize && Abs(SaveNum) > Ar.ArMaxSerializeSize) || (QWORD)Abs(SaveNum)*(SaveNum<0 ? sizeof(UNICHAR) : 1) > (QWORD)Ar.RemainingBytes() )
 		{
 			Ar.ArIsError = 1;
 			Ar.ArIsCriticalError = 1;
@@ -262,6 +265,8 @@ CORE_API FArchive& operator<<( FArchive& Ar, FString& A )
 		else
 			for( INT i=0; i<A.Num(); i++ )
 				{UNICHAR UCh; Ar << UCh; A(i)=FromUnicode(UCh);}
+		if( A.Num() )
+			A(A.Num()-1) = 0;
 		if( Ar.IsLoading() && A.Num()==1 )
 			A.Empty();
 	}
@@ -2462,7 +2467,7 @@ CORE_API void VARARGS appUnwindf( const TCHAR* Fmt, ... )
 		appStrncat( GErrorHist, TEXT(" <- "), ARRAY_COUNT(GErrorHist) );
 	appStrncat( GErrorHist, TempStr, ARRAY_COUNT(GErrorHist) );
 
-	debugf( NAME_Critical, TempStr );
+	debugf( NAME_Critical, TEXT("%s"), TempStr );
 }
 
 

@@ -257,7 +257,11 @@ void UHTTPDownload::Tick(void)
 				(*(*ProxyServerHost)) ? *FormatFilename(*DownloadURL.String()) : *(FString(TEXT("/"))+FormatFilename(*(DownloadURL.Map+DownloadURL.OptionString()))),
 				(*(*ProxyServerHost)) ? *ProxyServerHost : *DownloadURL.Host
 			);
-			send( ServerSocket, appToAnsi(*Request), Request.Len(), 0 );
+			// appToAnsi truncates long requests, so convert the whole string.
+			TArray<ANSICHAR> AnsiRequest( Request.Len() );
+			for( INT i=0; i<Request.Len(); i++ )
+				AnsiRequest(i) = ToAnsi( (*Request)[i] );
+			send( ServerSocket, &AnsiRequest(0), AnsiRequest.Num(), 0 );
 		}
 		HTTPState = HTTP_ReceivingHeader;
 		break;
@@ -266,6 +270,12 @@ void UHTTPDownload::Tick(void)
 			FetchData();
 			for( INT i=0;i<ReceivedData.Num();i++ )
 			{
+				if( Headers.Num()>64 || ReceivedData.Num()>65536 )
+				{
+					DownloadError( LocalizeError( TEXT("ConnectionFailed"), TEXT("Engine") ) );
+					HTTPState = HTTP_Closed;
+					return;
+				}
 				if( ReceivedData(i)==13 || ReceivedData(i)==10 )
 				{				
 					UBOOL EOH = i==0;

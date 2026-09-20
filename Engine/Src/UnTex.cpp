@@ -1429,7 +1429,7 @@ INT FStaticTexture::GetFirstMip()
 	while( ((GetWidth() >> FirstMip) < 64) && ((GetHeight() >> FirstMip) < 64) && (FirstMip > 0) )
 		FirstMip--;
 
-	return Max( FirstMip, Texture->MinLOD );
+	return Min( Max( FirstMip, Texture->MinLOD ), Max( Texture->Mips.Num()-1, 0 ) );
 }
 
 //
@@ -1472,6 +1472,18 @@ UTexture* FStaticTexture::GetUTexture()
 	return Texture;
 }
 
+// Mip sizes and data come from the package, while renderers size their buffers from the texture size.
+static UBOOL MipFits( UTexture* Texture, INT MipIndex )
+{
+	FMipmap&		Mip		= Texture->Mips(MipIndex);
+	ETextureFormat	Format	= (ETextureFormat) Texture->Format;
+	UBOOL			DXT		= Format == TEXF_DXT1 || Format == TEXF_DXT3 || Format == TEXF_DXT5;
+	INT				USize	= DXT ? Max(Mip.USize,4) : Mip.USize,
+					VSize	= DXT ? Max(Mip.VSize,4) : Mip.VSize;
+	return	Mip.USize == Max(Texture->USize >> MipIndex,1) && Mip.VSize == Max(Texture->VSize >> MipIndex,1)
+		&&	(QWORD)GetBytesPerPixel(Format,USize) * VSize <= (QWORD)Mip.DataArray.Num();
+}
+
 //
 //	FStaticTexture::GetRawTextureData()
 //
@@ -1485,6 +1497,11 @@ void* FStaticTexture::GetRawTextureData(INT MipIndex)
 	if(!Texture->bParametric)
 		Texture->Mips(MipIndex).DataArray.Load();
 
+	if( !MipFits(Texture,MipIndex) )
+	{
+		debugf(TEXT("WARNING: Texture [%s] is corrupted."),Texture->GetPathName());
+		return NULL;
+	}
 	return &Texture->Mips(MipIndex).DataArray(0);
 
 	unguard;
@@ -1525,7 +1542,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 	if(!Texture->bParametric)
 		Mipmap.DataArray.Load();
 
-	if( &Mipmap.DataArray(0) == NULL )
+	if( &Mipmap.DataArray(0) == NULL || !MipFits(Texture,MipIndex) )
 	{
 		debugf(TEXT("WARNING: Texture [%s] is corrupted."),Texture->GetPathName());
 		return;
@@ -1719,7 +1736,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 		static DWORD*	PalettePtr = Palette;
 		BYTE*			SourceData = &Mipmap.DataArray(0);
 
-		appMemcpy(Palette,&Texture->Palette->Colors(0),Texture->Palette->Colors.Num() * sizeof(FColor));
+		appMemcpy(Palette,&Texture->Palette->Colors(0),Min(Texture->Palette->Colors.Num(),256) * sizeof(FColor));
 
 		//!!MAT
 		if(Texture->bMasked)

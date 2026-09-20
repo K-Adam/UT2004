@@ -1341,11 +1341,14 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 			BYTE MD5Decrypt = DecBuffer[64];
 			BYTE Pos = DecBuffer[65];
 
-			for (INT j=0;j<16;j++)
+			if( Pos <= ARRAY_COUNT(DecBuffer)-32 )
 			{
-				BYTE Hi = DecBuffer[Pos++];
-				BYTE Lo = DecBuffer[Pos++];
-				Connection->GMD5[j] = ((Hi & 0xF0) + (Lo & 0x0F)) ^ MD5Decrypt++;
+				for (INT j=0;j<16;j++)
+				{
+					BYTE Hi = DecBuffer[Pos++];
+					BYTE Lo = DecBuffer[Pos++];
+					Connection->GMD5[j] = ((Hi & 0xF0) + (Lo & 0x0F)) ^ MD5Decrypt++;
+				}
 			}
 		}
 		else if( ParseCommand(&Text,TEXT("NETSPEED")) )
@@ -1559,37 +1562,30 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 				}
 
 				// Use 4.8kbs narrow band as safety fallback codec.
-				if( !(VoiceCodec & AllowedCodecs) )
+				if( VoiceCodec!=CODEC_96WB || !(AllowedCodecs & CODEC_96WB) )
 					VoiceCodec = CODEC_48NB;
 
 				// Create and set up voice channel.
-				if( Connection->Actor && Connection->Actor->PlayerReplicationInfo )
+				if( Connection->Actor && Connection->Actor->PlayerReplicationInfo && Connection->Actor->PlayerReplicationInfo->PlayerID )
 				{
 					INT PlayerID = Connection->Actor->PlayerReplicationInfo->PlayerID;
-					check(PlayerID);
 					debugf(NAME_DevNet,TEXT("OPENVOICE for PlayerID: %i with codec: %i"), PlayerID, VoiceCodec );
 					
-					// See whether this player already has a voice channel.
-					UVoiceChannel* VoiceChannel = Connection->VoiceChannel;
-
-					// Create channel for client if there isn't already one.
-					if( !VoiceChannel )
+					// Create channel for client if there isn't already one, in a free voice slot.
+					INT i = 0;
+					while( i<VOICE_MAX_CHATTERS && Connection->Driver->VoiceInfos[i] )
+						i++;
+					UVoiceChannel* VoiceChannel = NULL;
+					if( !Connection->VoiceChannel && i<VOICE_MAX_CHATTERS )
+						VoiceChannel = Cast<UVoiceChannel>(Connection->CreateChannel( CHTYPE_Voice, 1 ));
+					if( VoiceChannel )
 					{
-						UVoiceChannel* VoiceChannel = CastChecked<UVoiceChannel>(Connection->CreateChannel( CHTYPE_Voice, 1 ));
-						
 						// Set server options.
 						DWORD ServerOptions = 0;
 //						if( VoiceChatManager->VoIPAllowSpatialization )
 //							ServerOptions |= VOICE_AllowSpatialization;
 						if( GameEngine->VoIPAllowVAD )
 							ServerOptions |= VOICE_AllowVAD;
-						
-						// Find free voice slot.
-						INT i;
-						for( i=0; i<VOICE_MAX_CHATTERS; i++ )
-							if( Connection->Driver->VoiceInfos[i] == NULL )
-								break;
-						check(i<VOICE_MAX_CHATTERS); //!!VOIP TODO
 
 						Connection->Driver->VoiceInfos[i] = new FVoiceInfo;
 

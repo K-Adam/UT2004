@@ -1386,11 +1386,11 @@ void UReplicatorEngine::SendDownloadManagers (UNetConnection* Connection)
 {
 	//Send the ones we have defined locally
 	for (INT i = 0; i < DownloadManagers.Num(); ++i) 
-		Connection->Logf ( *DownloadManagers (i));
+		Connection->Logf ( TEXT("%s"), *DownloadManagers (i));
 
 	//And the ones that the real server (or the upstream proxy) told us about
 	for (INT i = 0; i < ServerDLManagers.Num (); ++i) {
-		Connection->Logf ( *ServerDLManagers (i));
+		Connection->Logf ( TEXT("%s"), *ServerDLManagers (i));
 	}
 
 	//If we are watching a demo, send the channel download as well (it is usually in serverdlmanagers)

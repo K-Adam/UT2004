@@ -494,6 +494,11 @@ void UDemoRecDriver::TickDispatch( FLOAT DeltaTime )
 				break;
 			}
 			*FileAr << PacketBytes;
+			if( PacketBytes > PACKETSIZE )
+			{
+				debugf( NAME_DevNet, TEXT("Demo file packet too large") );
+				goto AtEnd;
+			}
 
 			if( PacketBytes )
 			{

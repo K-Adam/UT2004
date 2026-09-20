@@ -113,6 +113,13 @@ public:
 	{	
 		debugf( TEXT("Resolving %s..."), InHostName );
 
+		// The name can come from a server or an HTTP redirect.
+		if( appStrlen(InHostName) >= ARRAY_COUNT(HostName) )
+		{
+			appStrncpy( Error, TEXT("Host name too long"), ARRAY_COUNT(Error) );
+			Done = 1;
+			return;
+		}
 		appMemcpy( HostName, appToAnsi(InHostName), appStrlen(InHostName) + 1 );
 		*Error = 0;
 		Done = 0;

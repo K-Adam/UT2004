@@ -258,7 +258,7 @@ void UPackageMap::Compute()
 		{
 			Info.RemoteGeneration = Info.LocalGeneration;
 		}
-		if( Info.RemoteGeneration<Info.LocalGeneration )
+		if( Info.RemoteGeneration>=1 && Info.RemoteGeneration<Info.LocalGeneration )
 		{
 			Info.ObjectCount  = Min( Info.ObjectCount, Info.Linker->Summary.Generations(Info.RemoteGeneration-1).ExportCount );
 			Info.NameCount    = Min( Info.NameCount,   Info.Linker->Summary.Generations(Info.RemoteGeneration-1).NameCount   );

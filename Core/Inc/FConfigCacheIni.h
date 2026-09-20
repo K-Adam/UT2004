@@ -328,8 +328,9 @@ public:
 		if( !Sec )
 			return 0;
 		TCHAR* End = Result;
-		for( FConfigSection::TIterator It(*Sec); It && End-Result+appStrlen(*It.Key())+1<Size; ++It )
-			End += appSprintf( End, TEXT("%s=%s"), *It.Key(), *It.Value() ) + 1;
+		// Each entry is Key=Value and a NUL, and the list ends with one more NUL.
+		for( FConfigSection::TIterator It(*Sec); It && End-Result+appStrlen(*It.Key())+appStrlen(*It.Value())+3<=Size; ++It )
+			End += appSnprintf( End, Size-(End-Result), TEXT("%s=%s"), *It.Key(), *It.Value() ) + 1;
 		*End++ = 0;
 		return 1;
 		unguard;

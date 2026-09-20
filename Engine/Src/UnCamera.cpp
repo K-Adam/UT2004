@@ -340,7 +340,7 @@ UBOOL UViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		if( Driver && Driver->ServerConnection )
 		{
 			Ar.Logf(TEXT("Injecting: %s"),Cmd);
-			Driver->ServerConnection->Logf( Cmd );
+			Driver->ServerConnection->Logf( TEXT("%s"), Cmd );
 		}
 		return 1;
 	}

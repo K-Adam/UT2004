@@ -66,6 +66,12 @@ public:
 		INT Pos = Tell();
 		return Pos!=INDEX_NONE && Pos>=TotalSize();
 	}
+	// MAXINT when the archive doesn't know its size, as with network archives.
+	virtual INT RemainingBytes()
+	{
+		INT Pos = Tell(), Size = TotalSize();
+		return Pos>=0 && Size>=Pos ? Size-Pos : MAXINT;
+	}
 	virtual UBOOL AtStopper()
 	{
 		INT Pos = Tell();
@@ -138,6 +144,7 @@ public:
 	UBOOL ForServer()		{return ArForServer;}
 	UBOOL ContainsCode()	{return ArContainsCode;}
 	UBOOL NetPackData()		{return ArNetPackData;}
+	void SetError()			{ArIsError = 1;}
 
 	// Friend archivers.
 	CORE_API friend FArchive& operator<<( FArchive& Ar, ANSICHAR& C );

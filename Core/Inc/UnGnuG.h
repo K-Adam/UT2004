@@ -109,6 +109,7 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 	va_start( ArgPtr, lastarg );	\
 	VSNPRINTF( msg, len, fmt, ArgPtr );	\
 	va_end( ArgPtr );	\
+	(msg)[(len)-1] = 0;	\
 }
 
 #define GET_VARARGS_RESULT(msg,len,lastarg,fmt,result)	\
@@ -153,7 +154,7 @@ typedef wchar_t             UNICHARU;	// A unicode character.
 typedef signed int			UBOOL;		// Boolean 0 (false) or 1 (true).
 typedef float				FLOAT;		// 32-bit IEEE floating point.
 typedef double				DOUBLE;		// 64-bit IEEE double.
-typedef unsigned int        SIZE_T;     // Corresponds to C SIZE_T.
+typedef size_t              SIZE_T;     // Corresponds to C SIZE_T.
 
 // Bitfield type.
 typedef unsigned int		BITFIELD;	// For bitfields.

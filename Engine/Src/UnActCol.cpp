@@ -387,7 +387,7 @@ static UBOOL CheckResults(FCheckResult* BenchResult, FCheckResult* OctreeResult,
 
 	if(isDifferent)
 	{
-		debugf(Name);
+		debugf(TEXT("%s"), Name);
 #if TEST_WITH_NAIVE
 		debugf(TEXT("  NAIVE RESULT:"));
 		OutputResult(BenchResult);

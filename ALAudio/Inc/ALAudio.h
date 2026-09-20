@@ -28,6 +28,8 @@ Revision history:
 #pragma pack(pop)
 #endif
 
+// Before Core.h, whose clock macro breaks the standard headers.
+#include <atomic>
 #include "Core.h"
 #include "Engine.h"
 #include "UnRender.h"

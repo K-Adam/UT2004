@@ -53,6 +53,7 @@ if ((PTRINT) Ptr < 0x1000) Ptr = NULL;
 				free( Ptr );
 			Result = NULL;
 		}
+		check(Result || !NewSize);
 		return Result;
 		unguardf(( TEXT("%08X %i %s"), (INT) ((PTRINT)Ptr), NewSize, Tag ));
 	}

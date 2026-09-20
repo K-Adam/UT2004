@@ -143,7 +143,8 @@ public:
 	FALAudioStream*			Last;
 
 	DWORD					FileStreamingThreadId;
-	UBOOL					Destroyed;					
+	// Shared with the streaming thread.
+	std::atomic<INT>		Destroyed;
 };
 
 #endif

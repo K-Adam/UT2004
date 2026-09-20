@@ -332,6 +332,11 @@ void UChannel::ReceivedRawBunch( FInBunch& Bunch )
 				break;
 			}
 		}
+		if( NumInRec>=RELIABLE_BUFFER )
+		{
+			Connection->State = USOCK_Closed;
+			return;
+		}
 		FInBunch* New = new(TEXT("FInBunch"))FInBunch(Bunch);
 		New->Next     = *InPtr;
 		*InPtr        = New;
@@ -858,10 +863,15 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
             SerializeCompressedInitial( Bunch, Location, Rotation, ActorClass->GetDefaultActor()->bNetInitialRotation, NULL );
 
 			InActor = Level->SpawnActor( ActorClass, NAME_None, Location, Rotation, NULL, 1, 1, NULL, NULL, 1 ); 
+			if( !InActor )
+			{
+				// The server sent a class that can't be spawned, such as an abstract or static one.
+				Broken = 1;
+				return;
+			}
 			bJustSpawned = 1;
 			if ( InActor->bDeleteMe )
 				debugf(TEXT("Client received and deleted instantly %s"),InActor->GetName());
-			check(InActor);
 		}
 		debugf( NAME_DevNetTraffic, TEXT("      Spawn %s:"), InActor->GetFullName() );
 		SetChannelActor( InActor );
@@ -914,6 +924,12 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 			BYTE Element=0;
 			if( It->ArrayDim != 1 )
 				Bunch << Element;
+			if( Element>=It->ArrayDim )
+			{
+				Bunch.SetOverflowed();
+				FieldCache = NULL;
+				break;
+			}
 
 			// Pointer to destination.
 			BYTE* DestActor  = (BYTE*)Actor;
@@ -1398,6 +1414,8 @@ void UFileChannel::ReceivedBunch( FInBunch& Bunch )
 				// Remove it from the package map
 				debugf( TEXT("User skipped download of '%s'"), SrcFilename );
 				Connection->PackageMap->List.Remove( PackageIndex );
+				delete SendFileAr;
+				SendFileAr = NULL;
 				return;
 			}
 		}
@@ -1436,6 +1454,8 @@ void UFileChannel::ReceivedBunch( FInBunch& Bunch )
 
 		// Illegal request; refuse it by closing the channel.
 		debugf( NAME_DevNet, LocalizeError(TEXT("NetInvalid"),TEXT("Engine")) );
+		delete SendFileAr;
+		SendFileAr = NULL;
 		FOutBunch Bunch( this, 1 );
 		SendBunch( &Bunch, 0 );
 	}
@@ -1450,10 +1470,10 @@ void UFileChannel::Tick()
 	//TIM: IsNetReady(1) causes the client's bandwidth to be saturated. Good for clients, very bad
 	// for bandwidth-limited servers. IsNetReady(0) caps the clients bandwidth.
 	static UBOOL LanPlay = ParseParam(appCmdLine(),TEXT("lanplay"));
-	while( !OpenedLocally && SendFileAr && IsNetReady(LanPlay) && (Size=MaxSendBytes())!=0 )
+	while( !OpenedLocally && !Closing && SendFileAr && IsNetReady(LanPlay) && (Size=MaxSendBytes())!=0 )
 	{
-		// Sending.
-		INT Remaining = Connection->PackageMap->List(PackageIndex).FileSize-SentData;
+		// A SKIP from the client can remove PackageIndex from the map, so the size comes from the file.
+		INT Remaining = SendFileAr->TotalSize()-SentData;
 		FOutBunch Bunch( this, Size>=Remaining );
 		Size = Min( Size, Remaining );
 		BYTE* Buffer = (BYTE*)appAlloca( Size );
@@ -1504,14 +1524,14 @@ void UFileChannel::Destroy()
 FString UFileChannel::Describe()
 {
 	guard(UFileChannel::Describe);
-	FPackageInfo& Info = Connection->PackageMap->List( PackageIndex );
+	TArray<FPackageInfo>& List = Connection->PackageMap->List;
 	return FString::Printf
 	(
 		TEXT("File='%s', %s=%i/%i "),
 		OpenedLocally ? (Download?Download->TempFilename:TEXT("")): SrcFilename,
 		OpenedLocally ? TEXT("Received") : TEXT("Sent"),
 		OpenedLocally ? (Download?Download->Transfered:0): SentData,
-		Info.FileSize
+		List.IsValidIndex(PackageIndex) ? List(PackageIndex).FileSize : 0
 	) + UChannel::Describe();
 	unguard;
 }
@@ -1614,18 +1634,25 @@ void UVoiceChannel::ReceivedStatusPacket( FVoiceInfo* InVoiceInfo, EVoicePacketT
 {
 	guard(UVoiceChannel::ReceivedStatusPacket);
 
+	// The server sends Initialize, AddChatter and RemoveChatter, the client only AckChatter.
+	UBOOL IsServer = Connection->Driver->ServerConnection == NULL;
+	if( InVoiceInfo->VoiceIndex>=VOICE_MAX_CHATTERS || IsServer!=(PacketType==VOICEPACKET_AckChatter) )
+		return;
+	FVoiceInfo*& VoiceInfo = Connection->Driver->VoiceInfos[ InVoiceInfo->VoiceIndex ];
+	if( !IsServer && PacketType!=VOICEPACKET_RemoveChatter )
+	{
+		EVoiceCodec Codec = InVoiceInfo->VoiceCodec;
+		if( VoiceInfo || (Codec!=CODEC_48NB && Codec!=CODEC_96WB) || InVoiceInfo->PacketSize!=UAudioSubsystem::CodecPacketSize[CODEC_TO_INDEX(Codec)] )
+			return;
+	}
+
 	if( PacketType == VOICEPACKET_Initialize )
 	{
 		// Client.
-		check( Connection->Driver->ServerConnection );
-
+		if( Connection->VoiceChannel )
+			return;
 		VoiceIndex = InVoiceInfo->VoiceIndex;
-
-		FVoiceInfo*& VoiceInfo = Connection->Driver->VoiceInfos[ InVoiceInfo->VoiceIndex ];
-		check( !VoiceInfo );//!!VOIP TODO
-
-		check( Connection->VoiceChannel == NULL );//!!VOIP TODO
-		Connection->VoiceChannel = this; //!!VOIP TODO
+		Connection->VoiceChannel = this;
 
 		VoiceInfo = new FVoiceInfo;
 	
@@ -1641,11 +1668,6 @@ void UVoiceChannel::ReceivedStatusPacket( FVoiceInfo* InVoiceInfo, EVoicePacketT
 	if( PacketType == VOICEPACKET_AddChatter )
 	{
 		// Client.
-		check( Connection->Driver->ServerConnection );
-
-		FVoiceInfo*& VoiceInfo = Connection->Driver->VoiceInfos[ InVoiceInfo->VoiceIndex ];
-		check( !VoiceInfo );//!!VOIP TODO
-
 		VoiceInfo = new FVoiceInfo;
 	
 		VoiceInfo->VoiceSound		= NULL;
@@ -1662,10 +1684,8 @@ void UVoiceChannel::ReceivedStatusPacket( FVoiceInfo* InVoiceInfo, EVoicePacketT
 	if( PacketType == VOICEPACKET_RemoveChatter )
 	{
 		// Client.
-		check( Connection->Driver->ServerConnection );
-
-		FVoiceInfo*& VoiceInfo = Connection->Driver->VoiceInfos[ InVoiceInfo->VoiceIndex ];
-		check( VoiceInfo );//!!VOIP TODO
+		if( !VoiceInfo )
+			return;
 
 		delete [] VoiceInfo->PacketData;
 		VoiceInfo->PacketData = NULL;
@@ -1680,9 +1700,8 @@ void UVoiceChannel::ReceivedStatusPacket( FVoiceInfo* InVoiceInfo, EVoicePacketT
 	if( PacketType == VOICEPACKET_AckChatter )
 	{
 		// Server.
-		check( !Connection->Driver->ServerConnection );
-		check( Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] == USOCK_Pending ); //!!VOIP TODO
-		Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] = USOCK_Open;
+		if( VoiceIndex<VOICE_MAX_CHATTERS && Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] == USOCK_Pending )
+			Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] = USOCK_Open;
 	}
 
 	unguard;
@@ -1701,16 +1720,13 @@ void UVoiceChannel::Destroy()
 	check(Connection);
 	check(Connection->Driver);
 
-	// Remove chatter.
-	Connection->VoiceChannel = NULL;
-	if( !Connection->Driver->ServerConnection )	//!!VOIP TODO: is this guaranteed on server?
+	// Remove chatter. A channel the server refused never got a voice slot.
+	if( Connection->VoiceChannel==this )
+		Connection->VoiceChannel = NULL;
+	if( !Connection->Driver->ServerConnection && VoiceIndex<VOICE_MAX_CHATTERS && Connection->Driver->VoiceInfos[VoiceIndex] )
 	{
 		// Server.
-	
-		check(VoiceIndex<VOICE_MAX_CHATTERS);
-
 		FVoiceInfo*& VoiceInfo = Connection->Driver->VoiceInfos[VoiceIndex];
-		check( VoiceInfo );
 
 		for( INT i=0; i<Connection->Driver->ClientConnections.Num(); i++ )
 		{
@@ -1744,9 +1760,9 @@ void UVoiceChannel::Serialize(FArchive& Ar)
 	Super::Serialize(Ar);
 	if( !Ar.IsLoading() && !Ar.IsSaving() )
 	{
-		FVoiceInfo* VoiceInfo = Connection->Driver->VoiceInfos[VoiceIndex];
-		check( VoiceInfo ); //!!VOIP TODO
-		Ar << VoiceInfo->VoiceSound;
+		FVoiceInfo* VoiceInfo = VoiceIndex<VOICE_MAX_CHATTERS ? Connection->Driver->VoiceInfos[VoiceIndex] : NULL;
+		if( VoiceInfo )
+			Ar << VoiceInfo->VoiceSound;
 	}
 	unguard;
 }
@@ -1783,10 +1799,12 @@ void UVoiceChannel::ReceivedBunch( FInBunch& Bunch )
 		else
 		if( !Connection->Driver->ServerConnection )
 		{
-			// Server.
-
+			// Server. A client may only send its own voice.
+			if( PacketType!=VoiceIndex )
+				break;
 			FVoiceInfo* VoiceInfo = Connection->Driver->VoiceInfos[PacketType];
-			check( VoiceInfo ); //!!VOIP TODO
+			if( !VoiceInfo )
+				break;
 
 			Bunch.Serialize( VoiceInfo->PacketData, VoiceInfo->PacketSize );
 			if( Bunch.IsError() )
@@ -1824,9 +1842,9 @@ void UVoiceChannel::ReceivedBunch( FInBunch& Bunch )
 		else
 		{
 			// Client.
-
 			FVoiceInfo* VoiceInfo = Connection->Driver->VoiceInfos[PacketType];
-			check( VoiceInfo ); //!!VOIP TODO
+			if( !VoiceInfo )
+				break;
 
 			Bunch.Serialize( VoiceInfo->PacketData, VoiceInfo->PacketSize );
 			if( Bunch.IsError() )
@@ -1842,7 +1860,7 @@ void UVoiceChannel::ReceivedBunch( FInBunch& Bunch )
 
 				UTexture::__Client->Engine->Audio->PlayVoicePacket( VoiceInfo );
 	
-				if( Connection->Actor->myHUD && (Connection->Actor->myHUD->LastPlayerIDTalking==0 || Connection->Actor->myHUD->LastPlayerIDTalking==VoiceInfo->PlayerID) )
+				if( Connection->Actor && Connection->Actor->myHUD && (Connection->Actor->myHUD->LastPlayerIDTalking==0 || Connection->Actor->myHUD->LastPlayerIDTalking==VoiceInfo->PlayerID) )
 				{
 					Connection->Actor->myHUD->LastPlayerIDTalking		= VoiceInfo->PlayerID;
 					Connection->Actor->myHUD->LastPlayerIDTalkingTime	= Connection->Actor->Level->TimeSeconds;

@@ -287,6 +287,14 @@ CORE_API INT appSprintf( TCHAR* Dest, const TCHAR* Fmt, ... )
 	return Result;
 }
 
+CORE_API INT appSnprintf( TCHAR* Dest, INT Count, const TCHAR* Fmt, ... )
+{
+	INT Result;
+	GET_VARARGS_RESULT(Dest,Count,Fmt,Fmt,Result);
+	Dest[Count-1] = 0;
+	return Result;
+}
+
 CORE_API INT appStrlen( const TCHAR* String )
 {
 #if UNICODE

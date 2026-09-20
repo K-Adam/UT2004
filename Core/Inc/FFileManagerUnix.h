@@ -168,7 +168,7 @@ public:
 		guardSlow(FArchiveFileReader::Precache);
 		checkSlow(Pos==BufferBase+BufferCount);
 		BufferBase = Pos;
-		BufferCount = Min( Min( HintCount, (INT)(ARRAY_COUNT(Buffer) - (Pos&(ARRAY_COUNT(Buffer)-1))) ), Size-Pos );
+		BufferCount = Min( Min( Max( HintCount, 0 ), (INT)(ARRAY_COUNT(Buffer) - (Pos&(ARRAY_COUNT(Buffer)-1))) ), Size-Pos );
 		DOUBLE	StartTime	= appSeconds();
 		if( read( File, Buffer, BufferCount ) != BufferCount )
 		{

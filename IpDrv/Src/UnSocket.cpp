@@ -49,7 +49,7 @@ DWORD STDCALL ResolveThreadEntry( void* Arg )
 	}
 
 	if( HostEnt==NULL || HostEnt->h_addrtype!=PF_INET )
-		appSprintf( Info->Error, TEXT("Can't find host %s (%s)"), appFromAnsi(Info->HostName), SocketHostError(e) );
+		appSnprintf( Info->Error, ARRAY_COUNT(Info->Error), TEXT("Can't find host %s (%s)"), appFromAnsi(Info->HostName), SocketHostError(e) );
 	else
 		Info->Addr = *(in_addr*)( *HostEnt->h_addr_list );
 
