@@ -178,20 +178,12 @@ struct FTranslucentDrawItem
 {
 	UBOOL	BSP;
 
-// !!! FIXME: rcg06012002 This don't fly on GCC.
-//	union
-//	{
-//		struct
-//		{
-
 			INT						iNode;
 			FDynamicLight**			DynamicLights;
 			INT						NumDynamicLights;
 			FProjectorRenderInfo**	DynamicProjectors;
 			INT						NumDynamicProjectors;
-//		};
 		FDynamicActor*	DynamicActor;
-//	};
 };
 
 //
@@ -631,7 +623,7 @@ TList<FDynamicLight*>* GetRelevantLights(FSceneNode* SceneNode,FDynamicActor* Dy
 
 			if( DynamicLight->Actor )
 			{
-				FLOAT OurDistance =  FDist( DynamicLight->Position, DynamicActor->BoundingSphere ); // Actor->Location );
+				FLOAT OurDistance =  FDist( DynamicLight->Position, DynamicActor->BoundingSphere );
 
 				LightString = FString::Printf(TEXT("[%i]{%2i}(%s) Rad %4.4f Col %3.2f %3.2f %3.2f Alph %4.4f Dst %4.5f Ky %i br %3.2f v=%u lv=%u"), 
 						    Number, 
@@ -2096,14 +2088,6 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 			DynamicActor->Render(SceneNode,NULL,NULL,RI);
 	}
 
-#if 0
-	// Render antiportal volumes.
-
-	RI->SetTransform(TT_LocalToWorld,FMatrix::Identity);
-	for(INT ZoneIndex = 0;ZoneIndex < Model->NumZones;ZoneIndex++)
-		for(TList<FConvexVolume*>* AntiPortalList = RenderState.Zones[ZoneIndex].AntiPortals;AntiPortalList;AntiPortalList = AntiPortalList->Next)
-			FLineBatcher(RI,0).DrawConvexVolume(*AntiPortalList->Element,FColor(255,0,0));
-#endif
 
 	// Cleanup.
 	GStats.DWORDStats( GEngineStats.STATS_Visibility_ScratchBytes ) += (DWORD) (GSceneMem.GetByteCount() - InitialByteCount);

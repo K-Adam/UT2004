@@ -166,7 +166,7 @@ UTexture::UTexture()
 	guard(UTexture::UTexture);
 
 	RenderInterface = new FStaticTexture(this);
-	//!!vogel: material duplication code hack.
+	// Material duplication sets bit 8 of GUglyHackFlags.
 	if( !(GUglyHackFlags & 8) )
 	{
 		Format			= TEXF_P8;
@@ -199,10 +199,10 @@ static void SerializeMips( UTexture* Texture, FArchive& Ar, TArray<FMipmap>& Mip
 		for( INT i=0; i<NewNum; i++ )
 		{
 			UBOOL SavedLazyLoad = GLazyLoad;
-			// Commented out by Andrew: Never load texture data until texture upload time.
+			// Never load texture data until texture upload time.
 			// This reduces peak memory usage a lot.
 			GLazyLoad = 1;
-			//!!vogel: Material duplication hack.
+			// Material duplication loads the data right away.
 			if( GUglyHackFlags & 8 )
 				GLazyLoad = 0;
 			Ar << *new(Mips)FMipmap;
@@ -284,20 +284,7 @@ void UTexture::PostLoad()
 	UClamp = Clamp(UClamp,0,USize);
 	VClamp = Clamp(VClamp,0,VSize);
 
-#if 0
-    // amb,gam --- calculate the MaxLOD
-    MaxLOD = Mips.Num() - 1;
-    for( INT i = Mips.Num() - 1; i >= 0; i-- )
-    {
-        if( Mips(i).USize >= MIN_TEXTURE_SIZE && Mips(i).VSize >= MIN_TEXTURE_SIZE )
-        {
-            MaxLOD = i;
-            break;
-        }
-    }
-    // --- amb,gam
-#else
-	//!!vogel: better suited for low end machines.
+	// Better suited for low end machines.
 	MaxLOD = Mips.Num() - 1;
 	for( INT i=0; i<Mips.Num(); i++ )
 	{
@@ -307,7 +294,6 @@ void UTexture::PostLoad()
 			break;
 		}
 	}
-#endif
 
 	// Init animation.
 	Accumulator = 0;
@@ -1142,8 +1128,8 @@ ETextureFormat UTexture::ConvertDXT()
 				ForceRGBA = 1;
 							
 			Mips(m).DataArray.Empty();
-			INT Size = IsDXT1 ? Width * Height / 2 : ConvertTo4444 ? Width * Height * 2 : Width * Height * 4;
-			Mips(m).DataArray.Add( Max(Size,IsDXT1 ? 8 : 0) ); //!!vogel: FIXME
+			INT Size = IsDXT1 ? Max(Width/4,1) * Max(Height/4,1) * 8 : ConvertTo4444 ? Width * Height * 2 : Width * Height * 4;
+			Mips(m).DataArray.Add( Size );
 			appMemcpy( &Mips(m).DataArray(0), Data, Size );
 			delete [] Data;
 		}
@@ -1170,13 +1156,10 @@ static UBOOL ConvertDXT1(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 	if (b4444)
 	{
 		debugf(TEXT("DXT CONVERT: DXT1 texture - converting to 4444"));
-		//*ppDestData = new _WORD[x*y];
 		check(0);
-//		DXT1DecompressTexture16bpp(pSrcData, x, y, *ppDestData);
 	}
 	else
 	{
-		//debugf(TEXT("DXT CONVERT: DXT1 texture - converting to 8888"));
 		*ppDestData = DecompressDXT( pSrcData, x, y, squish::kDxt1 );
 	}
 	return false;
@@ -1229,14 +1212,10 @@ static UBOOL ConvertDXT3(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 		// Conversion to RGBA.
 		if (b4444)
 		{
-			//debugf(TEXT("DXT CONVERT: DXT3 texture isn't opaque: converting to 4444"));
-			//*ppDestData = new _WORD[x*y];
 			check(0);
-			//DXT3DecompressTexture16bpp(pSrcData, x, y, *ppDestData);
 		}
 		else
 		{
-			//debugf(TEXT("DXT CONVERT: DXT3 texture isn't opaque: converting to 8888"));
 			*ppDestData = DecompressDXT( pSrcData, x, y, squish::kDxt3 );
 		}
 		// Texture was converted to RGBA.
@@ -1244,7 +1223,6 @@ static UBOOL ConvertDXT3(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 	}
 	
 	// Conversion to DXT1.
-	//debugf(TEXT("DXT CONVERT: DXT3 texture is OPAQUE\nConverting to DXT1..."));
 	
 	// Allocate memory for destination data (8 bytes per block).
 	*ppDestData = new BYTE[nNumberOfBlocks*8];
@@ -1322,14 +1300,10 @@ static UBOOL ConvertDXT5(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 		// Conversion to RGBA
 		if (b4444)
 		{
-			//debugf(TEXT("DXT CONVERT: DXT5 texture isn't opaque: converting to 4444"));
-			//*ppDestData = new _WORD[x*y];
 			check(0);
-			//DXT5DecompressTexture16bpp(pSrcData, x, y, *ppDestData);
 		}
 		else
 		{
-			//debugf(TEXT("DXT CONVERT: DXT5 texture isn't opaque: converting to 8888"));
 			*ppDestData = DecompressDXT( pSrcData, x, y, squish::kDxt5 );
 		}
 		// Texture was converted to RGBA.
@@ -1337,7 +1311,6 @@ static UBOOL ConvertDXT5(void *pSrcData, int x, int y, UBOOL b4444, BYTE **ppDes
 	}
 	
 	// Conversion to DXT1.
-	//debugf(TEXT("DXT CONVERT: DXT5 texture is OPAQUE\nConverting to DXT1..."));
 
 	// Allocate memory for destination data (8 bytes per block).
 	*ppDestData = new BYTE[nNumberOfBlocks*8];

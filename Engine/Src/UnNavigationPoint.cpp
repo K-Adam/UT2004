@@ -66,9 +66,6 @@ UBOOL ANavigationPoint::CanReach(ANavigationPoint *Dest, FLOAT Dist, UBOOL bUseF
 {
 	guard(ANavigationPoint::CanReach)
 
-//	if ( Dest->bMustBeReachable )
-//		debugf(TEXT("%s CanReach %s visitedWeight %d dist %f"),GetName(),Dest->GetName(),visitedWeight,Dist);
-
 	if ( (bUseFlag && bCanReach) || (this == Dest) )
 	{
 		bCanReach = true;
@@ -84,8 +81,6 @@ UBOOL ANavigationPoint::CanReach(ANavigationPoint *Dest, FLOAT Dist, UBOOL bUseF
 	for ( INT i=0; i<PathList.Num(); i++ )
 		if ( (PathList(i)->reachFlags & R_PROSCRIBED) == 0 )
 		{
-//			if ( Dest->bMustBeReachable )
-//			debugf(TEXT("%s Path distance %d to %s"), GetName(), PathList(i)->Distance, PathList(i)->End->GetName());
 			if( PathList(i)->Distance <= 1.f )
 			{
 				debugf(TEXT("%s negative or zero distance to %s!"), GetName(),PathList(i)->End->GetName());
@@ -160,8 +155,7 @@ UBOOL ANavigationPoint::ReviewPath(APawn* Scout)
 			if ( !bFoundRoute )
 				GWarn->MapCheck_Add( MCTYPE_WARNING, this, *FString::Printf(TEXT("Path to %s is very long - add a pathnode in between."), PathList(i)->End->GetName()));
 		}
-	// do walks from this path, check that when lose this path, find another
-	// FIXME implement
+	// Not checked: whether walks from this path find another one when they lose it.
 
 	return true;
 	unguard;
@@ -913,7 +907,6 @@ void ALiftCenter::addReachSpecs(APawn * Scout, UBOOL bOnlyChanged)
 		GWarn->MapCheck_Add( MCTYPE_ERROR, this, TEXT("Mover associated with a LiftCenter must not be BumpOpenTimed"));
 
 	UReachSpec *newSpec = ConstructObject<UReachSpec>(UReachSpec::StaticClass(),GetLevel()->GetOuter(),NAME_None,RF_Public);
-	//debugf("Add Reachspecs for LiftCenter at (%f, %f, %f)", Location.X,Location.Y,Location.Z);
 	INT NumExits = 0;
 
 	for ( INT i=0; i<GetLevel()->Actors.Num(); i++ )
@@ -999,7 +992,6 @@ void ALadder::addReachSpecs(APawn * Scout, UBOOL bOnlyChanged)
 
 	UReachSpec *newSpec = ConstructObject<UReachSpec>(UReachSpec::StaticClass(),GetLevel()->GetOuter(),NAME_None,RF_Public);
 
-	//debugf("Add Reachspecs for Ladder at (%f, %f, %f)", Location.X,Location.Y,Location.Z);
 	bPathsChanged = bPathsChanged || !bOnlyChanged;
 
 	// connect to all ladders in same LadderVolume
@@ -1012,7 +1004,7 @@ void ALadder::addReachSpecs(APawn * Scout, UBOOL bOnlyChanged)
 			{
 				newSpec->Init();
 				// add reachspec from this to other Ladder
-				// FIXME - support single direction ladders (e.g. zipline)
+				// Single direction ladders (e.g. zipline) are not supported.
 				newSpec->CollisionRadius = COMMONRADIUS;
 				newSpec->CollisionHeight = COMMONHEIGHT;
 				newSpec->reachFlags = R_LADDER;
@@ -1040,7 +1032,6 @@ void ATeleporter::addReachSpecs(APawn * Scout, UBOOL bOnlyChanged)
 	guard(ATeleporter::addReachspecs);
 
 	UReachSpec *newSpec = ConstructObject<UReachSpec>(UReachSpec::StaticClass(),GetLevel()->GetOuter(),NAME_None,RF_Public);
-	//debugf("Add Reachspecs for node at (%f, %f, %f)", Location.X,Location.Y,Location.Z);
 	bPathsChanged = bPathsChanged || !bOnlyChanged;
 
 	for (INT i=0; i<GetLevel()->Actors.Num(); i++)
@@ -1223,7 +1214,6 @@ void AWarpZoneMarker::addReachSpecs(APawn * Scout, UBOOL bOnlyChanged)
 	guard(AWarpZoneMarker::addReachspecs);
 
 	UReachSpec *newSpec = ConstructObject<UReachSpec>(UReachSpec::StaticClass(),GetLevel()->GetOuter(),NAME_None,RF_Public);
-	//debugf("Add Reachspecs for node at (%f, %f, %f)", Location.X,Location.Y,Location.Z);
 
 	for (INT i=0; i<GetLevel()->Actors.Num(); i++)
 	{
@@ -1456,7 +1446,6 @@ INT ANavigationPoint::PrunePaths()
 				&& PathList(j)->End->FindAlternatePath(PathList(i), PathList(j)->Distance) )
 			{
 				PathList(i)->bPruned = true;
-				//debugf(TEXT("Pruned path to %s because of path through %s"),PathList(i)->End->GetName(),PathList(j)->End->GetName());
 				j = PathList.Num();
 				pruned++;
 			}
@@ -1486,7 +1475,6 @@ UBOOL ANavigationPoint::FindAlternatePath(UReachSpec* StraightPath, INT Accumula
 			if ( (AccumulatedDistance + PathList(i)->Distance + PathList(i)->End->ExtraCost < PATHPRUNING * StraightPath->Distance)
 					&& (*PathList(i) <= *StraightPath) )
 			{
-				//debugf(TEXT("Direct path from %s to %s"),GetName(), PathList(i)->End->GetName());
 				return true;
 			}
 			else 
@@ -1503,7 +1491,6 @@ UBOOL ANavigationPoint::FindAlternatePath(UReachSpec* StraightPath, INT Accumula
 			&& ((StraightDir | (PathList(i)->End->Location - Location)) > 0.f)
 			&& PathList(i)->End->FindAlternatePath(StraightPath, AccumulatedDistance + PathList(i)->Distance) )
 		{
-			//debugf(TEXT("Partial path from %s to %s"),GetName(), PathList(i)->End->GetName());
 			return true;
 		}
 

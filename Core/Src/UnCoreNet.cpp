@@ -265,7 +265,6 @@ void UPackageMap::Compute()
 		}
 		MaxObjectIndex       += Info.ObjectCount;
 		MaxNameIndex         += Info.NameCount;
-		//debugf( TEXT("** Package %s: %i objs, %i names, gen %i-%i"), *Info.URL. Info.ObjectCount, Info.NameCount, Info.LocalGeneration, Info.RemoveGeneration );
 		for( INT j=0; j<Min(Info.Linker->NameMap.Num(),Info.NameCount); j++ )
 			if( NameIndices(Info.Linker->NameMap(j).GetIndex()) == -1 )
 				NameIndices(Info.Linker->NameMap(j).GetIndex()) = Info.NameBase + j;

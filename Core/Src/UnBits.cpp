@@ -131,9 +131,6 @@ void FBitWriter::SerializeBits( void* Src, INT LengthBits )
 
 	if( Num+LengthBits<=Max )
 	{
-		//for( INT i=0; i<LengthBits; i++,Num++ )
-		//	if( ((BYTE*)Src)[i>>3] & GShift[i&7] )
-		//		Buffer(Num>>3) |= GShift[Num&7];
 		if( LengthBits == 1 )
 		{
 			if( ((BYTE*)Src)[0] & 0x01 )
@@ -165,7 +162,6 @@ void FBitWriter::Serialize( void* Src, INT LengthBytes )
 void FBitWriter::SerializeInt( DWORD& Value, DWORD ValueMax )
 {
 	guardSlow(FBitWriter::SerializeInt);
-	//checkSlow(Value<ValueMax);
 
 	if( Num+appCeilLogTwo(ValueMax)<=Max )
 	{
@@ -184,7 +180,6 @@ void FBitWriter::SerializeInt( DWORD& Value, DWORD ValueMax )
 void FBitWriter::WriteInt( DWORD Value, DWORD ValueMax )
 {
 	guardSlow(FBitWriter::WriteInt);
-//	checkSlow(Value<ValueMax);
 	//warning: Copied and pasted from FBitWriter::SerializeInt
 	if( Num+appCeilLogTwo(ValueMax)<=Max )
 	{
@@ -289,9 +284,6 @@ void FBitReader::SerializeBits( void* Dest, INT LengthBits )
 	appMemzero( Dest, (LengthBits+7)>>3 );
 	if( Pos+LengthBits<=Num )
 	{
-		//for( INT i=0; i<LengthBits; i++,Pos++ )
-		//	if( Buffer(Pos>>3) & GShift[Pos&7] )
-		//		((BYTE*)Dest)[i>>3] |= GShift[i&7];
 		if( LengthBits == 1 )
 		{
 			if( Buffer(Pos>>3) & GShift[Pos&7] )

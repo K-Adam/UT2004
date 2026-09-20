@@ -87,7 +87,6 @@ static FString SDLClipboardPaste()
 	return Result;
 }
 
-// just in case.  :)  --ryan.
 static void sdl_atexit_handler(void)
 {
     static bool already_called = false;

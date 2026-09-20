@@ -63,16 +63,13 @@ AActor* ULevel::SpawnActor
 	{
 	    if( GetLevelInfo()->NetMode == NM_DedicatedServer )
 		{
-			//debugf(TEXT("%s not spawned"),Class->GetName());
 			return NULL;
 		}
     }
-#if 1
     // sjs - level's outer is not transient so we must do this
     // doing this is a huge benefit for long running names, as the name table grows > 40 megs after long multiplayer games.
     if( !GTransientNaming && InName==NAME_None)
         InName = NAME_Transient;
-#endif
 
 	// Use class's default actor as a template.
 	if( !Template )
@@ -154,8 +151,6 @@ AActor* ULevel::SpawnActor
 		if( Actor->bCollideActors && Hash )
 			Hash->AddActor( Actor );
 	}
-	//if ( Actor->bCollideActors && !Actor->bBlockActors && !Actor->bUseCylinderCollision && (Actor->DrawType == DT_StaticMesh) )
-	//	debugf(TEXT("%s shouldn't be using static mesh collision"),Actor->GetName());
 
 	// Send PostBeginPlay.
 	Actor->eventPostBeginPlay();
@@ -236,8 +231,6 @@ UBOOL ULevel::DestroyActor( AActor* ThisActor, UBOOL bNetForce )
 	guard(ULevel::DestroyActor);
 	check(ThisActor);
 	check(ThisActor->IsValid());
-	//debugf( NAME_Log, "Destroy %s", ThisActor->GetClass()->GetName() );
-
 	// In-game deletion rules.
 	guardSlow(DestroyRules);
 	if( !GIsEditor )
@@ -363,7 +356,6 @@ UBOOL ULevel::DestroyActor( AActor* ThisActor, UBOOL bNetForce )
 	{
 		if( ThisActor->bCollideActors )
 			Hash->RemoveActor( ThisActor ); 
-		//Hash->CheckActorNotReferenced( ThisActor );
 	}
 	unguardSlow;
 
@@ -630,7 +622,6 @@ APlayerController* ULevel::SpawnPlayActor( UPlayer* Player, ENetRole RemoteRole,
 
 	// Possess the newly-spawned player.
 	Actor->SetPlayer( Player );
-	//debugf(TEXT("%s got player %s"),Actor->GetName(), Player->GetName());
 	Actor->Role       = ROLE_Authority;
 	Actor->RemoteRole = RemoteRole;
 	Actor->ShowFlags  = SHOW_Backdrop | SHOW_Actors | SHOW_StaticMeshes | SHOW_Terrain | SHOW_DistanceFog | SHOW_Backdrop | SHOW_PlayerCtrl | SHOW_RealTime | SHOW_Coronas | SHOW_Particles | SHOW_BSP | SHOW_FluidSurfaces | SHOW_Projectors;
@@ -927,9 +918,7 @@ UBOOL ULevel::FarMoveActor( AActor* Actor, FVector DestLocation,  UBOOL test, UB
 
     if( prevLocation != Actor->Location && !test ) // CheckEncroachment moved this actor (teleported), we're done
     {
-        // todo: ensure the actor was placed back into the collision hash
-        //debugf(TEXT("CheckEncroachment moved this actor, we're done!"));
-        //farMoveStackCnt--;
+        // Could ensure the actor was placed back into the collision hash.
         return result;
     }
 	
@@ -954,7 +943,6 @@ UBOOL ULevel::FarMoveActor( AActor* Actor, FVector DestLocation,  UBOOL test, UB
 		// sure the Actor is not in the Octree before changing its location.
 		if(Actor->IsInOctree())
 		{
-			//debugf(TEXT("FarMoveActor: Actor (%s) still in Octree. Removing."), Actor->GetName());
 			Hash->RemoveActor( Actor );
 		}
 
@@ -964,7 +952,7 @@ UBOOL ULevel::FarMoveActor( AActor* Actor, FVector DestLocation,  UBOOL test, UB
 	if( Actor->bCollideActors && Hash ) 
 		Hash->AddActor( Actor );
 
-	// FIXME - setzone fast if actor attached to bone
+	// Setting the zone could be faster for actors attached to a bone.
 
 	// Set the zone after moving, so that if a PhysicsVolumeChange or ActorEntered/ActorEntered message
 	// tries to move the actor, the hashing will be correct.
@@ -1213,15 +1201,6 @@ UBOOL ULevel::MoveActor
 					FMatrix NewWorldTM = Other->HardRelMatrix * BaseTM;
 					FVector NewWorldPos( NewWorldTM.M[3][0], NewWorldTM.M[3][1], NewWorldTM.M[3][2] );
 
-#if 0
-					// debug ref-frame drawing
-					FVector xDir( NewWorldTM.M[0][0], NewWorldTM.M[0][1], NewWorldTM.M[0][2] );
-					FVector yDir( NewWorldTM.M[1][0], NewWorldTM.M[1][1], NewWorldTM.M[1][2] );
-					FVector zDir( NewWorldTM.M[2][0], NewWorldTM.M[2][1], NewWorldTM.M[2][2] );
-					GTempLineBatcher->AddLine(NewWorldPos, NewWorldPos + (50 * xDir), FColor(255, 0, 0));
-					GTempLineBatcher->AddLine(NewWorldPos, NewWorldPos + (50 * yDir), FColor(0, 255, 0));
-					GTempLineBatcher->AddLine(NewWorldPos, NewWorldPos + (50 * zDir), FColor(0, 0, 255));
-#endif
 
 					FRotator NewWorldRot = (GMath.UnitCoords * NewWorldTM.Coords()).OrthoRotation();
 

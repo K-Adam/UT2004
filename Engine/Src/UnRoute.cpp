@@ -98,7 +98,6 @@ static FLOAT FindEndPoint( ANavigationPoint* CurrentNode, APawn* seeker, FLOAT b
 {
 	if ( CurrentNode->bEndPoint )
 	{
-//		debugf(TEXT("Found endpoint %s"),CurrentNode->GetName());
 		return 2.f;
 	}
 	else
@@ -113,9 +112,6 @@ FLOAT APawn::findPathToward(AActor *goal, FVector GoalLocation, NodeEvaluator No
 	if ( !Level->NavigationPointList || (FindAnchorFailedTime == Level->TimeSeconds) || !Controller )
 		return 0.f;
 
-	//if ( goal )
-	//	debugf(TEXT("%s Findpathtoward %s"),GetName(), goal->GetName());
-	//else debugf(TEXT("%s Findpathtoward point"),GetName());
 	int bSpecifiedEnd = (NodeEval == NULL);
 	UBOOL bOnlyCheckVisible = (Physics == PHYS_Karma);
 	FVector RealLocation = Location;
@@ -236,7 +232,6 @@ FLOAT APawn::findPathToward(AActor *goal, FVector GoalLocation, NodeEvaluator No
 			}
 		}
 
-		//debugf(TEXT("Startpoints = %d, DestPoints = %d"), StartPoints.numPoints, DestPoints.numPoints);
 		if ( !Anchor )
 		{
 			if ( StartPoints.numPoints > 0 )
@@ -409,7 +404,6 @@ FLOAT APawn::findPathToward(AActor *goal, FVector GoalLocation, NodeEvaluator No
 			Nav->ClearForPathFinding();
 		}
 	}
-	//debugf(TEXT("Found anchors"));
 
 	if ( EndAnchor )
 	{
@@ -459,9 +453,8 @@ FLOAT APawn::findPathToward(AActor *goal, FVector GoalLocation, NodeEvaluator No
 		Controller->SetRouteCache(BestDest,StartDist,EndDist);
 		return BestWeight;
 	}
-	else if ( Level->Game && Level->Game->bLiberalVehiclePaths ) // FIXME - should allow this always - hack to limit to onslaught because not tested in UT Assault
+	else if ( Level->Game && Level->Game->bLiberalVehiclePaths ) // only for games that set bLiberalVehiclePaths (Onslaught), other modes keep the retail paths
 	{
-		//debugf(TEXT("Second Search"));
 		AVehicle *V = Cast<AVehicle>(this);
 		if ( V && V->Driver )
 		{
@@ -470,7 +463,6 @@ FLOAT APawn::findPathToward(AActor *goal, FVector GoalLocation, NodeEvaluator No
 			V->Driver->Controller = Controller;
 			V->Driver->Anchor = Anchor;
 			BestDest = V->Driver->breadthPathTo(NodeEval,Anchor,V->Driver->calcMoveFlags(),&BestWeight, false);
-			//debugf(TEXT("ON FOOT found %s"),BestDest->GetName());
 			V->Driver->Controller = OldController;
 			Controller->Pawn = V;
 			if ( BestDest )
@@ -485,11 +477,9 @@ FLOAT APawn::findPathToward(AActor *goal, FVector GoalLocation, NodeEvaluator No
 				}
 				if ( N && (!bSuperSize || !N->bNoSuperSize) )
 				{
-					//debugf(TEXT("anchor %s route %s"),Anchor->GetName(), N->GetName());
 					UReachSpec *spec = Anchor->GetReachSpecTo(N);
 					if ( spec && spec->supports(CollisionRadius, CollisionHeight, calcMoveFlags(), MaxFallSpeed) )
 					{
-						//debugf(TEXT("IT WORKS"));
 						Controller->SetRouteCache(BestDest,StartDist,EndDist);
 						return BestWeight;
 					}
@@ -600,7 +590,6 @@ ANavigationPoint* APawn::breadthPathTo(NodeEvaluator NodeEval, ANavigationPoint 
 	while ( currentnode )
 	{
 		currentnode->bAlreadyVisited = true;
-		//debugf(TEXT("Distance to %s is %d"), currentnode->GetName(), currentnode->visitedWeight);
 		FLOAT thisWeight = (*NodeEval)(currentnode, this, *Weight);
 		if ( thisWeight > *Weight )
 		{
@@ -622,7 +611,6 @@ ANavigationPoint* APawn::breadthPathTo(NodeEvaluator NodeEval, ANavigationPoint 
 		{
 			ANavigationPoint* endnode = NULL;
 			UReachSpec *spec = currentnode->PathList(i);
-			//debugf(TEXT("check path from %s to %s with %d, %d"),spec->Start->GetName(), spec->End->GetName(), spec->CollisionRadius, spec->CollisionHeight);
 			if ( spec && spec->End && !spec->End->bAlreadyVisited && spec->supports(iRadius, iHeight, moveFlags, iMaxFallSpeed) && (!bSuperSize || !spec->End->bNoSuperSize) )
 			{
 				endnode = spec->End;
@@ -641,7 +629,6 @@ ANavigationPoint* APawn::breadthPathTo(NodeEvaluator NodeEval, ANavigationPoint 
 						nextweight = 1;
 					}
 					INT newVisit = nextweight + currentnode->visitedWeight; 
-					//debugf(TEXT("Path from %s to %s costs %d total %d"), currentnode->GetName(), endnode->GetName(), nextweight, newVisit);
 					if ( endnode->visitedWeight > newVisit )
 					{
 						// found a better path to endnode
@@ -701,7 +688,7 @@ ANavigationPoint* APawn::CheckDetour(ANavigationPoint* BestDest, ANavigationPoin
 	ANavigationPoint* DetourDest = NULL;
 	FLOAT DetourWeight = 0.f;
 
-	// FIXME - mark list to ignore (if already in route)
+	// Could mark a list to ignore (if already in route).
 	for ( INT i=0; i<Anchor->PathList.Num(); i++ )
 	{
 		UReachSpec *spec = Anchor->PathList(i);

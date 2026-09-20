@@ -30,7 +30,6 @@ static UPackage* CheckPackageLoaded(const FString& packageName, UBOOL bCreateIfN
 
     if (!pkg)
     {
-        //debugf(TEXT("load packageName=%s"),packageName);
         pkg = (UPackage*) UObject::LoadPackage(pkg, *packageName, LOAD_NoWarn | LOAD_Quiet);
     }
 
@@ -61,7 +60,6 @@ static UPackage* CheckPackageLoaded(const FString& packageName, UBOOL bCreateIfN
 // Load/Create manifest class
 static UManifest* CreateManifest()
 {
-    //debugf(TEXT("CreateManifest()"));
     UManifest* manifest = Cast<UManifest>(UObject::StaticConstructObject(UManifest::StaticClass(), UObject::GetTransientPackage(), NAME_None, RF_Public | RF_Standalone, NULL, GError));
 
     FString fileName;
@@ -73,7 +71,6 @@ static UManifest* CreateManifest()
  
     for (INT i=0; i<saveGameFiles.Num(); i++)
     {
-        //debugf(TEXT("found save game %s"), *saveGameFiles(i));
         RemoveFileExt(saveGameFiles(i), Temp);
         manifest->AddEntry(FString(Temp));
     }
@@ -240,23 +237,9 @@ void AGameInfo::execSavePackage( FFrame& Stack, RESULT_DECL )
 
     checkSlow( packageName.Len() );
 
-    //debugf(TEXT("SINGLEPLAYER save packageName=%s"),packageName);
-    // Check manifest for package entry and remove it
-    
-    //if (!SaveGameManifest)
-    //    SaveGameManifest = CreateManifest();
-
-    //INT idx = SaveGameManifest->FindEntry(packageName);
-	//if (idx < 0) {
-	  //  debugf(TEXT("SINGLEPLAYER savepackage still in manifest. NOT RETURNING."));
-		//SaveGameManifest->RemoveEntry(idx);
-        //return;
-	//}
-
     UPackage* pkg = CheckPackageLoaded(packageName, 0, SaveGameManifest);
 
 	if (!pkg) {
-	    //debugf(TEXT("SINGLEPLAYER savepackage not loaded"));
         return;
 	}
 
@@ -276,7 +259,6 @@ void AGameInfo::execSavePackage( FFrame& Stack, RESULT_DECL )
 	fileName += packageName + TEXT(".uvx");
  
     *(DWORD*) Result = SavePackage(pkg, NULL, RF_Standalone, *fileName, GWarn, NULL);
-    //debugf(TEXT("SINGLEPLAYER savepackage result %d"),Result);
 
     // restore levelinfo
     for (TObjectIterator<AActor> It; It; ++It)
@@ -299,23 +281,9 @@ void AGameInfo::execDeletePackage( FFrame& Stack, RESULT_DECL )
 
     checkSlow( packageName.Len() );
 
-    //debugf(TEXT("del package %s"), *packageName);
-
     *(DWORD*) Result = 0;
 
-    // Check manifest for package entry and remove it
-	//if (!SaveGameManifest) {
-    //    debugf(TEXT("SINGLEPLAYER creating savegamemanifest"));
-    //    SaveGameManifest = CreateManifest();
-	//}
-
 	UBOOL success = true;
-    //INT idx = SaveGameManifest->FindEntry(packageName);
-    //UBOOL success = (idx >= 0);
-	//if (!success) {
-     //   debugf(TEXT("SINGLEPLAYER found entry in manifest but not returning!"));
-        //return;
-	//}
 
 	FString fileName;
 
@@ -324,12 +292,9 @@ void AGameInfo::execDeletePackage( FFrame& Stack, RESULT_DECL )
 
     success = DeletePackage(*fileName);
 	if (!success) {
-	    //debugf(TEXT("SINGLEPLAYER delete package failed"));
         return;
 	}
 
-    //SaveGameManifest->RemoveEntry(idx);
-            
     *(DWORD*) Result = 1;
 
     unguard;

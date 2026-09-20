@@ -1158,12 +1158,6 @@ public:
 	{
 		return Max + (Min - Max) * appSRand();
 	}
-#if 0
-	FORCEINLINE INT GetRandInt() const
-	{
-		return appRandRange( (INT)Min, (INT)Max );
-	} 
-#endif
 	FORCEINLINE int IsNearlyZero() const
 	{
 		return
@@ -1694,7 +1688,6 @@ inline FVector FVector::TransformVectorByTranspose( const FCoords &Coords) const
 
 
 // Apply 'pivot' transform: First rotate, then add the translation.
-// TODO: convert to assembly !
 inline FVector FVector::PivotTransform(const FCoords& Coords) const
 {
 	return Coords.Origin + FVector( *this | Coords.XAxis, *this | Coords.YAxis, *this | Coords.ZAxis );
@@ -1902,8 +1895,6 @@ inline FCoords FCoords::MirrorByPlane( const FPlane& Plane ) const
 //
 inline FCoords& FCoords::operator*=( const FCoords& TransformCoords )
 {
-	//!! Proper solution:
-	//Origin = Origin.TransformPointBy( TransformCoords.Inverse().Transpose() );
 	// Fast solution assuming orthogonal coordinate system:
 	Origin = Origin.TransformPointBy ( TransformCoords );
 	XAxis  = XAxis .TransformVectorBy( TransformCoords );
@@ -2788,8 +2779,6 @@ inline void FastSlerpNormQuat(const FQuat *quat1,const FQuat *quat2, float slerp
 
 inline void FastQuatToFCoords( FQuat& Q, FVector& P, FCoords& SpaceDest )
 {
-	// SpaceBases(bone) = FQuaternionCoords( CachedOrientations(bone));
-	// SpaceBases(bone).Origin = CachedPositions(bone);
 	FLOAT wx, wy, wz, xx, yy, yz, xy, xz, zz, x2, y2, z2;
 
 	x2 = Q.X + Q.X;  y2 = Q.Y + Q.Y;  z2 = Q.Z + Q.Z;
@@ -3258,28 +3247,6 @@ class FRotationMatrix : public FMatrix
 {
 public:
 
-#if 0
-	FRotationMatrix(FRotator Rot) :
-	  FMatrix(
-			FMatrix(	// Roll
-				FPlane(1.0f,					0.0f,					0.0f,						0.0f),
-				FPlane(0.0f,					+GMath.CosTab(Rot.Roll),-GMath.SinTab(Rot.Roll),	0.0f),
-				FPlane(0.0f,					+GMath.SinTab(Rot.Roll),+GMath.CosTab(Rot.Roll),	0.0f),
-				FPlane(0.0f,					0.0f,					0.0f,						1.0f)) *
-			FMatrix(	// Pitch
-				FPlane(+GMath.CosTab(Rot.Pitch),0.0f,					+GMath.SinTab(Rot.Pitch),	0.0f),
-				FPlane(0.0f,					1.0f,					0.0f,						0.0f),
-				FPlane(-GMath.SinTab(Rot.Pitch),0.0f,					+GMath.CosTab(Rot.Pitch),	0.0f),
-				FPlane(0.0f,					0.0f,					0.0f,						1.0f)) *
-			FMatrix(	// Yaw
-				FPlane(+GMath.CosTab(Rot.Yaw),	+GMath.SinTab(Rot.Yaw), 0.0f,	0.0f),
-				FPlane(-GMath.SinTab(Rot.Yaw),	+GMath.CosTab(Rot.Yaw), 0.0f,	0.0f),
-				FPlane(0.0f,					0.0f,					1.0f,	0.0f),
-				FPlane(0.0f,					0.0f,					0.0f,	1.0f))
-			)
-	  {
-	  }
-#else
 	FRotationMatrix(FRotator Rot)
 	{
 		FLOAT	SR	= GMath.SinTab(Rot.Roll),
@@ -3309,7 +3276,6 @@ public:
 		M[3][2]	= 0.f;
 		M[3][3]	= 1.f;
 	}
-#endif
 };
 
 class FInverseRotationMatrix : public FMatrix
@@ -3521,8 +3487,6 @@ public:
 
 inline void FQuatToFCoordsFast( FQuat& Q, FVector& P, FCoords& SpaceDest )
 {
-	// SpaceBases(bone) = FQuaternionCoords( CachedOrientations(bone));
-	// SpaceBases(bone).Origin = CachedPositions(bone);
 	FLOAT wx, wy, wz, xx, yy, yz, xy, xz, zz, x2, y2, z2;
 
 	x2 = Q.X + Q.X;  y2 = Q.Y + Q.Y;  z2 = Q.Z + Q.Z;

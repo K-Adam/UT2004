@@ -66,7 +66,6 @@ struct ForceData
 extern bool CalcForceData( ForceData& forceData, AActor* forceActor );
 extern void CalcForceAtPoint( ForceData* forces, int numForces, FVector& pt, FVector& accumForce );
 
-//class UParticleMesh;
 // particle iterators!
 // this controls of the update and drawing behaviour of the emitters
 class ParticleIterator
@@ -183,7 +182,6 @@ public:
 		if ( poolMem > peakMem )
 		{
 			peakMem = poolMem;
-			// debugf(TEXT("ParticlePoolMgr count: (%d) peak mem: (%dKB) curEmitters: (%d)"), numPool, peakMem/1024, UParticleMesh::msNumActiveSys );
 		}
 	}
 	PclArrayPtr GetArray( int requested )
@@ -198,10 +196,9 @@ public:
 			largestFound = Max( largestFound, pCur->pParticleArray->Num() );
 			numChecked++;
 			// also could check ArrayMax
-			if ( requested <= pCur->pParticleArray->Num() ) // todo: make this have a tolerance like num > request-% num < request+%
+			if ( requested <= pCur->pParticleArray->Num() ) // make this have a tolerance like num > request-% num < request+%
 			{
 				pArray = pCur->pParticleArray;
-				//debugf(TEXT("ParticlePoolMgr getting particle array(%d) poolMem(%d KB)"), pArray->Num() );
 				if ( pPrev ) // fix list chain
 				{
 					pPrev->pNext = pCur->pNext;

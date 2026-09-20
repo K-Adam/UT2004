@@ -194,7 +194,7 @@ INT FALVoiceModule::Encode()
 
 		if( VoiceChannel )
 		{
-			check( VoiceChannel->VoiceIndex < VOICEPACKET_Max ); //!!VOIP TODO
+			check( VoiceChannel->VoiceIndex < VOICEPACKET_Max );
 			VoiceInfo = ServerConnection->Driver->VoiceInfos[VoiceChannel->VoiceIndex];
 		}
 
@@ -436,7 +436,6 @@ UBOOL FALVoiceModule::Decode( FVoiceInfo* VoiceInfo )
 				Flags &= ~SF_No3D;
 			}
 
-//			FLOAT Radius = Clamp( AudioSubsystem->SpatializedVoiceRadius, 10.f, 1000000.f );
 			FLOAT Radius = Clamp( AudioSubsystem->Viewport->Actor->VoiceReplicationInfo ?
 				AudioSubsystem->Viewport->Actor->VoiceReplicationInfo->BroadcastRadius : AudioSubsystem->SpatializedVoiceRadius,
 				10.f, 1000000.f );

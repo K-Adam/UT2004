@@ -96,7 +96,7 @@ public:
 
 	virtual void Execute( UBOOL bAdditive );
 
-// Some versions of GNU C++ seem to need a little nudging here. --ryan.
+// Some versions of GNU C++ seem to need a little nudging here.
 #ifdef __GNUC__
     void *operator new(size_t x, TArray<UTerrainBrush>& t) { return ::operator new(x, t); }
 #endif

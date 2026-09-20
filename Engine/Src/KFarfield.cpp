@@ -39,14 +39,9 @@ KModelPairType KModelsToKey(McdModelID m1, McdModelID m2)
 	KModelPairType Key;
 
 #if PLATFORM_32BITS
-    // Commented code below is an Aliasing Violation!
-	//McdModelID* models = (McdModelID*)&Key;
-	//models[0] = m1;
-	//models[1] = m2;
     Key = (((QWORD) m1) << 32) | ((QWORD) m2);
 #elif PLATFORM_64BITS
-    // I'm a gambling man. I'll bet that the loworder bits are still unique
-    //  enough for this key generation...yikes.  --ryan.
+    // Assumes the low 32 bits of each pointer are still unique enough for the key.
     Key = (QWORD) (((((PTRINT) m1) & 0xFFFFFFFF) << 32) | (((PTRINT) m2) & 0xFFFFFFFF));
 #else
     #error Please define your platform.
@@ -120,7 +115,6 @@ static UBOOL ActorsShouldCollide(AActor* a1, AActor* a2)
 	}
 
 	// Dont allow things with  different bKDoubleTickRate to collide. 
-	// JTODO: Can we fix this? Set bKDoubleTickRate on the fly?
 	// NB. Should always have KParams at this point.
 	UKarmaParams* kparams1 = Cast<UKarmaParams>(a1->KParams);
 	UKarmaParams* kparams2 = Cast<UKarmaParams>(a2->KParams);
@@ -377,8 +371,6 @@ void KUpdateContacts(TArray<AActor*> &actors, ULevel* level, UBOOL bDoubleRateAc
 	if(!level->Hash)
 		return;
 
-	//debugf( TEXT("-------------- BEGIN CONTACT GEN ---------------") );
-
 	FMemMark Mark(GMem);
 
 	// Keep a lookup of pairs we already have, to prevent adding them twice.
@@ -411,8 +403,6 @@ void KUpdateContacts(TArray<AActor*> &actors, ULevel* level, UBOOL bDoubleRateAc
 		// Do any other pre-contact gen stuff (reset flags set inside contact callback etc.)
 		actor->preContactUpdate();
 
-		//debugf( TEXT("ContactGen: %x %s"), actor, actor->GetName() );
-
 		if(actor->Physics != PHYS_Karma && actor->Physics != PHYS_KarmaRagDoll)
 		{
 			debugf( TEXT("KUpdateContacts: Actor without Karma physics mode. Name: %x %s Physics: %d"), actor, actor->GetName(), (INT)actor->Physics );
@@ -420,7 +410,6 @@ void KUpdateContacts(TArray<AActor*> &actors, ULevel* level, UBOOL bDoubleRateAc
 		}
 
 		check(!actor->bDeleteMe);
-		//check(actor->Physics == PHYS_Karma || actor->Physics == PHYS_KarmaRagDoll);
 		check(actor->bBlockKarma);
 		check(actor->bCollideActors);
 
@@ -455,10 +444,7 @@ void KUpdateContacts(TArray<AActor*> &actors, ULevel* level, UBOOL bDoubleRateAc
 			AActor* overActor = overlap->Actor;
 			check(overActor);
 			check(overActor->bBlockKarma);
-			//check(overActor->KParams);
 			check(!overActor->bDeleteMe);
-
-			//debugf(TEXT("Consider: %x %s - %x %s"), actor, actor->GetName(), overActor, overActor->GetName() );
 
 			// Check if this pair of actors should happen at all.
 			if( !overActor->KParams || actor == overActor || !ActorsShouldCollide(actor, overActor) )
@@ -473,7 +459,6 @@ void KUpdateContacts(TArray<AActor*> &actors, ULevel* level, UBOOL bDoubleRateAc
 			check(!(model2 && inst2));
 
 			// Now generate the resulting set of overlapping models, using AABB test to reject further.
-			//debugf(TEXT("GeneratePairs: %x %s - %x %s"), actor, actor->GetName(), overActor, overActor->GetName() );
 			GenerateOverlapPairs(model1, inst1, model2, inst2, PairM1, PairM2, 1, &level->KDisableTable);
 			check(PairM1.Num() == PairM2.Num());
 			
@@ -481,7 +466,6 @@ void KUpdateContacts(TArray<AActor*> &actors, ULevel* level, UBOOL bDoubleRateAc
 
 		// We also need to make sure there is a pair between this actor and the level model,
 		// for BSP/Terrain collision via TriList. No need to bother with the overlap test.
-		//debugf(TEXT("GeneratePairs (world): %s - WORLD"), actor->GetName() );
 		GenerateOverlapPairs(model1, inst1, level->KLevelModel, 0, PairM1, PairM2, 0, &level->KDisableTable);
 
 		// If this is a skeletal actor, we need to generate pairs of models between its parts.
@@ -565,16 +549,6 @@ void KGoodbyeModelPair(McdModelPairID pair, ULevel* level)
 	debugf(TEXT("GOODBYE: %s (%x) - %s (%x)"), a1?a1->GetName():TEXT("None"), pair->model1, a2?a2->GetName():TEXT("None"), pair->model2);
 #endif
 
-#if 0
-	if(bDoPairCheck)
-	{
-		for(INT i=KGData->filterPairs->helloFirst; i<KGData->filterPairs->stayingEnd; i++)
-		{
-			McdModelPair* mp = KGData->filterPairs->array[i];
-			check(mp != pair);
-		}
-	}
-#endif
 	// Make sure pair is removed from set of overlapping pairs.
 	KModelPairType Key = KModelsToKey(pair->model1, pair->model2);
 	level->OverlapPairs.Remove(Key);
@@ -619,14 +593,12 @@ void KGoodbyePair(McdModelID model1, McdModelID model2, ULevel* level)
 	// There is no pair between these models, do nothing
 	if(!pair)
 	{
-#if 1
 		// Check neither model thinks its overlapping the other.
 		KarmaModelUserData* d1 = (KarmaModelUserData*)McdModelGetUserData(model1);
 		check(d1->OverlapModels.FindItemIndex(model2) == INDEX_NONE);
 
 		KarmaModelUserData* d2 = (KarmaModelUserData*)McdModelGetUserData(model2);		
 		check(d2->OverlapModels.FindItemIndex(model1) == INDEX_NONE);
-#endif
 		return;
 	}
 
@@ -809,13 +781,8 @@ static void KSimpleHello(McdModelPair *p)
 
 	p->request = McdFrameworkGetDefaultRequestPtr(frame);
 
-#if 0
-	if (frame->mHelloCallbackFnPtr)
-		(*(frame->mHelloCallbackFnPtr))(p);
-#else
 	if (interactions->helloFn)
 		(*interactions->helloFn)(p);
-#endif
 
 	return;
 
@@ -937,9 +904,6 @@ MeBool KIntersect(McdModelPair *p, McdIntersectResult *result)
 {
 	guard(KIntersect);
 
-	//check(p->model1)
-	//check(p->model2);
-
 	int type1 = McdModelGetGeometryType(p->model1);
 	int type2 = McdModelGetGeometryType(p->model2);
 
@@ -985,7 +949,7 @@ MeBool KIntersect(McdModelPair *p, McdIntersectResult *result)
 	{
         const size_t BlockSize = 512*sizeof(McdContact);
 		outContacts = result->contacts;
-		result->contacts = (McdContact *)MeMemoryALLOCA(BlockSize); // TODO: fix me!
+		result->contacts = (McdContact *)MeMemoryALLOCA(BlockSize);
 		appMemzero(result->contacts, BlockSize);
 	}
 
@@ -1068,9 +1032,7 @@ static MeBool KIntersectEach(McdModelPairContainer* pairs,
 		r->contacts = contactArray + *contactCount;
 		r->contactMaxCount = contactsLeft;
 
-		//clock(GStats.DWORDStats(GEngineStats.STATS_Karma_KIntersect));
 		KIntersect(mp, r);
-		//unclock(GStats.DWORDStats(GEngineStats.STATS_Karma_KIntersect));
 
 		(*contactCount) += r->contactCount;
 	}

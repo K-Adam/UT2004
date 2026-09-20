@@ -682,8 +682,6 @@ void UStruct::Serialize( FArchive& Ar )
 	guard(UStruct::Serialize);
 	Super::Serialize( Ar );
 
-	//debugf(TEXT("UStruct::Serialize %s"),GetFullName());
-
 	// Serialize stuff.
 	Ar << ScriptText << Children;
 	Ar << FriendlyName;
@@ -1234,7 +1232,7 @@ CORE_API FArchive& operator<<( FArchive& Ar, FLabelEntry &Label )
 void *GSerializedPointers[MAX_SERIALIZED_POINTERS];
 INT GTotalSerializedPointers = 0;
 
-// !!! FIXME: This has GOT to be a mad performance hit.  --ryan.
+// Linear search, so this gets slow with many pointers.
 INT SerialPointerIndex(void *ptr)
 {
     for (INT i = 0; i < GTotalSerializedPointers; i++)
@@ -1245,7 +1243,6 @@ INT SerialPointerIndex(void *ptr)
 
     check(GTotalSerializedPointers < MAX_SERIALIZED_POINTERS);
     GSerializedPointers[GTotalSerializedPointers] = ptr;
-    //printf("Added new serialized pointer: number (%d) at (%p).\n", GTotalSerializedPointers, ptr);
     return(GTotalSerializedPointers++);
 }
 #endif
@@ -1533,7 +1530,6 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		case EX_Case:
 		{
 			_WORD W;
-//			_WORD* W=(_WORD*)&Script(iCode);
 			XFER(_WORD); // Code offset.
 			appMemcpy(&W, &Script(iCode-sizeof(_WORD)), sizeof(_WORD));
 			if( W != MAXWORD )

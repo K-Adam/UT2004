@@ -56,14 +56,6 @@ class EDITOR_API UEditInfo : public UObject
 	DWORD	FileTime;			// CRC of the file, for "make" change detection.
 	TArray<FDependency> Dep;	// List of other objects this object is dependent on.
 
-	// UObject interface.
-	//UEditInfo();
-	//UEditInfo( const TCHAR* InFilename );
-
-	// UEditInfo interface.
-	//UBOOL IsUpToDate( EEditDependencyType InType );
-	//void UpdateCRC();
-	//void EmptyDependencies( EEditDependencyType InMinType );
 };
 IMPLEMENT_CLASS(UEditInfo);
 
@@ -178,24 +170,6 @@ FString FScriptCompiler::GetContext()
 
 	return FString::Printf(	TEXT("%s(%i)"), *Filename, InputLine);
 
-/*
-	if (InDefaultPropContext)
-		return FString::Printf
-		(
-			TEXT("%s%s\\Classes\\%s.uc(1) : defaultproperties"),
-			*Path, 
-			Class->GetOuter()->GetName(), 
-			Class->GetName()
-		);
-	return FString::Printf
-	(
-		TEXT("%s%s\\Classes\\%s.uc(%i)"),
-		*Path, 
-		Class->GetOuter()->GetName(), 
-		Class->GetName(), 
-		InputLine
-	);
-*/
 }
 
 /*-----------------------------------------------------------------------------
@@ -308,7 +282,6 @@ void FScriptCompiler::EmitDebugInfo( BYTE OpCode )
 	if ( SupressDebugInfo > 0)
 	{
 		SupressDebugInfo--;
-//		GWarn->Logf(TEXT("Supressed %s"), InfoType);
 		return;
 	}
 
@@ -320,15 +293,6 @@ void FScriptCompiler::EmitDebugInfo( BYTE OpCode )
 		Writer << InputLine;
 		Writer << InputPos;
 		Writer << OpCode;
-/*		BYTE OutCh;
-		for( TCHAR* Ch=InfoType; *Ch; Ch++ )
-		{
-			OutCh = ToAnsi(*Ch);
-			Writer << OutCh;
-		}
-		OutCh = 0;
-		Writer << OutCh;
-*/
 	}
 }
 
@@ -710,8 +674,6 @@ void FScriptCompiler::EmitLet( const FPropertyBase& Type, const TCHAR *Tag )
 	if( Type.ArrayDim > 1 )
 		appThrowf( TEXT("Can only assign individual elements, not arrays") );
 
-	//!! Yoda Debugger
-	//EmitLineNumber();
 	EmitDebugInfo(DI_Let);
 	
 	if( Type.Type==CPT_Bool )
@@ -1713,10 +1675,6 @@ void FScriptCompiler::CompileConst( UStruct* Scope )
 	FToken ValueToken;
 	if( !GetToken(ValueToken) )
 		appThrowf( TEXT("const %s: Missing value"), *ConstName );
-#if 0 // language enhancement from Paul Dubois - infinite machines
-	if( ValueToken.TokenType != TOKEN_Const )
-		appThrowf( TEXT("const %s: Value is not constant"), *ConstName );
-#endif
 	// Format constant.
 	TCHAR Value[1024];
 	if( ValueToken.TokenType != TOKEN_Const )
@@ -2007,7 +1965,6 @@ UBOOL FScriptCompiler::CompileFieldExpr
 
 		// rjp -- If RF_Public is not set on protected variables, subclasses which exist in other packages
 		// can't reference the property, since the linker won't include the property in the package's export map
-		// if( !(Property->GetFlags() & RF_Public) && ((Property->GetFlags() & RF_Final) ? Property->GetOwnerClass()!=Class : !Class->IsChildOf( Property->GetOwnerClass() )) )
 		if ( !(Property->GetFlags() & RF_Public) && Property->GetOwnerClass() != Class )
 			appThrowf( TEXT("Can't access private variable '%s' in '%s'"), Property->GetName(), Property->GetOwnerClass()->GetName() );
 		// -- rjp
@@ -2114,7 +2071,6 @@ UBOOL FScriptCompiler::CompileFieldExpr
 			appThrowf( TEXT("Can't access private function '%s' in '%s'"), Function->GetName(), Function->GetOwnerClass()->GetName() );
 		if(	Function->FunctionFlags & FUNC_Protected )
 		{
-			//Warn->Logf( TEXT("%s calling %s::%s in scope %s"), Class->GetName(), Function->GetOwnerClass()->GetName(), Function->GetName(), Scope->GetName() );
 			if( !Class->IsChildOf( Function->GetOwnerClass() ) )														// if we are not a subclass of the function's class.
 			{
 				if( Function->GetOwnerClass()->IsChildOf( Class ) )														// if we are a superclass of the function's class.
@@ -2126,7 +2082,6 @@ UBOOL FScriptCompiler::CompileFieldExpr
 					}
 					else
 					{
-						//Warn->Logf( TEXT("    %s::%s is %s"), ScopedFunction->GetOwnerClass()->GetName(), ScopedFunction->GetName(), (ScopedFunction->FunctionFlags & FUNC_Private) ? TEXT("PRIVATE") : (ScopedFunction->FunctionFlags & FUNC_Public) ? TEXT("PUBLIC") : (ScopedFunction->FunctionFlags & FUNC_Protected) ? TEXT("PROTECTED") : TEXT("INVALID") );
 						if( (ScopedFunction->FunctionFlags & FUNC_Private) && ScopedFunction->GetOwnerClass()!=Class )	// if a function with the same name is in scope but is private.
 						{
 							appThrowf( TEXT("Can't access private function '%s' in '%s' (%s::%s is not in scope)"), ScopedFunction->GetName(), ScopedFunction->GetOwnerClass()->GetName(), Function->GetOwnerClass()->GetName(), Function->GetName() );
@@ -2327,19 +2282,16 @@ int FScriptCompiler::ConversionCost
 	if( Dest.MatchesType(Source,1) )
 	{
 		// Identical match.
-		//AddResultText("Identical\r\n");
 		return 0;
 	}
 	else if( Dest.PropertyFlags & CPF_OutParm )
 	{
 		// If converting to l-value, conversions aren't allowed.
-		//AddResultText("IllegalOut\r\n");
 		return MAXINT;
 	}
 	else if( Dest.MatchesType(Source,0) )
 	{
 		// Generalization.
-		//AddResultText("Generalization\r\n");
 		int Result = 1;
 		if( Source.Type==CPT_ObjectReference && Source.PropertyClass!=NULL )
 		{
@@ -2356,43 +2308,36 @@ int FScriptCompiler::ConversionCost
 	else if( Dest.ArrayDim!=1 || Source.ArrayDim!=1 )
 	{
 		// Can't cast arrays.
-		//AddResultText("NoCastArrays\r\n");
 		return MAXINT;
 	}
 	else if( Dest.Type==CPT_Byte && Dest.Enum!=NULL )
 	{
 		// Illegal enum cast.
-		//AddResultText("IllegalEnumCast\r\n");
 		return MAXINT;
 	}
 	else if( Dest.Type==CPT_ObjectReference && Dest.PropertyClass!=NULL )
 	{
 		// Illegal object cast.
-		//AddResultText("IllegalObjectCast\r\n");
 		return MAXINT;
 	}
 	else if( (Dest.PropertyFlags & CPF_CoerceParm) ? (Conversion==CST_Max) : !(Conversion & AUTOCONVERT) )
 	{
 		// No conversion at all.
-		//AddResultText("NoConversion\r\n");
 		return MAXINT;
 	}
 	else if( GetConversion( Dest, Source ) & TRUNCATE )
 	{
 		// Truncation.
-		//AddResultText("Truncation\r\n");
 		return 104;
 	}
 	else if( (Source.Type==CPT_Int || Source.Type==CPT_Pointer || Source.Type==CPT_Byte) && Dest.Type==CPT_Float )
 	{
 		// Conversion to float.
-		//AddResultText("ConvertToFloat\r\n");
 		return 103;
 	}
 	else
 	{
 		// Expansion.
-		//AddResultText("Expansion\r\n");
 		return 101;
 	}
 	unguard;
@@ -2410,7 +2355,6 @@ UBOOL FScriptCompiler::CompileDynamicCast( FToken Token, FToken& ResultType )
 	UClass* DestClass = FindObject<UClass>( ANY_PACKAGE, Token.Identifier );
 	if( !DestClass )
 	{
-#if 1 //NEW: CDH... explicit cast to enums
 		UEnum* DestEnum = FindObject<UEnum>( ANY_PACKAGE, Token.Identifier );
 		if (DestEnum)
 		{
@@ -2429,7 +2373,6 @@ UBOOL FScriptCompiler::CompileDynamicCast( FToken Token, FToken& ResultType )
 			ResultType = FToken( FPropertyBase( DestEnum ) );
 			return 1;
 		}
-#endif // ...CDH
 		PerformRetry( LowRetry );
 		return 0;
 	}
@@ -2652,8 +2595,6 @@ UBOOL FScriptCompiler::CompileExpr
 			if( !NewParent.PropertyClass )//!!??
 				NewParent.PropertyClass = UObject::StaticClass();
 			ParentClass = NewParent.PropertyClass;
-			//!!oldver, delete this: if( !ParentClass )
-			//	appThrowf( TEXT("'new': Invalid outer class") );
 			Going = MatchSymbol(TEXT(","));
 		}
 		else Writer << EX_Nothing;
@@ -2759,20 +2700,7 @@ UBOOL FScriptCompiler::CompileExpr
 				appThrowf( TEXT("Invalid property or function call on a dynamic array"));
 
 		}
-/*		else if( Token.ArrayDim==-2 )
-		{
-			if( !MatchSymbol(TEXT("[")) )
-				break;
-			FRetryPoint HighRetry; InitRetry(HighRetry);
-			Writer << EX_HashElement;
-			CompileExpr( FPropertyBase(CPT_String), TEXT("map key") );
-			if( !MatchSymbol(TEXT("]")) )
-				appThrowf( TEXT("%s is a map; expecting ']'"), Token.Identifier );
-
-			// Emit element size and array dimension.
-			CodeSwitcheroo( LowRetry, HighRetry );
-		}
-*/		else if( Token.ArrayDim!=1 )
+		else if( Token.ArrayDim!=1 )
 		{
 			// If no array handler, we're done.
 			if( !MatchSymbol(TEXT("[")) )
@@ -2923,7 +2851,6 @@ UBOOL FScriptCompiler::CompileExpr
 
 				// Figure out which operator overload is best.
 				BestOperLink = NULL;
-				//AddResultText("Oper %s:\r\n",OperLinks[0]->Node().Name());
 				UBOOL AnyLeftValid=0, AnyRightValid=0;
 				for( INT i=0; i<OperLinks.Num(); i++ )
 				{
@@ -2936,7 +2863,6 @@ UBOOL FScriptCompiler::CompileExpr
 					{
 						// Check match of first parm.
 						UProperty* Parm1 = *It; ++It;
-						//AddResultText("Left  (%s->%s): ",FName(Token.Type)(),FName(Parm1.Type)());
 						INT Cost         = ConversionCost(FPropertyBase(Parm1),Token);
 						ThisMatch        = Cost;
 						AnyLeftValid     = AnyLeftValid || Cost!=MAXINT;
@@ -2946,7 +2872,6 @@ UBOOL FScriptCompiler::CompileExpr
 					{
 						// Check match of second parm.
 						UProperty* Parm2 = *It; ++It;
-						//AddResultText("Right (%s->%s): ",FName(NewResultType.Type)(),FName(Parm2.Type)());
 						INT Cost         = ConversionCost(FPropertyBase(Parm2),NewResultType);
 						ThisMatch        = Max(ThisMatch,Cost);
 						AnyRightValid    = AnyRightValid || Cost!=MAXINT;
@@ -3214,8 +3139,6 @@ void FScriptCompiler::CheckInScope( UObject* Obj )
 {
 	guard(FScriptCompiler::CheckInScope);
 	check(Obj);
-	//if( Class->PackageImports.FindItemIndex( Obj->GetOuter()->GetFName(), i )==INDEX_NONE )
-	//	appThrowf(" '%s' is not accessible to this script", Obj->GetFullName() );
 	unguard;
 }
 
@@ -3438,8 +3361,6 @@ void FScriptCompiler::PopNest( ENestType NestType, const TCHAR* Descr )
 		{
 			// Emit stop command.
 
-			//!! Yoda Debugger
-			//EmitLineNumber();
 			EmitDebugInfo(DI_PrevStack);	
 			Writer << EX_Stop;
 
@@ -3471,9 +3392,6 @@ void FScriptCompiler::PopNest( ENestType NestType, const TCHAR* Descr )
 			if( !(TopFunction->FunctionFlags & FUNC_Native) )
 			{
 			
-				//!! Yoda Debugger
-				//EmitLineNumber();
-
 				EmitDebugInfo(DI_ReturnNothing);
 				Writer << EX_Return;
 				Writer << EX_Nothing;
@@ -3559,8 +3477,6 @@ void FScriptCompiler::PopNest( ENestType NestType, const TCHAR* Descr )
 					CheckAllow( TEXT("'Else If'"), ALLOW_ElseIf );
 
 					// Jump to next evaluator if expression is false.
-					//!! Yoda Debugger
-					//EmitLineNumber();
 					EmitDebugInfo(DI_SimpleIf);
 					Writer << EX_JumpIfNot;
 					EmitAddressToChainLater( TopNest );
@@ -3615,7 +3531,6 @@ void FScriptCompiler::PopNest( ENestType NestType, const TCHAR* Descr )
 			PerformRetry(Retry,0,1);
 
 			// Jump back to start of loop.
-			//EmitLineNumber();
 			Writer << EX_Jump;
 			EmitAddressToFixupLater(TopNest,FIXUP_ForStart,NAME_None);
 
@@ -3942,7 +3857,6 @@ UBOOL FScriptCompiler::GetVarType
 		{
 		// rjp -- If RF_Public is not set on protected variables, subclasses which exist in other packages
 		// can't reference the property, since the linker won't include the property in the package's export map
-		//	ObjectFlags &= ~RF_Public;
 			ObjectFlags |= RF_Protected;
 			IsVariable  = 1;
 		}
@@ -4103,8 +4017,7 @@ UBOOL FScriptCompiler::GetVarType
 
 		DWORD InnerFlags = RF_Public;
 
-		// this clears the private/protected attributes of the array var -- rjp
-//		GetVarType( Scope, VarProperty, ObjectFlags, Disallow, TEXT("'array'") );
+		// Passing ObjectFlags here would clear the private/protected attributes of the array var.
 		GetVarType( Scope, VarProperty, InnerFlags, Disallow, TEXT("'array'") );
 		if( VarProperty.ArrayDim==0 )
 			appThrowf( TEXT("Arrays within arrays not supported") );
@@ -4113,24 +4026,11 @@ UBOOL FScriptCompiler::GetVarType
 		if ( VarProperty.Type == CPT_Struct && (Flags & CPF_Localized) )
 			Warn->Logf(NAME_Warning, TEXT("'localized': Has no effect on arrays of type 'struct'"));
 	}
-#if 0 //NEW: ARL(ParticleSystems)
-	else if( VarType.Matches(NAME_OrderedArray) )
-	{
-		RequireSymbol( TEXT("<"), TEXT("'orderedarray'") );
-		GetVarType( Scope, VarProperty, ObjectFlags, Disallow, TEXT("'orderedarray'") );
-		if( VarProperty.ArrayDim==0 )
-			appThrowf( TEXT("OrderedArrays within arrays not supported") );
-		VarProperty.ArrayDim = -1;
-		RequireSymbol( TEXT(">"), TEXT("'orderedarray'") );
-	}
-#endif
 	else if( VarType.Matches(NAME_Map) )
 	{
 		appThrowf( TEXT("Map are not supported in UnrealScript yet") );
 		RequireSymbol( TEXT("<"), TEXT("'map'") );
-		//!!GetVarType( Scope, VarProperty, ObjectFlags, Disallow, TEXT("'map'") );
 		RequireSymbol( TEXT(","), TEXT("'map'") );
-		//!!GetVarType( Scope, VarProperty, ObjectFlags, Disallow, TEXT("'map'") );
 		RequireSymbol( TEXT(">"), TEXT("'map'") );
 	}
 	else if( VarType.Matches(NAME_String) || VarType.Matches(NAME_Button) )
@@ -4143,7 +4043,6 @@ UBOOL FScriptCompiler::GetVarType
 			if( !MatchSymbol(TEXT("]")) )
 				appThrowf( TEXT("%s: Missing ']'"), Thing ? Thing : TEXT("Declaration") );
 			Warn->Logf( NAME_Warning, TEXT("String sizes are now obsolete; all strings are dynamically sized") );
-			//appThrowf( TEXT("String sizes are now obsolete; all strings are dynamically sized") );
 		}
 		VarProperty = FPropertyBase(CPT_String);
 		if( VarType.Matches(NAME_Button) )
@@ -4373,8 +4272,6 @@ UProperty* FScriptCompiler::GetVarNameAndDim
 					   -- rjp */
 
 					static const TCHAR* cmdline = appCmdLine();
-					// Swap comment to require -conflicts parameter in order to see conflicts between local properties and inherited global properties
-					// if ( !Func || (Existing->IsA(UProperty::StaticClass()) && (ParseParam(cmdline,TEXT("CONFLICTS")) || BaseScope == Func->GetOuter())) || ParseParam(cmdline,TEXT("STRICT")) )
 					if ( !Func || Existing->IsA(UProperty::StaticClass()) || ParseParam(cmdline,TEXT("STRICT")) )
 						Warn->Logf( NAME_Warning, TEXT("'%s' obscures '%s' defined in base class '%s'."), *VarToken.TokenName, *VarToken.TokenName, BaseScope->GetName() );
                 }
@@ -4689,7 +4586,6 @@ INT FScriptCompiler::CompileDeclaration( FToken& Token, UBOOL& NeedSemicolon )
         // amb ---
         if( FString(Token.Identifier).EndsInDigit() )
         	Warn->Logf( NAME_Warning, TEXT("Class names shouldn't end in a digit"), Token.Identifier );
-			// MERGE_HACK --- appThrowf( TEXT("Class names cannot end in a digit"), Token.Identifier );
         // --- amb
 		if( !Token.Matches(Class->GetName()) )
 			appThrowf( TEXT("Class must be named %s, not %s"), Class->GetName(), Token.Identifier );
@@ -5852,8 +5748,6 @@ void FScriptCompiler::CompileCommand( FToken& Token, UBOOL& NeedSemicolon )
 			appThrowf( TEXT("Internal consistency error on 'Return'") );
 		UFunction* Function = CastChecked<UFunction>(Nest[i].Node);
 		UProperty* Return = Function->GetReturnProperty();
-		//EmitLineNumber();
-		//!! Yoda Debugger
 		if ( Return )
 			EmitDebugInfo(DI_Return);
 		else
@@ -5888,8 +5782,6 @@ void FScriptCompiler::CompileCommand( FToken& Token, UBOOL& NeedSemicolon )
 		PushNest( NEST_If, TEXT(""), NULL );
 
 		// Jump to next evaluator if expression is false.
-		//EmitLineNumber();
-		//!! Yoda Debugger
 		EmitDebugInfo(DI_SimpleIf);
 		Writer << EX_JumpIfNot;
 		EmitAddressToChainLater(TopNest);
@@ -5919,8 +5811,6 @@ void FScriptCompiler::CompileCommand( FToken& Token, UBOOL& NeedSemicolon )
 		TopNest->SetFixup(FIXUP_LoopStart,TopNode->Script.Num());
 
 		// Evaluate expr and jump to end of loop if false.
-		//EmitLineNumber();
-		//!! Yoda Debugger
 		EmitDebugInfo(DI_While);		
 		Writer << EX_JumpIfNot; 
 		EmitAddressToFixupLater(TopNest,FIXUP_LoopEnd,NAME_None);
@@ -6139,7 +6029,6 @@ void FScriptCompiler::CompileCommand( FToken& Token, UBOOL& NeedSemicolon )
 		CheckAllow( TEXT("'Goto'"), ALLOW_Label );
 		if( TopNest->Allow & ALLOW_StateCmd )
 		{
-//			EmitDebugInfo(DI_PrevStack);
 			// Emit virtual state goto.
 			Writer << EX_GotoLabel;
 			CompileExpr( FPropertyBase(CPT_Name), TEXT("'Goto'") );
@@ -6518,9 +6407,6 @@ void FScriptCompiler::CompileSecondPass( UStruct* Node )
 								appThrowf( TEXT("Function '%s' already has a replication definition"), *VarName );
 							if( (Function->FunctionFlags&FUNC_Native) && (Function->FunctionFlags&FUNC_Final) )
 								appThrowf( TEXT("Native final functions may not be replicated") );
-							/* reasonable? for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(*Function); It; ++It )
-								if( (It->PropertyFlags & CPF_ReturnParm) && (q++>0) )
-									appThrowf( TEXT("Functions that return a value may not be replicated") ); */
 
 							// Set its properties.
 							Function->FunctionFlags  |= FunctionFlags;
@@ -6974,27 +6860,6 @@ static UBOOL ParseScripts( TArray<UClass*>& AllClasses, FScriptCompiler& Compile
         {
 			if( (*It)->GetSuperClass()==Class)
             {
- /*               // amb,gam --- not robust, but serves our purpose
-                for (INT nameIdx=0; nameIdx<(*It)->DependentOn.Num(); nameIdx++)
-                {
-                    UClass* clsTmp = FindObject<UClass>(ANY_PACKAGE, *(*It)->DependentOn(nameIdx));
-                    if (!clsTmp)
-                    {
-                        appThrowf( TEXT("Unknown class %s"), (*It)->DependentOn(nameIdx));
-                    }
-                    else
-                    {
-						for ( UClass* ParentClass = Class; ParentClass; ParentClass = ParentClass->GetSuperClass() )
-						{
-							if ( ParentClass == clsTmp )
-								appThrowf(TEXT("%s already dependant on %s through inheritance"), (*It)->GetName(), ParentClass->GetName());
-						}
-
-                        if (!ParseScripts( AllClasses, Compiler, clsTmp, MakeAll, Booting, MakeSubclasses))
-							return 0;
-					}
-                }
-*/                // --- amb,gam
                 if (!ParseScripts( AllClasses, Compiler, *It, MakeAll, Booting, MakeSubclasses))
 				    return 0;
             }

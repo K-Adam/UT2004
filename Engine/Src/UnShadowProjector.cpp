@@ -295,8 +295,6 @@ UBitmapMaterial* UShadowBitmapMaterial::Get(FTime Time,UViewport* Viewport)
 
 		Viewport->Actor->Location = FrustumOrigin;
 		Viewport->Actor->Rotation = (-LightDirection).Rotation();
-		//Viewport->SizeX = USize;
-		//Viewport->SizeY = VSize;
 		Viewport->ScaleX = Viewport->ScaleY = 1.0f;
 		Viewport->bRenderCinematics = 0;
 		Viewport->Actor->ShowFlags &= ~SHOW_Projectors;

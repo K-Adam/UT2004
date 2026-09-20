@@ -650,14 +650,10 @@ FORCEINLINE UBOOL UObject::IsA( class UClass* SomeBase ) const
         SomeBase->IsACount++;
 #endif
 
-//	if (SomeBase==LastIsA)  // skip the trip up the hierarchy if possible.
-//		return 1;
-
 	for( UClass* TempClass=Class; TempClass; TempClass=(UClass*)TempClass->SuperField )
 	{
 		if( TempClass==SomeBase )
 		{
-//            LastIsA=SomeBase;
 			return 1;
 		}
 	}
@@ -715,7 +711,7 @@ inline UBOOL UStruct::StructCompare( const void* A, const void* B )
 
 // gcc3 thinks &((myclass*)NULL)->member is an invalid use of the offsetof
 //  macro. This is a broken heuristic in the compiler, but the workaround is
-//  to use a non-zero offset.  --ryan.
+//  to use a non-zero offset.
 #ifdef __GNUC__
   #define CPP_PROPERTY(name) \
 	EC_CppProperty, (((BYTE*)(&((ThisClass*)0x1)->name)) - ((BYTE*)0x1))

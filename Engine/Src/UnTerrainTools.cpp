@@ -215,7 +215,7 @@ void UTerrainBrushColor::Execute( UBOOL bAdditive )
 		if( !bRet )
 			return;
 
-	// FIXME : should do some kind of nice blending and stuff here instead of just jamming the color in
+	// Jams the color in, could blend nicely instead.
 	for( INT x = 0 ; x < TI->SelectedVertices.Num() ; x++ )
 	{
 		FSelectedTerrainVertex* Vertex = &TI->SelectedVertices(x);
@@ -763,7 +763,6 @@ FTerrainTools::FTerrainTools()
 
 FTerrainTools::~FTerrainTools()
 {
-	//Brushes.Empty();
 }
 
 void FTerrainTools::Init()
@@ -804,7 +803,6 @@ void FTerrainTools::Init()
 	new( Brushes )UTerrainBrushVertexEdit();
 	new( Brushes )UTerrainBrushSelect();
 	new( Brushes )UTerrainBrushPaint();
-	//new( Brushes )UTerrainBrushColor();	// Doesn't work in UT2003, so don't bother making it available.
 	new( Brushes )UTerrainBrushSmooth();
 	new( Brushes )UTerrainBrushNoise();
 	new( Brushes )UTerrainBrushFlatten();
@@ -932,7 +930,6 @@ void FTerrainTools::AdjustAlignedActors()
 			NewLocation.Z = Hit.Location.Z + AttachedActorOffsets(i).Height;
 			
 			Actor->Location = NewLocation;
-			//Actor->Level->FarMoveActor( Actor, NewLocation );
 			Actor->PostEditChange();
 		}
 	}

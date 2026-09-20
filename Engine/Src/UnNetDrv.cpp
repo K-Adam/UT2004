@@ -20,7 +20,6 @@ UBOOL UPackageMapLevel::CanSerializeObject( UObject* Obj )
 	if( Actor && !Actor->bStatic && !Actor->bNoDelete )
 	{
 		UActorChannel* Ch = Connection->ActorChannels.FindRef(Actor);
-		//old: induces a bit of lag. return Ch && Ch->OpenAcked;
 		return Ch!=NULL; //new: reduces lag, increases bandwidth slightly.
 	}
 	else return 1;

@@ -456,29 +456,6 @@ void FStats::Render(class UViewport* Viewport, class UEngine* Engine)
 		DRAW_STRING( (TIME_PRINTF , TIME_ARGUMENTS ( STATS_Game_ScriptDebugTime	) ));
 
 
-		/* SCRIPTTIME
-		if ( GStats.DWORDStats(GEngineStats.STATS_Game_ActorTickCycles) * GSecondsPerCycle * 1000.0f > 30.f )
-		{
-			debugf(TEXT(" ****************************************************************"));
-			debugf(TEXT(" ActorTick Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_ActorTickCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" Script Cycles %f"), GScriptCycles * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" ScriptTick Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_ScriptTickCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" FindPath Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" SeePlayer Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_SeePlayerCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" Spawning Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_SpawningCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" CleanupDestroyed Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_CleanupDestroyedCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" AudioTick Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_AudioTickCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" Canvas Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" Physics Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" Move Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_MoveCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" MLCheck Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_MLCheckCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" MPCheck Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_MPCheckCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" UpdateRenderData Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_UpdateRenderData) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" ParticleTick Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_ParticleTickCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" NetTick Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_NetTickCycles) * GSecondsPerCycle * 1000.0f);
-			debugf(TEXT(" HUD PostRender Cycles %f"), GStats.DWORDStats(GEngineStats.STATS_Game_HUDPostRender) * GSecondsPerCycle * 1000.0f);
-		}
-		*/
 	}
 
 	// Render hardware stats.

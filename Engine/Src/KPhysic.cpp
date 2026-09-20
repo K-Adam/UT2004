@@ -263,24 +263,11 @@ void AActor::KAddImpulse(FVector Impulse, FVector Position, FName BoneName)
 				inst->KSkelModels(inst->KLastTraceHit) != 0)
 			{
 				body = McdModelGetBody(inst->KSkelModels(inst->KLastTraceHit));
-				//debugf(TEXT("Hit Bone: %s Impulse: <%f %f %f>"), 
-				//	*((USkeletalMesh*)inst->GetMesh())->RefSkeleton(inst->KLastTraceHit).Name,
-				//	Impulse[0], Impulse[1], Impulse[2]);
 			}
 		}
-#if 0
-		else // If all else fails, kick the root (if present)
-		{
-			McdModelID model = inst->KSkelModels(0);
-			if(model)
-				body = McdModelGetBody(model);
-		}
-#endif
 
 		inst->KLastTraceHit = -1;
 		isSkel = 1;
-
-		//debugf(TEXT("Impulse: %f %f %f"), Impulse.X, Impulse.Y, Impulse.Z);
 	}
 
 	// Scale both to ME sizes - for both mass AND velocity!
@@ -299,26 +286,6 @@ void AActor::KAddImpulse(FVector Impulse, FVector Position, FName BoneName)
 			MdtBodyEnable(body);
 		}
 
-#if 0
-		// walk the heirarchy - applying impulses to other bones.
-		MeVector3Scale(kimpulse, (MeReal)0.1);
-		//kimpulse[2] += MeSqrt(kimpulse[0] * kimpulse[0] + kimpulse[1] * kimpulse[1]);
-
-		for(INT i=0; i<inst->KSkelModels.Num(); i++)
-		{
-			McdModelID boneModel = inst->KSkelModels(i);
-			if(!boneModel)
-				continue;
-
-			MdtBodyID boneBody = McdModelGetBody(boneModel);
-			if(!boneBody || boneBody == body)
-				continue;
-
-			MdtBodyAddImpulse(boneBody, kimpulse[0], kimpulse[1], kimpulse[2]);
-
-			MdtBodyEnable(boneBody);
-		}
-#endif
 	}
 	else
 	{
@@ -385,8 +352,6 @@ void UKarmaParams::PostEditChange()
 	if(!body)
 		return;
 
-	//AActor* actor = KBodyGetActor(body);
-
 
 	// If we have a 'full' Karma Params including inertia tensor/com-offset, use that.
 	UKarmaParamsRBFull* fullParams = Cast<UKarmaParamsRBFull>(this);
@@ -416,8 +381,7 @@ void UKarmaParams::PostEditChange()
 	}
 	else
 	{
-		//	JTODO: Mass properties came from static mesh, so we need to get hold of them again 
-		//	to rescale them in case scale or mass has changed. But how!?
+		// Mass properties came from the static mesh, so they are not rescaled when scale or mass changes.
 	}
 	
 	KBodySetMass(body, this->KMass);
@@ -772,9 +736,7 @@ void AActor::postKarmaStep()
 
 	// Actually move the actor. 
 	// This could actually destroy the actor due to Touch etc. - so we check afterwards.
-	//clock(GStats.DWORDStats(GEngineStats.STATS_Karma_Temp));
 	level->MoveActor(this, moveBy, rot, Hit);
-	//unclock(GStats.DWORDStats(GEngineStats.STATS_Karma_Temp));
 
 	if(this->bDeleteMe || this->getKModel() != model || McdModelGetBody(model) != body)
 		return;
@@ -970,7 +932,6 @@ inline void AActor::physKarma_internal(FLOAT deltaTime)
 	UBOOL doUpdate = eventKUpdateState(newState);
 	if(doUpdate)
 	{
-#if 1
 		// Check the quaternion...
 		MeVector4 quat = {newState.Quaternion.W, newState.Quaternion.X, newState.Quaternion.Y, newState.Quaternion.Z};
 		MeReal k = MeVector4MagnitudeSqr(quat);
@@ -985,7 +946,6 @@ inline void AActor::physKarma_internal(FLOAT deltaTime)
 			debugf(NAME_DevKarma, TEXT("Quaternion (%f %f %f %f) with non-unit magnitude detected. (%s)"), quat[0], quat[1], quat[2], quat[3], this->GetName() );
 			return;
 		}
-#endif
 
 		MdtBodyEnable(body); // If getting new state from the server - make sure we are awake...
 
@@ -1132,16 +1092,6 @@ inline void AActor::physKarma_internal(FLOAT deltaTime)
 				newState.AngVel.Y + fixAngVel[1], 
 				newState.AngVel.Z + fixAngVel[2]);
 		}
-		
-		//MeMatrix4Ptr NewBodyTM = MdtBodyGetTransformPtr(body);
-		//if( !MeMatrix4IsTM( NewBodyTM, ME_MEDIUM_EPSILON) )
-		//{
-		//	debugf( TEXT("Bad TM: %s"), this->GetName() );
-		//	debugf( TEXT("M0 %f %f %f %f"), NewBodyTM[0][0], NewBodyTM[0][1], NewBodyTM[0][2], NewBodyTM[0][3] );
-		//	debugf( TEXT("M1 %f %f %f %f"), NewBodyTM[1][0], NewBodyTM[1][1], NewBodyTM[1][2], NewBodyTM[1][3] );
-		//	debugf( TEXT("M2 %f %f %f %f"), NewBodyTM[2][0], NewBodyTM[2][1], NewBodyTM[2][2], NewBodyTM[2][3] );
-		//	debugf( TEXT("M3 %f %f %f %f"), NewBodyTM[3][0], NewBodyTM[3][1], NewBodyTM[3][2], NewBodyTM[3][3] );
-		//}
 	}
 
 	// If this body is not enabled - we dont need to do anything more.

@@ -103,7 +103,6 @@ void AEmitter::Spawned()
 void AEmitter::PostScriptDestroyed()
 {
 	guard(AEMitter::Destroy);
-#if 1
 	if( DeleteParticleEmitters )
 	{
 		for (INT i=0; i<Emitters.Num(); i++)
@@ -114,7 +113,6 @@ void AEmitter::PostScriptDestroyed()
 		delete ParticleMaterial;
 		ParticleMaterial = NULL;
 	}
-#endif
 	Super::PostScriptDestroyed();
 	unguard;
 }

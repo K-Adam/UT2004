@@ -14,7 +14,7 @@
 
 //
 // FMemoryReader and FMemoryWriter are needed for texture duplication code
-// !!vogel: GUglyHackFlags & 8
+// Texture duplication runs with GUglyHackFlags & 8 set.
 //
 class FMemoryReader : public FArchive
 {
@@ -55,7 +55,6 @@ public:
 private:
 	void Serialize( void* Data, INT Num )
 	{
-		//INT Index = Bytes.Add(Num);
 		Bytes.Add(Num);
 		appMemcpy( &Bytes(Offset), Data, Num );
 		Offset+=Num;
@@ -539,15 +538,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 			Parse( Str, TEXT("Package="), PkgName );
 			if( PkgName!=NAME_None && Parse( Str, TEXT("File="), TempFname, ARRAY_COUNT(TempFname) ) )
 			{
-#if 0
-				// sjs ---
-				if ( appStricmp(&TempFname[appStrlen(TempFname)-3],TEXT("tga"))==0
-                    || appStricmp(&TempFname[appStrlen(TempFname)-3],TEXT("bmp"))==0)
-                {
-                    DDSConversion( TempFname, Str, Ar );
-                }
-                // --- sjs
-#endif
 				UPackage* Pkg = CreatePackage(NULL,*PkgName);
 				Pkg->bDirty = 1;
 				if( !Parse( Str, TEXT("Name="),  TempName,  NAME_SIZE ) )
@@ -660,7 +650,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 							CompressionOptions.FadeAmount	= 100;
 						}
 						
-						//GWarn->Logf(TEXT("%s"), Texture->GetPathName());
 						Texture->Compress( DXTFormat == 1 ? TEXF_DXT1 : DXTFormat == 3 ? TEXF_DXT3 : TEXF_DXT5, DoMips || bModulated, &CompressionOptions );
 					}
 
@@ -816,12 +805,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 			&&	Num<((ULodMesh*)Mesh)->Materials.Num() )
 			{
 				((ULodMesh*)Mesh)->Materials( Num ) = Material;
-				/*
-				FLOAT TextureLod=1.0f;
-				Parse( Str, TEXT("TLOD="), TextureLod );
-				if( Num < Mesh->TextureLOD.Num() )
-					Mesh->TextureLOD( Num ) *= TextureLod;
-				*/
 				debugf( TEXT("Added texture number: %i total %i for mesh %s"), Num, ((ULodMesh*)Mesh)->Materials.Num(), Mesh->GetName() );
 			}
 			else Ar.Logf( NAME_ExecWarning, TEXT("Missing meshmap, texture, or num (%s)"), Str );
@@ -857,7 +840,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 			UMeshAnimation *Anim;
 			MotionChunkDigestInfo MoveInfo;
 
-			//FMeshAnimSeq Seq;
 			INT NumFrames;
 			INT StartFrame;
 			FLOAT AnimRate;
@@ -919,7 +901,7 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 
 				Parse( Str, TEXT("MAXKEYS="), Anim->DigestHelper->MovesInfo(i).KeyQuotum );
 									
-				Anim->DigestHelper->MovesInfo(i).FirstRawFrame = StartFrame; //Anim->AnimSeqs(i).StartFrame;
+				Anim->DigestHelper->MovesInfo(i).FirstRawFrame = StartFrame;
 				Anim->DigestHelper->MovesInfo(i).NumRawFrames = NumFrames;  
 				Anim->DigestHelper->MovesInfo(i).AnimRate = AnimRate;    // 
 				Anim->DigestHelper->MovesInfo(i).TrackTime = TrackTime; // total time - override by PlayRate  ?
@@ -1059,27 +1041,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 	}	
 	else if( ParseCommand(&Str,TEXT("MESH")) )
 	{
-#if 0 /* Pre LOD */
-		if( ParseCommand(&Str,TEXT("IMPORT")) )
-		{
-			// Mesh importing.
-			TCHAR TempStr1[MAX_EDCMD];
-			if
-			(	Parse( Str, TEXT("MESH="), TempName, ARRAY_COUNT(TempName) )
-			&&	Parse( Str, TEXT("ANIVFILE="), TempStr, ARRAY_COUNT(TempStr) )
-			&&	Parse( Str, TEXT("DATAFILE="), TempStr1, ARRAY_COUNT(TempStr1) ) )
-			{
-				UBOOL Unmirror=0, ZeroTex=0; INT UnMirrorTex;
-				ParseUBOOL( Str, TEXT("UNMIRROR="), Unmirror );
-				ParseUBOOL( Str, TEXT("ZEROTEX="), ZeroTex );
-				if( !Parse( Str, TEXT("UNMIRRORTEX="), UnMirrorTex ) )
-					UnMirrorTex = -1;
-				meshVertImport( TempName, ParentContext, TempStr, TempStr1, Unmirror, ZeroTex, UnMirrorTex );
-			}
-			else Ar.Log(NAME_ExecWarning,TEXT("Bad MESH IMPORT"));
-			return 1;
-		}
-#else		
 		if( ParseCommand( &Str, TEXT("SCALE") ) )
 		{
 			// Mesh scaling.
@@ -1108,12 +1069,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 			&&	Num<((ULodMesh*)Mesh)->Materials.Num() )
 			{
 				((ULodMesh*)Mesh)->Materials( Num ) = Material;
-				/*
-				FLOAT TextureLod=1.0f;
-				Parse( Str, TEXT("TLOD="), TextureLod );
-				if( Num < Mesh->TextureLOD.Num() )
-					Mesh->TextureLOD( Num ) *= TextureLod;
-				*/
 				debugf( TEXT("Added texture number: %i total %i for mesh %s"), Num, ((ULodMesh*)Mesh)->Materials.Num(), Mesh->GetName() );
 			}
 			else Ar.Logf( NAME_ExecWarning, TEXT("Missing meshmap, texture, or num (%s)"), Str );
@@ -1278,7 +1233,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 				TagRotation = FRotator(0.f,0.f,0.f);
 				GetFROTATOR( Str, TagRotation, 256 );
 				FCoords TagCoords = GMath.UnitCoords / TagOrigin / TagRotation;
-                //TagCoords = TagCoords.Transpose();
 
 				if( !Mesh->SetAttachAlias( TagName, BoneName, TagCoords ) )
 					Ar.Log( NAME_ExecWarning, TEXT("MESH ATTACHNAME bone not found in mesh.") );
@@ -1342,7 +1296,6 @@ UBOOL UEditorEngine::SafeExec( const TCHAR* InStr, FOutputDevice& Ar )
 			else Ar.Log( NAME_ExecWarning, TEXT("Bad MESH LODPARAMS") );
 			return 1;
 		}
-#endif
 		else if( ParseCommand(&Str,TEXT("ORIGIN")) )
 		{
 			// Mesh origin. 
@@ -2124,7 +2077,6 @@ UBOOL UEditorEngine::Exec_Brush( const TCHAR* Str, FOutputDevice& Ar )
 		Level->Model->ClearRenderData(GRenDev);
 		Trans->End();
 		RedrawLevel(Level);
-		//EdCallback(EDC_MapChange,0,0);
 		return 1;
 	}
 	else if (ParseCommand(&Str,TEXT("ADDMOVER"))) // BRUSH ADDMOVER
@@ -2267,7 +2219,6 @@ UBOOL UEditorEngine::Exec_Brush( const TCHAR* Str, FOutputDevice& Ar )
 		Trans->End();
 
 		RedrawLevel(Level);
-		//EdCallback(EDC_MapChange,0,0);
 	}
 	else if (ParseCommand(&Str,TEXT("SUBTRACT"))) // BRUSH SUBTRACT
 		{
@@ -2280,7 +2231,6 @@ UBOOL UEditorEngine::Exec_Brush( const TCHAR* Str, FOutputDevice& Ar )
 		Level->Model->ClearRenderData(GRenDev);
 		Trans->End();
 		RedrawLevel(Level);
-		//EdCallback(EDC_MapChange,0,0);
 		return 1;
 		}
 	else if (ParseCommand(&Str,TEXT("FROM"))) // BRUSH FROM INTERSECTION/DEINTERSECTION
@@ -2721,7 +2671,6 @@ UBOOL UEditorEngine::Exec_Map( const TCHAR* Str, FOutputDevice& Ar )
 			LoadPackage( Level->GetOuter(), TempFname, 0 );
 			Level->Engine = this;
 			Level->ReconcileActors();
-			//GTerrainTools.Init();
 			ResetSound();
 			bspValidateBrush( Level->Brush()->Brush, 0, 1 );
 			GWarn->EndSlowTask();
@@ -3145,7 +3094,6 @@ UBOOL UEditorEngine::Exec_Map( const TCHAR* Str, FOutputDevice& Ar )
 		}
 
 		levelStats.PrintTextureSummary( Ar ); 
-		//levelStats.PrintGeomSummary( Ar );
 
 		Ar.Logf( NAME_Log,
 		TEXT("============================================================") );
@@ -3846,8 +3794,6 @@ UBOOL UEditorEngine::Exec_Texture( const TCHAR* Str, FOutputDevice& Ar )
 			//!!MAT
 			// what did this used to do?
 
-			//UTexture* Texture = List[i];
-			//Texture->Scale *= DeltaScale;
 		}
 		Mark.Pop();
 		return 1;
@@ -3938,110 +3884,6 @@ UBOOL UEditorEngine::Exec_Texture( const TCHAR* Str, FOutputDevice& Ar )
 		}
 		return 1;
 	}
-	// Batch Detail Texture Editing added by Legend on 4/12/2000
-	//
-	// Editor Command: TEXTURE CLEARDETAIL
-	//
-	//		Clear the "current detail texture"
-	//
-	// Editor Command: TEXTURE SETDETAIL
-	//
-	//		Set the "current detail texture" to the current the texture browser selection
-	//
-	// Editor Command: TEXTURE APPLYDETAIL [OVERRIDE]
-	//
-	//		Apply the "current detail texture" to the texture selected in the texture browser
-	//
-	// Editor Command: TEXTURE REPLACEDETAIL
-	//
-	//		Search through all texture packages for occurrences of detail textures that
-	//		match the texture currently selected in the texture browser.  If a match
-	//		is found, replace the texture's detail texture with the "current detail texture."
-	//
-	// Editor Command: TEXTURE BATCHAPPLY DETAIL=[DetailTextureName | None]
-	//                 [PREFIX=TextureNameMatchingPrefix] [OVERRIDE=[TRUE | FALSE]]
-	//
-	//		Search through all texture packages optionally searching for matches
-	//		against the "TextureNameMatchingPrefix" for all textures found, apply
-	//		DetailTextureName as the new detail texture.  If a detail texture already
-	//		exists and OVERRIDE=FALSE, then skip the texture.
-	//
-	//!!MAT
-	/*
-	else if( ParseCommand(&Str,TEXT("CLEARDETAIL")) )
-	{
-		CurrentDetailTexture = 0;
-		debugf( NAME_Log, TEXT("Detail texture cleared") );
-		return 1;
-	}
-	else if( ParseCommand(&Str,TEXT("SETDETAIL")) )
-	{
-		CurrentDetailTexture = CurrentMaterial;
-		debugf( NAME_Log, TEXT("Detail texture set to %s"), CurrentMaterial ? CurrentMaterial->GetFullName() : TEXT("None") );
-		return 1;
-	}
-	else if( ParseCommand(&Str,TEXT("APPLYDETAIL")) )
-	{
-		if( CurrentMaterial != 0 )
-		{
-			if( CurrentMaterial->DetailTexture == 0 || ParseCommand(&Str,TEXT("OVERRIDE")) )
-			{
-				CurrentMaterial->DetailTexture = CurrentDetailTexture;
-				debugf( NAME_Log, TEXT("Detail texture %s applied to %s"), CurrentMaterial->DetailTexture->GetFullName(), CurrentMaterial->GetFullName() );
-			}
-			else
-			{
-				debugf( NAME_Log, TEXT("Detail texture for %s ALREADY set to %s"), CurrentMaterial->GetFullName(), CurrentMaterial->DetailTexture->GetFullName() );
-			}
-		}
-		else
-		{
-			debugf( NAME_Log, TEXT("No texture selected") );
-		}
-		return 1;
-	}
-	else if( ParseCommand(&Str,TEXT("REPLACEDETAIL")) )
-	{
-		for( TObjectIterator<UTexture> It; It; ++It )
-		{
-			if( It->DetailTexture == CurrentMaterial )
-			{
-				It->DetailTexture = CurrentDetailTexture;
-				debugf( NAME_Log, TEXT("Detail texture %s replaced with %s on %s"), CurrentMaterial->DetailTexture->GetFullName(), CurrentDetailTexture->GetFullName(), It->GetFullName() );
-			}
-		}
-	}
-	else if( ParseCommand(&Str,TEXT("BATCHAPPLY")) )
-	{
-		UTexture* DetailTexture = 0;
-		ParseObject<UTexture>(Str,TEXT("DETAIL="),DetailTexture,ANY_PACKAGE);
-		debugf( NAME_Log, TEXT("Detail=%s"), DetailTexture ? DetailTexture->GetFullName() : TEXT("<None>") );
-
-		FString TexturePrefix;
-		UBOOL bNoPrefix = !Parse( Str, TEXT("PREFIX="), TexturePrefix );
-		debugf( NAME_Log, TEXT("Prefix=%s"), bNoPrefix ? TEXT("<None>") : TexturePrefix );
-
-		UBOOL bOverride = 0;
-		Parse( Str,TEXT("OVERRIDE="), bOverride );
-		debugf( NAME_Log, TEXT("bOverride=%d"), bOverride );
-
-		for( TObjectIterator<UTexture> It; It; ++It )
-		{
-			if( bNoPrefix || appStrstr( It->GetName(), *TexturePrefix ) == It->GetName() )
-			{
-				if( bOverride || It->DetailTexture == 0 )
-				{
-					It->DetailTexture = DetailTexture;
-					debugf( NAME_Log, TEXT("Detail texture %s applied to %s"), It->DetailTexture->GetFullName(), It->GetFullName() );
-				}
-				else
-				{
-					debugf( NAME_Log, TEXT( "Detail texture for %s ALREADY set to %s"), It->GetFullName(), It->DetailTexture->GetFullName() );
-				}
-			}
-		}
-		return 1;
-	}*/
 	else if( ParseCommand(&Str,TEXT("NEW")) )
 	{
 		FName GroupName=NAME_None;
@@ -4843,7 +4685,6 @@ UBOOL UEditorEngine::Exec_Terrain( const TCHAR* Str, FOutputDevice& Ar )
 		GTerrainTools.SetCurrentBrush( TerrainEditBrush );
 
 		RedrawLevel( Level );
-		//EdCallback( EDC_RedrawAllViewports, 0, 0 );
 	}
     // amb ---
 	else if( ParseCommand(&Str,TEXT("ADDCONST") ) )	// TERRAIN ADDCONST=<_WORD>
@@ -5134,11 +4975,11 @@ UBOOL UEditorEngine::Exec_Anim( const TCHAR* Str, FOutputDevice& Ar )
 				Trans->Begin( TEXT("Anim Import") );
 
 				// #SKEL -> change to use command line's package and group, just like textures.
-				FName PkgName; // = ParentContext ? ParentContext->GetFName() : NAME_None;
+				FName PkgName;
 				PkgName = FName(TEXT("TempAnimPackage"));
 				Parse( Str, TEXT("PACKAGE="), PkgName );
 				UPackage* Pkg = CreatePackage(NULL,*PkgName);		
-				FName GroupName = TEXT("Default"); // NAME_None; 				
+				FName GroupName = TEXT("Default");
 
 				INT DoWeldVerts = 0;
 				Parse( Str,TEXT("WELDING="), DoWeldVerts);
@@ -5180,7 +5021,6 @@ UBOOL UEditorEngine::Exec_Anim( const TCHAR* Str, FOutputDevice& Ar )
 					
 					appStrcpy(TempMeshName,*NewMeshName);
 					
-					// meshSkelImport( TempMeshName, ParentContext, TempFname, Unmirror, ZeroTex, LinkMaterials, &LODInfo );
 					meshSkelImport( TempMeshName, Pkg, TempFname, Unmirror, ZeroTex, 1, &LODInfo );
 				}
 				
@@ -5218,11 +5058,11 @@ UBOOL UEditorEngine::Exec_Anim( const TCHAR* Str, FOutputDevice& Ar )
 				debugf(TEXT("Generating ANIMATION object: cmd: [%s]"),Str);
 
 				// #SKEL -> change to use command line's package and group, just like textures.
-				FName PkgName; // = ParentContext ? ParentContext->GetFName() : NAME_None;
+				FName PkgName;
 				PkgName = FName(TEXT("TempAnimPackage"));
 				Parse( Str, TEXT("Package="), PkgName );
 				UPackage* Pkg = CreatePackage(NULL,*PkgName);		
-				FName GroupName = TEXT("Default"); // NAME_None; 
+				FName GroupName = TEXT("Default");
 
 				UMeshAnimation* NewAnim = NULL;
 
@@ -5362,7 +5202,6 @@ UBOOL UEditorEngine::Exec_Fluid( const TCHAR* Str, FOutputDevice& Ar )
 //
 UBOOL UEditorEngine::Exec( const TCHAR* Stream, FOutputDevice& Ar )
 {
-	//debugf("GEditor Exec: %s",Stream);
 	TCHAR CommandTemp[MAX_EDCMD];
 	TCHAR ErrorTemp[256]=TEXT("Setup: ");
 	guard(UEditorEngine::Exec);
@@ -5448,7 +5287,6 @@ UBOOL UEditorEngine::Exec( const TCHAR* Stream, FOutputDevice& Ar )
 		if( Exec_Light( Str, Ar ) )
 			return 1;
 	}
-#if 1 // toggle showing inventory spots
 	//------------------------------------------------------------------------------------
 	// DEBUGGING
 	//
@@ -5465,7 +5303,6 @@ UBOOL UEditorEngine::Exec( const TCHAR* Stream, FOutputDevice& Ar )
 
 		RedrawLevel( Level );
 	}
-#endif
 	//------------------------------------------------------------------------------------
 	// MAP
 	//
@@ -5698,12 +5535,6 @@ UBOOL UEditorEngine::Exec( const TCHAR* Stream, FOutputDevice& Ar )
 		TArray<FVector> Sizes;
 		for( INT i=0; i<Level->Model->LightMaps.Num(); i++ )
 			new(Sizes)FVector(Level->Model->LightMaps(i).SizeX,Level->Model->LightMaps(i).SizeY,0);
-		/*for( i=0; i<Sizes.Num(); i++ )
-			for( INT j=0; j<i; j++ )
-				if
-				(	(Sizes(j).X>Sizes(i).X)
-				||	(Sizes(j).X==Sizes(i).X && Sizes(j).Y>Sizes(i).Y) )
-					Exchange( Sizes(i), Sizes(j) );*/
 		debugf( TEXT("LightMap Sizes: ") );
 		INT DX[17], DY[17], Size=0, Under32=0, Under64=0;
 		for( INT i=0; i<9; i++ )

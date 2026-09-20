@@ -126,8 +126,6 @@ UViewport::UViewport() : RenderTarget(this)
 	{
 		Console					= InteractionMaster->Console;
 
-		// Create the Player Menu if one is defaulted (which can happilly overwrite the console :)
-		// gam --- InteractionMaster->eventAddInteraction(TEXT("ini:Engine.Engine.DefaultPlayerMenu"),this);
 	}
 
 	unguard;
@@ -396,7 +394,6 @@ UBOOL UViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	}
 	else if( ParseCommand(&Cmd,TEXT("SHOT")) )
 	{
-#if 1 
 		FMemMark Mark(GMem);
 		FColor* Buf = new(GMem,SizeX*SizeY)FColor;
 		RenDev->ReadPixels( this, Buf );
@@ -439,9 +436,6 @@ UBOOL UViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		GConfig->SetInt(TEXT("Screenshots"),TEXT("ShotCount"),ShotCount,TEXT("User.ini"));
 
 		Mark.Pop();
-#else
-        QueueScreenShot = 1;
-#endif
         return 1;
 	}
 	else if( ParseCommand(&Cmd,TEXT("SHOWACTORS")) )
@@ -729,10 +723,6 @@ void UViewport::Serialize( const TCHAR* Data, EName MsgType )
     GLog->Serialize( Data, MsgType );
     // --- gam
 
-	// Pass to console.
-//	if( Console )
-		//Console->Serialize( Data, MsgType );
-
 	unguard;
 }
 
@@ -811,7 +801,6 @@ void UViewport::ExecuteHits( const FHitCause& Cause, BYTE* HitData, INT HitSize,
 		if( !HitOverrideClass || ThisHit->IsA(HitOverrideClass) )
 			BestHit = ThisHit;
 	}
-	//!! FIXME for Direct3D editor.
 	if( HitSize != 0 )
 		return;
 

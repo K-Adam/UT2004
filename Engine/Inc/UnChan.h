@@ -202,7 +202,7 @@ struct FVoiceInfo
 	BYTE		VoiceIndex;
 
 	// You need to serialize VoiceSound and PacketData manually; this is
-	//  just to send the pertinent bits over the wire.  --ryan.
+	//  just to send the pertinent bits over the wire.
 	friend FArchive &operator<<( FArchive& Ar, FVoiceInfo& V );
 };
 

@@ -472,7 +472,6 @@ void UDemoRecDriver::TickDispatch( FLOAT DeltaTime )
 
 						// Exit.
 						GIsRequestingExit = 1;
-						//appRequestExit(0);
 					}
 				}
 				else

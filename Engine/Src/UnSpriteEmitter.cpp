@@ -190,7 +190,6 @@ INT USpriteEmitter::FillVertexBuffer( FSpriteParticleVertex* Vertices, FLevelSce
 			if ( (UseDirectionAs == PTDU_UpAndNormal) || (UseDirectionAs == PTDU_RightAndNormal) )
 			{
 				ProjTemp = Direction ^ RealProjectionNormal;
-				//ProjTemp.Normalize();
 			}
 			else
 			{
@@ -202,7 +201,7 @@ INT USpriteEmitter::FillVertexBuffer( FSpriteParticleVertex* Vertices, FLevelSce
 		switch ( UseDirectionAs )
 		{
 		case PTDU_None:
-			Up	  = ProjUp    * Particle->Size.X; //!!(Particle->Size.Y ? Particle->Size.Y : Particle->Size.X);
+			Up	  = ProjUp    * Particle->Size.X;
 			Right = ProjRight * Particle->Size.X;
 			break;
 		case PTDU_Scale:
@@ -240,8 +239,6 @@ INT USpriteEmitter::FillVertexBuffer( FSpriteParticleVertex* Vertices, FLevelSce
 			else
 				Angle = appTrunc(Particle->StartSpin.X + Time * Particle->SpinsPerSecond.X) & 0xFFFF;
 
-//			RotationAxis = Up ^ Right;
-//			RotationAxis.Normalize();
 			Up    =    Up.RotateAngleAxis(Angle, RotationAxis);
 			Right = Right.RotateAngleAxis(Angle, RotationAxis);
 		}
@@ -298,7 +295,7 @@ INT USpriteEmitter::FillVertexBuffer( FSpriteParticleVertex* Vertices, FLevelSce
 				if ( BlendBetweenSubdivisions )
 				{
 					FLOAT Alpha;
-					//TODO: move range check to PostEditChange?
+					// The range check could move to PostEditChange.
 					if ( UseSubdivisionScale && (SubdivisionScale.Num() > SubDivs) )
 					{
 						FLOAT Offset;
@@ -340,7 +337,7 @@ INT USpriteEmitter::FillVertexBuffer( FSpriteParticleVertex* Vertices, FLevelSce
 
 		FVector ParticleLocation = Particle->Location;
 		
-		// TODO: add option to flip up
+		// Could add an option to flip up.
 		Vertex->Position	= ParticleLocation + Up - Right;
 		Vertex->Color		= Color;
 		Vertex->U			= UMin;

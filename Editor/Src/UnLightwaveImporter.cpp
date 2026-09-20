@@ -9,8 +9,6 @@
 #include "EditorPrivate.h"
 
 #define UV2SUPPORT
-//#define XFADESUPPORT
-//#define DECOSUPPORT
 #define MSASUPPORT
 
 UBOOL GImportedBrush = false;
@@ -1018,7 +1016,6 @@ UStaticMesh *GenerateStaticMesh
 		}
 		if( j == MeshMaterials.Num() )
 		{
-            //debugf(TEXT("Added %s mesh material to %s"), meshMat.Material->GetName(), *InName );
 			MeshMaterials.AddItem( meshMat );
             MeshPolyFlags.AddItem( Triangles(i).LegacyPolyFlags );
 		}
@@ -1069,7 +1066,6 @@ UStaticMesh *GenerateStaticMesh
 		}
 
 		LWOMesh->CollisionModel->BuildBound();
-	    //GEditor->bspMergeCoplanars( LWOMesh->CollisionModel, 0, 0 );
 		GEditor->bspBuild(LWOMesh->CollisionModel,BSP_Good,15,70,1,0);
 		GEditor->bspRefresh(LWOMesh->CollisionModel,1);
 		GEditor->bspBuildBounds(LWOMesh->CollisionModel);

@@ -26,7 +26,7 @@
  Work notes:
 
    Mesh built with full floating point coordinates.        
-   TODO:convert ApplyPivot into assembly for efficiency ?
+   ApplyPivot could be converted into assembly for efficiency.
 
 =============================================================================*/ 
 
@@ -305,7 +305,6 @@ IMPLEMENT_CLASS(UMeshAnimation);
 void UAnimation::Serialize( FArchive& Ar )
 {
 	guard(UAnimation::Serialize);
-	//Super::Serialize(Ar);
 	unguardobj;
 }
 IMPLEMENT_CLASS(UAnimation);
@@ -330,7 +329,6 @@ void FSkinVertexStream::GetRawStreamData(void ** Dest, INT FirstVertex )
 {
 	if( bStreamCallback)
 	{
-		//debugf(TEXT("WARNING!!!! Getrawstreamdata called. "));
 		*Dest = NULL;
 	}
 	else
@@ -342,12 +340,10 @@ INT FSkinVertexStream::GetSize()
 	if( bStreamCallback )
 	{
 		INT CurrentVertexBufferSize = ((USkeletalMeshInstance*)MeshInstance)->ActiveVertStreamSize();
-		//debugf(TEXT("Vertex size reporting - %i"),CurrentVertexBufferSize);
 		return sizeof(FAnimMeshVertex) * CurrentVertexBufferSize;	
 	}
 	else
 	{
-		//debugf(TEXT("Vertex size reporting (regular stream) - %i"), Vertices.Num());
 		return sizeof(FAnimMeshVertex) * Vertices.Num(); 
 	}
 }
@@ -505,7 +501,6 @@ void USkeletalMesh::PostLoad()
 	// Only if it wasn't already present, reconstruct the raw mesh...
 	if( this->InternalVersion < 2 )  // Version 2 starts using static LOD's and Raw-data lazyarrays.
 	{		
-		// debugf(TEXT("Converting from older mesh data for skeletal mesh [%s] internal version [%i]"),this->GetName(),this->InternalVersion); 
 		ReconstructRawMesh();
 	}		
 
@@ -527,8 +522,6 @@ void USkeletalMesh::PostLoad()
 	}
 
 #ifdef WITH_LIPSINC	
-
-	// debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Looking up controller for mesh %s"), this->GetName());
 
 	LIPSincController = GLIPSincDB.FindControllerByName( FString(this->GetName()) );
 
@@ -612,7 +605,6 @@ void USkeletalMeshInstance::PlayLIPSincAnim ( FName LIPSincAnimName, FLOAT Volum
 				// Otherwise we could end up with two copies in the list.
 				GLIPSincTalkerList.Add( this );
 
-				//GLIPSincTalkerList.PrintList();
 			}
 
 			LIPSincBlendInfo.Volume = Volume;
@@ -836,7 +828,7 @@ void USkeletalMeshInstance::Destroy()
 
 //
 //  Checks bone hierarchy of one mesh against another.
-//  TODO: expand to cull dummies/ reorder bones.
+//  Could be expanded to cull dummies / reorder bones.
 //
 UBOOL USkeletalMesh::ConformSkeletonTo( USkeletalMesh* SrcMesh, UBOOL Replace )
 {
@@ -874,7 +866,7 @@ UBOOL USkeletalMesh::ConformSkeletonTo( USkeletalMesh* SrcMesh, UBOOL Replace )
 			RefSkeleton.AddItem( SrcMesh->RefSkeleton(b));
 		}
 		debugf( TEXT(" Completely replaced %i bones."), RefSkeleton.Num() );
-		//TODO - Use NewBoneIndices to ensure weights still point to the correct bones.
+		// Weights are not remapped through NewBoneIndices, so they may point to the wrong bones.
 	}
 
     return true;
@@ -954,7 +946,6 @@ void USkeletalMeshInstance::SetScale( FVector NewScale )
 	USkeletalMesh* Mesh = (USkeletalMesh*)GetMesh();
 
 	Mesh->Scale = NewScale;
-	// debugf(TEXT("Setting scale for mesh [%s]  %f %f %f"),Mesh->GetName(),NewScale.X,NewScale.Y,NewScale.Z );
 	// Maximum mesh scaling dimension for LOD gauging. Somewhat arbitrary.
 	Mesh->MeshScaleMax = ( 5.0f * 1.0f / 128.0f ) * Mesh->BoundingSphere.W * Max(Abs(Mesh->Scale.X), Max(Abs(Mesh->Scale.Y), Abs(Mesh->Scale.Z)));
 	unguard;
@@ -1011,8 +1002,6 @@ UBOOL USkeletalMeshInstance::StopAnimating( UBOOL ClearAll )
 	// Freeze status of channel 0 - note: no animend callbacks..
 	for( INT BlendIdx = 0; BlendIdx<Blends.Num(); BlendIdx++)
 	{
-		//Blends(BlendIdx).AnimSequence = NAME_None;
-		//Blends(BlendIdx).AnimFrame = 0.0f;
 		Blends(BlendIdx).AnimRate = 0.0f;				
 		Blends(BlendIdx).TweenRate = 0.0f;
 	}	
@@ -1026,7 +1015,6 @@ UBOOL USkeletalMeshInstance::StopAnimating( UBOOL ClearAll )
 
 		// Don't erase scalers - not necessary for Ragdoll, and they
 		// are needed for rendering while in ragdoll mode.
-	 	// Scalers.Empty();
 
 		// Clear activity all nonzero channels too.
 		for( INT BlendIdx = 1; BlendIdx<Blends.Num(); BlendIdx++)
@@ -1062,7 +1050,6 @@ UBOOL USkeletalMeshInstance::FreezeAnimAt( FLOAT Time, INT Channel )
 		Blends(Channel).AnimFrame = Time;
 		Blends(Channel).AnimRate  = 0.0f;				
 		Blends(Channel).TweenRate = 0.0f;
-		//Blends(Channel).bAnimLoop = false;
 		return 1;
 	}
 	return 0;
@@ -1325,13 +1312,10 @@ INT LinkAnimBonesToMesh( USkeletalMesh* Mesh,const UMeshAnimation* MeshAnim, TAr
 			{
 				CachedLinks(p) = b;
 				LinksFound++;				
-				 //debugf(TEXT(" Linked up %s with %s  index %i "),*MeshAnim->RefBones(b).Name,*(Mesh->RefSkeleton(p).Name), MeshAnim->RefBones(b).Name.GetIndex() ); 
 				break;
 			}
 		}		
 
-		//if(CachedLinks(p) == -1)
-		//	debugf(TEXT(" Unmatched link %s index %i "),*(Mesh->RefSkeleton(p).Name),p);
 	}
 	if( LinksFound == 0)
 	{
@@ -1368,8 +1352,6 @@ INT LinkMeshBonesToMesh( USkeletalMesh& Mesh,const USkeletalMesh& OwnerMesh, Mes
 				break;
 			}
 		}		        
-		//if( AnimLinkup->CachedLinks(p) == -1 )
-		//	debugf(TEXT(" Unmatched link %s index %i "),*(Mesh.RefSkeleton(p).Name),p);
 	}
 
 	if( LinksFound == 0)
@@ -1399,7 +1381,6 @@ INT FindLinkedAnimIndex(TArray<MeshAnimLinkup>& AnimLinkups,UMeshAnimation* OurA
 //
 UBOOL USkeletalMeshInstance::PlayAnim(INT channel,FName SequenceName, FLOAT InRate, FLOAT InTweenTime, UBOOL InLooping) 
 {
-	//debugf(TEXT("PlayAnim: Gticks %i Sequence[%s] Channel %i InTweenTime %f  InRate %f "),(INT)GTicks, *SequenceName, channel, InTweenTime, InRate); 
 
 	guard( USkeletalMeshInstance::PlayAnim );
 	if ( (channel < 0) || !ValidateAnimChannel( channel ) )
@@ -1504,9 +1485,6 @@ UBOOL USkeletalMeshInstance::PlayAnim(INT channel,FName SequenceName, FLOAT InRa
 			Blend->OldAnimRate   = Blend->AnimRate;		
 			return 1;
 		}
-
-		//if( Blend->AnimSequence == NAME_None )
-		//	InTweenTime = 0.0f;
 
 		Blend->AnimSequence  = SequenceName;
 		Blend->OrigRate      = SeqRate / SeqFrameCount;
@@ -1671,7 +1649,6 @@ void USkeletalMeshInstance::ClearSkelAnims()
 	for(INT i=0; i<AnimLinkups.Num(); i++)
 	{
 		AnimLinkups(i).CachedLinks.Empty();
-		//AnimLinkups(i).RefBoneAdjusts.Empty();
 	}
 	AnimLinkups.Empty();
 	unguardSlow;
@@ -1710,7 +1687,6 @@ UBOOL USkeletalMeshInstance::SetBlendParams(INT Channel, FLOAT BlendAlpha, FLOAT
 	INT StartBone = MatchRefBone( StartBoneName );
 	if( StartBone < 0 ) // Default to the rootbone.
 	{
-		//debugf(TEXT("Warning: blend at unknown bone [%s] - reverting to root bone."),StartBoneName);
 		StartBone = 0;
 	}
 	
@@ -1789,7 +1765,7 @@ HMeshAnim USkeletalMeshInstance::GetAnimIndexed(INT InIndex)
 {
 	guardSlow( USkeletalMeshInstance::GetAnimIndexed );
 
-	//#FIXME - allow indexing beyond SkelAnim(0)!!
+	// Only indexes into SkelAnim(0).
     if( CurrentSkelAnim(0) && (CurrentSkelAnim(0)->AnimSeqs.Num() > InIndex) )
 	{
 		return (HMeshAnim) &(CurrentSkelAnim(0)->AnimSeqs( InIndex));
@@ -1922,7 +1898,6 @@ UMeshAnimation* USkeletalMeshInstance::FindAnimObjectForSequence( FName SeqName 
 	// Go over all linked animations to find one containing SeqName..
 	for(INT a=0; a< AnimLinkups.Num(); a++)
 	{
-		//FMeshAnimSeq* ResultSeq = AnimLinkups(a).Anim->GetAnimSeq( SeqName );
 		FMeshAnimSeq* ResultSeq = NULL;
 
 		if( AnimLinkups(a).Anim )
@@ -1967,7 +1942,6 @@ UBOOL USkeletalMeshInstance::AnimForcePose( FName SeqName, FLOAT AnimFrame, FLOA
 				}
 			}
 
-			//Blends(Channel).SkelAnim  = FoundAnimObject;			
 			Blends(Channel).MeshAnimIndex = FindLinkedAnimIndex ( AnimLinkups, FoundAnimObject );
 			Blends(Channel).AnimFrame = AnimFrame;
 			Blends(Channel).AnimSequence = SeqName; 
@@ -1975,7 +1949,6 @@ UBOOL USkeletalMeshInstance::AnimForcePose( FName SeqName, FLOAT AnimFrame, FLOA
 		}			
 		else
 		{
-			// debugf(TEXT("Animation sequence not found in any of the linked animation objects."));
 			return 0;
 		}
 	}	
@@ -2051,7 +2024,7 @@ UBOOL USkeletalMeshInstance::UpdateAnimation(FLOAT DeltaSeconds)
 						Blend->AnimFrame += Blend->AnimRate * WorkSeconds;
 					else
 						Blend->AnimFrame += ::Max( 0.3f, GetActor()->Velocity.Size() * -Blend->AnimRate ) * WorkSeconds;
-					//FIXME - instead of fixed 0.3, make it an animation attribute?
+					// The fixed 0.3 could be an animation attribute.
 
 					// Handle all animation sequence notifys.
 					if( Blend->bAnimNotify && GetActor()->Mesh && !Blend->bNotifyIgnore ) 
@@ -2119,7 +2092,6 @@ UBOOL USkeletalMeshInstance::UpdateAnimation(FLOAT DeltaSeconds)
 							LastAnimEndStage = channel;
 							if( !Blend->bNotifyIgnore ) 
 							{
-								//debugf(TEXT("End-anim notify 1 (looping animation) for mesh %s  anim %s channel %i"),GetActor()->Mesh->GetName(), *Blend->AnimSequence, channel );
 								GetActor()->NotifyAnimEnd(LastAnimEndStage);														
 							}
 						}
@@ -2133,7 +2105,6 @@ UBOOL USkeletalMeshInstance::UpdateAnimation(FLOAT DeltaSeconds)
 
 						if( !Blend->bNotifyIgnore && (Blend->AnimRate > 0.0f) ) // No notifies for zero animrate either.
 						{
-							//debugf(TEXT("End-anim notify 2 for mesh %s  anim %s channel %i"),GetActor()->Mesh->GetName(), *Blend->AnimSequence, channel );
 							Blend->AnimRate = 0.0f; 
 							GetActor()->NotifyAnimEnd(LastAnimEndStage);												
 						}
@@ -2159,7 +2130,6 @@ UBOOL USkeletalMeshInstance::UpdateAnimation(FLOAT DeltaSeconds)
 							LastAnimEndStage = channel;
 							if( !Blend->bNotifyIgnore ) 
 							{
-								// debugf(TEXT("End-anim notify 3 for mesh %s  anim %s channel %i"),GetActor()->Mesh->GetName(), *Blend->AnimSequence, channel );
 								GetActor()->NotifyAnimEnd(LastAnimEndStage);														
 							}
 						}
@@ -2188,7 +2158,6 @@ UBOOL USkeletalMeshInstance::UpdateAnimation(FLOAT DeltaSeconds)
 	// Check deletion status.
 	if( GetStatus() & MINST_DeleteMe )
 	{
-		//debugf(TEXT("Skeletal mesh instance deleting itself: [%s]"),this->GetName()); 
 		delete this;		
 	}
 	else
@@ -2303,7 +2272,6 @@ FBox USkeletalMeshInstance::GetRenderBoundingBox( const AActor* Owner )
 	guardSlow(USkeletalMeshInstance::GetRenderBoundingBox);	
 
 	// NOTE: Avoid confusion with the Instance's own boundingbox .
-	//return ((USkeletalMesh*)GetMesh())->BoundingBox;
 	return GetMesh()->BoundingBox;
 
 	unguardSlow;
@@ -2354,9 +2322,6 @@ FCoords USkeletalMeshInstance::GetBoneCoords( DWORD BoneIdx )
 
 	if( SpaceBases.Num() && BoneIdx < (DWORD)SpaceBases.Num() )
 	{
-#if 0 // JAG - seems to work
-		return (SpaceBases(BoneIdx) * CachedMeshTrafo);
-#else
 		const FMatrix& MeshToWorldMatrix = MeshToWorld();	
 		const FMatrix& JointMatrix		 = SpaceBases(BoneIdx).Matrix() * MeshToWorldMatrix;
 
@@ -2372,7 +2337,6 @@ FCoords USkeletalMeshInstance::GetBoneCoords( DWORD BoneIdx )
 		const FVector& Origin = MeshToWorldMatrix.TransformFVector( SpaceBases(BoneIdx).Origin );
 
 		return FCoords(Origin, XAxis, YAxis, ZAxis);
-#endif
 	}
 	else
 		return GMath.UnitCoords;
@@ -2396,11 +2360,6 @@ FRotator USkeletalMeshInstance::GetBoneRotation( DWORD BoneIdx, INT Space )
 	 }
 	 if( SpaceBases.Num() && BoneIdx < (DWORD)SpaceBases.Num() )
 	 {
-		// Construct global
-		//FCoords Cached = SpaceBases(BoneIdx).Transpose();
-		//FCoords LocalSpace = Cached * CachedMeshTrafo;
-		//FRotator Orientation = LocalSpace.OrthoRotation();
-		//return Orientation;
 		return (SpaceBases(BoneIdx).Transpose() * CachedMeshTrafo).OrthoRotation();
 	 }
 	 else
@@ -2529,17 +2488,6 @@ FRotator USkeletalMeshInstance::GetRootRotationDelta()
 		}						
 	}
 	
-	// Assume always called in tandem with GetRootLocationDelta()?
-	// #TODO: both rotation and location need to be actor-centric.
-	/*
-	FRotator OutRot = LastRootRotation - RootRotation; //RootRotation = NewRoot.OrthoRotation() - LockedRootTrafo.OrthoRotation();
-	LastRootRotation = RootRotation;
-
-	OutRot.Yaw = 65535 - OutRot.Yaw;
-	OutRot.Pitch = 0; 
-	OutRot.Roll = 0;
-	*/
-
 	FRotator OutRot = FRotator(0,0,0);
 	return OutRot;
 	unguard;
@@ -2798,7 +2746,7 @@ void GetTrackRotPos(const MotionChunk* ThisMove, INT Bone, FLOAT Time, FQuat& Ou
 			// First look whether it's the end key, otherwise start in the middle.
 			INT Estimate = LastKey;
 			
-			if( SmallerEqPositiveFloat( Track.KeyTime(Estimate), Time) )//if( Track.KeyTime(Estimate) <= Time )
+			if( SmallerEqPositiveFloat( Track.KeyTime(Estimate), Time) )
 			{
 				KeyA=Estimate;
 			}
@@ -2828,7 +2776,6 @@ void GetTrackRotPos(const MotionChunk* ThisMove, INT Bone, FLOAT Time, FQuat& Ou
 					if( SmallerPositiveFloat(Time,Track.KeyTime(Estimate) ) ) //( Time < Track.KeyTime(Estimate) )
 					{
 						Estimate -= SearchStep;
-						//debugf(TEXT("Down: SearchStep:%i  Estimate: %i Totalkeys: %i "),SearchStep,Estimate,TotalKeys);
 						if( Estimate < 0)
 						{
 							Estimate = 0;
@@ -2838,7 +2785,6 @@ void GetTrackRotPos(const MotionChunk* ThisMove, INT Bone, FLOAT Time, FQuat& Ou
 					if( SmallerEqPositiveFloat( Track.KeyTime(Estimate+1),Time) )//( Time >= Track.KeyTime(Estimate+1) )
 					{
 						Estimate +=SearchStep;
-						//debugf(TEXT("Up: SearchStep:%i  Estimate: %i Totalkeys: %i "),SearchStep,Estimate,TotalKeys);
 						if( Estimate > LastKey )
 						{
 							Estimate = LastKey;
@@ -2870,7 +2816,6 @@ void GetTrackRotPos(const MotionChunk* ThisMove, INT Bone, FLOAT Time, FQuat& Ou
 		// KeyA wraps ?
 		if( KeyA == -1 )
 		{
-			// if( Time < ThisMove->TrackTime ) //- implied..
 			KeyA = TotalKeys - 1;
 		}		
 	}
@@ -2977,7 +2922,6 @@ void GetTrackRotPos(const MotionChunk* ThisMove, INT Bone, FLOAT Time, FQuat& Ou
 
 void SetupChannelPose( USkeletalMesh& Mesh, FCoords& PivotJoint, INT PivotIndex, TArray<FQuat>& ChannelSkelRot, TArray<FVector>& ChannelSkelPos, const MotionChunk* ThisMove, MeshAnimLinkup* ThisLinkup, FLOAT Time,  USkeletalMeshInstance* MInst )
 {
-	//debugf(TEXT("Evaluating channel-specific pose for mesh: [%s]"),Mesh.GetName() ); 
 
 	INT TotalBones = ThisLinkup->CachedLinks.Num();
 
@@ -3142,7 +3086,6 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 	// Prepare transforms to deform skin vertices directly from reference pose.
 	for( INT s=0; s<MInst->SpaceBases.Num(); s++ ) 
 	{
-		// debugf( TEXT(" Mesh: %s  Bone # %3i [%19s]  Parent # %3i "),Mesh->GetName(),s,*(Mesh->RefSkeleton(s).Name),Mesh->RefSkeleton(s).ParentIndex);
 
 		// Perform the transform recombine that effectively accomplishes: NewCopy = MInst->SpaceBases(s).ApplyPivot(Mesh->RefBases(s).PivotInverse());
 		FCoords& SpaceBaseRef   = MInst->SpaceBases(s);
@@ -3177,8 +3120,6 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 		if(!( InDW & (DWORD)0xF0000000)) // No marker- default transform.
 		{	
 			FCoords& Bone = BONEMATRIX(InDW & 0x0FFF);
-			//StreamPtr[0] = SkinVertPtr->Point.PivotTransform( Bone ); // Does the compiler catch this though ???
-			//StreamPtr[1] = TransformPackedNormal( SkinVertPtr->Normal, Bone );			
 			FVector TempNorm;			
 			TempNorm.X = ((INT)SkinVertPtr->Normal.X - 511);			
 			StreamPtr[0].X  = (SkinVertPtr->Point | Bone.XAxis) + Bone.Origin.X;																		
@@ -3216,10 +3157,6 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 			FLOAT Weight2  = CREATEWEIGHT(InDW2);			
 			FCoords& Bone1 = BONEMATRIX(InDW & 0x0FFF);
 			FCoords& Bone2 = BONEMATRIX(InDW2 & 0x0FFF);
-			//FVector NewVertex = Weight1 * SkinVertPtr->Point.PivotTransform( Bone1 );
-			//FVector NewNormal = Weight1 * TransformPackedNormal( SkinVertPtr->Normal, Bone1 );						
-			//StreamPtr[0] = NewVertex + Weight2 * SkinVertPtr->Point.PivotTransform( Bone2 ); 
-			//StreamPtr[1] = NewNormal + Weight2 * TransformPackedNormal( SkinVertPtr->Normal, Bone2 ); 			 
 
 			FVector TempNorm;
 			TempNorm.X = ((INT)SkinVertPtr->Normal.X - 511);
@@ -3250,8 +3187,6 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 		if(( InDW & (DWORD)0xF0000000) == 0x80000000 ) // default transform.
 		{	
 			FCoords& Bone = BONEMATRIX(InDW & 0x0FFF);
-			//StreamPtr[0] = DupDestination[0] = SkinVertPtr->Point.PivotTransform(Bone); // Does the compiler catch this though ???
-			//StreamPtr[1] = DupDestination[1] = TransformPackedNormal( SkinVertPtr->Normal, Bone); 									
 			FVector TempNorm;						
 			TempNorm.X = ((INT)SkinVertPtr->Normal.X - 511);
 			TempNorm.Y = ((INT)SkinVertPtr->Normal.Y - 511);				
@@ -3278,10 +3213,6 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 			FCoords& Bone2 = BONEMATRIX(InDW2 & 0x0FFF);
 			FLOAT Weight1  = CREATEWEIGHT(InDW);
 			FLOAT Weight2  = CREATEWEIGHT(InDW2);
-			//FVector NewVertex = Weight1 * SkinVertPtr->Point.PivotTransform( Bone1 );
-			//FVector NewNormal = Weight1 * TransformPackedNormal( SkinVertPtr->Normal, Bone1 );
-			//StreamPtr[0] = DupDestination[0] = NewVertex + Weight2 * SkinVertPtr->Point.PivotTransform( Bone2 ); 
-			//StreamPtr[1] = DupDestination[1] = NewNormal + Weight2 * TransformPackedNormal( SkinVertPtr->Normal, Bone2 ); 
 
 			FVector TempNorm;			
 			TempNorm.X = ((INT)SkinVertPtr->Normal.X - 511);						
@@ -3310,13 +3241,10 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 			InStream += 4;	
 		}
 		else 
-		//if( (InDW & (DWORD)0x70000000) > 0x10000000 ) // 3-8 influences queued up in the DWORD stream - with OR without storage.
 		{	
 			INT InfluenceCount = ( (InDW & 0x70000000) >> (32-4)) + 1;				
 			FCoords& Bone = BONEMATRIX(InDW & 0x0FFF);
 			FLOAT Weight  = CREATEWEIGHT(InDW);
-			//FVector NewVertex = Weight * SkinVertPtr->Point.PivotTransform( Bone );
-			//FVector NewNormal = Weight * TransformPackedNormal( SkinVertPtr->Normal, Bone );
 			FVector TempNorm;			
 			TempNorm.X = ((INT)SkinVertPtr->Normal.X - 511);						
 			TempNorm.Y = ((INT)SkinVertPtr->Normal.Y - 511);				
@@ -3336,8 +3264,6 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 				DWORD InDW2 = ((DWORD*)InStream)[i];
 				FCoords& Bone2 = BONEMATRIX(InDW2 & 0x0FFF);
 				FLOAT Weight2  = CREATEWEIGHT(InDW2);
-				//NewVertex += Weight2 * SkinVertPtr->Point.PivotTransform( Bone2 );
-				//NewNormal += Weight2 * TransformPackedNormal( SkinVertPtr->Normal, Bone2 );				
 				NewVertex.X  += Weight2*((SkinVertPtr->Point | Bone2.XAxis) + Bone2.Origin.X);																
 				NewVertex.Y  += Weight2*((SkinVertPtr->Point | Bone2.YAxis) + Bone2.Origin.Y);													
 				NewVertex.Z  += Weight2*((SkinVertPtr->Point | Bone2.ZAxis) + Bone2.Origin.Z);												
@@ -3421,7 +3347,6 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 		while( ( InDW < 0xFFFFFFFF ) && ( OutIdx < LODModel->SmoothVerts.Num() ) ) // End marker...
 		{			
 			InStream += 3;
-			// if( (InDW & (DWORD)0x70000000) >= 0x00000000 ) // 0-7: means 1-8 influences queued up in the DWORD stream 
 			if( InDW <  (DWORD)0xF0000000 ) // Skip if ful upper 4 bits .
 			{	
 				INT InfluenceCount = ( (InDW & 0x70000000) >> (32-4)) ;								
@@ -3524,17 +3449,6 @@ void USkeletalMeshInstance::GetFrame
 		CachedOrientations.Add(Mesh.RefSkeleton.Num());				
 		CachedPositions.Add(Mesh.RefSkeleton.Num());		
 		// If tween-starting base channel, initialize with Reference skeleton for immediate tweening capability ?
-		/*
-		if( Blends.Num() && (Blends(0).AnimFrame < 0.0f) )
-		{
-			for( INT b=0; b< Mesh.RefSkeleton.Num(); b++)
-			{
-				CachedOrientations(b) = Mesh.RefSkeleton(b).BonePos.Orientation;
-				CachedPositions(b) = Mesh.RefSkeleton(b).BonePos.Position;
-			}
-			CacheActive = true; 
-		}
-		*/
 		for( INT Channel = 0; Channel < Blends.Num(); Channel++) 
 		{
 			Blends(Channel).CachedFrame = 0.0f;
@@ -3611,7 +3525,6 @@ void USkeletalMeshInstance::GetFrame
 		}
 
 		// Copy bone positions from owner or refpose, depending on name match.
-		// if( AnimLinkups(0).CachedLinks.Num() >= Mesh.RefSkeleton.Num()) )
 
 		if( AnimLinkups.Num() )
 		{
@@ -3686,7 +3599,6 @@ void USkeletalMeshInstance::GetFrame
 					MotionChunk* BlendMove = SkelAnim ? SkelAnim->GetMovement( Blend.AnimSequence ): NULL;
 					FMeshAnimSeq* BlendSeq = SkelAnim ? SkelAnim->GetAnimSeq( Blend.AnimSequence ): NULL;
 
-					//debugf(TEXT(" Playing [%s]  animframe [%f] for mesh [%s] ticks %i chann %i"),*(Blend.AnimSequence),Blend.AnimFrame,Mesh.GetName(),GTicks,Channel);
 					FLOAT BlendFrameTime = 0.0f;
 					if( BlendSeq )
 					{						
@@ -3700,7 +3612,6 @@ void USkeletalMeshInstance::GetFrame
 					}
 					else if ( !blendTweening ) // We have animation keys to slerp between, no tweening needed.
 					{
-						//debugf(TEXT(" Slerp stats: Mesh.RefSkeletonnum %i Animtracksnum %i Seqname %s"),Mesh.RefSkeleton.Num(),ThisMove->AnimTracks.Num(),*Seq->Name); 
 						if( BlendMove && BlendMove->AnimTracks.Num() )
 						{ 
 							// We have some compressed animation keys.
@@ -3750,7 +3661,6 @@ void USkeletalMeshInstance::GetFrame
 												PivotHeap(Idx).Bone = b;
 												PivotHeap(Idx).Flags = PH_Blend;												
 												PivotHeap(Idx).Alpha = Alpha;
-												//debugf(TEXT("Global orientation blend - alpha: %f "),Alpha); 
 											} 
 											else 
 											{
@@ -3838,7 +3748,6 @@ void USkeletalMeshInstance::GetFrame
 											FVector NewPos = PrevPos + (ThisPos - PrevPos)*Alpha;
 											
 											INT Idx = TrafoHeap.Add();						
-											//debugf(TEXT("Get trafo to tweenblend ch. %i, bone: %i  cached link: %s (%i) TrafoHeapIdx %i  "),Channel, b , *(Mesh.RefSkeleton(b).Name), Blend.CachedLinks(b),Idx ); 
 											TrafoHeap(Idx).Rot = NewQuat;
 											TrafoHeap(Idx).Pos = NewPos;
 											TrafoHeap(Idx).Channel = Channel;			
@@ -3846,7 +3755,6 @@ void USkeletalMeshInstance::GetFrame
 										}
 										else // Special global-pivot usage.
 										{	
-											// if( ( b>0 ) && ( Blend.StartBone == b) && Blend.bGlobalPose )
 											// Non-rootbone partial blend tween required.	
 											// Note: all global-pivot code only handles rotation, not translation.
 											
@@ -3863,8 +3771,7 @@ void USkeletalMeshInstance::GetFrame
 											PivotHeap(Idx).Channel = Channel;
 											PivotHeap(Idx).Bone = b;	
 											PivotHeap(Idx).Flags = PH_Tween;										
-											PivotHeap(Idx).Alpha = Blend.TweenProgress; //Alpha;
-											//debugf(TEXT("Global orientation TWEEN - alpha: %f  BAF  %f Tp %f "),Alpha, Blend.AnimFrame, Blend.TweenProgress ); 
+											PivotHeap(Idx).Alpha = Blend.TweenProgress;
 										}																				
 									}												
 								}							
@@ -3913,8 +3820,6 @@ void USkeletalMeshInstance::GetFrame
 					}
 				}
 
-				// debugf(TEXT("Blending channel %i for bone %i with keyalpha %f blendalpha %f, BlendInTime %f af %f"), channel+1, bone, KeyAlpha, Blends(channel).BlendAlpha, Blends(channel).BlendInTime,Blends(channel).AnimFrame ); 
-
 				// May need to be initialized with reference pose before starting any blending; 
 				// unless the animation is being totally replaced..
 
@@ -3962,7 +3867,6 @@ void USkeletalMeshInstance::GetFrame
 			FCoords TempSpaceBase = FQuaternionCoords( CachedOrientations(0));
 			TempSpaceBase.Origin = CachedPositions(0);
 			
-			// FCoords NewRoot = TempSpaceBase * CachedMeshTrafo; Non-rootmotion <- this was temp fix  to make GetRootLocation work (broken now!)
 			FCoords NewRoot = TempSpaceBase * LockedLocalTrafo;
 			
 			NewRootRaw   = TempSpaceBase; 
@@ -3970,7 +3874,6 @@ void USkeletalMeshInstance::GetFrame
 
 			RootLocation = NewRoot.Origin;		
 			RootRotation = NewRoot.OrthoRotation(); 
-			// Or ??? RootRotation = NewRoot.OrthoRotation() - LockedRootTrafo.OrthoRotation();									
 
 			bRootTrafoStale = 0;
 			bRootTrafoOnly  = 0;
@@ -3999,8 +3902,6 @@ void USkeletalMeshInstance::GetFrame
 						
 			// Final transformation of quaternion/position to FCoords representation.
 			FQuatToFCoordsFast( CachedOrientations(bone),CachedPositions(bone), SpaceBases(bone));
-			// SpaceBases(bone) = FQuaternionCoords( CachedOrientations(bone));
-			// SpaceBases(bone).Origin = CachedPositions(bone);
 			
 			// Locked root-motion implies total take-over, so clamp it to what it was at lock-time.
 			if( bone==0 )
@@ -4030,8 +3931,8 @@ void USkeletalMeshInstance::GetFrame
 			{
 				CachedLIPSincValues.Empty();
 
-				// TODO:  should be sum of all targets in normal LBP
-				CachedLIPSincValues.AddZeroed( 27 );  // FIXME
+				// Should be the sum of all targets in a normal LBP.
+				CachedLIPSincValues.AddZeroed( 27 );
 			}
 
 			if( IsPlayingLIPSincAnim() || LIPSincBlendInfo.bForceFrame )
@@ -4049,9 +3950,6 @@ void USkeletalMeshInstance::GetFrame
 				}
 			}
 
-			// Update the LookAtController
-			//FMatrix MeshToWorldMatrix = MeshToWorld();
-			//LookAtController.Update( Mesh.LIPSincController->GetLookAtInfo(), &Mesh, SpaceBases, CachedPositions, CachedOrientations, MeshToWorldMatrix, this );
 		}
 
 		unclock(LIPSincSetupCycles);
@@ -4147,7 +4045,6 @@ void USkeletalMeshInstance::GetFrame
 								KeyAlpha *= ( Blend.AnimFrame / Blend.BlendInTime );
 							}
 						}									
-						//debugf(TEXT("#Pivot BLEND alpha:[%f]"),KeyAlpha); 
 					}
 					else // 'Tweened' pivot with stored Alpha.
 					{
@@ -4166,7 +4063,6 @@ void USkeletalMeshInstance::GetFrame
 							}
 						}									
 						KeyAlpha = PivotHeap(p).Alpha * PreAlpha; 
-						//debugf(TEXT("#Pivot TWEEN alpha:[%f]  pre: [%f]"), KeyAlpha, PreAlpha);
 					}
 					
 					if( KeyAlpha > 0.0f)
@@ -4188,7 +4084,6 @@ void USkeletalMeshInstance::GetFrame
 						// so that tweening will work correctly.												
 						CachedOrientations(s) = FCoordsQuaternion( UndoPivot( SpaceBases(s),SpaceBases(Mesh.RefSkeleton(s).ParentIndex) ) );
 						CachedOrientations(s).Normalize();
-						//debugf(TEXT("#Spine global applied and stored - using alpha: %7.5f GTicks %i Bone: %i"),KeyAlpha,(INT)GTicks,(INT)s); 
 					}
 				}
 			} // PivotHeap.Num()
@@ -4245,7 +4140,6 @@ void USkeletalMeshInstance::GetFrame
 	// For debugging mode: prepare the wireframe bone line drawing data.
 	if( SceneNode && SceneNode->Viewport->bShowBones )  
 	{	
-		//debugf(TEXT("Setting up debug pivots for mesh: %s showbones: %i"), Mesh.GetName(), SceneNode ? SceneNode->Viewport->bShowBones : -1 );
 		DebugPivots.Empty();
 		DebugPivots.Add(SpaceBases.Num());
 		DebugParents.Empty();
@@ -4270,7 +4164,6 @@ void USkeletalMeshInstance::GetFrame
 			UCanvas* Canvas = SceneNode->Viewport->Canvas;
 			FString	AnimString;			
 			AnimString = FString::Printf(TEXT(" Animation - mesh:%s actor:%s  instance:%s channels:"),Mesh.GetName(),  AnimOwner->GetName(), this->GetName() );
-			//SceneNode->Viewport->AnimStats.IntStat( *AnimString,TEXT(" ")) = Blends.Num();
 			Canvas->CurY += 6;
 			DrawStat(Canvas, FColor(255,255,0),4,TEXT("%s"),*AnimString); // Title string
 			Canvas->CurY += 3;
@@ -4353,14 +4246,6 @@ void USkeletalMeshInstance::GetFrame
 //
 FMatrix USkeletalMeshInstance::MeshToWorld() 
 { 
-	/* - OLD Fcoords-based transformation setup
-	FCoords LocalCoords;
-	FScale SkeletalScale = FScale(SkelMesh->Scale * Actor->DrawScale * Actor->DrawScale3D,0.f,SHEER_None);
-	LocalCoords = GMath.UnitCoords * (Actor->Location + Actor->PrePivot) * Actor->Rotation * SkelMesh->RotOrigin * SkeletalScale;
-	LocalCoords.Origin += SkelMesh->Origin;
-	FMatrix	WorldMatrix = LocalCoords.Matrix();
-	RI->SetTransform( TT_LocalToWorld, WorldMatrix );
-	*/
 
 	USkeletalMesh* ThisMesh = (USkeletalMesh*)GetMesh();
 
@@ -4370,12 +4255,12 @@ FMatrix USkeletalMeshInstance::MeshToWorld()
         ThisMesh->RotOrigin = ((AInventory*)GetActor())->PlayerViewPivot;
 
 	if(bIgnoreMeshOffset)
-		NewMatrix = //FTranslationMatrix( ThisMesh->Origin  ) *
+		NewMatrix =
 		         FScaleMatrix( GetActor()->DrawScale3D * GetActor()->DrawScale * ThisMesh->Scale ) * 
 				 FRotationMatrix( GetActor()->Rotation ) *
 				 FTranslationMatrix( GetActor()->Location );
 	else
-		NewMatrix = //FTranslationMatrix( ThisMesh->Origin  ) *
+		NewMatrix =
 			FScaleMatrix( GetActor()->DrawScale3D * GetActor()->DrawScale * ThisMesh->Scale ) * 
 			FRotationMatrix( ThisMesh->RotOrigin ) *			 
 			FRotationMatrix( GetActor()->Rotation ) *
@@ -4512,19 +4397,10 @@ static UMaterial* ApplyOverlayMaterial(UMaterial* skelMaterial, UMaterial* overl
 	if(!overlayShader && !overlayCombiner)
 		return CurrentOverlayMaterial;
 
-	// Removed to support shader overlays using combiners as the diffuse
-	//if ( overlayShader )
-	//{
-	//	overlayCombiner = Cast<UCombiner>(overlayShader->Diffuse);
-	//	if (overlayCombiner)
-	//		overlayShader = NULL;
-	//}
-
 	// Try and find a texture from characters skin material.
 	UTexture* skelTexture = GetTextureFromMaterial(skelMaterial);
 	if(!skelTexture)
 	{
-		//debugf(TEXT("ApplyOverlayMaterial: Could not obtain texture from skin(%s). Ignoring Overlay."),skelMaterial->GetName() );
 		return skelMaterial;
 	}
 
@@ -4588,7 +4464,7 @@ static UMaterial* ApplyOverlayMaterial(UMaterial* skelMaterial, UMaterial* overl
 
 //
 //	DrawSprite - special-case sprite drawing for LOD purposes.
-//  TODO: - for more speed the sprite vertices could be stored (per instance or per mesh) and re-rendered quickly.
+//  - for more speed the sprite vertices could be stored (per instance or per mesh) and re-rendered quickly.
 //        - not all rotation/pivot modes make sense with the RelativeRotation
 //        - Experiment with alpha fading. 
 //
@@ -4648,8 +4524,6 @@ void DrawSkelImpostor( FDynamicActor* Owner, FVector* Origin, FLevelSceneNode* S
 	{
 		if(SceneNode->Viewport->Actor->ShowFlags & SHOW_SelectionHighlight && Actor->bSelected)
 			ColorPlane = FPlane(0.5f,0.9f,0.5f,1.0f);
-		// else if( Actor->LightType != LT_None )
-		// 	ColorPlane = FGetHSV(Actor->LightHue,Actor->LightSaturation,255);
 	}
 	FColor Color = FColor(ColorPlane);
 
@@ -4765,7 +4639,6 @@ void DrawSkelImpostor( FDynamicActor* Owner, FVector* Origin, FLevelSceneNode* S
 		INT LightsLimit = Actor->MaxLights; 
 		INT	NumHardwareLights = 0;
 		// Set lights.
-		//RI->EnableLighting(1,0,1,NULL,SceneNode->Viewport->Actor->RendMap == REN_LightingOnly, Owner->BoundingSphere);
 		RI->EnableLighting(1,1,1,NULL,SceneNode->Viewport->Actor->RendMap == REN_LightingOnly, Owner->BoundingSphere);
 		for(TList<FDynamicLight*>* LightList = Lights;LightList && NumHardwareLights < LightsLimit;LightList = LightList->Next)
 			RI->SetLight(NumHardwareLights++,LightList->Element);
@@ -4902,10 +4775,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 	LastLodFactor = MeshVertLODFactor;
 
 	UBOOL bDrawImpostor = false;
-
-	// Old  smooth-lod vertex count determination.
-	// FLOAT TargetSubset    = Max( (FLOAT)SkelMesh->LODMinVerts, (FLOAT)SkelMesh->Points.Num() * MeshVertLODFactor  );
-	// INT VertexSubset      = Min( appRound(TargetSubset), SkelMesh->Points.Num() );
 
 	//
 	// Choose Static LOD level depending on MeshVertLODFactor, or use forced LOD level.
@@ -5045,7 +4914,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 
 		// Get a vertex pool to render this skeletal mesh from.
 
-#if 1
 		FVertexPool*	VertexPool = GetVertexPool(&SkinStream);
 
 		if(VertexPool->GetClient() != &SkinStream)
@@ -5058,9 +4926,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 		RI->SetVertexStreams( VS_FixedFunction, VertexStreams, 1 ); 
 		if( SkelMesh->SkinTesselationFactor > 1.0f )
 			RI->SetNPatchTesselation( SkelMesh->SkinTesselationFactor);
-#else
-		INT	BaseVertexIndex = RI->SetDynamicStream( VS_FixedFunction, &SkinStream ); 
-#endif
 		unclock(IdxCycles);
 		GStats.DWORDStats( GEngineStats.STATS_Mesh_RigidCycles ) += IdxCycles;
 		
@@ -5107,21 +4972,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 				}
 			
 			
-				/*
-				// Fun 'stripper'....gradually erase polygons to verify the drawing sequence. Use DrawFaceNum instead of Section.TotalFaces to make it work.
-				static INT StripSection = 0;				
-				static INT StripIndex = 0;				
-				StripIndex--; 
-				if( StripIndex<0 )
-				{					
-					StripSection--;
-					if( StripSection < 0 ) StripSection = SkelMesh->LODModels(CurrentLODLevel).SmoothSections.Num()-1;
-					StripIndex = SkelMesh->LODModels(CurrentLODLevel).SmoothSections(StripSection).TotalFaces * 7;					
-				}
-				INT DrawFaceNum = (StripSection < SectionIndex) ? 0 : (StripSection == SectionIndex) ? Min((INT)Section.TotalFaces, StripIndex/7 ) : Section.TotalFaces ;
-				DrawFaceNum =  Max(Min((INT)DrawFaceNum,(INT)Section.TotalFaces),1);				
-				*/												
-														
 				// Draw the section.
 				RI->DrawPrimitive
 				( 
@@ -5395,14 +5245,14 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 			// From each child to its parent.
 			if( ParentIndex[b] != b )
 			{
-				FVector B1 = Pivots[b]; //.TransformPointBy(LocalCoords);
-				FVector B2 = Pivots[ParentIndex[b]];//.TransformPointBy(LocalCoords);				
+				FVector B1 = Pivots[b];
+				FVector B2 = Pivots[ParentIndex[b]];
 				LineBatcher.DrawLine(B1,B2,BoneColor);
 			}			
 		}
 
 		// Draw the 'umbilical' line from the mesh-space-origin to the root-bone.
-		// TODO: mark the origin with a little 'actor space origin' axes system.
+		// The origin could be marked with a little 'actor space origin' axes system.
 		if( DebugPivots.Num() )
 		{			
 			FVector B1 =  FVector(0.0f,0.0f,0.0f);
@@ -5431,21 +5281,21 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 
 				// X-axis - red
 				FVector Axis = FVector(1.0f,0.0f,0.0f);
-				Axis = JointMatrix.TransformNormal( Axis ); // Axis.TransformVectorBy( JointTrafo );   
+				Axis = JointMatrix.TransformNormal( Axis );
 				Axis.Normalize();									
 				B2 = B1 + Axis * 7.0f; 
 				LineBatcher.DrawLine(B1,B2,RedColor);
 
 				// Y axis - green				
 				Axis = FVector(0.0f,1.0f,0.0f);
-				Axis = JointMatrix.TransformNormal( Axis ); // Axis.TransformVectorBy( JointTrafo ); 				
+				Axis = JointMatrix.TransformNormal( Axis );
 				Axis.Normalize();
 				B2 = B1 + Axis * 7.0f;
 				LineBatcher.DrawLine(B1,B2,GreenColor);		
 
 				// Z axis - blue				
 				Axis = FVector(0.0f,0.0f,1.0f);
-				Axis = JointMatrix.TransformNormal( Axis ); // Axis.TransformVectorBy( JointTrafo ); 				
+				Axis = JointMatrix.TransformNormal( Axis );
 				Axis.Normalize();
 				B2 = B1 + Axis * 7.0f;
 				LineBatcher.DrawLine(B1,B2,BlueColor);				
@@ -5641,7 +5491,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 		}
 
 		FLineBatcher LineBatcher(RI);
-		//RI->SetTransform(TT_LocalToWorld, FMatrix::Identity);
 		RI->SetTransform(TT_LocalToWorld, MeshToWorldMatrix);
 		for(INT i=0; i<DebugInfluences.Num(); i++)
 		{
@@ -5661,10 +5510,10 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 				Color = FPlane(0.9f,0.9f,0.9f,0.f);  // White for 5 +...  using this many links is often unnecessary.
 							
 			// Draw small influence-colored normal linesegments.
-			// #TODO - scale the normals to a reasonable screensize regardless of mesh distance ?						
+			// Normals could be scaled to a reasonable screen size regardless of mesh distance.
 			FVector &Point = DebugInfluences(i).Vertex;
 			FVector Norm =  DebugInfluences(i).Normal; 
-			// Normalize and scale down a bit. // Norm.Normalize();
+			// Normalize and scale down a bit.
 			FLOAT SquareSum = Norm.X*Norm.X+Norm.Y*Norm.Y+Norm.Z*Norm.Z;
 			if( SquareSum >= SMALL_NUMBER )
 			{
@@ -5674,8 +5523,6 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 				Norm.Z *= Scale;
 			}
 			LineBatcher.DrawLine(Point,Point+Norm,Color);
-			// Draw little squares in wireframe mode.
-			// if( bDrawWireframe )LineBatcher.DrawPoint( SceneNode, Point, Color );											
 		}						
 		LineBatcher.Flush();
 	} 		
@@ -5703,7 +5550,7 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 			{				
 				if( LightList->Element && LightList->Element->Actor )
 				{
-					FLOAT OurDistance =  FDist( LightList->Element->Position, (FVector)LightSphere ); // Actor->Location );
+					FLOAT OurDistance =  FDist( LightList->Element->Position, (FVector)LightSphere );
 					
 					LightString = FString::Printf(TEXT("[%i]{%2i}(%s) Rad %4.4f Col %3.2f %3.2f %3.2f Alph %4.4f Dst %4.5f Ky %i br %3.2f"), 
 						        Number, 
@@ -5744,8 +5591,6 @@ void USkeletalMeshInstance::CopyAnimation(INT SrcChannel, INT DestChannel)
 	MeshAnimChannel *SrcBlend  = &Blends(SrcChannel);
 	MeshAnimChannel *DestBlend = &Blends(DestChannel);
 		
-	//DestBlend = SrcBlend;
-	
 	DestBlend->AnimSequence  = SrcBlend->AnimSequence;
 	DestBlend->MeshAnimIndex = SrcBlend->MeshAnimIndex;
 	
@@ -5779,8 +5624,6 @@ void USkeletalMeshInstance::SetAnimRate(INT Channel, FLOAT NewRate)
 		return;
 	MeshAnimChannel *Blend = &Blends(Channel);
 	
-	//debugf(TEXT(">>SetAnimRATE: Channel %i  Rate %f  Mesh: %s  Origrate: %f OldAnimRate %f"),Channel,NewRate,GetMesh()->GetName(),Blend->OrigRate,Blend->OldAnimRate ); 
-
 	Blend->AnimRate = NewRate * Blend->OrigRate; 
 	unguard;
 }
@@ -5933,7 +5776,6 @@ UBOOL USkeletalMesh::SetAttachmentLocation(AActor * Actor, AActor *AttachedActor
 	FCoords AttachCoords;
 	FCoords AttachTagCoords;
 
-	//debugf(TEXT("Attachment bone plug: %s"),*(AttachedActor->AttachmentBone));
 	INT TagIndex = TagAliases.FindItemIndex(AttachedActor->AttachmentBone);	
 											
 	// Try to get an attachment FCoords and adjustment FCoords if available.
@@ -5999,7 +5841,6 @@ UBOOL USkeletalMesh::SetAttachmentLocation(AActor * Actor, AActor *AttachedActor
 
 		// Add Actor's ->RelativeRotation and ->RelativeLocation too..
 		FVector  RelLoc = AttachedActor->RelativeLocation.TransformVectorBy( LinkupCoords);
-		//FRotator RelRot = AttachedActor->RelativeRotation;
 		FCoords  RelRotCoords = GMath.UnitCoords / AttachedActor->RelativeRotation;
 
 		// Handle location and rotation separately 
@@ -6178,7 +6019,6 @@ void UAnimNotify_Script::Notify( UMeshInstance *Instance, AActor *Owner )
 	{
 		if( GIsEditor )
 		{
-			//debugf( NAME_Log, TEXT("Editor: skipping AnimNotify_Script %s"), *NotifyName );
 		}
 		else
 		{
@@ -6201,7 +6041,6 @@ void UAnimNotify_Scripted::Notify( UMeshInstance *Instance, AActor *Owner )
 
 	if( GIsEditor )
 	{
-		//debugf( NAME_Log, TEXT("Editor: skipping AnimNotify_Scripted %s"), GetName() );
 	}
 	else
 		eventNotify( Owner );
@@ -6219,7 +6058,6 @@ void UAnimNotify_MatSubAction::Notify( UMeshInstance *Instance, AActor *Owner )
 	
 	if( GIsEditor )
 	{
-		//debugf( NAME_Log, TEXT("Editor: skipping AnimNotify_MatSubAction %s"), GetName() );
 	}
 	else
 	if( SubAction )
@@ -6246,7 +6084,6 @@ void UAnimNotify_MatSubAction::Notify( UMeshInstance *Instance, AActor *Owner )
 			SubAction->PctEnding = (SceneManager->CurrentTime + SubAction->Duration) / SceneManager->TotalSceneTime; 
 			SubAction->PctDuration = SubAction->PctEnding - SubAction->PctStarting;
 			SubAction->Status = SASTATUS_Running;
-			//debugf( NAME_Log, TEXT("AnimNotify_MatSubAction %s: attached subaction %s to scene %s"), GetName(), SubAction->GetName(), SceneManager->GetName() );
 		}
 		else
 			debugf( NAME_Log, TEXT("AnimNotify_MatSubAction %s: unable to find current SceneManager"), GetName() );

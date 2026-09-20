@@ -18,10 +18,6 @@ Revision history:
 
 #include <stdio.h>
 
-#if 0 //def WIN64
-#define CATCH_SIGSEGV 1
-#endif
-
 #if CATCH_SIGSEGV
 #include <signal.h>
 #endif
@@ -32,7 +28,7 @@ Revision history:
 #if __STATIC_LINK
 #include "Engine.h"
 
-#if __UNIX__  // !!! FIXME: Macro problem! --ryan.
+#if __UNIX__
 #undef clock
 #endif
 
@@ -163,8 +159,6 @@ int main( int argc, char* argv[] )
 		#if !_MSC_VER
 		// Set module name.
 		strcpy( GModule, "ucc" );
-		//!!vogel: pathname might be too long
-		//appStrcpy( GModule, argv[0] );
 		#endif
 		
 		// Parse command line.
@@ -192,18 +186,6 @@ int main( int argc, char* argv[] )
 
 		// Init engine core.
 		appInit( TEXT("UT2004"), CmdLine, &Malloc, &Log, &Error, &Warn, &FileManager, FConfigCacheIni::Factory, 1 );
-
-		// Launch the bug report monitor.
-#if ((WIN32) && (!defined _DEBUG))
-#if 0
-		const TCHAR* Parameters[] = { TEXT("BugReport"), appItoa(GetCurrentProcessId()), NULL };
-		_wspawnv(
-			_P_NOWAIT,
-			TEXT("BugReport"),
-			Parameters
-			);
-#endif
-#endif
 
 #if __STATIC_LINK
         // Clean lookups.
@@ -248,20 +230,6 @@ int main( int argc, char* argv[] )
 		GLazyLoad = 0;
 		UBOOL Help = 0;
 		DWORD LoadFlags = LOAD_NoWarn | LOAD_Quiet;
-
-#if 0  // Roughly test appSeconds() functionality...  --ryan.
-DOUBLE x = appSeconds() + 1.0;
-while (1)
-{
-    while (appSeconds() < x)
-    {
-        /* spin. */
-    }
-
-    printf("...second (%f).\n", x);
-    x += 1.0;
-}
-#endif
 
 		if( Token==TEXT("") )
 		{

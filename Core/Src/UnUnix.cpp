@@ -34,7 +34,6 @@
 #include <dlfcn.h>
 
 #include <netdb.h>
-//#include <fpu_control.h>
 
 #include <pthread.h>
 #include <sys/types.h>
@@ -79,7 +78,6 @@ extern char **environ;
 
 TCHAR *GUnixSpawnOnExit = NULL;
 
-// filler.  --ryan.
 HINSTANCE hInstance = 0;
 
 
@@ -104,11 +102,6 @@ CORE_API ANSICHAR* unixToANSI( ANSICHAR* ACh, const UNICHAR* InUCh )
         INT Index;
 		for(Index = 0;InUCh[Index] != 0;Index++)
 		{
-        	#if 0
-				if (InUCh[Index] > 255)
-					debugf("unixToANSI: can't convert character %d!", (int) InUCh[Index]);
-            #endif
-
 			ACh[Index] = (ANSICHAR) InUCh[Index];
 		}
         ACh[Index] = 0;
@@ -172,7 +165,7 @@ CORE_API UNICHAR* unixANSIToUNICODE(char* str)
 	guardSlow(unixANSIToUnicode);
 	INT iLength = unixGetSizeUNICODE(str);
 	UNICHAR* pBuffer = new UNICHAR[iLength];
-	appStrcpy(pBuffer,TEXT(""));  // !!! FIXME: Is this really necessary?
+	appStrcpy(pBuffer,TEXT(""));
 	return unixToUNICODE(pBuffer,str);
     unguardSlow;
 }
@@ -181,37 +174,6 @@ CORE_API UNICHAR* unixANSIToUNICODE(char* str)
 CORE_API void unixDetectUNICODE( void )
 {
     guard(unixDetectUNICODE);
-
-#if 0
-    errno = 0;
-    if (!setlocale(LC_CTYPE, ""))
-    {
-        debugf(TEXT("setlocale() failed: %s"), strerror(errno));
-        debugf(TEXT("Must assume ANSI (8-bit) character encoding."));
-    }
-    else
-    {
-        char *encoding = "Unknown";
-        if (getenv("UNREAL_UNICODE") != NULL)
-            GUnicode = GUnicodeOS = 1;
-        else
-        {
-                encoding = nl_langinfo(_NL_CTYPE_CODESET_NAME);
-                char *unicode_encodings[] = { "UTF-8", "UTF8", NULL };
-                for (INT i = 0; unicode_encodings[i]; i++)
-                {
-                    if (strcmp(encoding, unicode_encodings[i]) == 0)
-                    {
-                        GUnicode = GUnicodeOS = 1;
-                    }
-                }
-        }
-
-        debugf(TEXT("Your locale: [%s].\n"), ANSI_TO_TCHAR(encoding));
-        if (GUnicodeOS)
-            debugf(TEXT("Enabled UNICODE support."));
-    }
-#endif
 
     unguard;
 }
@@ -342,12 +304,6 @@ CORE_API INT _wcsicmp( const UNICHAR* String1, const UNICHAR* String2 )
 {
     guardSlow(_wcsicmp);
 
-    /*
-    printf("_wcsicmp:\n");
-    printf("  "); unicode_str_to_stdout(String1);
-    printf("  "); unicode_str_to_stdout(String2);
-    */
-
     while (true)
     {
         int ch1 = toupper((int) *String1);
@@ -375,12 +331,6 @@ CORE_API INT _wcsicmp( const UNICHAR* String1, const UNICHAR* String2 )
 CORE_API INT _wcsnicmp( const UNICHAR* Str1, const UNICHAR *Str2, INT max )
 {
     guardSlow(_wcsnicmp);
-
-    /*
-    printf("_wcsnicmp:\n");
-    printf("  "); unicode_str_to_stdout(Str1);
-    printf("  "); unicode_str_to_stdout(Str2);
-    */
 
     INT i = 0;
     while (true)
@@ -472,7 +422,6 @@ CORE_API UNICHAR* _wcsupr( UNICHAR* String )
 
 CORE_API INT _wtoi( const UNICHAR* Str )
 {
-    // !!! FIXME: This might be completely broken.
     char *ansistr = TCHAR_TO_ANSI(Str);
     return(atoi(ansistr));
 }
@@ -480,8 +429,12 @@ CORE_API INT _wtoi( const UNICHAR* Str )
 
 CORE_API INT wcstoul( const TCHAR* Start, TCHAR** End, INT Base )
 {
-    // !!! FIXME: This might be completely broken.
-    return(strtoul(TCHAR_TO_ANSI(Start), (char **) End, Base));
+    ANSICHAR* Ansi = TCHAR_TO_ANSI(Start);
+    ANSICHAR* AnsiEnd;
+    INT Result = strtoul(Ansi, &AnsiEnd, Base);
+    if( End )
+        *End = (TCHAR*)Start + (AnsiEnd-Ansi);
+    return Result;
 }
 
 // glibc's wide functions expect a 4-byte wchar_t, so this scans ANSI copies with sscanf. It supports
@@ -541,7 +494,6 @@ CORE_API INT swscanf( const UNICHAR* Str, ... )
     return Result;
 }
 
-// !!! FIXME: This can always be more robust.
 CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
 {
     if (fmt == NULL)
@@ -558,8 +510,6 @@ CORE_API INT wvsnprintf( TCHAR *buf, INT max, const TCHAR *fmt, va_list args )
 
     TCHAR *dst = buf;
     TCHAR *enddst = dst + (max - 1);
-
-    //printf("printf by-hand formatting "); unicode_str_to_stdout(src);
 
     while ((*src) && (dst < enddst))
     {
@@ -907,7 +857,7 @@ CORE_API FLOAT _wtof( const TCHAR* Str )
 #endif
 
 
-/* visual C++ compatibility. --ryan. */
+/* Visual C++ compatibility. */
 char *strlwr(char *str)
 {
     for (char *p = str; *p; p++)
@@ -970,8 +920,6 @@ void USystem::StaticConstructor()
 	new(GetClass(),TEXT("PurgeCacheDays"),      RF_Public)UIntProperty   (CPP_PROPERTY(PurgeCacheDays     ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("SavePath"),            RF_Public)UStrProperty   (CPP_PROPERTY(SavePath           ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("CacheExt"),            RF_Public)UStrProperty   (CPP_PROPERTY(CacheExt           ), TEXT("Options"), CPF_Config );
-//	new(GetClass(),TEXT("CacheRecordPath"),     RF_Public)UStrProperty   (CPP_PROPERTY(CacheRecordPath    ), TEXT("Options"), CPF_Config );
-//	new(GetClass(),TEXT("MusicPath"),           RF_Public)UStrProperty   (CPP_PROPERTY(MusicPath          ), TEXT("Options"), CPF_Config );
 	new(GetClass(),TEXT("SpeechPath"),          RF_Public)UStrProperty   (CPP_PROPERTY(SpeechPath         ), TEXT("Options"), CPF_Config );
 
 	UArrayProperty* A = new(GetClass(),TEXT("Paths"),RF_Public)UArrayProperty( CPP_PROPERTY(Paths), TEXT("Options"), CPF_Config );
@@ -1019,7 +967,7 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
         if ((GIsClient) && (appStrlen(Cmd) == 0))  // just restarting client?
         {
             GUnixSpawnOnExit = new TCHAR[128];
-            appStrcpy(GUnixSpawnOnExit, TEXT("./ut2004-bin"));  // !!! FIXME
+            appStrcpy(GUnixSpawnOnExit, TEXT("./ut2004-bin"));
             appRequestExit( 0 );
             return 1;
         }
@@ -1036,7 +984,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		appStrncpy( Arg0, Cmd, max );
         Arg0[RELAUNCH_ARRAY - 1] = 0;  // just in case.
 
-#if 1
         INT arraylen = RELAUNCH_ARRAY + 128;
         FString xterm(TEXT(""));
 
@@ -1057,21 +1004,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
             appStrcat(GUnixSpawnOnExit, Arg0);
 
         appRequestExit( 0 );
-#else
-
-        char ansistr[RELAUNCH_ARRAY];
-        appToAnsi(Arg0, ansistr);
-
-		if (fork() == 0)
-		{
-			appSleep(3);
-			INT error = execl("./ucc-bin", "./ucc-bin", "server", ansistr, NULL );
-			if (error == -1)
-				appErrorf( TEXT("Failed to launch process.") );
-		} else {
-			appRequestExit( 0 );
-		}
-#endif
 		return 1;
 	}
 	else if( ParseCommand( &Cmd, TEXT("DEBUG") ) )
@@ -1147,10 +1079,6 @@ void* appGetDllHandle( const TCHAR* Filename )
 
 	void *Result = NULL;
 
-	#if 0 //__STATIC_LINK
-		return((void*) -1);
-	#endif
-
 	check(Filename);
 	const TCHAR* PackageName = Filename;
 	TCHAR* Cur;
@@ -1209,11 +1137,6 @@ void* appGetDllHandle( const TCHAR* Filename )
 			}
 		}
 	}
-
-#if 0
-	if (Result == NULL)
-		debugf(TEXT("Failed to dynamically load [%s]."), Filename);
-#endif
 
 	return Result;
 	unguard;
@@ -1424,7 +1347,7 @@ static void HandleSignal( int Signal )
 }
 
 
-// special case for CTRL-C.  --ryan.
+// Special case for CTRL-C.
 static void HandleInterrupt( int Signal )
 {
     check(Signal==SIGINT);
@@ -1808,7 +1731,6 @@ void appPlatformPreInit()
     #endif
 
 #else
-    // (more to come. --ryan.)
     #error fill in your platform.
 #endif
 
@@ -1847,13 +1769,10 @@ FCriticalSection::~FCriticalSection() noexcept(false)
 
 void FCriticalSection::Lock()
 {
-    //printf("MUTEX LOCK START %p\n", Handle);
 	pthread_mutex_block *block = (pthread_mutex_block *) Handle;
     pthread_t self = pthread_self();
     if (self == block->tid)
     {
-        //printf("MUTEX REQUIRED RECURSION! (%p:%d)\n",
-        //        Handle, (int) block->refcount);
         block->refcount++;
     }
     else
@@ -1864,12 +1783,10 @@ void FCriticalSection::Lock()
         block->tid = self;
         block->refcount = 1;
     }
-    //printf("MUTEX LOCK END   %p\n", Handle);
 }
 
 void FCriticalSection::Unlock()
 {
-    //printf("MUTEX UNLOCK START %p\n", Handle);
 	pthread_mutex_block *block = (pthread_mutex_block *) Handle;
     pthread_t self = pthread_self();
     check(self == block->tid);
@@ -1881,7 +1798,6 @@ void FCriticalSection::Unlock()
         int rc = pthread_mutex_unlock(&block->mutex);
 	    check(rc == 0);
     }
-    //printf("MUTEX UNLOCK END   %p\n", Handle);
 }
 
 FScopeCriticalSection::FScopeCriticalSection( FCriticalSection* InCriticalSection )
@@ -1900,8 +1816,6 @@ FScopeCriticalSection::~FScopeCriticalSection()
 void appPlatformInit()
 {
 	guard(appPlatformInit);
-
-	//printf("GRunningOS is (%d). ENGINE_VERSION is (%d).\n", (int) GRunningOS, (int) ENGINE_VERSION);
 
 	// System initialization.
 	GSys = new USystem;

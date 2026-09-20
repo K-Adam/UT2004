@@ -294,7 +294,6 @@ static inline UBOOL NEQ(FLOAT& A,FLOAT& B,UPackageMap* Map,UActorChannel* Channe
 static inline UBOOL NEQ(FVector& A,FVector& B,UPackageMap* Map,UActorChannel* Channel) {return ((INT*)&A)[0]!=((INT*)&B)[0] || ((INT*)&A)[1]!=((INT*)&B)[1] || ((INT*)&A)[2]!=((INT*)&B)[2];}
 static inline UBOOL NEQ(FRotator& A,FRotator& B,UPackageMap* Map,UActorChannel* Channel) {return A.Pitch!=B.Pitch || A.Yaw!=B.Yaw || A.Roll!=B.Roll;}
 static inline UBOOL NEQ(UObject* A,UObject* B,UPackageMap* Map,UActorChannel* Channel) {if( Map->CanSerializeObject(A) )return A!=B; Channel->bActorMustStayDirty = true; 
-//debugf(TEXT("%s Must stay dirty because of %s"),Channel->Actor->GetName(),A->GetName());
 return (B!=NULL);}
 static inline UBOOL NEQ(FName& A,FName B,UPackageMap* Map,UActorChannel* Channel) {return *(INT*)&A!=*(INT*)&B;}
 static inline UBOOL NEQ(FColor& A,FColor& B,UPackageMap* Map,UActorChannel* Channel) {return *(INT*)&A!=*(INT*)&B;}
@@ -442,7 +441,7 @@ INT* AActor::GetOptimizedRepList( BYTE* Recent, FPropertyRetirement* Retire, INT
 			if ( bNetDirty ) 
 			{
 				DOREP(Actor,DrawScale);
-				//DOREP(Actor,DrawScale3D); // Doesn't work in networking, because of vector rounding
+				// DrawScale3D is not replicated because vector rounding breaks it.
 				DOREP(Actor,DrawType);
 				DOREP(Actor,bCollideActors);
 				DOREP(Actor,bCollideWorld);
@@ -1665,22 +1664,6 @@ void AWeaponAttachment::PostNetReceive()
 	unguard;
 }
 
-/*
-FIXME - demo mode disabled
-void APlayerController::PostNetReceive()
-{
-	guard(APlayerController::PostNetReceive);
-
-	AActor::PostNetReceive();
-
-	if( GetLevel()->DemoRecDriver && GetLevel()->DemoRecDriver->ServerConnection )
-	{
-		Rotation.Pitch = DemoViewPitch; 
-		Rotation.Yaw = DemoViewYaw;
-	} 
-	unguard;
-} 
-*/
 /*-----------------------------------------------------------------------------
 	APlayerPawn implementation.
 -----------------------------------------------------------------------------*/
@@ -1710,15 +1693,6 @@ void APlayerController::SetPlayer( UPlayer* InPlayer )
 	// initialize the input system only if local player
 	if ( Cast<UViewport>(InPlayer) )
 		eventInitInputSystem();
-
-	// Voice chat.
-//	if( Level->NetMode == NM_Client && GetLevel()->Engine->Audio )
-//	{
-//		GetLevel()->Engine->Audio->EnterVoiceChat();
-//	}
-
-	// Debug message.
-	//debugf( NAME_Log, TEXT("Possessed PlayerPawn: %s"), GetFullName() );
 
 	unguard;
 }
@@ -2015,11 +1989,7 @@ void AActor::SetCollisionSize( FLOAT NewRadius, FLOAT NewHeight )
 	if( bCollideActors && GetLevel() && GetLevel()->Hash )
 		GetLevel()->Hash->AddActor( this );
 
-	/* FIXME - commented out for UT2003, until I have time to get it in w/ no issues
-	// check that touching array is correct.
-	if ( !bTest )
-		GetLevel()->CheckEncroachment(this,Location,Rotation,true);
-	*/
+	// No encroachment check here, retail disabled it because it caused issues.
 	bNetDirty = true;	// for network replication
 	unguard;
 }
@@ -2448,7 +2418,7 @@ void AActor::UpdateRenderData()
         return;
     }
 
-    // todo: add some bbox prediction for emitters
+    // could add some bbox prediction for emitters
     if ( Physics == PHYS_Rotating )
     {
         FVector center, extents;
@@ -2464,24 +2434,11 @@ void AActor::UpdateRenderData()
     else
     {        
         ActorRenderData->PredictedBox = ActorRenderData->BoundingBox;
-        //ActorRenderData->PredictedBox += (ActorRenderData->BoundingBox.Min + Velocity * 1.5f);
-        //ActorRenderData->PredictedBox += (ActorRenderData->BoundingBox.Max + Velocity * 1.5f);
         ActorRenderData->PredictedBox = ActorRenderData->PredictedBox.ExpandBy(PredictedBoxTweak);
     }
 
     Leaves.Empty(Leaves.Num());
 
-#if 0
-    if( DrawType == DT_Particle )
-    {
-        // expand by %5
-        FVector center, extents;
-        ActorRenderData->PredictedBox.GetCenterAndExtents(center, extents);
-        float radius = extents.Size();
-        radius *= 0.05f;
-        ActorRenderData->PredictedBox = ActorRenderData->PredictedBox.ExpandBy(radius);
-    }
-#endif
 
 	(TArray<INT>&)Leaves = XLevel->Model->BoxLeaves(ActorRenderData->PredictedBox);
 
@@ -2578,8 +2535,6 @@ UBOOL APawn::ShouldUpdateRelativeLocation()
 void AActor::SetBase( AActor* NewBase, FVector NewFloor, int bNotifyActor )
 {
 	guard(AActor::SetBase);
-	//debugf(TEXT("SetBase %s -> %s"),GetName(),NewBase ? NewBase->GetName() : TEXT("NULL"));
-
 	// Verify no recursion.
 	for( AActor* Loop=NewBase; Loop!=NULL; Loop=Loop->Base )
 		if ( Loop == this ) 
@@ -2714,7 +2669,6 @@ UBOOL AActor::AttachToBone( AActor* Attachment, FName BoneName )
 			Attachment->AttachmentBone = BoneName;
 			// Attach to base
 			Attachment->SetBase( this, FVector(0,0,1) );			
-			//debugf(TEXT("AttachToBonel: attachment made to bone named [s] in actor %s's skeleton."),GetName()); 
 			return 1;
 		}
 		else
@@ -2731,13 +2685,12 @@ UBOOL AActor::AttachToBone( AActor* Attachment, FName BoneName )
 
 		// Verify that the bone exists in the aliases or bones list.
 		BoneIndex = (Mesh->MeshGetInstance(this))->MatchRefBone( BoneName );
-		if( /*BoneIndex > -1 &&*/ Attachment && Attachment->IsValid() ) // BoneIndex won't be valid for deca because BoneName is not a bone name but an attachment tag name, dig?
+		if( Attachment && Attachment->IsValid() ) // BoneIndex won't be valid for deca because BoneName is not a bone name but an attachment tag name, dig?
 		{
 			// No checks for previous..
 			Attachment->AttachmentBone = BoneName;
 			// Attach to base
 			Attachment->SetBase( this, FVector(0,0,1) );			
-			//debugf(TEXT("AttachToBonel: attachment made to bone named [s] in actor %s's skeleton."),GetName()); 
 			return 1;
 		}
 		else
@@ -2929,7 +2882,6 @@ void AActor::CleanupSubObjects()
 	// Clean up mesh instance.
 	if( MeshInstance )
 	{
-		// debugf( NAME_Warning,TEXT("Deleting meshinstance for %s"),GetName()); 
 		delete MeshInstance;
 		MeshInstance = NULL;
 	}

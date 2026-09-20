@@ -214,7 +214,6 @@ public:
 	FURL			LastURL;
 	class ULinkerLoad* ClientPackage;
 	class UUTVPackageMap*	ServerPackageMap;
-	//class UDemoRecDriver* DemoDriver;
 
 	class UNetDriver*	ListenDriver;
 	class UNetDriver*	ConnectDriver;
@@ -228,9 +227,7 @@ public:
 	void Destroy();
 
 	void Init(FString IniFileName);
-//	void Exit();
 	void Tick( FLOAT DeltaSeconds );	
-//	void StaticConstructor();
 
 	// UEngine interface.
 	void Draw( UViewport* Viewport, UBOOL Blit=1, BYTE* HitData=NULL, INT* HitSize=NULL );

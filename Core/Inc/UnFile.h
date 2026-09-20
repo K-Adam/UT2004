@@ -129,12 +129,10 @@ CORE_API extern FString (*GClipboardPaste)();
       {
           if (++GuardIndex < MAX_PORTABLE_GUARD_BLOCKS)
               GuardTexts[GuardIndex] = text;
-          //printf("--> %d %s\n", (int) GuardIndex, text);
       }
 
       ~UnGuardBlock(void)
       {
-          //printf("<-- %d %s\n", (int) GuardIndex, GuardTexts[GuardIndex]);
           GuardIndex--;
       }
 

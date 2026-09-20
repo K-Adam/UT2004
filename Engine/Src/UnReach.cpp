@@ -186,7 +186,7 @@ int UReachSpec::defineFor(ANavigationPoint *begin, ANavigationPoint *dest, APawn
 
 	Then, with the largest height that was successful, determine the reachable region
 
-  TODO: it might be a good idea to look at what pawns are referenced by the level, and check for all their radii/height combos.
+  It might be a good idea to look at what pawns are referenced by the level, and check for all their radii/height combos.
   This won't work for a UT type game where pawns are dynamically loaded
 
 */

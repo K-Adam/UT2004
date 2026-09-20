@@ -414,19 +414,6 @@ class DLL_EXPORT_CLASS UWetTexture : public UWaterTexture
 	void Init( INT InUSize, INT InVSize );
 	void Clear( DWORD ClearFlags );
 	void ConstantTimeTick();
-	/*void Lock( FTextureInfo& TextureInfo, DOUBLE Time, INT LOD, URenderDevice* RenDev )
-	{
-		if( SourceTexture )
-		{
-			FTextureInfo TempInfo;
-			if( SourceTexture != this )
-			{
-				SourceTexture->Lock( TempInfo, Time, 0, NULL );
-				SourceTexture->Unlock( TempInfo );
-			}
-		}
-		Super::Lock( TextureInfo, Time, 0, RenDev );
-	}*/
 
 private:
 	// UWetTexture interface.
@@ -514,28 +501,6 @@ class DLL_EXPORT_CLASS UIceTexture : public UFractalTexture
 	void Tick(FLOAT DeltaSeconds);
 	void MousePosition( DWORD Buttons, FLOAT X, FLOAT Y );
 	void Click( DWORD Buttons, FLOAT X, FLOAT Y );
-	/*void Lock( FTextureInfo& TextureInfo, DOUBLE Time, INT LOD, URenderDevice* RenDev )
-	{
-		if( GlassTexture )
-		{
-			FTextureInfo TempInfo;
-			if( GlassTexture != this )
-			{
-				GlassTexture->Lock( TempInfo, Time, 0, NULL );
-				GlassTexture->Unlock( TempInfo );
-			}
-		}
-		if( SourceTexture )
-		{
-			FTextureInfo TempInfo;
-			if( SourceTexture != this )
-			{
-				SourceTexture->Lock( TempInfo, Time, 0, NULL );
-				SourceTexture->Unlock(TempInfo);
-			}
-		}
-		Super::Lock( TextureInfo, Time, 0, RenDev );
-	}*/
 
 private:
 	void MoveIcePosition(FLOAT VTicks);

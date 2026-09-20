@@ -138,15 +138,6 @@ struct FBoxCheckInfo
 		Box.Min.X = Temp[0]; Box.Min.Y = Temp[1]; Box.Min.Z = Temp[2];
 		Box.Max.X = Temp[3]; Box.Max.Y = Temp[4]; Box.Max.Z = Temp[5];
 	}
-	/*void NewSetupHulls( const FBspNode& Node )
-	{
-		FVert* Verts = &Model->Verts->Element( Node.iVertPool );
-		for( INT i=0; i<Node.NumVertices; i++ )
-		{
-			FVector& Point = Model->Points( Verts[i].iVertex );
-			Box += Point;
-		}
-	}*/
 };
 
 // Hull edge convolution macro.
@@ -290,19 +281,9 @@ struct FBoxPointCheckInfo : public FBoxCheckInfo
 		}
 		if( !Outside && Model.Nodes(iParent).iCollisionBound!=INDEX_NONE )
 		{
-#if 0
-			while( iParent != INDEX_NONE )
-			{
-				FBspNode& Parent = Model->Nodes->Element(iParent);
-				NewSetupHulls( Parent );
-				CLIP_COLLISION_PRIMITIVE;
-				iParent = Parent.iPlane;
-			}
-#else
 			// Reached a solid leaf, so setup hulls and clip it.
 			SetupHulls(Model.Nodes(iParent));
 			CLIP_COLLISION_PRIMITIVE;
-#endif
 			// We hit.
 			Result = 0;
 		}

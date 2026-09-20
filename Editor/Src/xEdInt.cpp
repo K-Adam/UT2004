@@ -103,10 +103,6 @@ static void IntExportProp( UClass* Class, UClass* SuperClass, UClass* OuterClass
 	}
 
 	TCHAR RealValue[256 * 1024] = TEXT("");
-	//	UArrayProperty* ArrayProp = Cast<UArrayProperty>(Prop);
-	//	if ( ArrayProp )
-	//		ArrayProp->Inner->ExportTextItem( RealValue, DataBase + DataOffset, NULL, PPF_Localized );
-	//	else
 
 	// rjp 2/25/04 -
 	/* By passing in DefaultData for the Default param of ExportTextItem, we cause the exporter to only export properties that have been changed
@@ -134,44 +130,12 @@ static void IntExportProp( UClass* Class, UClass* SuperClass, UClass* OuterClass
 	   Thus, even when values of individual members of the array in ClassB is identical to the values in ClassA, those values should be exported
 	   in the ClassB section of the localization file as well
 	   -- rjp */
-	Prop->ExportTextItem( RealValue, DataBase + DataOffset, /*DefaultData ? DefaultData + DataOffset :*/ NULL, PPF_Delimited|PPF_LocalizedOnly );
+	Prop->ExportTextItem( RealValue, DataBase + DataOffset,  NULL, PPF_Delimited|PPF_LocalizedOnly );
 
 	if ( appStrlen(RealValue) == 0 || !appStricmp(RealValue,TEXT("\"\"")) )
 		return;
 
-/*	INT RealLength = appStrlen( RealValue );
-    check( RealLength < ARRAY_COUNT(RealValue) );
-
-    if( ( RealLength == 0 ) || !appStrcmp( RealValue, TEXT("\"\"") ) )
-        return;
-
-    if( Class && SuperClass && OuterClass && (OuterClass != Class) )
-    {
-        // Only export if value has changed from base class:
-		TCHAR DefaultValue[256 * 1024];
-	    
-		BYTE* DefaultDataBase = (BYTE*)&SuperClass->Defaults(0);
-/ *		if (ArrayProp)
-		{
-			FArray* DiffArr = NULL;
-			if (SuperClass && DefaultDataBase && SuperClass->IsChildOf(OuterClass))
-				DiffArr = (FArray*)(DefaultDataBase + ArrayProp->Offset);
-
-			// TODO What if DiffArr->Num() >= Arr->Num()?  Won't catch the rest of the elements, in that case
-			INT i = DataOffset / ArrayProp->Inner->ElementSize;
-			ArrayProp->Inner->ExportText( i, DefaultValue, DataBase, DiffArr && i < DiffArr->Num() ? (BYTE*)DiffArr->GetData() : NULL, PPF_Delimited );
-		}
-		else
-		{
-* /			Prop->ExportTextItem( DefaultValue, DefaultDataBase + DataOffset, NULL, PPF_Delimited );
-			check( appStrlen( DefaultValue ) < ARRAY_COUNT(DefaultValue) );
-
-			if( appStrcmp( DefaultValue, RealValue ) == 0 )
-				return;
-//		}
-    }
-*/    
-	GConfig->SetString( SectionName, KeyPrefix, RealValue, IntName/*, !ArrayProp*/ );
+	GConfig->SetString( SectionName, KeyPrefix, RealValue, IntName );
     GPropertyCount++;
 }
 
@@ -197,19 +161,7 @@ static void IntExportStruct( UClass* Class, UClass* SuperClass, UClass* OuterCla
 
             INT NewOffset = DataOffset + (Prop->Offset) + (i * Prop->ElementSize );
 
-/*			UArrayProperty* ArrayProp = Cast<UArrayProperty>(Prop);
-			if (ArrayProp)
-			{
-				INT InnerSize = ArrayProp->Inner->ElementSize, Count = 0;
-				FArray* Array = (FArray*)(DataBase + NewOffset);
-				if (Array)
-					Count = Array->Num();
-
-				for (INT j = 0; j < Count; j++)
-					IntExportProp( Class, SuperClass, AtRoot ? CastChecked<UClass>(Prop->GetOuter()) : OuterClass, ArrayProp, IntName, SectionName, *NewPrefix, (BYTE*)Array->GetData(), j * InnerSize);
-			}
-			else
- */           IntExportProp( Class, SuperClass, AtRoot ? Prop->GetOwnerClass() : OuterClass, Prop, IntName, SectionName, *NewPrefix, DataBase, NewOffset );
+            IntExportProp( Class, SuperClass, AtRoot ? Prop->GetOwnerClass() : OuterClass, Prop, IntName, SectionName, *NewPrefix, DataBase, NewOffset );
 	    }
 	}
 }

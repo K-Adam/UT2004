@@ -98,7 +98,6 @@ void FStatGraph::AddDataPoint(FString LineName, FLOAT Data, UBOOL bAutoAddLine)
 	if(!lineIx && bAutoAddLine)
 	{
 		// Pick a hue and do HSV->RGB
-		//BYTE Hue = appRound(FRange(0, 255).GetRand());
 		BYTE Hue = (Lines.Num() * 40)%255;
 		FColor randomColor(FGetHSV(Hue, 128, 255));
 		randomColor.A = 255;

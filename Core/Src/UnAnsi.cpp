@@ -432,34 +432,14 @@ CORE_API INT appStrnicmp( const TCHAR* A, const TCHAR* B, INT Count )
 
 CORE_API QWORD appStrtoq( const TCHAR* Start, TCHAR** End, INT Base )
 {
-#if UNICODE
 	return _wcstoui64( Start, End, Base );
-#else
-  #if __UNIX__
-    debugf("FIXME: appStrtoq() is undefined!");
-    return(0);
-  #else
-	return _strtoui64( Start, End, Base );
-  #endif
-#endif
 }
 
 CORE_API TCHAR* appQtoa( QWORD Num, INT Base )
 {
-#if UNICODE
 	static TCHAR Buffer[30];
 	appMemzero( Buffer, sizeof(Buffer) );
 	return _ui64tow( Num, Buffer, Base );
-#else
-	static char Buffer[30];
-	appMemzero( Buffer, sizeof(Buffer) );
-  #if __UNIX__
-    debugf("FIXME: appQtoa() is undefined!");
-    return(appItoa((INT) Num));
-  #else
-	return _ui64toa( Num, Buffer, Base );
-  #endif
-#endif
 }
 
 /*-----------------------------------------------------------------------------

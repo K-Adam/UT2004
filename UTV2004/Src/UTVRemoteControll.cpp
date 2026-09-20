@@ -4,7 +4,7 @@
 
 // Win64 compiler complains about implicit size_t to INT conversion in plain
 //  strlen(), since it could in theory lose bits, but we probably won't have
-//  a >4GB string in here.  :)  --ryan.
+//  a >4GB string in here.
 static inline INT istrlen(const char *str)
 {
     return((INT) strlen(str));
@@ -29,7 +29,6 @@ void UTVRemoteControll::Tick(void)
 void UTVRemoteControll::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 {
 	if(Data[0]==255 && Data[1]==255 && Data[2]==255 && Data[3]==255){
-		//debugf(TEXT("Got 0xff udp data from %s"), *SrcAddr.GetString(true));
 
 		if(Count>=14 && memcmp(&Data[4],"challenge rcon\n",14)==0){
 			DWORD Challenge=rand();		//fix?

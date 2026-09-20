@@ -414,7 +414,7 @@ UBOOL FkDOP::LineCheck(FkDOPLineCollisionCheck& Check,FLOAT& HitTime)
 	FVector	Time(0.f,0.f,0.f);
 	UBOOL Inside = 1;
 
-	HitTime = 0.0f;  // always initialize (prevent valgrind whining) --ryan.
+	HitTime = 0.0f;  // always initialize to keep valgrind quiet
 
 	if(Check.LocalStart.X < Min[0])
 	{

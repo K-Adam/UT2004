@@ -8,7 +8,6 @@ Revision history:
 =============================================================================*/
 
 #include "EditorPrivate.h"
-//#include <stdlib.h>
 
 /*-----------------------------------------------------------------------------
 	UAnalyzeContentCommandlet
@@ -171,7 +170,6 @@ class UAnalyzeContentCommandlet : public UCommandlet
 
 						if( !Texture->Mips.Num() )
 						{
-//							GWarn->Logf( TEXT("%s"), Texture->GetPathName() );
 							continue;
 						}
 
@@ -184,7 +182,6 @@ class UAnalyzeContentCommandlet : public UCommandlet
 
 						if( NumMips == 1 )
 						{
-							//TextureStats.BytesRGBA		+= Size * 4;
 							TextureStats.AmountNoMips	   += 1;						
 							TextureStats.MaxUSizeNoMips		= Max( TextureStats.MaxUSizeNoMips, USize );
 							TextureStats.MaxVSizeNoMips		= Max( TextureStats.MaxVSizeNoMips, VSize );
@@ -309,10 +306,6 @@ class UAnalyzeContentCommandlet : public UCommandlet
 				}
 			}
 
-#if 0
-			GWarn->Logf( TEXT("%5.d total textures consuming %11.d KByte in video memory"), TextureStats.Amount, TextureStats.Bytes / 1024);
-			GWarn->Logf( TEXT("") );
-#else
 			GWarn->Logf( TEXT("Texture Stats") );
 			GWarn->Logf( TEXT("") );
 			GWarn->Logf( TEXT("%5.d  RGBA textures consuming %11.d KByte in video memory"), TextureStats.AmountRGBA, TextureStats.BytesRGBA / 1024);
@@ -411,7 +404,6 @@ class UAnalyzeContentCommandlet : public UCommandlet
 				GWarn->Logf( TEXT("") );
 				GWarn->Logf( TEXT("") );
 			}
-#endif
 
 			// Clear stats.
 			TextureStats.Textures.Empty();

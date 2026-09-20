@@ -46,11 +46,6 @@ static const FPlane RootNodeBox = FPlane(0, 0, 0, HALF_WORLD_MAX);
 
 #define MY_BOX_SIDE_THRESHOLD	(0.1f)
 
-#if 0
-static TArray<FVector>	TmpStart;
-static TArray<FVector>	TmpEnd;
-static TArray<FBox>		TmpBox;
-#endif
 
 #if TIME_OCTREE
 // Used to make timing a little easier!
@@ -78,7 +73,6 @@ public:
 };
 #endif
 
-//#define MY_FABS(x) (Abs(x))
 #define MY_FABS(x) (fabsf(x))
 
 // New, hopefully faster, 'slabs' box test.
@@ -91,7 +85,6 @@ static UBOOL LineBoxIntersect
 	const FVector&	OneOverDirection
 )
 {
-	//const FVector* boxPlanes = &Box.Min;
 	
 	FLOAT tf, tb;
 	FLOAT tnear = 0.f;
@@ -535,10 +528,6 @@ void FOctreeNode::StoreActor(AActor *Actor, FCollisionOctree* o, const FPlane* n
 		Children = new(TEXT("FOctreeNode"))FOctreeNode[8];
 		GOctreeBytesUsed += 8 * sizeof(FOctreeNode);
 
-		// Set up children. Calculate child bounding boxes
-		//for(INT i=0; i<8; i++)
-		//	CalcChildBox(&Children[i], this, i);
-
 		// Now we need to remove each actor from this node and re-check it,
 		// in case it needs to move down the Octree.
 		TArray<AActor*> PendingActors = Actors;
@@ -669,7 +658,6 @@ void FOctreeNode::ActorZeroExtentLineCheck(FCollisionOctree* o,
 #endif
 
 				// Check line against actor's bounding box
-				//FBox ActorBox = testActor->OctreeBox;
 				UBOOL hitActorBox = LINE_BOX(testActor->OctreeBoxCenter, testActor->OctreeBoxRadii, o->ChkStart, o->ChkDir, o->ChkOneOverDir);
 
 #if TIME_OCTREE
@@ -723,13 +711,6 @@ void FOctreeNode::ActorZeroExtentLineCheck(FCollisionOctree* o,
 					NewResult->GetNext() = o->ChkResult;
 					o->ChkResult = NewResult;
 
-#if 0
-					// DEBUG CHECK - Hit time should never before any of the entry times for this node.
-					if(T0X > NewResult->Time || T0Y > NewResult->Time || T0Z > NewResult->Time)
-					{
-						int sdf = 0;
-					}
-#endif
 					// Keep track of smallest hit time.
 					if(!o->ChkFirstResult || NewResult->Time < o->ChkFirstResult->Time)
 						o->ChkFirstResult = NewResult;
@@ -1015,7 +996,7 @@ void FOctreeNode::ActorEncroachmentCheck(FCollisionOctree* o, const FPlane* node
 			FPlane childBox;
 			CalcChildBox(&childBox, nodeBox, childIXs[i]);
 			this->Children[childIXs[i]].ActorEncroachmentCheck(o, &childBox);
-			// JTODO: Should we check TRACE_StopAtFirstHit and bail out early for Encroach check?
+			// Could check TRACE_StopAtFirstHit and bail out early for the Encroach check.
 		}
 	}
 
@@ -1028,12 +1009,6 @@ void FOctreeNode::ActorEncroachmentCheck(FCollisionOctree* o, const FPlane* node
 void FOctreeNode::ActorPointCheck(FCollisionOctree* o, const FPlane* nodeBox)
 {
 	guard(FOctreeNode::ActorPointCheck);
-
-	// First, see if this actors box overlaps tthe query point
-	// If it doesn't - return straight away.
-	//FBox TestBox = FBox(o->ChkStart - o->ChkExtent, o->ChkStart + o->ChkExtent);
-	//if( !Box.Intersect(o->ChkBox) )
-	//	return;
 
 	for(INT i=0; i<Actors.Num(); i++)
 	{
@@ -1096,7 +1071,7 @@ void FOctreeNode::ActorPointCheck(FCollisionOctree* o, const FPlane* nodeBox)
 			FPlane childBox;
 			CalcChildBox(&childBox, nodeBox, childIXs[i]);
 			this->Children[childIXs[i]].ActorPointCheck(o, &childBox);
-			// JTODO: Should we check TRACE_StopAtFirstHit and bail out early for Encroach check?
+			// Could check TRACE_StopAtFirstHit and bail out early for the Encroach check.
 		}
 	}
 
@@ -1109,12 +1084,6 @@ void FOctreeNode::ActorPointCheck(FCollisionOctree* o, const FPlane* nodeBox)
 void FOctreeNode::ActorRadiusCheck(FCollisionOctree* o, const FPlane* nodeBox)
 {
 	guard(FOctreeNode::ActorRadiusCheck);
-
-	// First, see if this actors box overlaps tthe query point
-	// If it doesn't - return straight away.
-	//FBox TestBox = FBox(o->ChkStart - o->ChkExtent, o->ChkStart + o->ChkExtent);
-	//if( !Box.Intersect(o->ChkBox) )
-	//	return;
 
 	// Skip if we've already checked this actor.
 	for(INT i=0; i<Actors.Num(); i++)
@@ -1148,7 +1117,7 @@ void FOctreeNode::ActorRadiusCheck(FCollisionOctree* o, const FPlane* nodeBox)
 			FPlane childBox;
 			CalcChildBox(&childBox, nodeBox, childIXs[i]);
 			this->Children[childIXs[i]].ActorRadiusCheck(o, &childBox);
-			// JTODO: Should we check TRACE_StopAtFirstHit and bail out early for Encroach check?
+			// Could check TRACE_StopAtFirstHit and bail out early for the Encroach check.
 		}
 	}
 
@@ -1276,9 +1245,6 @@ FCollisionOctree::FCollisionOctree()
 	RootNode = new(TEXT("FCollisionOctree RootNode")) FOctreeNode;
 	GOctreeBytesUsed += sizeof(FOctreeNode);
 
-	//RootNode->Centre = FVector(0, 0, 0);
-	//RootNode->Radius = HALF_WORLD_MAX;
-
 	// Zero timers.
 	ZE_SNF_PrimMillisec = 0;
 	ZE_MNF_PrimMillisec = 0;
@@ -1369,19 +1335,6 @@ void FCollisionOctree::Tick()
 {
 	guard(FCollisionOctree::Tick);
 
-	// Draw entire Octree.
-	//RootNode->Draw(FColor(0,255,255), 1);
-
-	// Draw actors with bShowOctreeNodes set to true
-	//RootNode->DrawFlaggedActors(this);
-
-#if 0
-	for(INT i=0; i<TmpStart.Num(); i++)
-	{
-		GTempLineBatcher->AddLine(TmpStart(i), TmpEnd(i), FColor(0, 255, 0));
-		GTempLineBatcher->AddBox(TmpBox(i), FColor(70, 255, 70));
-	}
-#endif
 
 	unguard;
 }
@@ -1400,8 +1353,6 @@ void FCollisionOctree::AddActor(AActor* Actor)
 
 	if( !Actor || Actor->bDeleteMe || Actor->bPendingDelete )
 		return;
-
-	//debugf(TEXT("Add: %p : %s"), Actor, Actor->GetName());
 
 	// Do nothing if actors location is invalid
 	if( !(Actor->Location == Actor->Location) )
@@ -1466,41 +1417,15 @@ void FCollisionOctree::RemoveActor(AActor* Actor)
 	if( !Actor )
 		return;
 
-#if 0
-	if(!GIsEditor && Actor->OctreeNodes.Num() == 0)
-	{
-		debugf(TEXT("Octree Warning (RemoveActor): %s Not In Octree."), Actor->GetName() );
-		return;
-	}
-#endif
-
-#if 0
-	if( !Actor->bDeleteMe )  
-	{
-
-		FBox CurrentBox = Actor->GetPrimitive()->GetCollisionBoundingBox(Actor);  
-		CurrentBox = CurrentBox.ExpandBy(ACTORBOX_EPSILON); 
-
-		if( (CurrentBox.Max - Actor->OctreeBox.Max).GetAbsMax() > 0.0001f || (CurrentBox.Min - Actor->OctreeBox.Min).GetAbsMax() > 0.0001f )  
-		{
-			debugf( TEXT("%x %s box changed while in Octree."), Actor, Actor->GetName() );
-		}
-	}
-#endif
-
-	// JTODO: This should check even if bDeleteMe is true! But the Hash doesn't, and sometimes
-	// that is the case.
+	// Skips bDeleteMe actors like the hash does, although they can still be in the octree.
 	if( !Actor->bDeleteMe && Actor->Location!=Actor->ColLocation )
 	{
 		// make sure ColLocation not undefined
-		//check(Actor->ColLocation == Actor->ColLocation); 
 		if( !(Actor->ColLocation == Actor->ColLocation) )
 			debugf( TEXT("Octree Warning (RemoveActor): %s has invalid ColLocation"), Actor->GetName() );
 		if ( Actor->Role == ROLE_Authority )
 			debugf( TEXT("Octree Warning (RemoveActor): %s moved without proper hashing"), Actor->GetName() );
 	}
-
-	//debugf(TEXT("Remove: %p : %s"), Actor, Actor->GetName());
 
 	guard(IterateNodes);
 	// Work through this actors list of nodes, removing itself from each one.
@@ -1542,7 +1467,6 @@ FCheckResult* FCollisionOctree::ActorLineCheck(FMemStack& Mem,
 
 	// Fill in temporary data.
 	CollisionTag++;
-	//debugf(TEXT("LINE CHECK: CT: %d"), CollisionTag);
 
 	ChkResult = NULL;
 

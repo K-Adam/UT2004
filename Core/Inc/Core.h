@@ -20,7 +20,7 @@
 
 #include <typeinfo>
 
-// OS X doesn't define __GNUG__, apparently.  --ryan.
+// OS X doesn't define __GNUG__.
 #if ((defined __GNUC__) && (!defined __GNUG__))
   #define __GNUG__ 1
 #endif
@@ -51,13 +51,9 @@
 #define FTime DOUBLE
 
 #ifdef _WIN64
-  #if 1 //!!! FIXME: Where is this defined? ((defined _AMD64) || (defined AMD64))
     #ifndef __x86_64__
       #define __x86_64__ 1
     #endif
-  #else
-    #error Not a Hammer build? You might have problems.
-  #endif
 #endif
 
 #if (defined __x86_64__)
@@ -152,7 +148,6 @@ enum ERunningOS
 #endif
 
 #if __UNIX__
-// !!! FIXME: dirty, dirty, dirty.  --ryan.
 extern CORE_API TCHAR *GUnixSpawnOnExit;
 #endif
 
@@ -473,7 +468,7 @@ private:
 // gethostbyname() returns a static buffer that is overwritten
 //  each call, so we need to serialize access to it so that correct
 //  results make it back for each query. This is largely for IpDrv, but
-//  UnUnix.cpp uses gethostbyname(), too, so it's in Core. --ryan.
+//  UnUnix.cpp uses gethostbyname(), too, so it's in Core.
 CORE_API extern FCriticalSection *gethostbyname_mutex;
 
 
@@ -542,7 +537,7 @@ CORE_API extern UBOOL					GShowBuildLabel; // gam
 CORE_API extern UBOOL					GIsClocking; 
 CORE_API extern class FGlobalMath		GMath;
 CORE_API extern class FArchive*         GDummySave;
-CORE_API extern FLOAT					GAudioMaxRadiusMultiplier; //!! vogel: TODO: merge audio globals into one struct
+CORE_API extern FLOAT					GAudioMaxRadiusMultiplier;
 CORE_API extern FLOAT					GAudioDefaultRadius;
 CORE_API extern TArray<FEdLoadError>	GEdLoadErrors;
 CORE_API extern	UDebugger*				GDebugger; //DEBUGGER

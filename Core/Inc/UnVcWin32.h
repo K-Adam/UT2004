@@ -233,7 +233,7 @@ typedef unsigned long PTRINT;
 #define GCC_ALIGN(n) 
 #define GCC_MOVE_ALIGN(n) 
 
-// This is for gcc bugs, mostly.  --ryan.
+// This is for gcc bugs, mostly.
 #ifndef BUGGYINLINE
 #define BUGGYINLINE inline
 #endif
@@ -256,11 +256,10 @@ extern CORE_API ANSICHAR GModule[32];
 ----------------------------------------------------------------------------*/
 
 extern "C" void* __cdecl _alloca(size_t);
-//#define appAlloca(size) _alloca((size+7)&~7)
 #define appAlloca(size) ((size==0) ? 0 : _alloca((size+7)&~7))
 
 #include <math.h>
-#include <float.h>  // newer platform sdk's need this for _isnan(). --ryan.
+#include <float.h>  // newer platform sdk's need this for _isnan().
 #define DEFINED_appMathIntrinsics 1
 #define appExp(x) exp(x)
 #define appLoge(x) log(x)

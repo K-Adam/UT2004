@@ -55,13 +55,6 @@ void UInteractionMaster::DisplayCopyright(void)
 {
 	guard(UninteractionMaster::DisplayCopyright);
 
-    /* gam ---
-	GWarn->Logf(LocalizeGeneral("Engine",TEXT("Core")));
-	GWarn->Logf(LocalizeGeneral("Copyright",TEXT("Core")));
-	GWarn->Logf(TEXT(" "));
-	GWarn->Logf(TEXT(" "));
-    --- gam */
-
 	unguard;
 }
 

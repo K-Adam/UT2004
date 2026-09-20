@@ -189,7 +189,7 @@ void MEAPI KDebugHandler(const int level, const char *const format,va_list ap)
         
     strncpy(message, karmaString, sizeof message);
     tmp = message + strlen(karmaString);
-    (void) vsprintf(tmp,format,ap); /* KTODO: Should be vsnprintf! */
+    (void) vsnprintf(tmp,sizeof(message)-(tmp-message),format,ap);
     tmp = message + strlen(message) - 1; /* Knock off final character (if its a newline) */
     if(*tmp == '\n')
         *tmp = '\0';
@@ -210,7 +210,7 @@ void MEAPI KErrorHandler(const int level, const char *const format,va_list ap)
         
     strncpy(message, karmaString, sizeof message);
     tmp = message + strlen(karmaString);
-    (void) vsprintf(tmp,format,ap); /* KTODO: Should be vsnprintf! */
+    (void) vsnprintf(tmp,sizeof(message)-(tmp-message),format,ap);
     tmp = message + strlen(message) - 1; /* Knock off final character (if its a newline) */
     if(*tmp == '\n')
         *tmp = '\0';
@@ -383,7 +383,6 @@ void MEAPI KUpdateJoined(AActor* actor, UBOOL newTag)
 {
 	guard(KUpdateJoined);
 
-	// JTODO: Should this go somewhere better? Slightly unpleasant.
 	static INT currentJoinedTag = 0;
 
 	// Get a new tag number.
@@ -818,8 +817,6 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 			MatrixScalePosition(tmpTM, scale3D);
 			McdAggregateAddElement(aggGeom, tmpGeom, tmpTM);
 		}
-		//else
-		//	debugf(TEXT("(Karma:) Could not create Convex geometry for Actor: %s"), name);
 
 		MeMemoryFREEA(verts);
 	}
@@ -968,7 +965,6 @@ static void AddConvexPrim(FKAggregateGeom* outGeom, TArray<FPlane> &planes, UMod
 		}
 	}
 
-#if 1
 	// We need at least 4 vertices to make a convex hull with non-zero volume.
 	// We shouldn't have the same vertex multiple times (using AddVertexIfNotPresent above)
 	if(c->VertexData.Num() < 4)
@@ -1020,7 +1016,6 @@ static void AddConvexPrim(FKAggregateGeom* outGeom, TArray<FPlane> &planes, UMod
 		outGeom->ConvexElems.Remove(ex);
 		return;
 	}
-#endif
 
 	unguard;
 }
@@ -1339,7 +1334,7 @@ void MEAPI KCreateAssetDB(MeAssetDB** db, McdGeomMan** gm)
 					char *data = (char*)chararray.GetData();
 					char *out = (char*)MeMemoryAPI.create(512);
 
-					#if WIN32 // !!! FIXME: this conflicts on Linux. --ryan.
+					#if WIN32 // this conflicts on Linux.
 						wcstombs(out, (unsigned short*)data, 512);
 					#else
 						strncpy(out, appToAnsi((TCHAR *) data), 512);
@@ -1348,13 +1343,6 @@ void MEAPI KCreateAssetDB(MeAssetDB** db, McdGeomMan** gm)
 					char *filename = (char*)MeMemoryAPI.create(strlen(out)+32);
 					filename[0] = 0;
 
-/*
-					#if WIN32   // !!! FIXME: more cross-platform fun!  --ryan.
-						filename = strcat(filename, "..\\KarmaData\\");
-					#else
-						filename = strcat(filename, "../KarmaData/");
-					#endif
-*/
 					filename = strcat(filename,out);
 
 					stream = MeStreamOpen(filename, kMeOpenModeRDONLY);
@@ -1377,8 +1365,6 @@ void MEAPI KCreateAssetDB(MeAssetDB** db, McdGeomMan** gm)
 			}
 		}
 
-        /* Load all geometrys/models/joints from XML into Asset DB */
-        //MeAssetDBLoadAllAssets(*db);
     }
 
 	MeAssetDBXMLInputDestroy(input);
@@ -1440,11 +1426,9 @@ void KBodySetInertiaTensor(const MdtBodyID b, const MeMatrix3 i)
 
     MeMatrix3Copy(clamped,i);
 
-#if 1
 	clamped[0][0] = MeCLAMP(clamped[0][0], iMag / MDTBODY_INERTIA_RANGE_LIMIT, iMag * MDTBODY_INERTIA_RANGE_LIMIT);
 	clamped[1][1] = MeCLAMP(clamped[1][1], iMag / MDTBODY_INERTIA_RANGE_LIMIT, iMag * MDTBODY_INERTIA_RANGE_LIMIT);
 	clamped[2][2] = MeCLAMP(clamped[2][2], iMag / MDTBODY_INERTIA_RANGE_LIMIT, iMag * MDTBODY_INERTIA_RANGE_LIMIT);
-#endif
 
     for (j = 0; j < 3; j++)
     {
@@ -1462,11 +1446,9 @@ void KBodySetMass(const MdtBodyID b, const MeReal mass)
 {
     b->mass = mass;
 
-#if 1
 	b->mass = MeCLAMP(b->mass, 
 		b->world->params.massScale / MDTBODY_MASS_RANGE_LIMIT, 
 		b->world->params.massScale * MDTBODY_MASS_RANGE_LIMIT);
-#endif
 
     b->keaBody.invmass = MeRecip(b->mass);
 }

@@ -109,7 +109,7 @@ UBOOL UVertMeshInstance::UpdateAnimation(FLOAT DeltaSeconds)
 				BaseChannel.AnimFrame += BaseChannel.AnimRate * DeltaSeconds;
 			else
 				BaseChannel.AnimFrame += ::Max( 0.3f, OurActor->Velocity.Size() * -BaseChannel.AnimRate ) * DeltaSeconds;
-			//FIXME - instead of fixed 0.3, make it an animation attribute?
+			// The fixed 0.3 could be an animation attribute.
 
 			// Handle all animation sequence notifies.
 			if( BaseChannel.bAnimNotify && OurActor->Mesh ) //#debug
@@ -201,7 +201,6 @@ UBOOL UVertMeshInstance::UpdateAnimation(FLOAT DeltaSeconds)
 	// Check deletion status.
 	if( GetStatus() & MINST_DeleteMe )
 	{
-		//debugf(TEXT("Vertex mesh instance deleting itself: [%s]"),this->GetName()); 
 		delete this;		
 	}
 	else
@@ -292,9 +291,6 @@ UBOOL UVertMeshInstance::PlayAnim(INT channel,FName SequenceName, FLOAT InRate, 
 			BaseChannel.OldAnimRate   = BaseChannel.AnimRate;		
 			return 1;
 		}
-
-		//if( BaseChannel.AnimSequence == NAME_None )
-		//	InTweenTime = 0.0f;
 
 		BaseChannel.AnimSequence  = SequenceName;
 		BaseChannel.OrigRate      = SeqRate / SeqFrameCount;
@@ -561,7 +557,6 @@ void UVertMeshInstance::SetScale( FVector NewScale )
 	Mesh->Scale = NewScale;
 	// Maximum mesh scaling dimension for LOD gauging.
 	Mesh->MeshScaleMax = (1.f/ 128.f) * Mesh->BoundingSphere.W * Max(Abs(Mesh->Scale.X), Max(Abs(Mesh->Scale.Y), Abs(Mesh->Scale.Z)));
-	//debugf(TEXT("New MeshScaleMax %f "),MeshScaleMax);  
 
 	unguard;
 }
@@ -592,7 +587,7 @@ UBOOL UVertMeshInstance::StopAnimating()
 	guard(UVertMeshInstance::IsAnimating);
 	if( OurActor )
 	{
-		if(1)//if ( Channel == 0 )
+		if(1)
 		{
 			//#SKEL 
 			BaseChannel.AnimSequence = NAME_None;
@@ -737,10 +732,6 @@ INT UVertMesh::RenderPreProcess()
 
 		// Both vertex and normals set dynamically in getframe..
 
-		// INT PointIndex = Wedges(WedgeIdx).iVertex;
-		// Vert.Position = Points(PointIndex);
-		// Vert.Normal = Points(PointIndex) + ( Normals(PointIndex) * 0.1f);  
-		// uses 'offset point', easier for skeletal combination of normals.
 		Vert->U = (Wedges(WedgeIdx).TexUV.U);
 		Vert->V = (Wedges(WedgeIdx).TexUV.V);
 	}
@@ -766,16 +757,11 @@ INT UVertMesh::RenderPreProcess()
 			
 		if( !Section || ( ThisMatIndex != Section->MaterialIndex ) )
 		{
-			//debugf(TEXT("New section %i for material index %i"),this->LODChunks[LodIdx].Sections.Num(),ThisMatIndex ); 
 		
 			// Create a new static mesh section.
 			Section = new(this->LODChunks[LodIdx].Sections) FLODMeshSection;
 			Section->FirstFace = FaceIndex;
 			Section->MaterialIndex = ThisFace.MeshMaterialIndex;
-			// Indices filled later, dynamically
-			// Section->FirstIndex = LODChunks[LodIdx].IndexBuffer.Indices.Num(); 
-			//Section->MinIndex = Wedges.Num();
-			//Section->MaxIndex = 0; 
 
 			Section->MinIndex = 0;
 			Section->MaxIndex = Wedges.Num()-1; 
@@ -784,23 +770,9 @@ INT UVertMesh::RenderPreProcess()
 			Section->TotalFaces = 0;
 		}
 
-		// For each vertex in the triangle...
-		// #ERROR: this does not properly take into account any LOD.
-		/*
-		for(INT VertexIndex = 0;VertexIndex < 3;VertexIndex++)
-		{
-			INT ThisVertIdx = ThisFace.iWedge[VertexIndex]; 
-			// Update the current section's minimum/maximum index hints.
-			Section->MinIndex = Min<_WORD>(Section->MinIndex, ThisVertIdx );
-			Section->MaxIndex = Max<_WORD>(Section->MaxIndex, ThisVertIdx );
-		}
-		*/
-
 		// Update the section's triangle count.
 		Section->TotalFaces++;
 	}
-	// debugf(TEXT("LODChunk [%i] IndexBuffer indices: %i"),LodIdx,LODChunks[LodIdx].IndexBuffer.Indices.Num());
-	// #TODO - delete geometry data made redundant by having vertex/index buffers (too dangerous currently - game-time-only?)
 
 	return 1;
 	unguard;
@@ -926,10 +898,6 @@ void UVertMeshInstance::GetFrame
 	FVector* CachedNorms    = &CachedMeshNormals(0);
 	const FMeshAnimSeq* Seq = GetAnimSeq( BaseChannel.AnimSequence );
 
-	// Coords                  = Coords * (Owner->Location + Owner->PrePivot) * Owner->Rotation * Mesh.RotOrigin * FScale(Mesh.Scale * Owner->DrawScale3D * Owner-> DrawScale,0.f,SHEER_None);
-	// FCoords LocalCoords = Coords;
-	// LocalCoords.Origin += Mesh.Origin;
-
 	if( BaseChannel.AnimFrame>=0.f || !WasCached )
 	{		
 		LODRequest = VertexNum; // How many regular vertices returned.
@@ -946,11 +914,9 @@ void UVertMeshInstance::GetFrame
 			iFrameOffset1 = (Seq->StartFrame + ((iFrame + 0) % Seq->NumFrames)) * Mesh.ModelVerts;
 			iFrameOffset2 = (Seq->StartFrame + ((iFrame + 1) % Seq->NumFrames)) * Mesh.ModelVerts;
 
-			//debugf(TEXT(" ModelVerts %i FrameOffset 1, 2  %i %i  Total vertices: %i "),Mesh.ModelVerts,iFrameOffset1,iFrameOffset2,Mesh.Verts.Num() ) ; 
 		}
 		else 
 		{
-			//debugf(TEXT(" Static ModelVerts %i FrameOffset 1, 2  %i %i  Total vertices: %i "),Mesh.ModelVerts,iFrameOffset1,iFrameOffset2,Mesh.Verts.Num() ) ; 
 		}
 
 		// Special case Alpha 0. 
@@ -1033,7 +999,6 @@ void UVertMeshInstance::GetFrame
 				for( INT i=VertexNum; i<VertsRequested; i++ )
 				{
 					CachedVerts[i]= FVector( MeshVertex[i].X, MeshVertex[i].Y, MeshVertex[i].Z );
-					//CachedNorms[i]= FVector( MeshNormal[i].X ,MeshNormal[i].Y , MeshNormal[i].Z  );
 					CachedNorms[i]= FVector( MeshNormal[i].X - 512.0f, MeshNormal[i].Y - 512.0f, MeshNormal[i].Z - 512.0f );
 				}
 				VertexNum = VertsRequested;
@@ -1058,7 +1023,6 @@ void UVertMeshInstance::GetFrame
 				FVector V2( MeshVertex[i].X, MeshVertex[i].Y, MeshVertex[i].Z );
 				CachedVerts[i] += (V2 - CachedVerts[i]) * Alpha;
 
-				//FVector N2( MeshNormal[i].X , MeshNormal[i].Y , MeshNormal[i].Z );
 				FVector N2( MeshNormal[i].X-512.0f , MeshNormal[i].Y-512.0f , MeshNormal[i].Z-512.0f );
 				CachedNorms[i] += (N2 - CachedNorms[i]) * Alpha;
 			}
@@ -1084,7 +1048,7 @@ void UVertMeshInstance::GetFrame
 			if( Mesh.Wedges(v).iVertex < VertexNum ) // LOD check, only transform necessary ones.
 			{
 				INT Idx = Mesh.Wedges(v).iVertex;
-				*ResultVerts       = CachedVerts[Idx]; // .TransformPointBy(LocalCoords);
+				*ResultVerts       = CachedVerts[Idx];
 				*(ResultVerts + 1) = CachedNorms[Idx];
 				// Normals: not normalized, hardware renderer automatically normalizes.
 			}
@@ -1102,7 +1066,6 @@ void UVertMeshInstance::GetFrame
 			UCanvas* Canvas = SceneNode->Viewport->Canvas;
 			FString	AnimString;			
 			AnimString = FString::Printf(TEXT(" Animation - mesh:%s actor:%s  instance:%s channels:"),Mesh.GetName(),  AnimOwner->GetName(), this->GetName() );
-			//SceneNode->Viewport->AnimStats.IntStat( *AnimString,TEXT(" ")) = Blends.Num();
 			Canvas->CurY += 6;
 			VertDrawStat(Canvas, FColor(255,255,0),4,TEXT("%s"),*AnimString); // Title string
 			Canvas->CurY += 3;
@@ -1134,18 +1097,16 @@ FMatrix UVertMeshInstance::MeshToWorld()
 	FMatrix NewMatrix;
 	
 	if(bIgnoreMeshOffset)
-		NewMatrix = //FTranslationMatrix( OurMesh->Origin  ) *
+		NewMatrix =
 		    FScaleMatrix( OurActor->DrawScale3D * OurActor->DrawScale * OurMesh->Scale ) * 
 			FRotationMatrix( OurActor->Rotation ) *
 			FTranslationMatrix( OurActor->Location );
-			//FTranslationMatrix( OurMesh->Origin  );  
 	else
-		NewMatrix = //FTranslationMatrix( OurMesh->Origin  ) *
+		NewMatrix =
 		         FScaleMatrix( OurActor->DrawScale3D * OurActor->DrawScale * OurMesh->Scale ) * 
 				 FRotationMatrix( OurMesh->RotOrigin ) *			 
 				 FRotationMatrix( OurActor->Rotation ) *
 				 FTranslationMatrix( OurActor->Location + OurActor->PrePivot );
-				 //FTranslationMatrix( OurMesh->Origin  );  
 
 	FVector XAxis( NewMatrix.M[0][0], NewMatrix.M[1][0], NewMatrix.M[2][0] );
 	FVector YAxis( NewMatrix.M[0][1], NewMatrix.M[1][1], NewMatrix.M[2][1] );
@@ -1215,11 +1176,6 @@ void UVertMeshInstance::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,T
             FRotationMatrix( OurActor->Rotation ) *
             FTranslationMatrix( OurMesh->Origin  ) * localWorld; 
 
-            /*FRotationMatrix(OurActor->Rotation) * FRotationMatrix(OurMesh->RotOrigin)
-            * FScaleMatrix(OurActor->DrawScale3D * OurActor->DrawScale * OurMesh->Scale)
-            * FTranslationMatrix( OurMesh->Origin )
-            * localWorld;*/
-
         RI->SetTransform(TT_LocalToWorld,localWorld);
     }
     else
@@ -1268,7 +1224,7 @@ void UVertMeshInstance::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,T
 		ExtraFlags |= (PF_Wireframe | PF_FlatShaded);
 	
 	// Setup a vertex stream, expected to change every frame ( if not, use a static mesh! ) 
-	INT	RequestedVerts = VertexSubset; // VertMesh->VertexBuffer->Vertices.Num();
+	INT	RequestedVerts = VertexSubset;
 	
 	// GETFRAME
 	// This initializes the VertMesh animated 3d points.
@@ -1318,11 +1274,6 @@ void UVertMeshInstance::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,T
 		}   
 		DynSectionFaces.AddItem(LodFaces);		
 	}
-
-	
-	// Set the lights.
-	// AZoneInfo*	ZoneInfo = SceneNode->Level->GetZoneActor(Owner->Actor->Region.ZoneNumber);
-	// RI->SetAmbientLight(FColor(FGetHSV(ZoneInfo->AmbientHue,ZoneInfo->AmbientSaturation,ZoneInfo->AmbientBrightness)));
 
 	if( Wireframe )
 	{
@@ -1391,11 +1342,6 @@ void UVertMeshInstance::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,T
 		RI->SetMaterial(MeshFlatframeShader);
 	}
 
-	// jij --- umm, ok...
-    //if(!SceneNode->Viewport->IsWire() && (SceneNode->Viewport->Actor->ShowFlags & SHOW_Projectors))
-	//{
-    /// --- jij
-
 	// Now finally draw the stuff.
 	for( INT SectionIndex = 0; SectionIndex < VertMesh->LODChunks[LodIdx].Sections.Num(); SectionIndex++ )
 	{
@@ -1438,17 +1384,12 @@ void UVertMeshInstance::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,T
 
 			}
 		}
-	// jij ---
-    //}
-    // --- jij
-
-	// TODO: projected shadows ?	
 
 	// Debug visibility bounding box drawing 
 	if( SceneNode->Viewport->bShowBounds )
 	{
 		FLineBatcher LineBatcher(RI);
-		FBox BoundBox = Owner->BoundingBox;      //GetRenderBoundingBox((AActor*)Actor); // Bounding box in world space;
+		FBox BoundBox = Owner->BoundingBox; // Bounding box in world space
 		RI->SetTransform(TT_LocalToWorld, FMatrix::Identity);
 		LineBatcher.DrawBox( BoundBox, FColor(72,90,255) );
 	}

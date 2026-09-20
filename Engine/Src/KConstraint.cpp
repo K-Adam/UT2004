@@ -188,27 +188,6 @@ void MEAPI KInitConstraintKarma(AKConstraint* con)
         con->KPriAxis2.X, con->KPriAxis2.Y, con->KPriAxis2.Z, 
         con->KSecAxis2.X, con->KSecAxis2.Y, con->KSecAxis2.Z);
 
-#if 0
-    /* Constraint-specific configuration. */
-	if(con->IsA(AKCarWheelJoint::StaticClass()))
-    {
-        MdtCarWheelID cw = MdtConstraintDCastCarWheel(mdtCon);
-		
-        /* Because car-wheel doesn't use the axis set above, we have to do them here. */
-
-		// HACK - Because CarWheel stores position rel to chassis COM (NOT chassis origin)
-		// have to compensate here. This WILL be fixed in Karma soon!!
-		MeVector3 relPos;
-		MeMatrix4 comRelTM;
-        KU2MEVecCopy(relPos, con->KPos1);
-		MdtBodyGetCenterOfMassRelativeTransform(b1, comRelTM);
-		MeVector3Subtract(cw->pos1, relPos, comRelTM[3]);
-
-        KU2MEVecCopy(cw->haxis1, con->KPriAxis1);
-        KU2MEVecCopy(cw->haxis2, con->KPriAxis2);
-        KU2MEVecCopy(cw->saxis1, con->KSecAxis2);
-    }
-#endif
 	
 	/* Set pointers between objects */
 	con->KConstraintData = (PTRINT)mdtCon;
@@ -320,18 +299,12 @@ void AKCarWheelJoint::preKarmaStep(FLOAT DeltaTime)
 	{
 		// If not braking...
 		// If there is a drive torque (+/-), apply it.
-#if 0
-		MdtCarWheelSetHingeLimitedForceMotor(mdtCW, 0, 0); // turn off motor
-		MdtBodyAddTorque(tBody, KMotorTorque*haxis[0], KMotorTorque*haxis[1], KMotorTorque*haxis[2]);
-		MdtBodyAddTorque(cBody, -KMotorTorque*haxis[0], -KMotorTorque*haxis[1], -KMotorTorque*haxis[2]);
-#else
 		if(KMotorTorque > 0.01)
 			MdtCarWheelSetHingeLimitedForceMotor(mdtCW, K_U2Rad * KMaxSpeed, KMotorTorque);
 		else if(KMotorTorque < -0.01)
 			MdtCarWheelSetHingeLimitedForceMotor(mdtCW, -K_U2Rad * KMaxSpeed, -KMotorTorque);
 		else
 			MdtCarWheelSetHingeLimitedForceMotor(mdtCW, 0, 0); // turn off motor
-#endif
 	}
 
     // Update steering controller
@@ -364,35 +337,6 @@ void AKCarWheelJoint::preKarmaStep(FLOAT DeltaTime)
 	MeReal meWheelHeight = MeVector3Dot(relPos, saxisDir);
     KWheelHeight = K_ME2UScale * meWheelHeight;
 	
-#if 0
-	// If wheel has moved beyond suspension range - reset 
-	MeReal newHeight;
-	if(meWheelHeight < 0.6 * this->KSuspLowLimit)
-		newHeight = 0.6 * this->KSuspLowLimit;
-	else if(meWheelHeight > 0.6 * this->KSuspHighLimit)
-		newHeight = 0.6 * this->KSuspHighLimit;
-	else
-		return;
-
-	debugf(TEXT("Adjust Wheel: %"), meWheelHeight);
-
-	// So we needed to adjust wheel position
-	MeVector3 newWheelPos;
-	MeVector3Copy(newWheelPos, saxisDir);
-	MeVector3Scale(newWheelPos, newHeight);
-	MeVector3Add(newWheelPos, jPos, newWheelPos);
-
-	MdtBodySetPosition(tBody, newWheelPos[0], newWheelPos[1], newWheelPos[2]);
-
-	// kill any velocity in suspension direction
-	MeVector3 newWheelVel, suspComp;
-	MdtBodyGetLinearVelocity(tBody, newWheelVel);
-	MeVector3Copy(suspComp, newWheelVel);
-	MeReal suspCompMag = MeVector3Dot(newWheelVel, saxisDir);
-	MeVector3Copy(suspComp, saxisDir);
-	MeVector3Scale(suspComp, suspCompMag);
-	MeVector3Subtract(newWheelVel, newWheelVel, suspComp);
-#endif
 
     unguard;
 }
@@ -474,7 +418,7 @@ void AKConstraint::physKarma(FLOAT deltaTime)
 		MdtConstraintGetPosition(mdtCon, cPos);
 		KME2UPosition(&newPos, cPos);
 		moveBy = newPos - this->Location; 
-		rot = FRotator(0, 0, 0); // KTODO: Should we calculate some orientation for the constraint? Are people going to add graphics to them?
+		rot = FRotator(0, 0, 0);
 		GetLevel()->MoveActor(this, moveBy, rot, Hit);
 
 		if(IsProbing(ENGINE_KForceExceed))

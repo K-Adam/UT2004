@@ -29,13 +29,6 @@ static FString GetDirName( const FString &Path )
 
 static void DoTexture( UTexture* Texture, UPackage* Package )
 {
-    /*
-    if( Texture->Detail )
-    {
-        GWarn->Logf( TEXT("POKE Texture %s Detail %s"), Texture->GetPathName(), Texture->Detail->GetPathName() );
-        GWarn->Logf( TEXT("POKE Texture %s DetailScale %f"), Texture->GetPathName(), Texture->DetailScale );
-    }
-    */
     
     if( Texture->Format == TEXF_DXT5 )
     {

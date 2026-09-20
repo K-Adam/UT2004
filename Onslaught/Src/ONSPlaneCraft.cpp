@@ -69,17 +69,9 @@ void AONSPlaneCraft::UpdateVehicle(FLOAT DeltaTime)
 
 	FVector Up(0.0f, 0.0f, 1.0f);
 
-	// Get body angular velocity (JTODO: Add AngularVelocity to Actor!)
+	// Get body angular velocity. AngularVelocity could be added to Actor.
 	FKRigidBodyState rbState;
 	KGetRigidBodyState(&rbState);
-	//FVector AngVel(rbState.AngVel.X, rbState.AngVel.Y, rbState.AngVel.Z);
-	//FLOAT TurnAngVel = AngVel | Up;
-	//FLOAT RollAngVel = AngVel | DirX;
-	//FLOAT PitchAngVel = AngVel | DirY;
-
-	/*FLOAT ForwardVelMag = Velocity | Forward;*/
-	//FLOAT RightVelMag = Velocity | Right;
-	//FLOAT UpVelMag = Velocity | Up;
 
     if(!this->KParams)
         return;
@@ -94,14 +86,12 @@ void AONSPlaneCraft::UpdateVehicle(FLOAT DeltaTime)
     FVector UpAxis, RightAxis, ForwardAxis;
     FVector StabilizerTorqueAxis;
     FVector DesiredDir;
-    //FLOAT GroundDist, DotAngle, PctBank;
     FRotator ViewOffset, DesiredRot;
 
 	if (Controller)
 	{
 		INT ViewOffsetPitch = Controller->Rotation.Pitch & 65535;
 		INT ViewOffsetYaw = Controller->Rotation.Yaw & 65535;
-		//DebugInfo = FString::Printf(TEXT("Controller->Rotation.Pitch: %d"), Controller->Rotation.Pitch); 
 
 		if (ViewOffsetPitch > 32768)
 			ViewOffsetPitch -= 65535;
@@ -132,8 +122,6 @@ void AONSPlaneCraft::UpdateVehicle(FLOAT DeltaTime)
 		// RELATIVE WIND //
 		LateralVelocity = (Velocity | DirY) * DirY;
 		RelativeWindVelocity = -(Velocity - LateralVelocity); // Remove the Y component of the velocity and take the inverse
-		//GTempLineBatcher->AddLine(Location, Location - RelativeWindVelocity, FColor( FPlane(0.0f,1.0f,0.0f,0.f)));
-		//GTempLineBatcher->AddLine(Location, Location + DirX * 750.0, FColor( FPlane(0.0f,0.0f,1.0f,0.f)));
 		RelativeWindFactor = AirFactor * RelativeWindVelocity.Size() * RelativeWindVelocity.Size();
 
 		// ANGLE OF ATTACK //
@@ -144,17 +132,14 @@ void AONSPlaneCraft::UpdateVehicle(FLOAT DeltaTime)
 
 		// LIFT //
 		Lift = DirZ * LiftCoefficientCurve.Eval(AngleOfAttack) * RelativeWindFactor;
-		//GTempLineBatcher->AddLine(Location, Location + Lift, FColor( FPlane(1.0f,0.0f,1.0f,0.f)));
 
 		// DRAG //
 		FVector NormalizedVelocity = Velocity;
 		NormalizedVelocity.Normalize();
 		Drag = DragCoefficientCurve.Eval(AngleOfAttack) * RelativeWindFactor * -NormalizedVelocity;
-		//GTempLineBatcher->AddLine(Location, Location + Drag, FColor( FPlane(1.0f,0.0f,1.0f,0.f)));
 
 		// ADD FORCES AND APPLY	
 		FVector Force = Thrust + Lift + Drag - LateralVelocity * 0.2f;
-		//DebugInfo = FString::Printf(TEXT("Angle of Attack: %f   Cl: %f   Lift: %f   Drag %f"), AngleOfAttack, LiftCoefficientCurve.Eval(AngleOfAttack), LiftCoefficientCurve.Eval(AngleOfAttack) * RelativeWindFactor, DragCoefficientCurve.Eval(AngleOfAttack) * RelativeWindFactor);
 
 		////////////
 		// TORQUE //
@@ -169,20 +154,12 @@ void AONSPlaneCraft::UpdateVehicle(FLOAT DeltaTime)
 		ViewOffset.Yaw = -ViewOffsetYaw;
 		ViewOffset.Roll = 0;
 
-	//    	DesiredDir = vector(ViewOffset);
-	//        DesiredDir.X *= -1;
-	//        DesiredDir = DesiredDir >> Rotation;
-	//        DesiredUpAxis = vect(0,0,1) >> rotator(DesiredDir);
-
 		// Pitching Torque
 		FLOAT PitchTorqueScale = fabs((FLOAT)ViewOffset.Pitch / 4096.0f);
 		if (ViewOffset.Pitch > 0)
     		CurPitchTorque = PitchTorque * Min(RelativeWindVelocity.Size() / 3000.0f, 1.0f) * PitchTorqueScale * DirY;
 		else
     		CurPitchTorque = PitchTorque * Min(RelativeWindVelocity.Size() / 3000.0f, 1.0f) * PitchTorqueScale * -DirY;
-
-		//// Pitch Dampening
-		//PitchDampening = -CurPitchTorque * AngleOfAttack / 90.0f;
 
 		// Banking Torque
 		FLOAT BankTorqueScale = fabs((FLOAT)ViewOffset.Yaw / 4096.0f);
@@ -191,46 +168,11 @@ void AONSPlaneCraft::UpdateVehicle(FLOAT DeltaTime)
 		else
 			CurBankTorque = BankTorque * Min(RelativeWindVelocity.Size() / 3000.0f, 1.0f) * BankTorqueScale * -DirX;
 
-		//// Bank Dampening
-		//BankDampening = -CurBankTorque * AngleOfAttack / 90.0f;
-
-		// Banking Pitch Torque
-		//FLOAT BankingPitchTorqueScale = 0.0;
-		//if ((ViewOffset.Yaw >= 0) && ((Rotation.Roll & 65535) > 32768))
-		//	 BankingPitchTorqueScale = Min(fabs(((Rotation.Roll & 65535) - 65536) / 16384.0), 1.0);
-		//else if ((ViewOffset.Yaw <= 0) && ((Rotation.Roll & 65535) < 32768))
-		//	BankingPitchTorqueScale = Min(fabs((Rotation.Roll & 65535) / 16384.0), 1.0);
-		
-		//CurBankingPitchTorque = PitchTorque * BankingPitchTorqueScale * -DirY; 
-		//DebugInfo = FString::Printf(TEXT("BankingPitchTorqueScale: %f"), BankingPitchTorqueScale);
-		//debugf(TEXT("ViewOffset.Pitch: %d    ViewOffset.Yaw: %d"), ViewOffset.Pitch, ViewOffset.Yaw);
-		//debugf(TEXT("PitchTorqueScale: %f    BankTorqueScale: %f"), PitchTorqueScale, BankTorqueScale);
-
-		//if ((Rotation.Roll & 65535) > 32768)
-		//    PctBank = abs(((Rotation.Roll & 65535) - 65536) / 16384.0);
-		//else
-		//    PctBank = abs((Rotation.Roll & 65535) / 16384.0);
-
-		//BankSpringTorque = -CurBankTorque * PctBank;
-		//CurBankingPitchTorque = BankingPitchTorque * PctBank * DirY;
-
-		// Stabilizing Torque
-		//DesiredRot.Pitch = -1000;
-		//DesiredRot.Yaw = Rotation.Yaw;
-		//DesiredRot.Roll = 0;
-		//DesiredDir = FVector(0,0,1) >> DesiredRot;
-
-		//StabilizerTorqueAxis = Normal(UpAxis cross DesiredDir);
-		//DotAngle = FClamp(UpAxis dot DesiredDir, -0.9999, 0.9999);
-		//StabilizerTorqueScale = ACos(DotAngle)/3.1416;
-		//CurStabilizerTorque += StabilizerTorque * StabilizerTorqueScale * StabilizerTorqueAxis;
-
 		FVector Torque = CurPitchTorque + PitchDampening + CurBankTorque + BankDampening;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		// Apply force/torque to body.
-		//debugf(TEXT("BankTorqueScale: %f   ViewOffset.Yaw: %f"), BankTorqueScale, ViewOffset.Yaw);
 		KAddForces(Force, Torque);
 	}
 
@@ -368,8 +310,6 @@ void AONSPlaneCraft::PostNetReceive()
 	OutputRise = PlaneState.ServerRise;
 	DriverViewPitch = PlaneState.ServerViewPitch;
 	DriverViewYaw = PlaneState.ServerViewYaw;
-
-	//KDrawRigidBodyState(PlaneState.ChassisState, false);
 
 	unguard;
 }

@@ -18,7 +18,7 @@ Revision history:
 #pragma pack (pop)
 
 #if __UNIX__
-#undef clock   // !!! FIXME: Stupid macro!  --ryan.
+#undef clock
 #include <pthread.h>
 #define Sleep(x) usleep(x * 1000)
 #define ExitThread(x)
@@ -80,7 +80,6 @@ UBOOL FALAudioStream::Init( const TCHAR* Filename, void* InSharedData, EAudioStr
 	Type		= InType;
 
 #if __UNIX__
-	// this...is lame.  --ryan.
 	FileHandle	= ((FFileManagerUnix *) GFileManager)->fopenReadRespectHomeDir(Filename);
 #else
 	FileHandle	= TCHAR_CALL_OS( _wfopen(Filename,TEXT("rb")), fopen(TCHAR_TO_ANSI(Filename),"rb") );
@@ -144,9 +143,8 @@ FALAudioStreamOgg::~FALAudioStreamOgg()
 }
 
 
-// for some reason, ov_open() on Win64 breaks unless I provide my
-//  own fseek() callback. Might be a C runtime conflict when linking
-//  with ogg?  --ryan.
+// ov_open() on Win64 breaks without a custom fseek() callback, probably a
+// C runtime conflict with ogg.
 #ifdef _WIN64
 static int _fseek64_wrapper(void *h, ogg_int64_t offset, int whence)
 {

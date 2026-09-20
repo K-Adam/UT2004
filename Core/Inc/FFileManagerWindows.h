@@ -531,15 +531,6 @@ public:
 	// --- gam
 
 	// rjp --
-/*
-#define DRIVE_UNKNOWN     0
-#define DRIVE_NO_ROOT_DIR 1
-#define DRIVE_REMOVABLE   2
-#define DRIVE_FIXED       3
-#define DRIVE_REMOTE      4
-#define DRIVE_CDROM       5
-#define DRIVE_RAMDISK     6
-*/
 	UBOOL GetDriveLetters( FString& Drives ) const
 	{
 		guard(FFileManagerWindows::GetDriveLetters);

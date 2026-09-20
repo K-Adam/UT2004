@@ -150,77 +150,6 @@ const TCHAR* UEditorEngine::csgGetName( ECsgOper CSG )
 -----------------------------------------------------------------------------*/
 
 //
-// Rebuild the level's Bsp from the level's CSG brushes
-//
-// Note: Needs to be expanded to defragment Bsp polygons as needed (by rebuilding
-// the Bsp), so that it doesn't slow down to a crawl on complex levels.
-//
-#if 0
-void UEditorEngine::csgRebuild( ULevel* Level )
-{
-	guard(UEditorEngine::csgRebuild);
-
-	INT NodeCount,PolyCount,LastPolyCount;
-	TCHAR TempStr[80];
-
-	BeginSlowTask( "Rebuilding geometry", 1 );
-	FastRebuild = 1;
-
-	FinishAllSnaps(Level);
-
-	// Empty the model out.
-	Level->Lock( LOCK_Trans );
-	Level->Model->EmptyModel( 1, 1 );
-	Level->Unlock( LOCK_Trans );
-
-	// Count brushes.
-	INT BrushTotal=0, BrushCount=0;
-	for( FStaticBrushIterator TempIt(Level); TempIt; ++TempIt )
-		if( *TempIt != Level->Brush() )
-			BrushTotal++;
-
-	LastPolyCount = 0;
-	for( FStaticBrushIterator It(Level); It; ++It )
-	{
-		if( *It == Level->Brush()
-			continue;
-
-		BrushCount++;
-		appSprintf(TempStr,"Applying brush %i of %i",BrushCount,BrushTotal);
-		StatusUpdate( TempStr, BrushCount, BrushTotal );
-
-		// See if the Bsp has become badly fragmented and, if so, rebuild.
-		PolyCount = Level->Model->Surfs->Num();
-		NodeCount = Level->Model->Nodes->Num();
-		if( PolyCount>2000 && PolyCount>=3*LastPolyCount )
-		{
-			appStrcat( TempStr, ": Refreshing Bsp..." );
-			StatusUpdate( TempStr, BrushCount, BrushTotal );
-
-			debugf 				( NAME_Log, "Map: Rebuilding Bsp" );
-			bspBuildFPolys		( Level->Model, 1, 0 );
-			bspMergeCoplanars	( Level->Model, 0, 0 );
-			bspBuild			( Level->Model, BSP_Lame, 25, 0, 0 );
-			debugf				( NAME_Log, "Map: Reduced nodes by %i%%, polys by %i%%", (100*(NodeCount-Level->Model->Nodes->Num()))/NodeCount,(100*(PolyCount-Level->Model->Surfs->Num()))/PolyCount );
-
-			LastPolyCount = Level->Model->Surfs->Num();
-		}
-
-		// Perform this CSG operation.
-		bspBrushCSG( *It, Level->Model, It->PolyFlags, (ECsgOper)It->CsgOper, 0 );
-	}
-
-	// Build bounding volumes.
-	Level->Lock( LOCK_Trans );
-	bspBuildBounds( Level->Model );
-	Level->Unlock( LOCK_Trans );
-
-	// Done.
-	FastRebuild = 0;
-	EndSlowTask();
-	unguard;
-}
-#endif
 
 //
 // Repartition the bsp.
@@ -1508,7 +1437,6 @@ void MapTopicHandler::Get( ULevel* Level, const TCHAR* Item, FOutputDevice& Ar )
 			{
 				ABrush* Actor    = (ABrush*)Level->Actors(i);
 				Actor->Location  = Level->Brush()->Location;
-				//Actor->Rotation  = Level->Brush()->Rotation;
 				Actor->PrePivot  = Level->Brush()->PrePivot;
 				GEditor->csgCopyBrush( Actor, Level->Brush(), 0, 0, 1 );
 				break;

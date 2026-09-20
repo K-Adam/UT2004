@@ -346,7 +346,7 @@ public:
 // FSoundData is represented as a byte array in Sound.uc, but the internal
 //  pointers, etc, cause this to expand on a 64-bit platform, so we add that
 //  extra space for 32-bit platforms so that the byte array in unrealscript
-//  matches for both platforms. --ryan.
+//  matches for both platforms.
 #if PLATFORM_32BITS
     INT padding_for_32bits_1 GCC_PACK(4);
     INT padding_for_32bits_2 GCC_PACK(4);
@@ -560,8 +560,7 @@ struct FFormatChunk
     DWORD   nAvgBytesPerSec;   // For buffer estimation  = sample rate * BlockAlign.
     _WORD   nBlockAlign;       // Block size of data = Channels times BYTES per sample.
     _WORD   wBitsPerSample;    // Number of bits per sample of mono data.
-    // This field doesn't exist until wFormatTag != 1  !!!  --ryan.
-    //_WORD   cbSize;            // The count in bytes of the size of extra information (after cbSize).
+    // cbSize is omitted because it only exists when wFormatTag != 1.
 };
 
 // ChunkID: 'smpl'
@@ -632,7 +631,6 @@ public:
 
 	// Read headers and load all info pointers in WaveModInfo. 
 	// Returns 0 if invalid data encountered.
-	// UBOOL ReadWaveInfo( TArray<BYTE>& WavData );
 	UBOOL ReadWaveInfo( TArray<BYTE>& WavData );
 	
 	// Handle RESIZING and updating of all variables needed for the new size:

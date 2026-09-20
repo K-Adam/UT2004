@@ -11,13 +11,9 @@
 #pragma pack(push,4)
 
 //
-// TODO: 
-//
 // * Straigtforward frames structure, choice between compression methods, ability to
 //   read the old U1 format and new ones with floating point UV's..
 // * Nifty vertex-compression tricks ?
-//
-//
 
 // Forward declarations.
 class UVertMesh;
@@ -100,7 +96,7 @@ class ENGINE_API UVertMeshInstance : public ULodMeshInstance
 
 	UBOOL AnimForcePose( FName SeqName, FLOAT AnimFrame, FLOAT Delta, INT Channel = 0 );
 
-	// TODO -clean up texture retrieval logic - some sources obsolete?
+	// Clean up texture retrieval logic, some sources may be obsolete.
 	UMaterial* GetMaterial( INT Count, AActor* Owner )
 	{
 		guardSlow(UMesh::GetMaterial);

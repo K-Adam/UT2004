@@ -117,9 +117,6 @@ void UEditorEngine::Init()
 
 	// Checks.
 	VERIFY_CLASS_OFFSET(U,EditorEngine,ParentContext);
-	//!!if( sizeof(*this) !=GetClass()->GetPropertiesSize() )
-	//	appErrorf( "Editor size mismatch: C++ %i / UnrealScript %i", sizeof(*this), GetClass()->GetPropertiesSize() );
-	//!!check(sizeof(*this)==GetClass()->GetPropertiesSize());
 
 	// Init Render Device
 	UClass* RenDevClass = StaticLoadClass( URenderDevice::StaticClass(), NULL, TEXT("OpenGLDrv.OpenGLRenderDevice"), NULL, LOAD_NoFail, NULL );
@@ -186,13 +183,6 @@ void UEditorEngine::RedrawLevel( ULevel* Level )
 void UEditorEngine::ResetSound()
 {
 	guard(UEditorEngine::ResetSound);
-#if 0
-	if( Audio )
-
-		for( int i=0; i<Client->Viewports.Num(); i++ )
-			if( !Client->Viewports(i)->IsOrtho() )
-				Audio->SetViewport( Client->Viewports(i) );
-#endif
 	unguard;
 }
 

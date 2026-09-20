@@ -127,7 +127,7 @@ UBOOL AVehicle::moveToward(const FVector &Dest, AActor *GoalActor )
 			}
 			bFlyingDown = true;
 		}
-		// check if on next path already - FIXME - want this for regular pawns as well! - FIXME - also should work when no currentpath (moving to initial path on network)
+		// check if on next path already (vehicles only, bots must path like retail)
 		else if ( Controller->NextRoutePath )
 		{
 			FVector NextPathDir = Controller->NextRoutePath->End->Location - Controller->NextRoutePath->Start->Location;
@@ -192,7 +192,7 @@ UBOOL AVehicle::moveToward(const FVector &Dest, AActor *GoalActor )
 
 	if ( ReachedDestination(AdjustedDest - Location, GoalActor) )
 	{
-		// FIXME - not if en route
+		// stops even en route, bots must drive like retail
         Throttle = 0.f;
 
 		// if Pawn just reached a navigation point, set a new anchor
@@ -725,7 +725,6 @@ void AVehicle::PostRender(FLevelSceneNode* SceneNode, FRenderInterface* RI)
 		UTexture* PCteamBeacon = pc->TeamBeaconTexture;
 		if ( PCteamBeacon )
 		{
-			//FLOAT   xscale = Clamp(0.28f * (ScaledDist - actorDist)/ScaledDist,0.1f, 0.25f);
 			if ( pc->myHUD && pc->myHUD->PortraitPRI && (pc->myHUD->PortraitPRI ==PlayerReplicationInfo) && pc->SpeakingBeaconTexture )
 			{
 				teamBeacon = pc->SpeakingBeaconTexture;

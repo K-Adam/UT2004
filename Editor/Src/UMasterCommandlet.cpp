@@ -909,7 +909,6 @@ class UUpdateUModCommandlet : public UCommandlet
 								UpdatePath = SrcHdr._Items_(i)._Filename_;
 								UpdateFlags = SrcHdr._Items_(i).Flags;
 								SrcHdr._Items_.Remove(i);
-								//GWarn->Logf( TEXT("UpdatePath is %s, file is %s"), *UpdatePath, *File );
 								break;
 							}			
 						}

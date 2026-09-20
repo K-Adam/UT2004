@@ -412,17 +412,11 @@ static MeBool MEAPI KPerContactCB(McdIntersectResult* result, McdContact* colC, 
 
 	MdtContactSetWorldVelocity(dynC, worldVel[0], worldVel[1], worldVel[2]);
 
-#if 0
-    // If its tri-list contact, do some extra filtering.
-    if(g1type == kMcdGeometryTypeTriangleList || g2type == kMcdGeometryTypeTriangleList)
-    {
-#else
 	// If dynamics-world contact, do extra filtering
 	if( (b1 && !b2) || (!b1 && b2) )
 	{
-#endif
         // Don't do hack to sphere or sphyl contacts
-        if(g1type != kMcdGeometryTypeSphere && g2type != kMcdGeometryTypeSphere //)
+        if(g1type != kMcdGeometryTypeSphere && g2type != kMcdGeometryTypeSphere
 			&& g1type != kMcdGeometryTypeSphyl && g2type != kMcdGeometryTypeSphyl)
         {
             MdtBodyID body = (b1)?b1:b2;
@@ -437,7 +431,6 @@ static MeBool MEAPI KPerContactCB(McdIntersectResult* result, McdContact* colC, 
             
             if(penetration > bvelMag + KGData->SimParams.MaxPenetration)
             {
-				//debugf(TEXT("Shrink Pen F: %f T: %f"), penetration, bvelMag + (MeReal)0.1);
                 MdtContactSetPenetration(dynC, bvelMag + KGData->SimParams.MaxPenetration);
             }
         }
@@ -447,7 +440,6 @@ static MeBool MEAPI KPerContactCB(McdIntersectResult* result, McdContact* colC, 
 	{
 		if(penetration > KGData->SimParams.MaxPenetration)
 		{
-			//debugf(TEXT("Shrink Pen F: %f T: %f"), penetration, bvelMag + (MeReal)0.1);
 			MdtContactSetPenetration(dynC, KGData->SimParams.MaxPenetration);
 		}
 	}
@@ -529,19 +521,6 @@ static MeBool MEAPI KPerContactCB(McdIntersectResult* result, McdContact* colC, 
 			}
 		}
 
-#if 0
-		// Set all normal direction to the same as the first face contact.
-		if (colC == cp1 || ((colC->dims>>8) == 2)) 
-		{
-			colC->normal[0] = normal[0];
-			colC->normal[1] = normal[1];
-			colC->normal[2] = normal[2];
-
-			MdtContactSetNormal(dynC, normal[0], normal[1], normal[2]);
-			MdtContactSetPosition(dynC, position[0], position[1], position[2]);
-			MdtContactSetPenetration(dynC, penetration);
-		}
-#endif
 
         /* calculate rolling direction of tyre at contact by cross product of wheel axis with contact normal */
         MeVector3 haxis, dir;
@@ -591,8 +570,6 @@ static MeBool MEAPI KPerContactCB(McdIntersectResult* result, McdContact* colC, 
 			MeReal priSlip = MeMIN(t->RollSlip, t->MinSlip + (meSpinSpeed * t->SlipRate));
 			MeReal secSlip = MeMIN(t->LateralSlip, t->MinSlip + (meSpinSpeed * t->SlipRate));
 
-			//debugf(TEXT("Slip: %f, %f"), priSlip, secSlip);
-
 			// Fabs just here to be sure :)
 			MdtContactParamsSetPrimarySlip(params, MeFabs(priSlip));
 			MdtContactParamsSetSecondarySlip(params, MeFabs(secSlip));
@@ -629,29 +606,6 @@ static MeBool MEAPI KPerContactCB(McdIntersectResult* result, McdContact* colC, 
 				t->GroundSurfaceType = ground->SurfaceType;
 			}
 
-#if 0
-			if(!MdtCarWheelIsSteeringLocked(mdtCW))
-			{
-				TCHAR propName[512];
-				appSprintf(propName, TEXT("%s-PriSlip"), t->GetName());
-				//GStatGraph->AddDataPoint(propName, priSlip, 1);
-
-				appSprintf(propName, TEXT("%s-SecSlip"), t->GetName());
-				//GStatGraph->AddDataPoint(propName, secSlip, 1);
-
-				appSprintf(propName, TEXT("%s-NormForce"), t->GetName());
-				MeVector3 normForce;
-				MdtContactGetForce(dynC, 0, normForce);
-				GStatGraph->AddDataPoint(propName, MeSqrt(normForce[2] * normForce[2]), 1);
-
-				appSprintf(propName, TEXT("%s-TanForce"), t->GetName());
-				GStatGraph->AddDataPoint(propName, MeSqrt(normForce[0] * normForce[0] + normForce[1] * normForce[1]), 1);
-
-				appSprintf(propName, TEXT("%s-SlipVel"), t->GetName());
-				GStatGraph->AddDataPoint(propName, t->GroundSlipVel, 1);
-				//debugf(TEXT("SS:%s-%f"), propName, t->GroundSlipVel);
-			}
-#endif
 		}
     }
     
@@ -660,8 +614,6 @@ static MeBool MEAPI KPerContactCB(McdIntersectResult* result, McdContact* colC, 
     
 
 endContact:
-	// Done inside KLevelDebugDrawConstraints now
-    //KConstraintDraw(MdtContactQuaConstraint(dynC), KGData->DebugDrawOpt, KLineDraw);
 
     return 1;
 
@@ -811,7 +763,6 @@ void MEAPI KInitActorDynamics(AActor* actor)
 	// If KParams is a KarmaParamsRBFull it will use inertia-tensor/com-offset from there.
     actor->KParams->PostEditChange();
 
-    //MeMemoryAPI.destroy(oldTM);
 	MeMemoryAPI.destroyAligned(oldTM);
 
 
@@ -1093,7 +1044,6 @@ void MEAPI KInitActorCollision(AActor* actor, UBOOL makeNull)
 	(KGData->ModelCount)++;
 
     /* Convert actors position/orientation into tm matrix. */
-	//MeMatrix4Ptr modelTM = (MeMatrix4Ptr)appMalloc(sizeof(MeMatrix4), TEXT("KARMA: MODEL TM"));
 	KSetSecName(TEXT("KARMA: MODEL TM"));
 	MeMatrix4Ptr modelTM = (MeMatrix4Ptr)MeMemoryAPI.createAligned(sizeof(MeMatrix4), 16);
 	KSetSecName(TEXT("KARMA: POST MODEL TM"));
@@ -1255,7 +1205,7 @@ void MEAPI KCheckActor(AActor* actor)
 			GWarn->MapCheck_Add( MCTYPE_ERROR, actor, 
 				TEXT("Constraints to World must have second ConstraintActor as NULL."));
 
-		// JTODO: Do more checking (ie. things connected have KarmaParams)
+		// Could do more checking (ie. things connected have KarmaParams).
 	}
 
 	// no non-constraint actor should have Physics set to PHYS_Karma unless it has a KParams editinline struct
@@ -1378,7 +1328,6 @@ void MEAPI KInitLevelKarma(ULevel* level)
 
 	// We dont use the normal MeAssetFactoryCreate function, because we want just one geometry manager
 	// for the whole game, but we need a new asset factory for each level.
-	//level->KAssetFactory = MeAssetFactoryCreate(level->KWorld, level->KSpace, KGData->Framework);
     level->KAssetFactory = (MeAssetFactory*)appMalloc(sizeof(MeAssetFactory), TEXT("KARMA: ASSET FACTORY"));
     level->KAssetFactory->gm = KGData->GeomMan;
     level->KAssetFactory->geometryPostCreateCB = 0;
@@ -1402,16 +1351,11 @@ void MEAPI KInitLevelKarma(ULevel* level)
     KSetSecName(TEXT("KARMA: TRILIST"));
 
     /* 'Level' collision model */
-    //MeMatrix4Ptr identTM = (MeMatrix4Ptr)appMalloc(sizeof(MeMatrix4), TEXT("KARMA: TRILIST TM"));
     KSetSecName(TEXT("KARMA: MODEL TM"));
     MeMatrix4Ptr identTM = (MeMatrix4Ptr)MeMemoryAPI.createAligned(sizeof(MeMatrix4), 16);
     KSetSecName(TEXT("KARMA: POST MODEL TM"));
     MeMatrix4TMMakeIdentity(identTM);
 
-#if 0
-	McdPlaneID triList = McdPlaneCreate(KGData->Framework);
-	identTM[3][2] = -7.68f;
-#else
 	MeVector3 worldMax = {WORLD_MAX,WORLD_MAX,WORLD_MAX};
 	MeVector3 worldMin = {-WORLD_MAX,-WORLD_MAX,-WORLD_MAX};
 	
@@ -1421,7 +1365,6 @@ void MEAPI KInitLevelKarma(ULevel* level)
 
 	// Need this to look up triangles in callback.
 	McdTriangleListSetUserData(triList, (void*)level);
-#endif
     
     level->KLevelModel = McdModelCreate(triList);
     (KGData->ModelCount)++;
@@ -1531,7 +1474,6 @@ void MEAPI KTermLevelKarma(ULevel* level)
         (KGData->GeometryCount)--;
 
 		MeMemoryAPI.destroyAligned(ltm);
-        //appFree(ltm);
     }
     unguard;
     
@@ -1578,7 +1520,6 @@ void MEAPI KTermLevelKarma(ULevel* level)
 	guard(AssetFactory);
 	if(level->KAssetFactory)
 	{
-		//MeAssetFactoryDestroy(level->KAssetFactory);
 		appFree(level->KAssetFactory);
 		level->KAssetFactory = NULL;
 	}
@@ -1781,9 +1722,6 @@ void MEAPI KInitGameKarma()
         McdPrimitivesRegisterInteractions(KGData->Framework);
         McdConvexMeshPrimitivesRegisterInteractions(KGData->Framework);
         McdAggregateRegisterInteractions(KGData->Framework);
-
-        //McdConvexMeshConvexMeshRegisterInteraction(KGData->Framework);
-        //McdTriangleListConvexMeshRegisterInteractions(KGData->Framework);
 
 		KSetSecName(TEXT("KARMA: MCDINIT: MODELPAIRCONTAINER"));
 

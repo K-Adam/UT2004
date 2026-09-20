@@ -64,8 +64,6 @@ struct WaterRefract
 
 inline static int f2i(float flt) 
 {
-    // !!! FIXME: There's like 18 million functions that do this!
-    // !!! FIXME:  Grep for "FloatToInt".  --ryan.
 	return (int) flt;
 }
 
@@ -222,24 +220,6 @@ static void CalculateLighting(UStaticMesh* StaticMesh,UStaticMeshInstance* Stati
         ((AxProcMesh*)Owner)->Vertices(i).Color = StaticMeshInstance->ColorStream.Colors(i);
     }
 
-#if 0
-	// Blend the vertex color/alpha into the color stream.
-	FColor*	SrcPtr = &StaticMesh->ColorStream.Colors(0);
-	FColor*	DestPtr = &StaticMeshInstance->ColorStream.Colors(0);
-	for(INT VertexIndex = 0;VertexIndex < StaticMesh->VertexStream.Vertices.Num();VertexIndex++)
-	{
-		if(StaticMesh->UseVertexColor)
-		{
-			DestPtr->R = (BYTE) ((INT)SrcPtr->R * (INT)DestPtr->R / (INT)255);
-			DestPtr->G = (BYTE) ((INT)SrcPtr->G * (INT)DestPtr->G / (INT)255);
-			DestPtr->B = (BYTE) ((INT)SrcPtr->B * (INT)DestPtr->B / (INT)255);
-		}
-
-		DestPtr->A = SrcPtr->A;
-		SrcPtr++;
-		DestPtr++;
-	}
-#endif
 	unguard;
 }
 
@@ -405,7 +385,7 @@ void AxProcMesh::CalcMeshData(void)
 
     for( i=0; i<Vertices.Num(); i++ )
 	{
-		pData->vertData(i).invWtSum = 1.0f;//StandardWeight;
+		pData->vertData(i).invWtSum = 1.0f;
 	}
 
     // look for ident verts
@@ -567,7 +547,7 @@ void AxProcMesh::CalcMeshData(void)
 	    {
             float tu = Vertices(i).U;
             float tv = Vertices(i).V;
-            if( 0 )//StaticMesh->UVStreams.Num() > 1 && StaticMesh->UVStreams(1).UVs.Num() == Vertices.Num() )
+            if( 0 )
             {
                 tu = StaticMesh->UVStreams(1).UVs(i).U;
                 tv = StaticMesh->UVStreams(1).UVs(i).V;
@@ -580,13 +560,9 @@ void AxProcMesh::CalcMeshData(void)
             else
             {
                 pData->vertData(i).wt = clr.X;
-                //pData->vertData(i).invWtSum *= clr.X;
             }
         }
-        //debugf( NAME_Warning, TEXT("P8 Weightmap integrated into forces!"));
 	}
-
-	//debugf(TEXT("pData->links count: %d"), pData->links.Num());
 
     CalcProcNormals( Vertices, pData->faces );
 	unguard;
@@ -605,7 +581,6 @@ UBOOL AxProcMesh::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 
     MeshData* pData = (MeshData*)pProcData;
 
-    //float t = Clamp( DeltaTime, 0.016f, 0.03f );
     float t = DeltaTime;
 
     NoiseCounter -= t;
@@ -628,7 +603,6 @@ UBOOL AxProcMesh::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 
         FBox bbox = pActor->GetPrimitive()->GetCollisionBoundingBox( pActor );
         bbox = bbox.TransformBy( WorldToLocal() );
-        //bbox = bbox.ExpandBy(0.1f);
         FSphere BoundingSphere = FSphere(&bbox.Min,2);
         float radiusSqr = Square(BoundingSphere.W);
         float invRadiusSqr = 1.0f / radiusSqr;
@@ -707,28 +681,6 @@ UBOOL AxProcMesh::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 
 	if ( ProcType == MT_Deform && recalcNormals==true )
 	{
-        /*
-		// collision occured so lets move verts
-        FProcMeshVertex* pVert = &Vertices(0);
-        FProcVertData* pVData = &pData->vertData(0);
-        int numVerts = Vertices.Num();
-		for ( i=0; i<numVerts; i++ )
-		{    
-            float inplaneVel = (pVData->velocity | pVData->restNormal) * t;
-			pVert->Position += pVData->restNormal * inplaneVel;
-			pVData->velocity = FVector(0,0,0);
-            float planeDist = FPointPlaneDist(pVert->Position, pVData->restPosition, pVData->restNormal);
-			if( planeDist > MovementClamp.Max )
-			{
-				pVert->Position = pVData->restPosition + (pVData->restNormal * MovementClamp.Max);
-			}
-            else if ( planeDist < MovementClamp.Min )
-			{
-				pVert->Position = pVData->restPosition + (pVData->restNormal * MovementClamp.Min);
-			}
-            pVert++;
-            pVData++;
-		}*/
 	}
 
 	if ( recalcNormals )
@@ -861,9 +813,6 @@ void AxProcMesh::Render(FLevelSceneNode* SceneNode,TList<class FDynamicLight*>* 
 	if ( Texture == NULL || Vertices.Num()==0 )
 		return;
 
-    //if(SceneNode->Viewport->IsOrtho())
-    //    return;
-
     INT RenderStartTime = appCycles();
 
 	RI->SetTransform(TT_LocalToWorld,LocalToWorld());
@@ -894,7 +843,7 @@ void AxProcMesh::Render(FLevelSceneNode* SceneNode,TList<class FDynamicLight*>* 
             clr.R = 255;
             clr.G = 255;
             clr.B = 255;
-            Vertices(i).Color = clr;//FColor(255,255,255,255);//clr;
+            Vertices(i).Color = clr;
         }
     }
 
@@ -952,7 +901,6 @@ void AxProcMesh::Render(FLevelSceneNode* SceneNode,TList<class FDynamicLight*>* 
 		for( int i=0; i<StaticMesh->Sections.Num(); i++ )
 		{
 			FStaticMeshSection&	Section = StaticMesh->Sections(i);
-			//RI->SetMaterial(pMat);
 			if(Section.NumPrimitives > 0)
 			{
 				RI->DrawPrimitive(

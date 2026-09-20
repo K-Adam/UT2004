@@ -68,9 +68,6 @@ public:
 			Out << CompressLength << First << Last;
 			for( i=0; i<CompressLength+1; i++ )
 				Out << CompressBuffer[CompressPosition(i)?CompressPosition(i)-1:0];
-			//GWarn->Logf(TEXT("Compression table"));
-			//for( i=0; i<CompressLength+1; i++ )
-			//	GWarn->Logf(TEXT("    %03i: %s"),CompressPosition(i)?CompressBuffer[CompressPosition(i)-1]:-1,appFromAnsi((ANSICHAR*)CompressBuffer+CompressPosition(i)));
 		}
 		return 0;
 		unguard;

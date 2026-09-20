@@ -488,7 +488,6 @@ void  UGUIController::NativeTick(FLOAT DeltaTime)
 		return;
 
 	// Use real seconds for TimeBased
-	// TODO: Check if other/all UInteraction need to use RealTime
 	DeltaTime /= ViewportOwner->Actor->Level->TimeDilation;
 	RenderDelta = DeltaTime;
 
@@ -620,13 +619,6 @@ void  UGUIController::NativePostRender(UCanvas* Canvas)
 
 	if ( !Canvas || !ViewportOwner )
 		return;
-
-	// Build a deltatime for animation
-/*
-	FLOAT CurrentTime = Master->Client->Viewports(0)->CurrentTime;
-	RenderDelta = CurrentTime - LastRenderTime;
-	LastRenderTime = CurrentTime;
-*/
 
 	Canvas->CurX = 0;
 	Canvas->ColorModulate = FPlane (1.0, 1.0, 1.0, 1.0);	// Fix their hack
@@ -1463,9 +1455,6 @@ UBOOL UGUIController::NativeKeyEvent(BYTE& iKey, BYTE& State, FLOAT Delta )
 	if (Master==NULL || Master->Client==NULL || Master->Client->Viewports.Num()==0 || Master->Client->Viewports(0)==NULL)
 		return false;
 
-//	if ( State != IST_Axis )
-//		debugf(TEXT("NativeKeyEvent %s %s"), Cast<UViewport>(ViewportOwner)->Input->GetKeyName( EInputKey(iKey) ), GetKeyStateName(State));
-
 	if ( !GIsEditor && DELEGATE_IS_SET(OnNeedRawKeyPress) )
 	{
 		if (State==IST_Release)
@@ -1552,7 +1541,6 @@ UBOOL UGUIController::NativeKeyEvent(BYTE& iKey, BYTE& State, FLOAT Delta )
 		// We didn't receive the press
 		if ( KeyDown[iKey] != 1 )
 		{
-//			debugf(TEXT("Ignoring errant release for key %s"), Cast<UViewport>(ViewportOwner)->Input->GetKeyName(EInputKey(iKey)));
 			return true;
 		}
 
@@ -2146,7 +2134,7 @@ void UGUIController::LookUnderCursor(FLOAT dX, FLOAT dY)
 		if (Under)
 		{
 			// If the current component is a valid drop target
-			if (Under->bDropTarget)	// TODO may need to support checking menuowner's for drop status
+			if (Under->bDropTarget)	// Menu owners are not checked for drop status
 			{
 
 				// If the component is currently in the DRP_Target state
@@ -2471,8 +2459,6 @@ void UGUIStyles::DrawText(UCanvas* Canvas, BYTE MenuState, FLOAT Left, FLOAT Top
 		return;
 
 	SaveCanvasState(Canvas);
-
-//	FontScale=0;  ??
 
 	// Snap location and size to integer amounts in screen space.
 	Left = appRound(Left);
@@ -3265,11 +3251,6 @@ void UGUIComponent::execAutoPosition( FFrame& Stack, RESULT_DECL )
 		if (Components(i) && Components(i)->ActualHeight() >Offset)
 			Components(i)->WinHeight = Components(i)->RelativeHeight(Offset);
 
-//	if (Offset < CompH)
-//	{
-//		debugf(TEXT("%s::AutoPosition() could not be executed: component %i height (%f) greater than component offset (%f).  Use less components, or increase the size of the area determined by bounds paramters."), GetName(), Largest, CompH, Offset);
-//		return;
-//	}
 	AutoPosition(Components, NL, NT, NL + NW, NT + NH, NumCol, ColPadding);
 
 	unguardexec;
@@ -3608,7 +3589,7 @@ void  UGUIComponent::SetDims(FLOAT Width, FLOAT Height, FLOAT Left, FLOAT Top)
 	unguardobj;
 }
 
-// TODO Support negative relative position
+// Negative relative positions are not supported.
 void UGUIComponent::SetAdjustedDims( FLOAT Width, FLOAT Height, FLOAT Left, FLOAT Top )
 {
 	guard(UGUIComponent::SetAdjustedDims);

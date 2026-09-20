@@ -167,17 +167,13 @@ struct MeshAnimLinkup
 	UMesh*          Mesh;  // Mesh as was linked.
 	UMesh*          RefMesh;     // Optional mesh to get refpose adjustments from - to help make non-alike skeletons' animations work.
 	TArray <INT>    CachedLinks; // The named-bone links between the animation and mesh.
-	//TArray <FCoords>RefBoneAdjusts; // If a reference mesh was set, these adjusts may have to be applied.  At some cost, but only O(bones).
 
 	friend FArchive &operator<<( FArchive& Ar, MeshAnimLinkup& M )
 	{
 		if( !Ar.IsPersistent() )
 		{
-			//Ar << M.Anim;
 			Ar << M.Mesh;
 			Ar << M.RefMesh;
-			//Ar << M.CachedLinks; 
-			//Ar << RefBoneAdjusts;
 		}
 		return Ar;
 	}
@@ -1106,7 +1102,7 @@ class ENGINE_API USkeletalMeshInstance : public ULodMeshInstance
 	FLOAT GetActiveAnimRate(INT Channel=0);
 	FLOAT GetActiveAnimFrame(INT Channel=0);
 	
-	// TODO -clean up texture retrieval logic - some sources obsolete?
+	// Clean up texture retrieval logic, some sources may be obsolete.
 	UMaterial* GetMaterial( INT Count, AActor* Owner )
 	{
 		guardSlow(UMesh::GetMaterial);

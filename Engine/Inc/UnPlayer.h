@@ -21,7 +21,7 @@ class ENGINE_API UPlayer : public UObject, public FOutputDevice, public FExec
 
 	// Objects.
 	APlayerController*	Actor;
-	APlayerController*	OldActor;		// for debugging FIXME
+	APlayerController*	OldActor;		// for debugging
 	UInteraction*		Console;
 	
 	BITFIELD		bWindowsMouseAvailable:1;

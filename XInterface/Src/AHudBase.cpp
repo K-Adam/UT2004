@@ -73,8 +73,6 @@ void AHudBase::DrawSpriteWidget( UCanvas* Canvas, FSpriteWidget* Widget )
 
     CalcPivotCoords( (EDrawPivot)(Widget->DrawPivot), ScreenX, ScreenY, ScreenDX, ScreenDY );
 
-    //if ((Widget->Scale < 0.0f) || (Widget->Scale > 1.0f))
-    //    debugf( NAME_Error, TEXT("DrawSpriteWidget() -- Widget->Scale out of range"));
 	Widget->Scale = Clamp<FLOAT>(Widget->Scale,0.f,1.f);
 
     switch (Widget->ScaleMode)

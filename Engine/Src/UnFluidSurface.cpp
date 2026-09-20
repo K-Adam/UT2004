@@ -65,8 +65,6 @@ UBOOL UFluidSurfacePrimitive::LineCheck
 		Result.Normal = hitNormal;
 		Result.Time = hitTime;
 
-		//debugf(TEXT("FS HitLoc: %f %f %f"), Result.Location.X, Result.Location.Y, Result.Location.Z);
-
 		return 0;
 	}
 	else
@@ -145,7 +143,6 @@ void UFluidSurfacePrimitive::Serialize(FArchive& Ar)
 {
 	guard(UFluidSurfacePrimitive::Serialize);
 	Super::Serialize(Ar);
-	//Ar << FluidInfo;
 	unguard;
 }
 
@@ -343,7 +340,7 @@ void AFluidSurfaceInfo::RebuildClampedBitmap()
 	appMemset( &Verts1(0), 0, FluidXSize * FluidYSize * sizeof(FLOAT) );
 
 	// Iterate over 'touching actors' list, checking for blocking volumes.
-	// JTODO: This isn't very effecient.
+	// This isn't very efficient.
 	for (INT i=0; i<GetLevel()->Actors.Num(); i++)
 	{
 		AActor* actor = GetLevel()->Actors(i);
@@ -473,7 +470,6 @@ void AFluidSurfaceInfo::Render(FDynamicActor* Actor,
 		}
 		else
 		{
-			// JTODO: I just can't find a sphere that makes lighting nice and even...
 			FLOAT tmpRad = Max(
 				0.5f * (FluidBoundingBox.Max.X - FluidBoundingBox.Min.X), 
 				0.5f * (FluidBoundingBox.Max.Y - FluidBoundingBox.Min.Y) );
@@ -481,9 +477,6 @@ void AFluidSurfaceInfo::Render(FDynamicActor* Actor,
 			RI->EnableLighting(1,1,1, NULL, 
 				SceneNode->Viewport->Actor->RendMap == REN_LightingOnly, 
 				FSphere(FVector(0, 0, 0), tmpRad) );
-				//FSphere(Location, 1000) );
-				//FSphere(&FluidBoundingBox.GetExtrema(0), 2) );
-				//GetPrimitive()->GetRenderBoundingSphere(this) );
 
 			int i=0;
 			while(Lights)
@@ -509,9 +502,7 @@ void AFluidSurfaceInfo::Render(FDynamicActor* Actor,
 			RI->SetMaterial(Skins.Num()?Skins(0):NULL);
 		}
 
-		// We might be underwater - so dont back face cull
-		// TODO: Change culling mode when underwater.
-		//RI->SetCullMode(CM_None);
+		// Could disable back face culling when underwater.
 
 		// Set the particle vertex stream and index buffer. The particle vertices aren't actually 
 		// generated until now.
@@ -684,12 +675,6 @@ UPrimitive* AFluidSurfaceInfo::GetPrimitive()
 
 /* *********************** SIMULATION ********************* */
 
-
-// velocity
-//#define GENALPHA(x,y) (Clamp<INT>(Abs(appRound((SURFHEIGHT(OldH, (x), (y)) - SURFHEIGHT(H, (x), (y))) * recipStep * VelocityAlphaScale)), 0, 255))
-
-// height
-//#define GENALPHA(x,y) (Clamp<INT>(appRound(SURFHEIGHT(OldH, (x), (y)) * AlphaScale), 0, AlphaMax))
 
 // height and curvature (additive)
 #define GENALPHA(C,H) (Clamp<INT>(appRound((C) * AlphaCurveScale + (H) * AlphaHeightScale), 0, AlphaMax))
@@ -995,9 +980,6 @@ void AFluidSurfaceInfo::FillVertexBuffer(void* Dest)
 	Color.A = 0;
 	Color = Color.RenderColor();
 
-	// used for velocity alpha
-	//FLOAT recipStep = 1.f/AverageTimeStep;
-	
 	/* ******************** HEX GRID ********************** */
 	if(FluidGridType == FGT_Hexagonal)
 	{

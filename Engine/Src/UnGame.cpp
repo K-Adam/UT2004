@@ -998,7 +998,7 @@ void UGameEngine::ServerUpdateMD5()
 	for( INT i=0; i<ObjLoaders.Num(); i++ )
 	{
 		ULinker* Linker = CastChecked<ULinker>( ObjLoaders(i) );
-		if ( true ) // Linker->LinksToCode() )
+		if ( true )
 		{
 			Found=-1;
 			for (INT k=0;k<PackageValidation.Num();k++)
@@ -1056,10 +1056,6 @@ UBOOL UGameEngine::Browse( FURL URL, const TMap<FString,FString>* TravelInfo, FS
 	Error = TEXT("");
 	const TCHAR* Option;
 
-	// Tear down voice chat.
-//	if( Audio )
-//		Audio->LeaveVoiceChat();
-
 	// Convert .unreal link files.
 	const TCHAR* LinkStr = TEXT(".unreal");//!!
 	if( appStrstr(*URL.Map,LinkStr)-*URL.Map==appStrlen(*URL.Map)-appStrlen(LinkStr) )
@@ -1097,26 +1093,6 @@ UBOOL UGameEngine::Browse( FURL URL, const TMap<FString,FString>* TravelInfo, FS
 	{
 		// Handle failure URL.
 		guard(FailedURL);
-/*		
-	    // gam ---
-	    for( INT i=LastURL.Op.Num()-1; i>=0; i-- )
-	    {
-		    if( !appStrPrefix( *LastURL.Op(i), TEXT("SpectatorOnly=") ) )
-		    {
-			    LastURL.Op.Remove( i );
-			    break;
-			}
-	    }
-	    for( INT i=URL.Op.Num()-1; i>=0; i-- )
-	    {
-		    if( !appStrPrefix( *URL.Op(i), TEXT("SpecatorOnly=") ) )
-		    {
-			    URL.Op.Remove( i );
-			    break;
-			}
-	    }
-        // --- gam
-*/
 		LastURL.RemoveOption(TEXT("SpectatorOnly="));
 		LastURL.RemoveOption(TEXT("Listen"));
 		LastURL.RemoveOption(TEXT("LAN"));
@@ -1163,28 +1139,11 @@ UBOOL UGameEngine::Browse( FURL URL, const TMap<FString,FString>* TravelInfo, FS
 			    Audio->SetViewport( Audio->GetViewport() );
         }
 
-		/* rjp -- this has been commented since Revision #1 of UnGame.cpp, circa ~v.777
-		          However, a GC is necessary here in order to purge all network actors (MasterServerUplink, UdpGamespyQuery)
-				  belonging to the previous map, as they will not release the ports they've bound until they're deleted -- rjp  */
-		//CollectGarbage( RF_Native ); // Causes texture corruption unless you flush.
-		// watch out for texture corruption resulting from this garbage collection, I guess -- rjp
-
-
-
-
-		// 2/24/04 - there have been an fairly large number of crashes during garbage collection recently;
-		//           In most cases, the GC that these crashes occurred in was the one that was getting called here.
-		//           It's a good possibility that this GC is merely exposing a hidden bug, but until we can be sure
-		//           it should remain disabled -- rjp
-//		guard(UGameEngine::Browse::CollectGarbageAtDisconnect);
-//		debugf(TEXT("Disconnected...requesting GC"));
-//		CollectGarbage( RF_Native | (GIsEditor ? RF_Standalone : 0) );
-//		unguard;
-
+		// No garbage collection here, it exposed crashes during disconnect.
 
 		if( URL.HasOption(TEXT("failed")) )
 		{
-			if ( !GPendingLevel/* && !GUIActive() */)
+			if ( !GPendingLevel )
 			{
 				SetProgress( *FString::Printf(TEXT("menu:%s"),*DisconnectMenuClass),LocalizeError(TEXT("ConnectionFailed"),TEXT("Engine")), TEXT("") );
 			}
@@ -1300,7 +1259,6 @@ UBOOL UGameEngine::Browse( FURL URL, const TMap<FString,FString>* TravelInfo, FS
 	{
 		// External URL.
 		guard(ExternalURL);
-		//Client->Viewports(0)->Exec(TEXT("ENDFULLSCREEN"));
 		appLaunchURL( *URL.String(), TEXT(""), &Error );
 		unguard;
 		return 0;
@@ -1967,7 +1925,6 @@ void UGameEngine::FixUpLevel()
 			UShader* PanningOil = FindObject<UShader>( AWRustTexShaders, TEXT("PanningOil") );
 			if( PanningOil )
 			{
-				//debugf(TEXT("Fixing up fallback for %s"), PanningOil->GetFullName());
 				PanningOil->FallbackMaterial = FindObject<UMaterial>( AWRustTexShaders, TEXT("TexOscillator3") );
 			}
 		}
@@ -1982,14 +1939,12 @@ void UGameEngine::FixUpLevel()
 			UShader* MoltenSteel1 = FindObject<UShader>( AWShadersShaders, TEXT("MoltenSteel1") );
 			if( MoltenSteel1 )
 			{
-				//debugf(TEXT("Fixing up fallback for %s"), MoltenSteel1->GetFullName());
 				MoltenSteel1->FallbackMaterial = FindObject<UMaterial>( AWShadersShaders, TEXT("TexPanner7") );
 			}
 
 			UShader* MoltenSteel2 = FindObject<UShader>( AWShadersShaders, TEXT("MoltenSteel2") );
 			if( MoltenSteel2 )
 			{
-				//debugf(TEXT("Fixing up fallback for %s"), MoltenSteel2->GetFullName());
 				MoltenSteel2->FallbackMaterial = FindObject<UMaterial>( AWShadersShaders, TEXT("TexPanner0") );
 			}
 		}
@@ -2355,10 +2310,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 	}
 	unguard;
 
-	// Tell the audio driver to clean up.
-//	if( Audio )
-//		Audio->CleanUp();
-
 	// Init collision.
 	GLevel->SetActorCollision( 1 );
 
@@ -2721,7 +2672,6 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 		if ( A )
 			GLevel->AntiPortals.AddItem(A);
 	}
-	//debugf(TEXT("%d ANTIPORTALS"),GLevel->AntiPortals.Num());
 
 	unguard;
 
@@ -3406,7 +3356,7 @@ void UGameEngine::Tick( FLOAT DeltaSeconds )
 	}
 
 	// Always reset bRenderLevel here, and let the menu system disable it
-	//  if need be in UGUIController::NativeTick()...  --ryan.
+	//  if need be in UGUIController::NativeTick()...
 	if (Client && Client->Viewports.Num()==1)
 	{
 		Client->Viewports(0)->Canvas->bRenderLevel = 1;
@@ -3445,13 +3395,9 @@ void UGameEngine::Tick( FLOAT DeltaSeconds )
 		GLevel->Tick( LEVELTICK_All, DeltaSeconds );
 	}
 
-#if 1
 	guard(TickEntry);
 	if( GEntry && GEntry!=GLevel )
 	{
-		// Tick any TCP links in the entry level
-		//GEntry->Tick( LEVELTICK_All, DeltaSeconds );
-
 		FLOAT EntryDelta = DeltaSeconds;
 
 		// Update entry clock
@@ -3470,7 +3416,6 @@ void UGameEngine::Tick( FLOAT DeltaSeconds )
 		}
 	}
 	unguard;
-#endif
 
 	if( Client && Client->Viewports.Num() && Client->Viewports(0)->Actor->GetLevel()!=GLevel )
 	{

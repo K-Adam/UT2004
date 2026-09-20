@@ -64,16 +64,20 @@ void UtvVoiceChannel::ReceivedBunch( FInBunch& Bunch )
 
 		}	else if(!Connection->Driver->ServerConnection){
 			// Server.
-//			debugf(TEXT("Reveived voice packet on %i"),Connection);
 
+			// A client may only send its own voice.
+			if( PacketType!=VoiceIndex )
+				break;
 			FVoiceInfo* VoiceInfo = Connection->Driver->VoiceInfos[PacketType];
-			check( VoiceInfo ); //!!VOIP TODO
+			if( !VoiceInfo )
+				break;
 
 			Bunch.Serialize( VoiceInfo->PacketData, VoiceInfo->PacketSize );
 			if( Bunch.IsError() )
 				break;
 
-			if(UtvEngine->OpenConnections.Find(Connection)->vipConnection){
+			UReplicatorEngine::OpenConnection* Open = UtvEngine->OpenConnections.Find(Connection);
+			if( Open && Open->vipConnection ){
 				if(Connection==UtvEngine->PrimaryConnection && UtvEngine->DelayPrimaryVoice){
 					vDelayer.AddVoice(VoiceInfo);
 				} else {
@@ -83,9 +87,9 @@ void UtvVoiceChannel::ReceivedBunch( FInBunch& Bunch )
 		}
 		else
 		{
-//		debugf(TEXT("Voice message on server channel??"));
 			FVoiceInfo* VoiceInfo = Connection->Driver->VoiceInfos[PacketType];
-			check( VoiceInfo ); //!!VOIP TODO
+			if( !VoiceInfo )
+				break;
 
 			Bunch.Serialize( VoiceInfo->PacketData, VoiceInfo->PacketSize );
 			if( Bunch.IsError() )
@@ -100,8 +104,6 @@ void UtvVoiceChannel::ReceivedBunch( FInBunch& Bunch )
 			// Client.
 		}
 	}
-	//	delete tempBunch;
-	//	UChannel::ReceivedBunch(Bunch);
 	unguard;
 }
 
@@ -113,22 +115,16 @@ void UtvVoiceChannel::DistributeVoicePacket(FVoiceInfo* VoiceInfo)
 		UNetConnection* ClientConnection	= Connection->Driver->ClientConnections(i);
 		UVoiceChannel*&	VoiceChannel		= ClientConnection->VoiceChannel;
 
-		// Only send if the other player is in our ActiveRoom or if we are logged in as admin
-		//				if( AllowVoiceTransmission(ClientConnection->Actor, *VoiceInfo) )
-		//				{
 		if( VoiceChannel && !VoiceChannel->Closing && VoiceInfo->VoiceIndex!=VoiceChannel->VoiceIndex)
 		{
-			//check( VoiceInfo->VoiceIndex == VoiceIndex ); //dont check since it might be from upstream server
+			// No VoiceIndex check, the packet might come from the upstream server.
 			// Don't send data till connection has been established by the other end as packet size is variable.
 			if( Connection->Driver->VoiceAckMap[VoiceInfo->VoiceIndex][VoiceChannel->VoiceIndex] == USOCK_Open ){
 				VoiceChannel->SendVoicePacket( VoiceInfo );
-				//							debugf(TEXT("Sending voice packet"));
 			} else if( Connection->Driver->VoiceAckMap[VoiceInfo->VoiceIndex][VoiceChannel->VoiceIndex] == USOCK_Closed ){
 				VoiceChannel->SendStatusPacket( VoiceInfo, VOICEPACKET_AddChatter );
-				//							debugf(TEXT("Sending voice AddChatter packet"));
 			}
 		}
-		//			}
 	}
 }
 

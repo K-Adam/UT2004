@@ -47,7 +47,7 @@ protected:
 	UBOOL						HaveALCaptureExt;
 	ALCdevice*					ALCaptureDevice;
 	BYTE*						ALCaptureBuffer;
-	ALenum						alc_capture_samples;  // !!! FIXME: put this in the headers.
+	ALenum						alc_capture_samples;
  
 	FCriticalSection			CriticalSection;
 	INT							RecordCount;

@@ -410,8 +410,6 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 		INT MaxSimultaneousLayers = Info->GetLevel()->Engine->GRenDev ? Info->GetLevel()->Engine->GRenDev->GetRenderCaps()->MaxSimultaneousTerrainLayers : 1;
 
 		UBOOL ForceAlphaMap =  GIsEditor;
-		//INT MaxSimultaneousLayers = GIsEditor ? 1 : Min<INT>( Info->DrawScale, 3 );
-		//UBOOL ForceAlphaMap =  GIsEditor || Info->bActorShadows;
 
 		RenderPasses.Empty();
 		TArray<INT> PassLayers;
@@ -419,7 +417,6 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 		{
 			// non-texture or alphatexture: render with alphamap
 			UTexture* LayerTexture = Cast<UTexture>(Info->Layers[SectorLayers(i)].Texture);
-			//!!vogel: OPENGL TODO
 			if( ForceAlphaMap || !LayerTexture || LayerTexture->IsTransparent() || GIsOpenGL )
 			{
 				PassLayers.AddItem( SectorLayers(i) );
@@ -464,28 +461,6 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 			}
 		}
 
-	#if 0
-		// Validate
-		TArray<INT> CheckLayers;
-		for( INT p=0;p<RenderPasses.Num();p++ )
-		{
-			FTerrainRenderCombination& RC = Info->RenderCombinations(RenderPasses(p).RenderCombinationNum);
-			for( INT l=0;l<RC.Layers.Num();l++ )
-			{
-				// Check each layer is used only once.
-				check( CheckLayers.FindItemIndex(RC.Layers(l)) == INDEX_NONE );
-				CheckLayers.AddItem(RC.Layers(l));
-			}
-		}
-
-		// Check each layer affecting the sector is rendered
-		for( INT l=0;l<SectorLayers.Num();l++ )
-			check( CheckLayers.FindItemIndex(SectorLayers(l)) != INDEX_NONE );
-
-		// Check there are no extra layers
-		check( CheckLayers.Num() == CheckLayers.Num() );
-		// End validation
-	#endif
 
 		// triangulate
 		for( INT pass=0; pass<RenderPasses.Num(); pass++ )
@@ -1915,23 +1890,6 @@ void ATerrainInfo::Update( FLOAT Time, INT StartX, INT StartY, INT EndX, INT End
 		}
 	}
 
-#if 0
-	debugf(TEXT("Vertex Streams: %d"), VertexStreams.Num());
-	for( INT i=0;i<VertexStreams.Num();i++ )
-		debugf(TEXT("  %d: %d vertices"), i, VertexStreams(i).Vertices.Num());
-	debugf(TEXT("RenderCombinations: %d"), RenderCombinations.Num());
-	for( INT i=0;i<RenderCombinations.Num();i++ )
-	{
-		FString Layers=TEXT("");
-		for( INT l=0;l<RenderCombinations(i).Layers.Num();l++ )
-			Layers += FString::Printf(TEXT(" %d"), RenderCombinations(i).Layers(l) );
-		debugf(TEXT("  %d: layers:%s type:%s"), i, *Layers,
-			RenderCombinations(i).RenderMethod == RM_AlphaMap ? "A" :
-			RenderCombinations(i).RenderMethod == RM_WeightMap ? "W" :
-			RenderCombinations(i).RenderMethod == RM_CombinedWeightMap ? "C" :
-			"U" );
-	}
-#endif
 
     if ( VertexLightMap ) // sjs
         SmoothColors();
@@ -2032,14 +1990,12 @@ UBOOL ATerrainInfo::LineCheckWithQuad( INT X, INT Y, FCheckResult &Result, const
 	if( bDeleteMe )
 		return 0;
 
-#if 1 // sjs - tracking down crashes
     INT BitIndex = X + Y * HeightmapX;
     if( !CheckInvisibleQuads )
     {
         check( QuadVisibilityBitmap.Num() > (BitIndex>>5) );
     }
     check( EdgeTurnBitmap.Num() > (BitIndex>>5) );
-#endif
 
 	if( !CheckInvisibleQuads && !GetQuadVisibilityBitmap( X, Y ) )
 		return 0;

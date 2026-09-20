@@ -12,15 +12,6 @@ void FProjectorRenderInfo::RemoveReference()
 	if( --ReferenceCount == 0 )
 	{
 		check(this);
-#if 0
-		if( Projector )
-		{
-			ULevel* Level = Projector->XLevel;
-			for( INT i=0; i<Level->DynamicProjectors.Num(); i++ )
-				if( Level->DynamicProjectors(i) == this )
-					appErrorf( TEXT("%s's FProjectorRenderInfo is being deleted even though it's still referenced by ULevel::DynamicProjectors"), Projector->GetPathName() );
-		}
-#endif
 		delete this;
 	}
 	unguard;
@@ -206,7 +197,6 @@ UBOOL UProjectorPrimitive::LineCheck
 	Planes[10] = FPlane( 0.f, 1.f, 0.0, bigBox.Min.Y);
 	Planes[11] = FPlane( 0.f,-1.f, 0.0,-bigBox.Max.Y);
 
-#if 1
 	FLOAT tnear, tfar, t, vn, vd ;
 	INT	fnorm_num = INDEX_NONE, bnorm_num = INDEX_NONE; // front/back face # hit
 
@@ -224,7 +214,6 @@ UBOOL UProjectorPrimitive::LineCheck
 
 		// Have to negate these, because frustum planes face inwards.
 		vd = FlipPlane | dir; // Component of ray along plane normal
-		//vn = FlipPlane.PlaneDot(Start); // Distance of start from plane
 		vn = FlipPlane.PlaneDot(Start); // Distance of start from plane
 
 		if ( vd == 0.0f ) 
@@ -284,7 +273,7 @@ UBOOL UProjectorPrimitive::LineCheck
 	{
 		if ( tfar < maxTime ) 
 		{
-			// inside, hitting back face. JTODO: Right results here?
+			// inside, hitting back face.
 			Result.Time			= 0.f;
 			Result.Location		= Start;
 			Result.Actor		= Owner;
@@ -304,61 +293,6 @@ UBOOL UProjectorPrimitive::LineCheck
 		}
 	}
 
-#else
-	// Check if the start and end are both inside the frustum
-	for( INT i=0;i<6;i++ )
-		if( Planes[i].PlaneDot(Start) < 0 || Planes[i].PlaneDot(End) < 0 )
-			goto NotBothInside;
-
-	Result.Time      = 0.f;
-	Result.Location  = Start;
-	Result.Actor     = Owner;
-	Result.Primitive = NULL;
-	Result.Normal	 = (Start-End).SafeNormal();
-	return 0;
-
-	NotBothInside:;
-
-	// Check for intersection with the frustum
-	FVector Direction = End-Start;
-	FVector Hit = End;
-	FVector HitNormal = (Start-End).SafeNormal();
-	UBOOL GotHit=0;
-	for( INT i=0;i<6;i++ )
-	{
-		if( Abs(Direction|Planes[i]) > KINDA_SMALL_NUMBER )
-		{
-			FVector Int = FLinePlaneIntersection( Start, End, Planes[i] );
-			for( INT j=0;j<6;j++ )
-			{
-				if( j != i )
-				{
-					if( Planes[j].PlaneDot(Int) < 0 )
-						goto RejectHit;					
-				}
-				if( ((Int-Start)|Direction)>0.f && (!GotHit || (Int-Start).SizeSquared()<(Hit-Start).SizeSquared() ) )
-				{
-					GotHit = 1;
-					Hit = Int;
-					HitNormal = Planes[j];
-				}
-				RejectHit:;
-			}
-		}
-	}
-	if( !GotHit )
-		return 1;
-
-	Result.Time      = ((Hit-Start)|Direction)/Direction.SizeSquared();
-
-	if(Result.Time > 1.0f || Result.Time < 0.0f)
-		return 1;
-
-	Result.Location  = Hit;
-	Result.Actor     = Owner;
-	Result.Primitive = NULL;
-	return 0;
-#endif
 	unguard;
 }
 
@@ -542,7 +476,7 @@ void AProjector::CalcMatrix()
 	FVector UpVector = DirectionCoords.ZAxis;
 	FVector LeftVector = -DirectionCoords.YAxis;
 
-	//!!vogel: what about DrawScale3D?
+	// DrawScale3D is ignored.
 	FLOAT USize = DrawScale*ProjTexture->MaterialUSize();
 	FLOAT VSize = DrawScale*ProjTexture->MaterialVSize();
 	FLOAT Radius = appSqrt(0.25f*USize*USize + 0.25f*VSize*VSize);
@@ -600,7 +534,7 @@ void AProjector::CalcMatrix()
 		ProjectionMatrix.M[2][1] = 0.5;
 		ProjectionMatrix.M[2][2] = 1.f;
 		ProjectionMatrix.M[3][3] = 1.f;
-		Matrix = ViewMatrix * ProjectionMatrix;//MatrixMultiply( Matrix, ViewMatrix, ProjectionMatrix );
+		Matrix = ViewMatrix * ProjectionMatrix;
 
 		FrustumVertices[4] = FrustumVertices[0]+MaxTraceDistance*(FrustumVertices[0]-FrustumOrigin).SafeNormal() / CosHalfFOV;
 		FrustumVertices[5] = FrustumVertices[1]+MaxTraceDistance*(FrustumVertices[1]-FrustumOrigin).SafeNormal() / CosHalfFOV;

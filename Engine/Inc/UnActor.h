@@ -89,7 +89,7 @@ inline APawn* AActor::GetPlayerPawn() const
 
 	// Players must have player objects.
     AController* Ctrl = ((APawn*)this)->Controller;
-    APlayerController* C = Ctrl ? Ctrl->GetAPlayerController() : NULL;//Cast<APlayerController>(((APawn*)this)->Controller);
+    APlayerController* C = Ctrl ? Ctrl->GetAPlayerController() : NULL;
 	if( !C || (C->Player == NULL) )
 		return NULL;
 

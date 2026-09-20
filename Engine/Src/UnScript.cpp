@@ -103,13 +103,6 @@ void AActor::execDebugUnclock( FFrame& Stack, RESULT_DECL )
 	Tim's physics modes.
 -----------------------------------------------------------------------------*/
 
-/* unused - vogel
-static FLOAT Splerp( FLOAT F )
-{
-	FLOAT S = Square(F);
-	return (1.0f/16.0f)*S*S - (1.0f/2.0f)*S + 1;
-}
-*/
 //
 // Moving brush.
 //
@@ -190,7 +183,7 @@ void AMover::physMovingBrush( FLOAT DeltaTime )
 		MoveVect = OldPos + ((BasePos + KeyPos[KeyNum]) - OldPos) * RenderAlpha - Location;
 		AMover *MoverBase = Cast<AMover>(Base);
 		if ( MoverBase )
-			MoveVect = FVector(0.f,0.f,0.f); // FIXME MoveVect += MoverBase->Location - MoverBase->BasePos;
+			MoveVect = FVector(0.f,0.f,0.f); // mover base motion is ignored like in retail, so clients predict the same move
 
 		if( GetLevel()->MoveActor
 		(
@@ -1118,7 +1111,7 @@ void AActor::execLinkMesh( FFrame& Stack, RESULT_DECL )
 		Mesh = NewMesh;
 		bNetDirty = true;
 
-		// FIXME temp hack - make this a script event
+		// The new mesh needs the head scale reapplied.
 		APawn *P = Cast<APawn>(this);
 		if ( P && (P->HeadScale != 1.f) )
 			P->eventSetHeadScale(P->HeadScale);
@@ -1166,8 +1159,6 @@ void AActor::execGetBoneCoords( FFrame& Stack, RESULT_DECL )
 		else
 		{
 			*(FCoords*)Result = ((USkeletalMeshInstance*)MeshInstance)->GetBoneCoords(0);
-			//debugf(TEXT("Warning: Invalid bone index (%i) for GetBoneRotation."),BoneIdx);
-			//*(FCoords*)Result = GMath.UnitCoords;
 		}
 	}	
     // sjs ---
@@ -1273,7 +1264,6 @@ void AActor::execGetClosestBone( FFrame& Stack, RESULT_DECL )
                 {
 		            dist = (Origin - loc).SizeSquared();
                 }
-                //debugf(TEXT("Bone: %s dist: %f"), *pSkel->TagAliases(t), appSqrt(dist));
                 if( dist < bestDist )
                 {
                     bestName = pSkel->TagAliases(t);
@@ -1282,7 +1272,6 @@ void AActor::execGetClosestBone( FFrame& Stack, RESULT_DECL )
                 // see if we have come near to bias bone
                 if( biasBone != NAME_None && biasBone == pSkel->TagAliases(t) && dist <= biasDist )
                 {
-                    //debugf(TEXT("Using Bias Bone: %s dist: %f"), *pSkel->TagAliases(t), appSqrt(dist));
                     bestName = biasBone;
                     bestDist = dist;
                     *(FName*)Result = bestName;
@@ -1493,7 +1482,6 @@ void AActor::execSetBoneScale( FFrame& Stack, RESULT_DECL )
 void AActor::execSetBoneLocation( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(AActor::execSetBoneLocation);
-	//P_GET_INT(Slot);
 	P_GET_NAME( BoneName );	
 	P_GET_VECTOR_OPTX( BoneTrans, FVector(0.0f,0.0f,0.0f) );
 	P_GET_FLOAT_OPTX( Alpha, 1.0f ); 
@@ -1531,7 +1519,6 @@ void AActor::execSetBoneRotation( FFrame& Stack, RESULT_DECL )
 void AActor::execSetBoneDirection( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(AActor::execSetBoneDirection);
-	//P_GET_INT(Slot);
 	P_GET_NAME( BoneName );	
 	P_GET_ROTATOR( BoneTurn );
 	P_GET_VECTOR_OPTX( BoneTrans, FVector(0.0f,0.0f,0.0f) );
@@ -1985,7 +1972,7 @@ void AActor::execPlaySound( FFrame& Stack, RESULT_DECL )
 		return;
 
     if ( Radius == 0.0f ) // sjs
-        Radius = Sound->GetRadius() * 0.15f; //!!vogel: FUDGE HACK 
+        Radius = Sound->GetRadius() * 0.15f; // fudge factor
 
 	if ( Instigator && ((Instigator == this) || (Instigator == Owner)) )
 		Volume *= Instigator->SoundDampening;
@@ -2045,7 +2032,7 @@ void AActor::execPlayOwnedSound( FFrame& Stack, RESULT_DECL )
 		return;
 
     if ( Radius == 0.0f ) // sjs
-        Radius = Sound->GetRadius() * 0.15f; //!!vogel: FUDGE HACK
+        Radius = Sound->GetRadius() * 0.15f; // fudge factor
 
 	if ( Instigator && ((Instigator == this) || (Instigator == Owner)) )
 		Volume *= Instigator->SoundDampening;
@@ -2374,7 +2361,6 @@ void AActor::execSpawn( FFrame& Stack, RESULT_DECL )
 	P_GET_ROTATOR_OPTX(SpawnRotation,Rotation);
 	P_FINISH;
 
-	// SCRIPTTIME FLOAT OldClock = GStats.DWORDStats(GEngineStats.STATS_Game_SpawningCycles);
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_SpawningCycles));
 	// Spawn and return actor.
 	AActor* Spawned = SpawnClass ? GetLevel()->SpawnActor
@@ -2393,12 +2379,6 @@ void AActor::execSpawn( FFrame& Stack, RESULT_DECL )
 		Spawned->Tag = SpawnName;
 	*(AActor**)Result = Spawned;
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_SpawningCycles));
-	/* SCRIPTTIME
-	if ( Spawned )
-		debugf(TEXT("%s Spawned %s took %f"),GetName(),Spawned->GetName(), (GStats.DWORDStats(GEngineStats.STATS_Game_SpawningCycles) - OldClock) * GSecondsPerCycle * 1000.0f);
-	else
-		debugf(TEXT("%s Failed spawn took %f"),GetName(),(GStats.DWORDStats(GEngineStats.STATS_Game_SpawningCycles) - OldClock) * GSecondsPerCycle * 1000.0f);
-	*/
 	unguardexecSlow;
 }
 
@@ -2930,7 +2910,6 @@ void AActor::ProcessState( FLOAT DeltaSeconds )
 		UState* StartStateNode = GetStateFrame()->StateNode;
 		UState* OldStateNode = GetStateFrame()->StateNode;
 		guard(AActor::ProcessState);
-		// SCRIPTTIME FLOAT StartTime = GScriptCycles;
 		if( ++GScriptEntryTag==1 )
 			clock(GScriptCycles);
 
@@ -2959,7 +2938,6 @@ void AActor::ProcessState( FLOAT DeltaSeconds )
 					OldStateNode = GetStateFrame()->StateNode;
 					if( ++NumStates > 4 )
 					{
-						//GetStateFrame().Logf( "Pause going from %s to %s", xx, yy );
 						break;
 					}
 				}
@@ -2974,17 +2952,6 @@ void AActor::ProcessState( FLOAT DeltaSeconds )
 		if( --GScriptEntryTag==0 )
 		{
 			unclock(GScriptCycles);
-			/* SCRIPTTIME
-			FLOAT PT = (GScriptCycles - StartTime) * GSecondsPerCycle * 1000.0f;
-			if ( PT > 0.01f )
-			{
-				debugf(TEXT("%s processSTATE"),GetName());
-				if ( PT > 0.1f )
-					debugf(TEXT("***STATE processing time %f"),PT);
-				else
-					debugf(TEXT("   STATE processing time %f"),PT);
-			}
-			*/
 		}
 		unguardf(( TEXT("Object %s, Old State %s, New State %s"), GetFullName(), StartStateNode->GetFullName(), GetStateFrame()->StateNode->GetFullName() ));
 	}
@@ -3037,7 +3004,6 @@ static inline void InternalProcessRemoteFunction
 
 	// Form the RPC preamble.
 	FOutBunch Bunch( Ch, 0 );
-	//debugf(TEXT("   Call %s"),Function->GetFullName());
 	Bunch.WriteInt( FieldCache->FieldNetIndex, ClassCache->GetMaxIndex() );
 
 	// Form the RPC parameters.
@@ -3076,7 +3042,6 @@ static inline void InternalProcessRemoteFunction
 		debugf( NAME_DevNetTraffic, TEXT("RPC bunch on closing channel") );
 	else
 	{
-//		debugf( NAME_DevNetTraffic, TEXT("      Sent RPC: %s::%s"), Actor->GetName(), Function->GetName() );
 		Ch->SendBunch( &Bunch, 1 );
 	}
 
@@ -3106,8 +3071,7 @@ UBOOL AActor::ProcessRemoteFunction( UFunction* Function, void* Parms, FFrame* S
 		return Absorb;
 
 	// Check if the actor can potentially call remote functions.
-	// FIXME - cleanup finding top - or make function
-    APlayerController* Top = GetTopPlayerController();//Cast<APlayerController>(GetTopOwner());
+    APlayerController* Top = GetTopPlayerController();
 	UNetConnection* ClientConnection = NULL;
 	if
 	(	(Role==ROLE_Authority)

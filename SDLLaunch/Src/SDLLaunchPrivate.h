@@ -16,8 +16,6 @@ Revision history:
 #include <errno.h>
 #include <sys/stat.h>
 
-// !!! FIXME: Do we really need this header?
-// !!! FIXME:  (check Core/Inc/FMallocDebug.h, too.) --ryan.
 #include <malloc.h>
 
 #include <fcntl.h>

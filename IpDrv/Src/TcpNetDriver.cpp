@@ -17,7 +17,6 @@ Notes:
 	Declarations.
 -----------------------------------------------------------------------------*/
 
-/* yucky legacy hack. --ryan. */
 #ifdef __linux__
 #  ifndef MSG_ERRQUEUE
 #    define MSG_ERRQUEUE 0x2000
@@ -221,7 +220,7 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 			else
 			{
                 #ifdef __linux__
-                    // determine IP address where problem originated. --ryan.
+                    // Determine the IP address where the problem originated.
                     recvfrom(Socket, NULL, 0, MSG_ERRQUEUE, (sockaddr*)&FromAddr, GCC_OPT_INT_CAST &FromSize );
                 #endif
                 
@@ -324,8 +323,6 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 		}
 	}
 	unclock(TCPNetDriverTime);
-	//if ( TCPNetDriverTime * GSecondsPerCycle * 1000.f > 1.f )
-	//		debugf(TEXT("TCPNetDriver %01.4f"), TCPNetDriverTime * GSecondsPerCycle * 1000.f);
 
 	unguard;
 }

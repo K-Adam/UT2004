@@ -279,8 +279,6 @@ UBOOL UEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 #ifdef WITH_LIPSINC
 	else if( ParseCommand(&Cmd,TEXT("LIPSINC")) )
 	{
-		// FIXME: HACK !!
-
 		const TCHAR *Str = Cmd;
 
 		TCHAR LIPSincAnimName[256];
@@ -337,13 +335,8 @@ UBOOL UEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 				{
 					Ar.Logf( TEXT("Found a skeletal mesh %s"), Found->GetName());
 
-					//USkeletalMesh* SkelMesh = (USkeletalMesh*)Found->Mesh;
-
-					//if( SkelMesh->LIPSincController )
-					//{
 					Ar.Logf( TEXT("Starting..."));
 					((USkeletalMeshInstance*)Found->Mesh->MeshGetInstance(Found))->PlayLIPSincAnim(LIPSincAnimName, 1.0, 200.0, 1.0);
-					//}
 				}
 			}
 			else Ar.Logf( TEXT("No Skeletal Meshes Found.") );
@@ -434,7 +427,6 @@ UBOOL UEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		}
 		else if(ParseCommand(&Cmd,TEXT("ALL")))
 		{
-			//bShowAnimStats	= 1;
 			
 			// ifdef WITH_LIPSINC
 			bShowLIPSincStats   = 1;
@@ -641,7 +633,7 @@ void UServerCommandlet::StaticConstructor()
 
 #include <float.h> // sjs test!
 
-#if __UNIX__  // rcg05102003 Added stdio console reading.  --ryan.
+#if __UNIX__  // stdio console reading.
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -661,7 +653,7 @@ INT UServerCommandlet::Main( const TCHAR* Parms )
 	UEngine* Engine = ConstructObject<UEngine>( EngineClass );
 	Engine->Init();
 
-	#if __UNIX__  // rcg05102003 Added stdio console reading.  --ryan.
+	#if __UNIX__  // stdio console reading.
 	int stdinfd = -1;
 	if (Engine->ServerReadsStdin)
 	{
@@ -693,7 +685,7 @@ INT UServerCommandlet::Main( const TCHAR* Parms )
 		// Clear stats (will also update old stats).
 		GStats.Clear();
 
-		#if __UNIX__  // rcg05102003 Added stdio console reading.  --ryan.
+		#if __UNIX__  // stdio console reading.
 		guard(stdin_reading);
 		if (stdinfd != -1)  // don't read if it would block/fail or not wanted.
 		{
@@ -720,7 +712,6 @@ INT UServerCommandlet::Main( const TCHAR* Parms )
 						stdincmd += stdinbuf;
 						if (stdincmd.Len() > 0)
 						{
-							//debugf(TEXT("Executing command from stdin: [%s]."), *stdincmd);
 							Engine->Exec( *stdincmd );
 							stdincmd = TEXT("");
 						}
@@ -836,7 +827,6 @@ INT UUModUnpackCommandlet::Main( const TCHAR* Parms )
         if ((fname == TEXT("manifest.ini")) || (fname == TEXT("manifest.int")))
             continue;
 
-        // !!! FIXME: This is lame.
         TCHAR *ptr = &fname[0];
         while (*ptr)
         {
@@ -880,7 +870,6 @@ INT UUModUnpackCommandlet::Main( const TCHAR* Parms )
             if (maxread > sizeof (buffer))
                 maxread = sizeof (buffer);
 
-            // !!! FIXME: Do these _always_ terminate the program on error?
             rarc->Serialize(buffer, maxread);
             warc->Serialize(buffer, maxread);
 
@@ -1289,7 +1278,7 @@ INT UMasterMD5Commandlet::QuickMD5(const TCHAR* Parms)
 	FString MD5Str;
 	FString Guid;
 	
-	if (!DoQuickMD5(Parms, MD5Str,Guid) ) // FString::Printf(TEXT("%s"),DoQuickMD5(Parms));
+	if (!DoQuickMD5(Parms, MD5Str,Guid) )
 		return 0;
 
 	GWarn->Logf( TEXT("  MD5 = [%s]"),*MD5Str);
@@ -1323,8 +1312,7 @@ INT UMasterMD5Commandlet::DoQuickMD5(const TCHAR *Parms, FString& MD5, FString& 
 	*MD5Ar << Summary; 
 
 	// MD5sum the package summary...
-	// !!! FIXME: Can we just hook this up to the serialization code?
-	// !!! FIXME: Same code is in UnLinker.cpp!
+	// Retail package MD5s hash these fields in this order, so this stays apart from the serializer.
 	appMD5Update32( &PMD5Context, Summary.Tag );
 	appMD5Update32( &PMD5Context, Summary.GetFileVersionComplete() );
 	appMD5Update32( &PMD5Context, Summary.PackageFlags );
@@ -1359,11 +1347,7 @@ INT UMasterMD5Commandlet::DoQuickMD5(const TCHAR *Parms, FString& MD5, FString& 
 
 			appMD5Update32(&PMD5Context, NameEntry.Flags);
 
-			// This is a mistake; the "sizeof" makes this "4" without ever calling appStrlen!!
-			//appMD5Update(&PMD5Context, (BYTE*)&NameEntry.Name,sizeof(appStrlen(NameEntry.Name) * sizeof(TCHAR) ) );
-
-			// Here's a byte-safe version that assumes we're sending four bytes. Remove this when
-			//  fixing the above version.  --ryan.
+			// Retail hashes only the first two characters (four bytes as UTF-16) of each name, so package MD5s depend on exactly this.
             appMD5Update16(&PMD5Context, (_WORD) NameEntry.Name[0]);
             appMD5Update16(&PMD5Context, (_WORD) NameEntry.Name[1]);
 		}
@@ -1560,10 +1544,6 @@ INT UMasterMD5Commandlet::GlobalID(const TCHAR* Parms)				// Shows what a packag
 	for (INT i=0; i<16; i++)
 		SecureKey += FString::Printf(TEXT("%02x"), HashDigest[i]);	
 	
-	//GWarn->Logf(TEXT("Original Key: %s"),Parms);
-	//GWarn->Logf(TEXT("Actual Hesh : %s"),*HashStr);
-	//GWarn->Logf(TEXT("Global Id   : %s"),*SecureKey);
-
 	GWarn->Logf(TEXT("This command has been removed!"));
 
 	return 0;

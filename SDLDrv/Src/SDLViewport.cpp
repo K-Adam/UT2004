@@ -282,7 +282,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		return 1;
 	}
 
-        // vi represent!  --ryan.
+        // vi style quit commands.
     else if ((ParseCommand(&Cmd,TEXT(":wq"))) || (ParseCommand(&Cmd,TEXT(":q!"))))
     {
         GIsRequestingExit = 1;
@@ -335,11 +335,6 @@ void USDLViewport::OpenWindow( PTRINT InParentWindow, UBOOL IsTemporary, INT New
 
 	if( NewX!=INDEX_NONE )
 		NewX = Align( NewX, 2 );
-
-	// User window of launcher if no parent window was specified.
-    // !!! FIXME: commented out because of compiler issue. --ryan.
-	//if( !InParentWindow )
-	//	Parse( appCmdLine(), TEXT("HWND="), InParentWindow );
 
 	// Create frame buffer.
 	if( IsTemporary )
@@ -862,7 +857,7 @@ UBOOL USDLViewport::TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY,
 			RenDev->Init();
 		}
 
-        // !!! FIXME: "ColorBytes" should be zero unless we need to fallback. It's complicated. Check this later. --ryan.
+        // "ColorBytes" should be zero unless a fallback is needed.
 		if( !RenDev->SetRes( this, NewX, NewY, Fullscreen | FullscreenOnly, ColorBytes ) )
 		{
 			debugf( NAME_Log, LocalizeError(TEXT("Failed3D"),TEXT("SDLDrv")) );
@@ -1089,7 +1084,7 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 //
 TCHAR * USDLViewport::GetLocalizedKeyName( EInputKey Key )
 {
-	return TEXT("");  // !!! FIXME: implement this! --ryan.
+	return TEXT("");
 }
 
 
@@ -1113,7 +1108,7 @@ void USDLViewport::TextToSpeech( const FString& Text, FLOAT Volume )
                 cvt[len] = '\0';
             }
 
-            // !!! FIXME: make non-blocking
+            // Could be made non-blocking.
             write(TextToSpeechObject, cvt, len);
         }
     }

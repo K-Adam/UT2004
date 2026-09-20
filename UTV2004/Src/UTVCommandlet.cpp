@@ -25,7 +25,6 @@ static void GetValue(FString& s,const TCHAR* key,FString& value)
 		if(s2.InStr(TEXT("?"))!=-1)
 			s2=s2.Left(s2.InStr(TEXT("?")));
 		value=s2;
-		//debugf(TEXT("%s %s"),key,value);
 	}
 }
 
@@ -58,8 +57,6 @@ INT UUTVCommandlet::Main( const TCHAR* Parms )
 	Engine->Init(inifile);
 	UtvEngine->ParseCmdLine(Parms);
 
-
-	//UClass* UplinkClass = UObject::StaticLoadClass( UEngine::StaticClass(), NULL, TEXT("utv2004.ReplicatorEngine"), NULL, LOAD_NoFail, NULL );
 
 	// Main loop.
 	GIsRunning = 1;

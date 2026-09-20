@@ -89,7 +89,6 @@ void rc4(BYTE *buffer_ptr, INT buffer_len, FRC4Key *key)
 	state = &key->state[0];         
 	for(counter = 0; counter < buffer_len; counter ++)      
 	{               
-		//old: x = (x + 1) % 256;
 		x = (x + buffer_ptr[counter] + 1) % 256;
 
 		y = (state[x] + y) % 256;               

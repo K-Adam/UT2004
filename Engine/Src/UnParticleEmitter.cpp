@@ -287,7 +287,7 @@ void UParticleEmitter::SpawnParticle( INT Index, FLOAT SpawnTime, INT Flags, INT
 	if( CoordinateSystem == PTCS_Independent )
 	{
 		if ( !(SpawnFlags & PSF_NoOwnerLocation) )
-			Particle.Location += Owner->Location;// + SpawnTime * Owner->AbsoluteVelocity;	
+			Particle.Location += Owner->Location;
 		Particle.RevolutionCenter += Owner->Location;
 	}
 
@@ -472,7 +472,6 @@ FLOAT UParticleEmitter::SpawnParticles( FLOAT OldLeftover, FLOAT Rate, FLOAT Del
 		if ( bInterpolate && CoordinateSystem == PTCS_Independent )
 		{
 			Percent = 1.f - FLOAT(i+1) / FLOAT(Number);
-			//debugf(TEXT("OwnerLocation - PI: %i P:%f LT:%f"), i, Percent, Owner->Level->TimeSeconds);
 			Particles(ParticleIndex).Location += Percent * (Owner->OldLocation - Owner->Location);	
 		}
 
@@ -572,8 +571,7 @@ INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 	}
 	else
 	{
-		Rate = ParticlesPerSecond; //!! TODO: PPSLightFactor
-		//Rate = ParticlesPerSecond * PPSLightFactor * LightBrightness / 255.f;
+		Rate = ParticlesPerSecond;
 	}
 
 	// Spawning on trigger.
@@ -599,7 +597,6 @@ INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 			if ( bInterpolate && CoordinateSystem == PTCS_Independent )
 			{
 				Percent = 1.f - FLOAT(i+1) / FLOAT(Amount);
-				//debugf(TEXT("OwnerLocation - PI: %i P:%f LT:%f"), i, Percent, Owner->Level->TimeSeconds);
 				Particles(ParticleIndex).Location += Percent * (Owner->OldLocation - Owner->Location);	
 			}
 
@@ -612,7 +609,6 @@ INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 	// Laurent -- Count particles to respawn for interpolation
 	INT	PtclRespawnCount	= 0;
 	INT PtclRespawnIndex	= 0;
-	//Percent					= 0.f;
 	for (INT Index=0; Index<Min(MaxActiveParticles, ActiveParticles); Index++)
 	{
 		FParticle& Particle = Particles(Index);
@@ -654,8 +650,6 @@ INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 			TickParticle = false;
 			Particle.Flags &= ~PTF_InitialSpawn;
 		}
-		//else
-		//	Particle.Time += DeltaTime;
 
 		if ( Particle.Time > Particle.MaxLifetime )
 		{
@@ -677,7 +671,6 @@ INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 			if ( bInterpolate && CoordinateSystem == PTCS_Independent )
 			{
 				Percent = 1.f - FLOAT(PtclRespawnIndex+1) / FLOAT(PtclRespawnCount);
-				//debugf(TEXT("OwnerLocation - PI: %i P:%f LT:%f"), i, Percent, Owner->Level->TimeSeconds);
 				Particles(Index).Location += Percent * (Owner->OldLocation - Owner->Location);	
 			}
 			PtclRespawnIndex++;

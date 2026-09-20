@@ -412,7 +412,6 @@ void UNetConnection::ReceivedPacket( FBitReader& Reader )
 		InPacketId = PacketId;
 	}
 	else InOrdAcc++;
-	//debugf(TEXT("RcvdPacket: %i %i"),(INT)(appSeconds()*1000)%1000,PacketId);
 
 	// Acknowledge the packet.
 	SendAck( PacketId );
@@ -454,7 +453,6 @@ void UNetConnection::ReceivedPacket( FBitReader& Reader )
 			else if( AckPacketId<OutAckPacketId )
 			{
 				//warning: Double-ack logic makes this unmeasurable.
-				//OutOrdAcc++;
 			}
 			unguard;
 
@@ -773,7 +771,6 @@ UChannel* UNetConnection::CreateChannel( EChannelType ChType, UBOOL bOpenedLocal
 	Channel->Init( this, ChIndex, bOpenedLocally );
 	Channels[ChIndex] = Channel;
 	OpenChannels.AddItem(Channel);
-	//debugf( "Created channel %i of type %i", ChIndex, ChType);
 
 	return Channel;
 	unguard;
@@ -947,7 +944,6 @@ void UNetConnection::HandleClientPlayer( APlayerController *PC )
 	check(PC->GetLevel()->Engine->Client);
 	check(PC->GetLevel()->Engine->Client->Viewports.Num());
 	Viewport = PC->GetLevel()->Engine->Client->Viewports(0);
-	//check( Viewport->Actor->Player == NULL || Viewport->Actor->Player->Actor == NULL );
 	Viewport->Actor->Player = NULL;
 	Viewport->CurrentNetSpeed = CurrentNetSpeed;
 
@@ -959,7 +955,6 @@ void UNetConnection::HandleClientPlayer( APlayerController *PC )
 	PC->SetPlayer( Viewport );
 	debugf(TEXT("%s setplayer %s"),PC->GetName(), Viewport->GetName());
 	PC->GetLevel()->Engine->Client->Viewports(0)->Input->ResetInput();
-//	PC->GetLevel()->Engine->Flush( 1 );
 	PC->Level->LevelAction = LEVACT_None;
 	unguard;
 

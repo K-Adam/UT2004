@@ -202,7 +202,6 @@ void AWeapon::TickAuthoritative( FLOAT DeltaSeconds )
                     else if (FireMode[mode]->bServerDelayStopFire)
                     {
                         FireMode[mode]->bServerDelayStopFire = false;
-                        //debugf(TEXT("ServerDelayStopFire %f"), Level->TimeSeconds);
                         eventStopFire(mode);
                     }
                 }
@@ -317,9 +316,7 @@ void AActor::TickAuthoritative( FLOAT DeltaSeconds )
 	guardSlow(AActor::TickAuthoritative);
 
 	// Tick the nonplayer.
-	//clockSlow(GStats.DWORDStats(GEngineStats.STATS_Game_ScriptTickCycles));
 	eventTick(DeltaSeconds);
-	//unclockSlow(GStats.DWORDStats(GEngineStats.STATS_Game_ScriptTickCycles));
 
 	// Update the actor's script state code.
 	ProcessState( DeltaSeconds );
@@ -408,9 +405,7 @@ void APawn::TickSimulated( FLOAT DeltaSeconds )
 		}
 	}
 	// Tick the nonplayer.
-	//clockSlow(GStats.DWORDStats(GEngineStats.STATS_Game_ScriptTickCycles));
 	eventTick(DeltaSeconds);
-	//unclockSlow(GStats.DWORDStats(GEngineStats.STATS_Game_ScriptTickCycles));
 
 	unguardSlow;
 }
@@ -534,7 +529,7 @@ UBOOL AActor::Tick( FLOAT DeltaSeconds, ELevelTick TickType )
 	// This actor is tickable.
 	if( RemoteRole == ROLE_AutonomousProxy ) 
 	{
-        APlayerController *PC = GetTopPlayerController();//Cast<APlayerController>(GetTopOwner());
+        APlayerController *PC = GetTopPlayerController();
 		if ( (PC && PC->LocalPlayerController()) || Physics == PHYS_Karma )
 			TickAuthoritative(DeltaSeconds);
 		else
@@ -703,7 +698,7 @@ UBOOL APlayerController::Tick( FLOAT DeltaSeconds, ELevelTick TickType )
 		// update viewtarget replicated info
 		if( ViewTarget != Pawn )
 		{
-            APawn* TargetPawn = ViewTarget ? ViewTarget->GetAPawn() : NULL; //Cast<APawn>(ViewTarget);
+            APawn* TargetPawn = ViewTarget ? ViewTarget->GetAPawn() : NULL;
 			if ( TargetPawn )
 			{
 				if ( TargetPawn->Controller && TargetPawn->Controller->GetAPlayerController() )
@@ -763,7 +758,7 @@ UBOOL APlayerController::Tick( FLOAT DeltaSeconds, ELevelTick TickType )
 			// update viewtarget replicated info
 			if( !bBehindView )
 			{
-				APawn* TargetPawn = ViewTarget ? ViewTarget->GetAPawn() : NULL; //Cast<APawn>(ViewTarget);
+				APawn* TargetPawn = ViewTarget ? ViewTarget->GetAPawn() : NULL;
 				if ( TargetPawn )
 				{
 					TargetViewRotation = Rotation;
@@ -780,7 +775,6 @@ UBOOL APlayerController::Tick( FLOAT DeltaSeconds, ELevelTick TickType )
 		if( SightCounter < 0.0f )
 			SightCounter += 0.2f;
 
-		//SightCounter = SightCounter - DeltaSeconds; // uncomment this line if PlayerControllers should receive SeePlayer() or SeeMonster() events
 		if( Pawn && !Pawn->bHidden )
 			ShowSelf();
 	}
@@ -827,21 +821,7 @@ void ULevel::TickNetClient( FLOAT DeltaSeconds )
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_NetTickCycles));
 	if( NetDriver->ServerConnection->State==USOCK_Open )
 	{
-		/* Don't replicate any properties from client to server
-		for( TMap<AActor*,UActorChannel*>::TIterator ItC(NetDriver->ServerConnection->ActorChannels); ItC; ++ItC )
-		{
-			guard(UpdateLocalActors);
-			UActorChannel* It = ItC.Value();
-			APawn* PlayerPawn = It->GetActor() ? It->GetActor()->GetAPawn() : NULL; // Cast<APawn>(It->GetActor());
-			if( PlayerPawn && PlayerPawn->Controller )
-			{
-				APlayerController* PC = PlayerPawn->Controller->GetAPlayerController();// Cast<APlayerController>(PlayerPawn->Controller);
-				if ( PC && PC->Player )
-					It->ReplicateActor();
-			}
-			unguard;
-		}
-		*/
+		// Don't replicate any properties from client to server.
 	}
 	else if( NetDriver->ServerConnection->State==USOCK_Closed )
 	{
@@ -917,13 +897,6 @@ UBOOL AActor::IsNetRelevantFor( APlayerController* RealViewer, AActor* Viewer, F
 					}
 				} 
 			}
-			/*
-			// check against antiportal volumes
-			FCheckResult Hit(1.f);
-			for ( INT i=0; i<GetLevel()->AntiPortals.Num(); i++ )
-				if ( GetLevel()->AntiPortals(i) && GetLevel()->AntiPortals(i)->GetPrimitive()->LineCheck( Hit, GetLevel()->AntiPortals(i), Location, SrcLocation, FVector(0.f,0.f,0.f), 0, TRACE_StopAtFirstHit )==0 )
-					return 0;
-			*/
 			return 1;
 		}
 		return 0;
@@ -975,29 +948,13 @@ UBOOL APawn::IsNetRelevantFor( APlayerController* RealViewer, AActor* Viewer, FV
 			return CacheNetRelevancy(false,RealViewer,Viewer);
 
 		// check against BSP - check head and center
-		//debugf(TEXT("Check relevance of %s"),*(PlayerReplicationInfo->PlayerName));
 		if ( !GetLevel()->Model->FastLineCheck(Location + FVector(0.f,0.f,BaseEyeHeight),SrcLocation) 
 			 && !GetLevel()->Model->FastLineCheck(Location,SrcLocation)  )
 			return CacheNetRelevancy(false,RealViewer,Viewer);
-		/*
-		if ( CollisionRadius <= COMMONRADIUS )
-			return 0;
-
-		// if large collision volume, check edges
-		if ( GetLevel()->Model->FastLineCheck(Location + FVector(0.f,CollisionRadius,0.f),SrcLocation) )
-			return CacheNetRelevancy(true,RealViewer,Viewer);
-		if ( GetLevel()->Model->FastLineCheck(Location - FVector(0.f,CollisionRadius,0.f),SrcLocation) )
-			return CacheNetRelevancy(true,RealViewer,Viewer);
-		if ( GetLevel()->Model->FastLineCheck(Location + FVector(CollisionRadius,0.f,0.f),SrcLocation) )
-			return CacheNetRelevancy(true,RealViewer,Viewer);
-		if ( GetLevel()->Model->FastLineCheck(Location - FVector(CollisionRadius,0.f,0.f),SrcLocation) )
-			return CacheNetRelevancy(true,RealViewer,Viewer);
-		return 0;
-		*/
 		if ( RealViewer->bWasSaturated )
 		{
 			// check against terrain
-			// FIXME - Jack, it would be nice to make this faster (a linecheck that just returns whether there was a hit)
+			// A linecheck that just returns whether there was a hit would be faster.
 			AZoneInfo* Z = Viewer->Region.Zone;
 			if( Z && Z->bTerrainZone ) 
 			{
@@ -1018,14 +975,6 @@ UBOOL APawn::IsNetRelevantFor( APlayerController* RealViewer, AActor* Viewer, FV
 				}
 			} 
 		}
-		/*
-		// check against antiportal volumes
-		FCheckResult Hit(1.f);
-		for ( INT i=0; i<GetLevel()->AntiPortals.Num(); i++ )
-			if ( GetLevel()->AntiPortals(i) 
-				&& GetLevel()->AntiPortals(i)->GetPrimitive()->LineCheck( Hit, GetLevel()->AntiPortals(i), Location + FVector(0.f,0.f,CollisionHeight), SrcLocation, FVector(0.f,0.f,0.f), 0, TRACE_StopAtFirstHit )==0 )
-				return CacheNetRelevancy(false,RealViewer,Viewer);
-		*/
 		return CacheNetRelevancy(true,RealViewer,Viewer);
 	}
 	unguardSlow;
@@ -1137,21 +1086,14 @@ INT ULevel::ServerTickClients( FLOAT DeltaSeconds )
 		ServerTickTime = DeltaSeconds;
 	else
 		ServerTickTime = 1.f/ServerTickTime;
-//	debugf(TEXT("START LIST"));
 	for( INT i=iFirstNetRelevantActor; i<Actors.Num(); i++ )
 	{
 		AActor* Actor = Actors(i);
-/*
-		if ( Actor && (Actor->RemoteRole != ROLE_None) )
-		{
-			debugf(TEXT(" Consider Replicating %s"),Actor->GetName());
-		}
-*/
 		if( Actor 
 			&& (Actor->RemoteRole!=ROLE_None) 
 			&& (TimeSeconds > Actor->NetUpdateTime) ) 
 		{
-			Actor->NetUpdateTime = TimeSeconds + appFrand() * ServerTickTime + 1.f/Actor->NetUpdateFrequency; // FIXME - cache 1/netupdatefreq
+			Actor->NetUpdateTime = TimeSeconds + appFrand() * ServerTickTime + 1.f/Actor->NetUpdateFrequency; // could cache 1/NetUpdateFrequency
 			if ( Actor->bAlwaysRelevant || !Actor->bOnlyRelevantToOwner ) 
 			{
 				ConsiderList[ConsiderListSize] = Actor;
@@ -1239,7 +1181,6 @@ INT ULevel::ServerTickClients( FLOAT DeltaSeconds )
 				AActor* Actor = ConsiderList[i];
 				if( Actor->NetTag!=NetTag )
 				{
-					//debugf(TEXT("Consider %s alwaysrelevant %d frequency %f "),Actor->GetName(), Actor->bAlwaysRelevant, Actor->NetUpdateFrequency);
 					UActorChannel* Channel = Connection->ActorChannels.FindRef(Actor);
 					if ( Actor->bOnlyDirtyReplication 
 						&& Channel
@@ -1261,7 +1202,6 @@ INT ULevel::ServerTickClients( FLOAT DeltaSeconds )
 			for( INT i=0; i<Connection->OwnedConsiderListSize; i++ )
 			{
 				AActor* Actor = Connection->OwnedConsiderList[i];
-				//debugf(TEXT("Consider owned %s alwaysrelevant %d frequency %f  "),Actor->GetName(), Actor->bAlwaysRelevant,Actor->NetUpdateFrequency);
 				if( Actor->NetTag!=NetTag )
 				{
 					UActorChannel* Channel = Connection->ActorChannels.FindRef(Actor);
@@ -1287,15 +1227,6 @@ INT ULevel::ServerTickClients( FLOAT DeltaSeconds )
 			Connection->LastRepTime = Connection->Driver->Time;
 			unguard;
 
-/*			INT i = 0;
-			for( TMap<AActor*,UActorChannel*>::TIterator ItC(Connection->ActorChannels); ItC; ++ItC )
-			{
-				i++;
-				UActorChannel* It = ItC.Value();
-				if ( It && It->GetActor() )
-					debugf(TEXT("Channel %d is %s"),i,It->GetActor()->GetName());
-			}
-*/
 			FLOAT RelevantTime = 0.f;
 			// Sort by priority.
 			guard(SortConsiderList);
@@ -1308,11 +1239,9 @@ INT ULevel::ServerTickClients( FLOAT DeltaSeconds )
 			guard(UpdateRelevant);
 			INT j;
 			UBOOL bNewSaturated = false;
-			//debugf(TEXT("START"));
 			for( j=0; j<ConsiderCount; j++ )
 			{
 				UActorChannel* Channel     = PriorityActors[j]->Channel;
-				//debugf(TEXT(" Maybe Replicate %s"),PriorityActors[j]->Actor->GetName());
 				if ( !Channel || Channel->Actor ) //make sure didn't just close this channel
 				{
 					AActor*        Actor       = PriorityActors[j]->Actor;
@@ -1343,7 +1272,6 @@ INT ULevel::ServerTickClients( FLOAT DeltaSeconds )
 								Channel->RelevantTime = NetDriver->Time + 0.5f * appFrand();
 							if( Channel->IsNetReady(0) )
 							{
-								//debugf(TEXT("Replicate %s"),Actor->GetName());
 								Channel->ReplicateActor();
 								Updated++;
 							}
@@ -1385,8 +1313,6 @@ INT ULevel::ServerTickClients( FLOAT DeltaSeconds )
 			unguard;
 			Mark.Pop();
 			unclock(RelevantTime);
-			//debugf(TEXT("Potential %04i ConsiderList %03i ConsiderCount %03i Prune=%01.4f Relevance=%01.4f"),Actors.Num()-iFirstNetRelevantActor, 
-			//			ConsiderListSize, ConsiderCount, PruneActors * GSecondsPerCycle * 1000.f,RelevantTime * GSecondsPerCycle * 1000.f);
 		}
 	}
 	Mark.Pop();
@@ -1645,22 +1571,12 @@ void ULevel::Tick( ELevelTick TickType, FLOAT DeltaSeconds )
 	if( !GUseFixedTimeStep ) 
 		DeltaSeconds *= Info->TimeDilation;
 	// Clamp time between 2000 fps and 2.5 fps.
-	//if ( DeltaSeconds > 0.1f )
-	//	debugf(TEXT("DeltaSeconds %f (unclamped)"),DeltaSeconds);
 	DeltaSeconds = Clamp(DeltaSeconds,0.0005f,0.40f);
 
 	if ( !IsPaused() )
 		TimeSeconds += DeltaSeconds;
 	Info->TimeSeconds = TimeSeconds;
 
-#if 0
-/* GERMAN VERSION */
-	AGameInfo *DefaultGameActor = Cast<AGameInfo>((AGameInfo::StaticClass())->GetDefaultActor());
-	if ( DefaultGameActor )
-		DefaultGameActor->bAlternateMode = true;
-	if ( Info->Game )
-		Info->Game->bAlternateMode = true;
-#endif
 
 	UpdateTime(Info);
 	if( Info->bPlayersOnly )
@@ -1680,7 +1596,7 @@ void ULevel::Tick( ELevelTick TickType, FLOAT DeltaSeconds )
 		NewlySpawned = NULL;
 		INT Updated  = 1;
 
-        /* KTODO: Should we do this _after_ actor physics? */
+        /* Karma ticks before actor physics, as in retail, so simulation order matches. */
         KTickLevelKarma(this, DeltaSeconds);
 
 		for( INT iActor=iFirstDynamicActor; iActor<Actors.Num(); iActor++ )
@@ -1753,16 +1669,6 @@ void ULevel::Tick( ELevelTick TickType, FLOAT DeltaSeconds )
 		unguard;
 	}
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_ActorTickCycles));
-/*
-	if ( (GStats.DWORDStats(GEngineStats.STATS_Game_ActorTickCycles) * GSecondsPerCycle * 1000.0f >= 30.f)
-		|| (GScriptCycles * GSecondsPerCycle * 1000.0f > 10.f) )
- 		debugf(TEXT("********** ActorTick Cycles %f at %f pathtime %f script time %f"), 
-					GStats.DWORDStats(GEngineStats.STATS_Game_ActorTickCycles) * GSecondsPerCycle * 1000.0f, 
-					TimeSeconds,
-					GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,
-					GScriptCycles * GSecondsPerCycle * 1000.0f
-					);
-*/
  	if ( Engine->Client )
 	{
 		if ( Engine->Client->InteractionMaster )

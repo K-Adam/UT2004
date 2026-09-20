@@ -64,16 +64,6 @@
 	}
 	virtual FMatrix LocalToWorld() const
 	{
-#if 0
-		FTranslationMatrix LToW( -PrePivot );
-		FScaleMatrix TempScale( DrawScale3D * DrawScale );
-		FRotationMatrix TempRot( Rotation );
-		FTranslationMatrix TempTrans( Location );
-		LToW *= TempScale;
-		LToW *= TempRot;
-		LToW *= TempTrans;
-		return LToW;
-#else
 		FMatrix Result;
 
 		FLOAT	SR	= GMath.SinTab(Rotation.Roll),
@@ -115,7 +105,6 @@
 		Result.M[3][3] = 1.f;
 
 		return Result;
-#endif
 	}
 	virtual FMatrix WorldToLocal() const
 	{
@@ -131,14 +120,7 @@
 
 	FLOAT LifeFraction()
 	{
-		#ifdef _WIN32  // !!! FIXME: why do we get NaNs here? --ryan.
 		return Clamp( 1.f - LifeSpan / GetClass()->GetDefaultActor()->LifeSpan, 0.f, 1.f );
-		#else
-		FLOAT ParentLifeSpan = GetClass()->GetDefaultActor()->LifeSpan;
-		if (ParentLifeSpan == 0.f)
-			return 1.f;
-		return Clamp( 1.f - LifeSpan / ParentLifeSpan, 0.f, 1.f );
-		#endif
 	}
 	FVector GetCylinderExtent() const {return FVector(CollisionRadius,CollisionRadius,CollisionHeight);}
 

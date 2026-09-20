@@ -7,13 +7,10 @@
 #include <McdInteractionTable.h>
 #include <McdModel.h>
 #include <McdContact.h>
-//#include "lsTransform.h"
 #include <McdTriangleList.h>
 #include <McdModelPair.h>
 #include <McdPrimitives.h>
 #pragma pack (pop)
-//#include "vectormath.h"
-//#include <GeomUtils.h>
 
 //  Vec x Axis
 inline void MeVec3CrossAxis(MeVector3 outVec, const MeVector3 inVec, const INT inAxisN) 
@@ -455,16 +452,6 @@ static bool McdVanillaOverlapOBBTri_13(MeReal &outSep,
 			if (rLen > eps2 * sqE[i])
 			{
 				rLen = MeSafeRecip(MeSqrt(rLen));
-				/*
-				This test is redundant, since  the conditional if (separation-maxSeparation > eps), below will eliminate
-				edge collisions which are too close to being a face collision.  I'm chucking it because the test seems
-				to be failing, and throwing out needed edge normals.  BRG 24Apr02
-				if (MeFabs(rLen*(*(lsVec3*)inTri->normal).dot(Vec3CrossAxis(*(lsVec3*)edge[i],j))) > 1-inEps)
-				{
-				// already handled by triangle normal
-				continue;
-				}
-				*/
 				MeReal aNormD = MeFabs(normD)*rLen;
 				MeReal separation = aNormD-sumR*rLen;
 
@@ -633,9 +620,6 @@ MeBool KBoxTriangleListIntersect( McdModelPair* p, McdIntersectResult *result )
 		MeVector3Subtract(edge[0], *ct.vertices[1], *ct.vertices[0]);
 		MeVector3Subtract(edge[1], *ct.vertices[2], *ct.vertices[1]);
 		MeVector3Subtract(edge[2], *ct.vertices[0], *ct.vertices[2]);
-
-		//verts = footprint;
-		//McdVanillaOverlapOBBTri_13(separation,normal,PN,verts,dims,eps,boxRadii,&ct,edge,fwk->mScale);
 
 		verts = footprint;
 

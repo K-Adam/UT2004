@@ -120,7 +120,6 @@ UBOOL InitSockets( FString& Error )
 				WSAData.wHighVersion>>8,WSAData.wHighVersion&255,
 				WSAData.iMaxSockets,WSAData.iMaxUdpDg
 			);
-			//debugf( NAME_Init, TEXT("WinSock: %s"), WSAData.szDescription );
 		} else {
 			TCHAR Error256[256];
 			appSprintf( Error256, TEXT("WSAStartup failed (%s)"), SocketError(Code) );
@@ -287,16 +286,11 @@ UBOOL IpAddressMatches( sockaddr_in& A, sockaddr_in& B )
 #endif
 }
 
-// FIXME
 UBOOL IpAddressRangeMatches( sockaddr_in& A, sockaddr_in& B )
 {
-#if __WINSOCK__
-	return	(A.sin_addr.S_un.S_addr & 0xFFFF0000) == (B.sin_addr.S_un.S_addr & 0xFFFF0000)
-		&&	A.sin_family			== B.sin_family;
-#elif __BSD_SOCKETS__
-	return	(A.sin_addr.s_addr & 0xFFFF0000) == (B.sin_addr.s_addr & 0xFFFF0000)
-		&&	A.sin_family		== B.sin_family;
-#endif
+	// Same /16. The addresses are in network byte order.
+	return	(ntohl(A.sin_addr.s_addr) & 0xFFFF0000) == (ntohl(B.sin_addr.s_addr) & 0xFFFF0000)
+		&&	A.sin_family == B.sin_family;
 }
 
 void IpGetBytes( in_addr Addr, BYTE& Ip1, BYTE& Ip2, BYTE& Ip3, BYTE& Ip4 )

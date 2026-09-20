@@ -91,7 +91,7 @@ void AONSHoverCraft::UpdateVehicle(FLOAT DeltaTime)
 
 		FVector Up(0.0f, 0.0f, 1.0f);
 
-		// Get body angular velocity (JTODO: Add AngularVelocity to Actor!)
+		// Get body angular velocity. AngularVelocity could be added to Actor.
 		FKRigidBodyState rbState;
 		KGetRigidBodyState(&rbState);
 		FVector AngVel(rbState.AngVel.X, rbState.AngVel.Y, rbState.AngVel.Z);
@@ -115,8 +115,6 @@ void AONSHoverCraft::UpdateVehicle(FLOAT DeltaTime)
 		Force += (-OutputStrafe * MaxStrafeForce * Right);
 
 		Force -= ( (1.0f - Abs(OutputStrafe)) * LatDamping * RightVelMag * Right);
-
-		//DebugInfo = FString::Printf(TEXT("HoverHeight Set To %f"), HoverHeight);
 
 		FRotator LookRot = FRotator(DriverViewPitch, DriverViewYaw, 0);
 		FVector LookDir = LookRot.Vector();
@@ -150,8 +148,6 @@ void AONSHoverCraft::UpdateVehicle(FLOAT DeltaTime)
 		FLOAT TurnTorqueMag = (DeltaHeading / PI) * TurnTorqueFactor;
 		TurnTorqueMag = Clamp<FLOAT>( TurnTorqueMag, -TurnTorqueMax, TurnTorqueMax );
 		Torque += ( TurnTorqueMag * Up );
-
-		//GStatGraph->AddDataPoint(FString(TEXT("TurnTorqueMag")), TurnTorqueMag, true);
 
 		//// ROLL ////
 
@@ -336,8 +332,6 @@ void AONSHoverCraft::PostNetReceive()
 	OutputStrafe = RangeByteToFloat(HoverState.ServerStrafe);
 	DriverViewPitch = HoverState.ServerViewPitch;
 	DriverViewYaw = HoverState.ServerViewYaw;
-
-	//KDrawRigidBodyState(HoverState.ChassisState, false);
 
 	unguard;
 }

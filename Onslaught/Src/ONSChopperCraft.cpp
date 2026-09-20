@@ -132,12 +132,8 @@ void AONSChopperCraft::UpdateVehicle(FLOAT DeltaTime)
 		}
 
 			
-		//DebugInfo = FString::Printf(TEXT("HoverHeight Set To %f"), HoverHeight);
-
 		FRotator LookRot = FRotator(DriverViewPitch, DriverViewYaw, 0);
 		FVector LookDir = LookRot.Vector();
-
-		//GTempLineBatcher->AddLine(Location, Location + 100 * LookDir, FColor(255, 0, 0));
 
 		// We try to turn the helicopter to match the way the camera is facing.
 
@@ -168,8 +164,6 @@ void AONSChopperCraft::UpdateVehicle(FLOAT DeltaTime)
 		FLOAT TurnTorqueMag = (DeltaHeading / PI) * TurnTorqueFactor;
 		TurnTorqueMag = Clamp<FLOAT>( TurnTorqueMag, -TurnTorqueMax, TurnTorqueMax );
 		Torque += ( TurnTorqueMag * Up );
-
-		//GStatGraph->AddDataPoint(FString(TEXT("TurnTorqueMag")), TurnTorqueMag, true);
 
 		//// ROLL ////
 
@@ -349,8 +343,6 @@ void AONSChopperCraft::PostNetReceive()
 	OutputRise = RangeByteToFloat(CopState.ServerRise);
 	DriverViewPitch = CopState.ServerViewPitch;
 	DriverViewYaw = CopState.ServerViewYaw;
-
-	//KDrawRigidBodyState(CopState.ChassisState, false);
 
 	unguard;
 }

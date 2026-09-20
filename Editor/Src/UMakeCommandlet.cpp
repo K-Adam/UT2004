@@ -153,8 +153,6 @@ class UMakeCommandlet : public UCommandlet
 						Filename = FString(GScriptSourceRoot) * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
 					}
 
-//					Filename = FString(TEXT("..")) * Pkg * TEXT("Inc") * Pkg + TEXT("Classes.h");
-
 					debugf( TEXT("Autogenerating C++ header: %s"), *Filename );
 					if( !UExporter::ExportToFile( UObject::StaticClass(), NULL, *Filename, 1, 1 ) )
 						break; // gam
@@ -186,10 +184,8 @@ class UMakeCommandlet : public UCommandlet
 		}
 
 		// Attempt to export .ucl information for any packages which were compiled
-		// TODO -
-		// Currently, if compiling multiple packages, and the compilation failed, no packages will be
-		// exported to .ucl.  When the compile finally succeeds, only the packages that were compiled during the final
-		// run will be exported....I think I could fix this by adding try {} catch () around the above block of code
+		// If a multi-package compile fails, nothing is exported to .ucl, and the run that finally succeeds
+		// exports only the packages it compiled.
 		if ( CompiledPackages.Num() )
 			ExportCachePackage(CompiledPackages);
 

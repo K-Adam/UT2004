@@ -73,7 +73,7 @@ static FString GetRealCDKey()
 	HKEY hKey = NULL;
 	bool RegOpened = ( RegOpenKeyX( HKEY_LOCAL_MACHINE, *FString::Printf(TEXT("Software\\Unreal Technology\\Installed Apps\\%s"),*Product), &hKey )==ERROR_SUCCESS );
 
-// 32-bit installer on the retail disc doesn't have access to root of registry... --ryan.
+// 32-bit installer on the retail disc doesn't have access to root of registry...
 #ifdef _WIN64
 	if (!RegOpened)
 		RegOpened = ( RegOpenKeyX( HKEY_LOCAL_MACHINE, *FString::Printf(TEXT("Software\\Wow6432Node\\Unreal Technology\\Installed Apps\\%s"),*Product), &hKey )==ERROR_SUCCESS );
@@ -126,8 +126,6 @@ static FString GetRealCDKey()
 
         buf[max] = '\0';  // just in case.
         cdkey = buf;
-
-        //debugf("cdkey is [%s].", *cdkey);
     }
 #else
 #   error Please fill in CD Key stuff for your platform!

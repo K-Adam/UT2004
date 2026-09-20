@@ -21,7 +21,7 @@ INT UCompressCommandlet::Main( const TCHAR* Parms )
 		appErrorf(TEXT("Source file(s) not specified"));
 	do
 	{
-        // skip "-nohomedir", etc... --ryan.
+        // Skip "-nohomedir" and other switches.
         if ((Wildcard.Len() > 0) && (Wildcard[0] == '-'))
             continue;
 

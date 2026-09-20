@@ -430,7 +430,7 @@ void AActor::execKSetInertiaTensor( FFrame& Stack, RESULT_DECL )
         return;
 
 	// we can only do this on the fly if this actor uses a UKarmaParamsRBFull for its KParams.
-	// KTODO: We could just spawn one here if its not?
+	// We could just spawn one here if it's not.
 	UKarmaParamsRBFull* fullParams = Cast<UKarmaParamsRBFull>(this->KParams);
 	if(fullParams)
 	{
@@ -461,7 +461,7 @@ void AActor::execKSetCOMOffset( FFrame& Stack, RESULT_DECL )
         return;
 
 	// we can only do this on the fly if this actor uses a UKarmaParamsRBFull for its KParams.
-	// KTODO: We could just spawn one here if its not?
+	// We could just spawn one here if it's not.
 	UKarmaParamsRBFull* fullParams = Cast<UKarmaParamsRBFull>(this->KParams);
 	if(fullParams)
 	{
@@ -738,7 +738,6 @@ void AActor::execKWake( FFrame& Stack, RESULT_DECL )
 }
 
 // Return if this actor's body is currently being simualted
-// JTODO: Fix for ragdolls.
 void AActor::execKIsAwake( FFrame& Stack, RESULT_DECL )
 {
 	guard(AActor::execKIsAwake);

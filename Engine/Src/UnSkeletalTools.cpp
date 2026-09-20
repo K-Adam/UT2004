@@ -179,7 +179,6 @@ void CreateSkinningStream( FStaticLODModel* NewLOD, USkeletalMesh* ParentMesh )
 			if( WedgeMarkers(w) == -1) 
 			{
 				WedgeMarkers(w) = 0; // Indicate first-of-multiple - otherwise, -1 (unique vertex+wedge).
-				//debugf(TEXT("Storage command for wedge %i vertex %i into top of buffer = %i "),w,VertIdx,UniqueDuplicates);
 				UniqueDuplicates++;
 				VertDupeIdx(VertIdx) = UniqueDuplicates; // location in buffer (+1)				
 			}
@@ -193,8 +192,6 @@ void CreateSkinningStream( FStaticLODModel* NewLOD, USkeletalMesh* ParentMesh )
 	VertDupeIdx.Empty();
 	NewLOD->DupVertCount = UniqueDuplicates;
 
-	// debugf(TEXT("## Duplicates-to-store total : %i"),NewLOD->DupVertCount);
-	
 	// Marker arrays:
 	// - know which wedge marks first occurrence of a point
 	// - for recurring points, know where off the temp stack to get them.
@@ -210,7 +207,7 @@ void CreateSkinningStream( FStaticLODModel* NewLOD, USkeletalMesh* ParentMesh )
 		//     Add either single bone + UV  
 		//  or Add multiple weights+indices
 		//  or Add back-index + UV  if vertex alread processed
-		INT VertIdx = ThisWedge.iVertex; //ThisWedge.iVertex;
+		INT VertIdx = ThisWedge.iVertex;
 	
 		if( WedgeMarkers(w) > 0 ) // 3d Point already computed - get it from the dupe buffer; index premultiplied with 6 (normal+vertex) floats
 		{			
@@ -231,7 +228,6 @@ void CreateSkinningStream( FStaticLODModel* NewLOD, USkeletalMesh* ParentMesh )
 				LookIdx++;
 			}	
 
-			// debugf(TEXT(" Influence count for vertex %i  is %i "),VertIdx ,InfluenceCount);
 			if( InfluenceCount == 0 ) 
 			{				
 				debugf(TEXT("NULL VERTEX INFLUENCE DETECTED."));				
@@ -243,8 +239,6 @@ void CreateSkinningStream( FStaticLODModel* NewLOD, USkeletalMesh* ParentMesh )
 				InfluenceCount = 7;
 			}
 
-			// if( ForceSingleInfluence ) InfluenceCount = 1;
-			
 			// First in any influence seqeuence: indicator bits to store the number of influences, or a copy-back instruction.			
 			DWORD IndicatorBits = ((DWORD)(Min(8,InfluenceCount)-1)) << (DWORD)(32-4);			
 
@@ -308,8 +302,6 @@ void CreateSkinningStream( FStaticLODModel* NewLOD, USkeletalMesh* ParentMesh )
 		}
 	}
 	NewLOD->SkinningStream.AddItem( (DWORD)0xFFFFFFFF ); // End-Of-Stream marker.
-
-	// debugf(TEXT("Created SkinningStream, size: %i    Temp vertex dupes: %i"),NewLOD->SkinningStream.Num(),BufSizeSim);	
 
 	// Tests-interpret entire stream for debugging.
 	if( 0 )
@@ -632,7 +624,7 @@ INT USkeletalMesh::LODFootprint( INT LODIndex, UBOOL RenderDataOnly )
 //
 // Generate a LOD level; hark back to older LOD data as our source if necessary for backward compatibility.
 // Note, 0th LOD level needs to be generated explicitly also.
-// TODO: more options needed for creation...
+// More creation options could be added.
 //
 
 #define MAXLODLEVELS 8
@@ -967,91 +959,6 @@ void USkeletalMesh::NormalizeInfluences( INT LodLevel )
 {
 	guard(USkeletalMesh::NormalizeInfluences);
 
-/*
-	// Influences match the 3D points, not the wedges.
-	InfluenceIndex.Empty();
-	InfluenceIndex.Add(Points.Num());
-	
-	//Mark as uninitialized.
-	for( INT i=0; i<InfluenceIndex.Num(); i++ )
-	{   		
-		InfluenceIndex(i).InfIndex[0] = 0xFFFF;
-		InfluenceIndex(i).InfIndex[1] = 0xFFFF;
-		InfluenceIndex(i).InfIndex[2] = 0xFFFF;
-		InfluenceIndex(i).InfIndex[3] = 0xFFFF;	
-
-		InfluenceIndex(i).BoneIndex[0] = 0;
-		InfluenceIndex(i).BoneIndex[1] = 0;
-		InfluenceIndex(i).BoneIndex[2] = 0;
-		InfluenceIndex(i).BoneIndex[3] = 0;	
-	}
-
-	// Initialize the Influence-index array (for each POINT / vertex , knows whick bones influence it with what weight).
-	for( INT w=0; w< BoneWeightIdx.Num(); w++ )
-	{
-		INT Index  = BoneWeightIdx(w).WeightIndex;
-		INT Number = BoneWeightIdx(w).Number;
-		if( Number > 0 )
-		{
-			for( INT b=Index; b<(Index+Number); b++ )
-			{
-				INT VertIndex = BoneWeights(b).PointIndex;
-
-				// if (VertIndex < FrameVerts )   // LOD check...
-				// FLOAT Weight = (FLOAT)BoneWeights(b).BoneWeight * ( 1.f/65535.f );
-
-				// Store known weights and influence index per vertex, up to 4.
-				INT InfCounter = 0;
-				while( ( InfluenceIndex(VertIndex).InfIndex[InfCounter] != 0xFFFF) && InfCounter < BONEINFLUENCELIMIT )
-					InfCounter++;
-				
-				// Use first noninitialized slot.
-				if( InfCounter < BONEINFLUENCELIMIT ) // < 4 to obey the Playstation limit...
-				{
-					InfluenceIndex(VertIndex).BoneIndex[InfCounter] = w ; // bone index.
-					InfluenceIndex(VertIndex).InfIndex[InfCounter] = b ;  // boneweights/influence index
-				}
-
-				// 4 influence slots were already full ?
-				if( InfCounter >= BONEINFLUENCELIMIT ) // >= 4? : Zero out this bone's influence if we ran out of slots.
-				{
-					BoneWeights(b).BoneWeight = 0; 
-				}
-			}
-		}
-	}
-	
-	//  Restriction of max influences per vertex;:make sure these all add up to 1 (65536)
-	for( i=0; i<InfluenceIndex.Num(); i++)
-	{
-		DWORD TotalWeight = 0;
-		INT WeightCount = 0;
-
-		// Find total
-		for( INT j=0; j<4; j++) 
-		{
-			INT Index = InfluenceIndex(i).InfIndex[j];
-			if( Index !=0xFFFF )
-			{
-				TotalWeight += BoneWeights( Index ).BoneWeight;
-				WeightCount++;
-			}			
-		}
-
-		// Ensure the influences add up to 65535 ( with some tolerance... )
-		if( (TotalWeight > 0xFFFF) || (TotalWeight < 0xFFF0) ) // Rescaling needed ?
-		{			
-			FLOAT WeightScale = 65535.f/((FLOAT)TotalWeight + 0.01f);
-			for( INT j=0; j<WeightCount; j++)
-			{
-				INT Index = InfluenceIndex(i).InfIndex[j];				
-				BoneWeights( Index ).BoneWeight = (INT) ( WeightScale * (FLOAT)BoneWeights( Index ).BoneWeight);
-			}
-		}
-	}
-	//debugf(TEXT("Generated %i InfIndices"),InfluenceIndex.Num());
-
-*/
 	unguard;
 }
 
@@ -1138,17 +1045,6 @@ void USkeletalMesh::ReconstructRawMesh()
 			}
 		}
 	}
-
-	/*
-	if( bVerbose) 
-	{
-		debugf(TEXT("Raw influences: %i  extracted from [%i] multiblends."),RawInfluences.Num(),MultiBlends.Num());	
-		for( INT m=0; m< MultiBlends.Num(); m++)
-		{
-			debugf(TEXT("[%i]-bone influences: %i "),m+1,MultiBlends(m).PointIndices.Num() );
-		}		
-	}
-	*/
 
 	TArray<INT> NewWedgeIndexes;
 	NewWedgeIndexes.AddZeroed(Wedges.Num());
@@ -1263,13 +1159,6 @@ void USkeletalMeshInstance::MeshBuildBounds()
 
 	FBox Temp = Mesh->BoundingBox;
 
-	// Extend by 2 to compensate for the fact that the skeletal bounds reflect the reference pose only...
-	// Skeletal meshes - don't have frames beyond 0.
-	/*
-	Mesh->BoundingBox.Min = 2.0f*Temp.Min-(Temp.Min + Temp.Max)*0.5f;
-    Mesh->BoundingBox.Max = 2.0f*Temp.Max-(Temp.Min + Temp.Max)*0.5f;
-	*/
-
 	// Tighter: scale up by + S x the distance from the midpoint, conservative bounds.
 	FVector MidMesh = 0.5f*(Temp.Min + Temp.Max);
 	Mesh->BoundingBox.Min = Temp.Min + 1.0f*(Temp.Min - MidMesh);  // 0.5 ?
@@ -1302,85 +1191,6 @@ void USkeletalMesh::FlipFaces()
 }
 
 
-
-/*
-void DetermineSections( USkeletalMesh* Mesh)
-{
-	//
-	// Create 'material' sections, with proper max/min & material indices, but most of the rest will be set dynamically;
-	//
-
-	FMeshSection* Section = NULL;
-	for(INT FaceIndex = 0;FaceIndex < Mesh->Faces.Num(); FaceIndex++)
-	{
-		FMeshFace ThisFace = Mesh->Faces(FaceIndex);
-		INT  ThisMatIndex = ThisFace.MeshMaterialIndex;
-			
-		if( !Section || ( ThisMatIndex != Section->MaterialIndex ) )
-		{
-			// debugf(TEXT("New section %i for material index %i"),SmoothSections.Num(),ThisMatIndex );
-		
-			// Create a new static mesh section.
-			Section = new( Mesh->SmoothSections) FMeshSection;
-			Section->FirstFace = FaceIndex;
-			Section->MaterialIndex = ThisFace.MeshMaterialIndex;
-			// Indices filled later, dynamically
-			// Section->FirstIndex = LODChunks[LodIdx].Indexbuffer.Indices.Num();
-			Section->MinIndex = Mesh->Wedges.Num()-1; // Updated below.
-			Section->MaxIndex = 0; // Updated below.
-			Section->TotalFaces = 0;
-		}
-
-		// For each vertex in the triangle determine the minimum/maximum index;
-		// Not compatible with LOD since extra vertex-buffer vertices have been created
-		// for new collapsed faces.
-		//for(INT VertexIndex = 0;VertexIndex < 3;VertexIndex++)
-		//{
-		//	INT ThisVertIdx = ThisFace.iWedge[VertexIndex]; 
-		//	Update the current section's minimum/maximum index hints.
-		//	Section->MinIndex = Min<_WORD>(Section->MinIndex, ThisVertIdx );
-		//	Section->MaxIndex = Max<_WORD>(Section->MaxIndex, ThisVertIdx );
-		//}
-		
-		// Update the section's triangle count.
-		Section->TotalFaces++;
-	}
-	
-	//
-	// Min/MaxIndex: must encompass all of a material, not assuming any ordering.
-	//
-	for(INT s=0; s<Mesh->SmoothSections.Num(); s++)
-	{
-		INT ThisMat = Mesh->SmoothSections(s).MaterialIndex;
-		INT NewMin =  Mesh->SmoothSections(s).MinIndex;
-		INT NewMax =  Mesh->SmoothSections(s).MaxIndex;
-		
-		for(INT w=0; w<Mesh->Wedges.Num(); w++)
-		{
-			if( ThisMat == WedgeMaterials(w) )
-			{
-				if( NewMin > w )
-					NewMin = w;
-				if( NewMax < w )
-					NewMax = w;				
-			}
-		}
-		
-		Mesh->SmoothSections(s).FirstIndex = 0;
-		Mesh->SmoothSections(s).MinIndex   = NewMin;
-		Mesh->SmoothSections(s).MaxIndex   = NewMax;
-		Mesh->SmoothSections(s).TotalVerts = (NewMax-NewMin)+1;
-	}
-	
-	// Section report. 
-	
-	//{for(INT s=0;s<Mesh->SmoothSections.Num();s++)
-	//{
-		//debugf(TEXT("Min, maxindex for section %i   %i  %i mat:%i "),(INT)s,(INT)Mesh->SmoothSections(s).MinIndex, (INT)Mesh->SmoothSections(s).MaxIndex,(INT)Mesh->SmoothSections(s).MaterialIndex);	//}}
-	
-}
-
-*/
 
 
 //
@@ -1706,7 +1516,7 @@ void USkeletalMesh::ExtractRigidParts( INT LODModelIndex, INT PartMinVerts, INT 
     // Extracting rigid parts to individual pools of faces/verts.	
 	//
 
-	// Fill complete rigid vertex stream ( #TODO: CULL ?! This one duplicates ALL verts - not just rigid ones ... )
+	// Fill complete rigid vertex stream. This duplicates all verts, not just rigid ones.
 	for(INT v = 0; v < Model.Wedges.Num(); v++)
 	{
 		FAnimMeshVertex NewVert;		
@@ -1720,12 +1530,6 @@ void USkeletalMesh::ExtractRigidParts( INT LODModelIndex, INT PartMinVerts, INT 
 
 	// No software skinning callback for rigid segments.
 	Model.RigidVertexStream.bStreamCallback = false; 
-
-	//
-	// Main bone index for each vertex; -1 if multiple indices...
-	// TArray<INT> SingleBoneIndexes; 
-	// SingleBoneIndexes.AddZeroed( Model.Points.Num() );
-	//
 
 	TArray<TempRawChunk> SolidChunks;
 	TArray<INT> FaceMarkers;  // Flags faces' digestion status.
@@ -1758,7 +1562,7 @@ void USkeletalMesh::ExtractRigidParts( INT LODModelIndex, INT PartMinVerts, INT 
 	}
 
 	//
-	// TODO: optionally cull/sort influences for more tolerant to-rigid conversion...
+	// Influences could optionally be culled/sorted for more tolerant to-rigid conversion.
 	//
 
 
@@ -2012,9 +1816,6 @@ INT UMeshAnimation::SortSequencesByName()
 		ReorderSeqTags(n).SequenceName = AnimSeqs(n).Name;
 		ReorderSeqTags(n).OriginalIndex = n;
 
-		//if( n > 0)
-		//debugf(TEXT("SortSeq outcome:  %i to %i is %i  from names %s %s "),n-1,n, (INT) CompareSequenceName( &ReorderSeqTags(n-1), &ReorderSeqTags(n) ),  *ReorderSeqTags(n-1).SequenceName,  *ReorderSeqTags(n).SequenceName  );
-				
 		// Copy all data.				                
 		TempMoves(n) = Moves(n);
 		Moves(n).Erase();      		
@@ -2028,7 +1829,6 @@ INT UMeshAnimation::SortSequencesByName()
 	for( INT n=0; n<Moves.Num(); n++)
 	{				
 		INT OrigIndex = ReorderSeqTags(n).OriginalIndex;
-		//debugf(TEXT("Original Index for %i  was %i "),n, OrigIndex  ); //#SKEL!!!
 		Moves(n)   = TempMoves( OrigIndex );
 		TempMoves( OrigIndex ).Erase();
 		AnimSeqs(n)= TempSeqData( OrigIndex );
@@ -2062,11 +1862,6 @@ INT UMeshAnimation::MoveSequenceByIndex( INT SourceIdx, INT DestIdx )
 		appMemzero( (void*)&TempMoveDest,sizeof(MotionChunk));		
 		TempMoveDest = Moves(DestIdx);
 
-		// Lazy arrays need to be loaded before they can be shuffled.
-		
-		//Moves( DestIdx ).RawTracks.Load();
-		//Moves( SourceIdx ).RawTracks.Load();		
-
 		Moves( DestIdx ).Erase();
 		Moves( DestIdx ) = Moves( SourceIdx );		
 
@@ -2091,8 +1886,7 @@ INT UMeshAnimation::MoveSequenceByIndex( INT SourceIdx, INT DestIdx )
 		return DestIdx;
 	}
 
-	// TODO: Implement general case.
-	// ...
+	// The general case is not implemented.
 
 	return -1;	
 }

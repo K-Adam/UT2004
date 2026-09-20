@@ -212,7 +212,6 @@ template<class CacheClass> void CacheLoad( CacheClass& Cache )
     Cache.Records.Empty();
 
 	UBOOL bFoundUPL=false;
-//    for( INT i = 0; i < GSys->Paths.Num(); i++ )
     for( INT i = GSys->Paths.Num()-1; i >= 0; i-- )
     {
         Files.Empty();

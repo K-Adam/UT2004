@@ -12,7 +12,6 @@ UBOOL UDemoPassthroughDriver::InitConnect( FNetworkNotify* InNotify, FURL& Conne
 		return 0;
 
 	// Playback, local machine is a client, and the demo stream acts "as if" it's the server.
-	//ServerConnection = new UDemoPassthroughConnection( this, ConnectURL );
 	ServerConnection = new UDemoRecConnection( this, ConnectURL );
 	ServerConnection->CurrentNetSpeed = 1000000;
 	ServerConnection->State        = USOCK_Pending;
@@ -76,7 +75,6 @@ void UDemoPassthroughDriver::TickDispatch( FLOAT DeltaTime )
 	if (pauseDemo)
 		return;
 
-	//UpdateDemoTime (&DeltaTime, 2.0f);
 	realTime += DeltaTime;
 
 	if( ServerConnection && (ServerConnection->State==USOCK_Pending || ServerConnection->State==USOCK_Open) )
@@ -113,7 +111,6 @@ void UDemoPassthroughDriver::TickDispatch( FLOAT DeltaTime )
 				lastFrame = ServerFrameNum;
 			}
 			else {
-				//debugf(TEXT("Not adding delta %f"), ServerDeltaTime);
 			}
 
 			*FileAr << PacketBytes;
@@ -157,7 +154,6 @@ void UDemoPassthroughDriver::SetCloak(UBOOL cloak)
 void UDemoPassthroughDriver::SetPaused(UBOOL pause)
 {
 	pauseDemo = pause;
-	//debugf(TEXT("Setting pause to %d"), pause);
 }
 
 IMPLEMENT_CLASS(UDemoPassthroughDriver);

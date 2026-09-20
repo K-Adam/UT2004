@@ -367,7 +367,6 @@ void UPlayInfo::execAddSetting( FFrame& Stack, RESULT_DECL )
 	UProperty *Prop = NULL;
 	INT i = 0;
 
-//	debugf(TEXT("PlayInfo.AddSettings: PropName='%s', DispName='%s'"), (const TCHAR *)*PropertyName, (const TCHAR *)*DisplayName);
 	// First, Context validity checks
 
 	if (ClassStack.Num() < 1)
@@ -626,7 +625,6 @@ void UPlayInfo::execStoreSetting( FFrame& Stack, RESULT_DECL )
 		if ( DataRange == TEXT("") )
 			DataRange = PID.Data;
 
-//	debugf(TEXT("PlayInfo.StoreSettings: PropName='%s', DispName='%s', OldValue='%s', NewValue='%s'"), *Settings(Index).SettingName, *Settings(Index).DisplayName, *Settings(Index).Value, *NewVal);
 		// Checkboxes return "" when unchecked
 
 		switch ( PID.RenderType )
@@ -818,7 +816,6 @@ UBOOL UPlayInfo::ValidateRange( const UProperty* Prop, FString& NewVal, FString&
 		}
 	}
 
-//	debugf(TEXT("ValidateRange Prop '%s'  bArray:%i  Array.Num():%i"), Prop->GetName(), bArray, Array.Num());
 	if ( bArray )
 	{
 		NewVal = TEXT("(");

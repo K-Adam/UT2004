@@ -133,7 +133,6 @@ inline void* operator new( size_t Size, FMemStack& Mem, EMemZeroed Tag, INT Coun
 	// Get zero-filled memory.
 	guardSlow(FMemStack::New2);
 	BYTE* Result = Mem.PushBytes( Size*Count, Align );
-// !!! FIXME: Don't cast to DWORD! Fix appMemzero()'s declaration!  --ryan.
 	appMemzero( Result, (DWORD) Size*Count );
 	return Result;
 	unguardSlow;
@@ -143,7 +142,6 @@ inline void* operator new( size_t Size, FMemStack& Mem, EMemOned Tag, INT Count=
 	// Get one-filled memory.
 	guardSlow(FMemStack::New3);
 	BYTE* Result = Mem.PushBytes( Size*Count, Align );
-// !!! FIXME: Don't cast to DWORD! Fix appMemset()'s declaration! --ryan.
 	appMemset( Result, 0xff, (DWORD) Size*Count );
 	return Result;
 	unguardSlow;

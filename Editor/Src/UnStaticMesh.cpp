@@ -55,7 +55,7 @@ UStaticMesh* CreateStaticMesh(TArray<FStaticMeshTriangle>& Triangles,TArray<FSta
 //	FindMaterialIndex
 //
 
-// !!! FIXME: also in Engine/Src/UnStaticMesh.cpp ...remove this if possible!
+// Duplicate of the helper in Engine/Src/UnStaticMesh.cpp.
 static INT FindMaterialIndex(TArray<FStaticMeshMaterial>& Materials,UMaterial* Material)
 {
 	INT MaterialIndex;

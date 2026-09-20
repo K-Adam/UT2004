@@ -185,7 +185,7 @@ inline DWORD GetTypeHash( const TCHAR* S )
 // Offset of a struct member.
 //   (gcc3 thinks &((myclass*)NULL)->member is an invalid use of the offsetof
 //    macro. This is a broken heuristic in the compiler, but the workaround is
-//    to use a non-zero offset.  --ryan.)
+//    to use a non-zero offset.)
 #ifdef __GNUC__
   #define STRUCT_OFFSET( struc, member ) \
 	( ( (PTRINT)&((struc*)0x1)->member ) - 0x1 )
@@ -225,8 +225,6 @@ public:
 	}
 	FORCEINLINE INT Num() const
 	{
-		//checkSlow(ArrayNum>=0);
-		//checkSlow(ArrayMax>=ArrayNum);
 		return ArrayNum;
 	}
 	void InsertZeroed( INT Index, INT Count, INT ElementSize )
@@ -234,7 +232,6 @@ public:
 		guardSlow(FArray::InsertZeroed);
 		// gam ---
 		checkSlow(ElementSize>0);
-		// sjs rem'd -trips all over- checkSlow(Count>0);
 		checkSlow(Index>=0);
 		checkSlow(Index<=ArrayNum);
 		checkSlow(ArrayNum>=0);
@@ -249,7 +246,6 @@ public:
 		guardSlow(FArray::Insert);
 		// gam ---
 		checkSlow(ElementSize>0);
-		// sjs rem'd -trips all over- checkSlow(Count>0);
 		// --- gam
 		checkSlow(ArrayNum>=0);
 		checkSlow(ArrayMax>=ArrayNum);
@@ -271,7 +267,6 @@ public:
 	{
 		guardSlow(FArray::Add);
 		// gam ---
-		// sjs rem'd -trips all over- checkSlow(Count>0);
 		checkSlow(ElementSize>0);
 		// --- gam
 		checkSlow(ArrayNum>=0);

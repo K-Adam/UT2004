@@ -27,7 +27,7 @@ const MeReal loLimColor[3]      = {0, 0, 1};
 const MeReal currPosColor[3]    = {1, 0, 1};
 const MeReal dirColor[3]        = {1, 1, 0};
 
-/* KTODO: This could _CERTAINLY_ be done more efficiently!! */
+/* This could be done more efficiently. */
 const MeVector3 sphereDraw[24][2] = 
 {
     {{0, 0, -1},            {0, 0.7071, -0.7071}},
@@ -433,7 +433,6 @@ void KConstraintDraw(const MdtConstraintID con, int opt,
         MeVector3MultiplyAdd(v2, (MeReal)-0.5 * debugAxisSize, z);
         drawFn(v1, v2, axisColor[0], axisColor[1], axisColor[2]);
 
-#if 1
 		MeReal tmpColor[3] = {0.5, 0.5, 1};
 		MdtConstraintBodyGetPosition(con, 0, pos);
         MeVector3Copy(v1, pos);
@@ -447,7 +446,6 @@ void KConstraintDraw(const MdtConstraintID con, int opt,
         MeVector3Copy(v2, pos);
         MeVector3MultiplyAdd(v2, (MeReal)-0.5 * debugAxisSize, z);
         drawFn(v1, v2, tmpColor[0], tmpColor[1], tmpColor[2]);
-#endif
         unguard;
     }
     
@@ -502,7 +500,6 @@ void KConstraintDraw(const MdtConstraintID con, int opt,
         guard(DrawCarWheel);
         MeVector3 cpos, wpos, hinge, steer, start, end, x = {1, 0, 0};
 		MdtConstraintBodyGetPosition(con, 0, cpos); // We want the position in the chassis ref frame.
-        //MdtCarWheelGetPosition(cw, cpos);
         MdtCarWheelGetSteeringAxis(cw, steer);
         MdtCarWheelGetHingeAxis(cw, hinge);
         MeReal low = MdtCarWheelGetSuspensionLowLimit(cw);
@@ -580,14 +577,6 @@ void KConstraintDraw(const MdtConstraintID con, int opt,
         
         drawFn(pos, end, contColor[0], contColor[1], contColor[2]);
         
-        /* Draw line from each body origin to the contact. */
-        //MdtBodyID body = MdtContactGetBody(contact, 0);
-        //drawFn(body->comTM[3], pos, cont2BodyColor[0], cont2BodyColor[1], cont2BodyColor[2]);
-        
-        //body = MdtContactGetBody(contact, 1);
-        //if(body)
-        //    drawFn(body->comTM[3], pos, cont2BodyColor[0], cont2BodyColor[1], cont2BodyColor[2]);
-
         /* Draw contact direction if used */
         if(contact->params.options & MdtBclContactOptionUseDirection)
         {
@@ -827,7 +816,7 @@ void UKMeshProps::Draw(FRenderInterface* RI, INT ShowFlags)
 			lineColor);
 
 		// Draw inertia tensor as equivalent sized box.
-		// JTODO: This currently ignores off-diagnol tensor elements.
+		// This currently ignores off-diagonal tensor elements.
 		FVector InertiaRadii;
 		InertiaRadii.X = K_ME2UScale * appSqrt( (1.5f)*(InertiaTensor[3]+InertiaTensor[5]-InertiaTensor[0]) );
 		InertiaRadii.Y = K_ME2UScale * appSqrt( (1.5f)*(InertiaTensor[0]+InertiaTensor[5]-InertiaTensor[3]) );

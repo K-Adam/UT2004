@@ -44,7 +44,6 @@ ULevel* UDemoPlayPendingLevel::NotifyGetLevel()
 void UDemoPlayPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 {
 	guard(UDemoPlayPendingLevel::NotifyReceivedText);
-	//debugf( TEXT("DemoPlayPendingLevel received: %s"), Text );
 	if( ParseCommand( &Text, TEXT("USES") ) )
 	{
 		// Dependency information.

@@ -93,18 +93,9 @@ UBOOL USkeletalMesh::LineCheck(
 		// Check line against each sphere
 		for(INT i=0; i<BoneCollisionSpheres.Num() ; i++)
 		{
-			//FSkelBoneSphere* s = &BoneCollisionSpheres(i);
-			// JTODO: Write extent-line/sphere test. Anyone think of something better than a minkowski sum?
+			// No extent line/sphere test yet.
 		}
 
-#if 0
-		if( !Extent.IsZero() )
-		{
-			FVector hitPos = Start + (Result.Time * (End - Start));
-			GTempLineBatcher->AddStayingLine(Start, hitPos, FColor(0, 0, 255));
-			GTempLineBatcher->AddStayingLine(hitPos, End, FColor(255, 0, 0));
-		}
-#endif
 		
 		// If we hit something during all of that, return 0.
 		if(Result.Time < 1.0f)
@@ -116,7 +107,6 @@ UBOOL USkeletalMesh::LineCheck(
 	// If its not a zero extent check against a ragdoll, use the superclass (cylinder) line check.
     if(Extent != FVector(0, 0, 0) || (Owner->Physics != PHYS_KarmaRagDoll))
     {
-        //debugf(TEXT("USkeletalMesh::LineCheck - can only test zero-extent."));
         return Super::LineCheck(Result, Owner, End, Start, Extent, ExtraNodeFlags, TraceFlags);
     }
 
@@ -270,8 +260,7 @@ UBOOL USkeletalMesh::PointCheck(
 		// Check line against each sphere
 		for(INT i=0; i<BoneCollisionSpheres.Num() ; i++)
 		{
-			//FSkelBoneSphere* s = &BoneCollisionSpheres(i);
-			// JTODO: Write extent-line/sphere test. Anyone think of something better than a minkowski sum?
+			// No extent line/sphere test yet.
 		}
 
 		// Didn't hit anything
@@ -296,7 +285,6 @@ UBOOL USkeletalMesh::UseCylinderCollision( const AActor* Owner )
 		return true;
 
 	// Dont use cylinder if we have collision prims 
-	// JTODO: flag for this instead?
 	if( BoneCollisionSpheres.Num() > 0 || BoneCollisionBoxes.Num() > 0 )
 		return false;
 
@@ -329,12 +317,9 @@ static FBox CalcPrimBox(USkeletalMeshInstance* inst )
 		INT boneIx = inst->MatchRefBone( b->BoneName );
 		check(boneIx != INDEX_NONE);
 		FCoords boneC = inst->GetBoneCoords(boneIx).Inverse();
-		//FCoords boxC = boneC * FCoords( b->Offset ); // Box local->world transform
 
 		// Transform umodel bounding box to world
 		FBox primBox = boneModel->BoundingBox.TransformBy( boneC );
-
-		//GTempLineBatcher->AddBox(primBox, FColor(255,255,0));
 
 		// Add to running total
 	    outBox += primBox;
@@ -355,12 +340,8 @@ static FBox CalcPrimBox(USkeletalMeshInstance* inst )
 		primBox += (sphereC + rVec);
 		primBox += (sphereC - rVec);
 
-		//GTempLineBatcher->AddBox(primBox, FColor(0,255,255));
-
 	    outBox += primBox;
 	}
-
-	//GTempLineBatcher->AddBox(outBox, FColor(255,0,255));
 
 	return outBox;
 

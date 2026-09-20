@@ -333,7 +333,7 @@ struct ENGINE_API FID3TagV2 : public FID3Tag
 			Frames(i).DumpFrame();
 	}
 
-// Some versions of GNU C++ seem to need a little nudging here. --ryan.
+// Some versions of GNU C++ seem to need a little nudging here.
 #ifdef __GNUC__
     void *operator new(size_t x) { return ::operator new(x); }
 #endif

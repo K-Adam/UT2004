@@ -68,7 +68,6 @@ UBOOL FALAudioCaptureDevice::Init()
 		const ALsizei seconds = 5;  // seconds of audio to buffer.
 		const ALsizei samples = freq * seconds;
 
-		// !!! FIXME: Not NULL device name...
 		ALCaptureDevice = UALAudioSubsystem::alcCaptureOpenDevice(NULL, freq, fmt, samples);
 		if (ALCaptureDevice != NULL)
 		{
@@ -124,8 +123,6 @@ DWORD FALAudioCaptureDevice::GetCurrentOffset()
 //
 DWORD FALAudioCaptureDevice::GetSamplesPerSecond()
 {
-	//FScopeCriticalSection Lock( &CriticalSection );
-
 	return 16000;
 }
 
@@ -197,11 +194,8 @@ FLOAT FALAudioCaptureDevice::GetSampleData( DWORD& Offset, void* Pointer, DWORD&
 		CaptureLength[0] = Samples;
 	}
 
-	// !!! FIXME: This conversion code could be dropped on the ALC_EXT_capture
-	// !!! FIXME:  codepath if we specify Type at device open time and never+       // !!! FIXME:  change it. This would clean up the code and be a good
-	// !!! FIXME:  performance win, since AL is converting anyhow.
-	// !!! FIXME:  Still need to determine max gain, though.  --ryan.
-	// !!! FIXME: Alternately, throw some Altivec in here for the Mac port. --ryan.
+	// This conversion could be dropped by opening the capture device with the requested Type,
+	// since AL converts anyway. The max gain would still need to be determined.
  
 	switch( Type )
 	{

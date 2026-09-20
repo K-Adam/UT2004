@@ -68,7 +68,7 @@ void AVolume::PostBeginPlay()
 						if( DecoType->bRandomYaw ) dvo->Rotation.Yaw += appRand()%65536;
 						if( DecoType->bRandomRoll ) dvo->Rotation.Roll += appRand()%65536;
 
-						//!!vogel: what about DrawScale3D?
+						// DrawScale3D is ignored.
 						if( !DecoType->DrawScale.IsZero() )
 							dvo->SetDrawScale( DecoType->DrawScale.GetRand() );
 					}

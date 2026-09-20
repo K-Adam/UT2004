@@ -191,8 +191,7 @@ void UHTTPDownload::Tick(void)
 				return;
 			}
 
-			// Don't do this; breaks on Linux 2.4+. --ryan.
-			//SetSocketLinger( ServerSocket );
+			// No SetSocketLinger here, it breaks on Linux 2.4+.
 
 			LocalAddr.sin_family      = AF_INET;
 			LocalAddr.sin_addr        = getlocalbindaddr( *GLog );

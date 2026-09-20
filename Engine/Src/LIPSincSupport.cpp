@@ -4,8 +4,6 @@
 	  Revision history:
 		* Created by Jamie Redmond
 
-    Work-in-progress TODO's:
-		
 =============================================================================*/
 
 #include "EnginePrivate.h"
@@ -787,8 +785,6 @@ UBOOL TLIPSincBonePoseInfo::BuildBoneMap( USkeletalMesh* Mesh, TArray<FString> *
 	{
 		FString thisBone = GetBoneName(lbi);
 
-		//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: thisBone %s"), *(thisBone));
-
 		foundBone = 0;
 		
 		for( INT bone=0; bone < Mesh->RefSkeleton.Num(); bone ++ )
@@ -797,8 +793,6 @@ UBOOL TLIPSincBonePoseInfo::BuildBoneMap( USkeletalMesh* Mesh, TArray<FString> *
 			{
 				foundBone = 1;
 
-				//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: BuildBoneMap -> found %s, updating map [%i -> %i]!"), *(Mesh->RefSkeleton(bone).Name), lbi, bone);
-				
 				m_nBoneMap(lbi) = bone;			
 				numValidBones++;
 			}
@@ -1572,7 +1566,7 @@ UBOOL TLIPSincController::ProcessLIPSinc
 			{
 				BlendInfo.BlendMode = ELBM_None;
 				bAnimDone = 1;
-				OurActor->NotifyLIPSincAnimEnd();  // TODO:  Should we call this when the animation is interrupted, too ??
+				OurActor->NotifyLIPSincAnimEnd();
 				
 				// Note that we don't remove this 'Talker' from the talker list here because we could be in the middle of
 				// a ForceUpdate() call.  The 'Talker' is removed in the TLIPSincTalkerList::ForceUpdate() function when
@@ -1584,7 +1578,7 @@ UBOOL TLIPSincController::ProcessLIPSinc
 				if( GIsEditor )
 				{
 					LIPSincValues.Empty();
-					LIPSincValues.AddZeroed( 27 );  // FIXME
+					LIPSincValues.AddZeroed( 27 );
 
 					for( INT e = 0; e < NumExpressions(); ++e )
 					{
@@ -1598,7 +1592,6 @@ UBOOL TLIPSincController::ProcessLIPSinc
 		}
 		else  // ELBM_None
 		{
-			//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: ELBM_None"));
 			bAnimDone = 1;
 		}
 	
@@ -1646,16 +1639,12 @@ void TLIPSincController::UpdateUnrealBoneCache
 		FQuat   Orientation = pBone->Orientation();
 		INT     Index       = pBone->GetUnrealIndex();
 
-		//CachedUnrealPositions   ( Index ) = Position;
-		//CachedUnrealOrientations( Index ) = Orientation;
-
 		FastQuatToFCoords( Orientation, Position, UnrealSpaceBases( Index ) );
 	}
 
 	unguard;
 }
 
-// TODO:
 // There should be quite a bit of room for optimization in this function.
 // For example, there are lots of places where a function is called that
 // simply loops over each bone in an expression trying to find a match.
@@ -1691,7 +1680,6 @@ void TLIPSincController::FinalBlend( TArray<TLIPSincIndexedBone> &LIPSincBones )
 			}
 			else
 			{
-				// TODO:
 				// It is an error if a bone exists that doesn't also exist in the base set because
 				// we have no base bone to blend from.  Perhaps we could get the bone's refpose
 				// transform and blend from that ??
@@ -1763,8 +1751,6 @@ void TLIPSincController::FinalBlend( TArray<TLIPSincIndexedBone> &LIPSincBones )
 					}
 					else
 					{
-						//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: WARNING: pPoseTransform"));
-						//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Bone %d not in expression %s"), Index, *(m_Expressions(iPose).GetName()) );
 					}
 				}
 			}
@@ -1811,35 +1797,25 @@ INT TLIPSincController::InitializeBones( TArray<TLIPSincIndexedBone> &LIPSincBon
 {
 	guard(TLIPSincController::InitializeBones);
 
-	//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Initializing bones..."));
-
 	TArray<INT> UniqueBoneIndices;
 
 	INT Index = 0;
 	INT i     = 0;
 
-	//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Default Poses..."));
-
 	for( i = 0; i < m_lbpiBonePoseInfo.NumBonesPerPose(); ++i )
 	{
 		if( !UniqueBoneIndices.FindItem( m_lbpiBonePoseInfo.GetUnrealBoneIndex( i ), Index ) )
 		{
-			//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]:\t Added bone with index %d"), m_lbpiBonePoseInfo.GetUnrealBoneIndex( i ) );
 			UniqueBoneIndices.AddItem( m_lbpiBonePoseInfo.GetUnrealBoneIndex( i ) );
 		}
 	}
 
-	//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Expressions..."));
-
 	for( i = 0; i < m_Expressions.Num(); ++i )
 	{
-		//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]:\t Expression %d..."), i );
-
 		for( INT j = 0; j < m_Expressions(i).NumBonesPerPose(); ++j )
 		{
 			if( !UniqueBoneIndices.FindItem( m_Expressions( i ).GetUnrealBoneIndex( j ), Index ) )
 			{
-				//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]:\t Added bone with index %d"), m_Expressions( i ).GetUnrealBoneIndex( j ) );
 				UniqueBoneIndices.AddItem( m_Expressions( i ).GetUnrealBoneIndex( j ) );
 			}
 		}
@@ -1856,8 +1832,6 @@ INT TLIPSincController::InitializeBones( TArray<TLIPSincIndexedBone> &LIPSincBon
 	{
 		LIPSincBones(i).SetUnrealIndex( UniqueBoneIndices( i ) );
 	}
-
-	//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: done with %d unique bones."), UniqueBoneIndices.Num() );
 
 	return UniqueBoneIndices.Num();
 
@@ -2742,8 +2716,6 @@ void TLIPSincTalkerList::Clear( void )
 {
 	guard(TLIPSincTalkerList::Clear);
 
-	//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Clearing talker list..."));
-
 	TLIPSincTalker* pTemp = 0;
 
 	while( pHead != 0 )
@@ -2765,8 +2737,6 @@ void TLIPSincTalkerList::Add( USkeletalMeshInstance* pSkeletalMeshInstance )
 
 	pHead = new TLIPSincTalker( pSkeletalMeshInstance, pHead );
 
-	//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Added %s to talker list."), pSkeletalMeshInstance->GetName());
-
 	unguard;
 }
 
@@ -2774,8 +2744,6 @@ void TLIPSincTalkerList::Add( USkeletalMeshInstance* pSkeletalMeshInstance )
 void TLIPSincTalkerList::Remove( USkeletalMeshInstance* pSkeletalMeshInstance )
 {
 	guard(TLIPSincTalkerList::Remove);
-
-	//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Removing %s from talker list..."), pSkeletalMeshInstance->GetName());
 
 	TLIPSincTalker* pPrevious = 0;
 	TLIPSincTalker* pCurrent  = pHead;
@@ -2794,8 +2762,6 @@ void TLIPSincTalkerList::Remove( USkeletalMeshInstance* pSkeletalMeshInstance )
 			}
 
 			delete pCurrent;
-
-			//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Removed."));
 
 			return;
 		}
@@ -2822,14 +2788,12 @@ void TLIPSincTalkerList::ForceUpdate( void )
 
 		while( pTalker != 0 )
 		{
-			//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Updating %s in talker list..."), pTalker->pSkeletalMeshInstance->GetName());
 			pTalker->pSkeletalMeshInstance->ForceUpdate();
 
 			if( !pTalker->pSkeletalMeshInstance->IsPlayingLIPSincAnim() )
 			{
 				TLIPSincTalker* pTemp = pTalker->pNext;
 				GLIPSincTalkerList.Remove( pTalker->pSkeletalMeshInstance );
-				//GLIPSincTalkerList.PrintList();
 				pTalker = pTemp;
 			}
 			else
@@ -2842,34 +2806,6 @@ void TLIPSincTalkerList::ForceUpdate( void )
 	unguard;
 }
 
-/*
-// Debugging Only.
-void TLIPSincTalkerList::PrintList( void )
-{
-	guard(TLIPSincTalkerList::PrintList);
-
-	debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: Begin Talker List"));
-
-	if( pHead != 0 )
-	{
-		TLIPSincTalker* pTalker = pHead;
-
-		while( pTalker != 0 )
-		{
-			debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]:\t %s"), pTalker->pSkeletalMeshInstance->GetName());
-			pTalker = pTalker->pNext;
-		}
-	}
-	else
-	{
-		debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]:\t Talker List Empty."));
-	}
-
-	debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: End Talker List"));
-
-	unguard;
-}
-*/
 
 // ==================
 // EXPERIMENTAL STUFF
@@ -2934,12 +2870,10 @@ UBOOL TLIPSincLookAtInfo::BuildBoneMap( USkeletalMesh* Mesh )
 
 	if( numValidBones == 3 )
 	{
-		//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: look at info is valid"));
 		return 1;
 	}
 	else
 	{
-		//debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: WARNING: LOOK AT INFO IS NOT VALID!"));
 		return 0;
 	}
 

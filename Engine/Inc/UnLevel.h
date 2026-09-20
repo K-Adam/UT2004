@@ -322,10 +322,6 @@ class ENGINE_API ULevel : public ULevelBase
 	UBOOL   bShowSlowOverlap;
 	FLOAT	SlowOverlapThreshTime;
 
-	// Temporary stats.
-//	INT NetTickCycles, ActorTickCycles, AudioTickCycles, FindPathCycles; 
-//	INT	MoveCycles, NumMoves, NumReps, NumPV, NumRPC, SeePlayer, CanvasCycles;
-//	INT Spawning, ParticleTickTime, Unused;
     
     MdtWorldID      KWorld; /* Dyanmics */
     MstBridgeID     KBridge; /* Glue (callbacks etc.) */

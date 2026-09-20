@@ -184,13 +184,10 @@ inline int bindnextport( SOCKET s, struct sockaddr_in* addr, int portcount, int 
     //
     // The workaround is to pick our own random ports if port zero is
     // requested. If we can't find a valid port above 1024 (below 1024 is
-    // reserved for the superuser) after a couple tries, we block for three
-    // seconds and then continue as normal...the blocking sucks, but
+    // seconds and then continue as normal, which tends to fix things.
     // tends to fix things, too. Oh well.
     //
     // The Win32 TCP/IP stack does not exhibit this problem.
-    //
-    //    --ryan.
 
     if( addr->sin_port==0 )
     {

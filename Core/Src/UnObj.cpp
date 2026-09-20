@@ -207,7 +207,6 @@ UBOOL UObject::IsValid()
 		debugf( NAME_Warning, TEXT("Other object in slot") );
 		debugf( NAME_Warning, TEXT("Other is: %s"), GObjObjects(GetIndex())->GetFullName() );
 		debugf( NAME_Warning, TEXT("This is: %s"), GetFullName() );
-//		debugf( NAME_Warning, TEXT("Other is: %s"), GObjObjects(GetIndex())->GetFullName() );
 		return 0;
 	}
 	else return 1;
@@ -655,7 +654,7 @@ void UObject::ExportProperties
 					if (DiffClass && Diff && DiffClass->IsChildOf(It.GetStruct()))
 						DiffArr = (FArray*)((BYTE*)Diff + It->Offset + j * It->ElementSize);
 
-					// TODO What if DiffArr->Num() >= Arr->Num()?  Won't catch the rest of the elements, in that case
+					// Elements of DiffArr past Arr->Num() are not visited.
 					for( INT k=0;k<Arr->Num();k++ )
 					{
 						if( InnerProp->ExportText( k, Value, (BYTE*)Arr->GetData(), DiffArr && k < DiffArr->Num() ? (BYTE*)DiffArr->GetData() : NULL, PPF_Delimited ) )
@@ -804,7 +803,6 @@ UBOOL UObject::ScriptConsoleExec( const TCHAR* Str, FOutputDevice& Ar, UObject* 
 UField* UObject::FindObjectField( FName InName, UBOOL Global )
 {
 	guardSlow(UObject::StaticFindField);
-#if 1 /* Fast, VF-hashed version */
 	INT iHash = InName.GetIndex() & (UField::HASH_COUNT-1);
 
 	// Search current state scope.
@@ -820,21 +818,6 @@ UField* UObject::FindObjectField( FName InName, UBOOL Global )
 
 	// Not found.
 	return NULL;
-#else /* Slow, unhashed version */
-	// Search current state scope.
-	if( StateFrame && StateFrame->StateNode && !Global )
-		for( TFieldIterator<UField> It(StateFrame->StateNode); It; ++It )
-			if( It->GetFName()==InName )
-				return *It;
-
-	// Search the global scope.
-	for( TFieldIterator<UField> It(GetClass()); It; ++It )
-		if( It->GetFName()==InName )
-			return *It;
-
-	// Not found.
-	return NULL;
-#endif
 	unguardfSlow(( TEXT("%s (node %s)"), GetFullName(), *InName ));
 }
 UFunction* UObject::FindFunction( FName InName, UBOOL Global )
@@ -1111,7 +1094,6 @@ void UObject::LoadConfig( UBOOL Propagate, UClass* Class, const TCHAR* InFilenam
 			UClass*         BaseClass = globalConfig ? OwnerClass : Class;
 			if ( !PerObject )
 				appStrncpy( Section, BaseClass->GetPathName(), MaxNameSize );
-//			const TCHAR*    Section   = PerObject ? GetName() : BaseClass->GetPathName();
 			UArrayProperty* ArrayProp = Cast<UArrayProperty>( *It );
 			UMapProperty*   Map       = Cast<UMapProperty>( *It );
 
@@ -1120,7 +1102,7 @@ void UObject::LoadConfig( UBOOL Propagate, UClass* Class, const TCHAR* InFilenam
 			debugf(NAME_DevSave, TEXT("   Loading value for %s from [%s]"), *Key, Section);
 			Value = TEXT("");
 
-			if( ArrayProp && It->ArrayDim == 1 )	// TODO MultiDim array support
+			if( ArrayProp && It->ArrayDim == 1 )	// Only single-dimension arrays are supported
 			{
 				FArray* Array = (FArray*)((BYTE*)this + It->Offset);
 				check(Array);
@@ -1242,12 +1224,6 @@ void UObject::LoadConfig( UBOOL Propagate, UClass* Class, const TCHAR* InFilenam
 				{
 					TArray<FString> List;
 					Sec->MultiFind( Key, List );
-					//FArray* Ptr  = (FArray*)((BYTE*)this + It->Offset);
-					//INT     Size = Array->Inner->ElementSize;
-					//Map->DestroyValue( Ptr );//!!won't do dction
-					//Ptr->AddZeroed( Size, List.Num() );
-					//for( INT i=List.Num()-1,c=0; i>=0; i--,c++ )
-					//	Array->Inner->ImportText( *List(i), (BYTE*)Ptr->GetData() + c*Size, 0 );
 				}
 			}
 			else for( INT i=0; i<It->ArrayDim; i++ )
@@ -1295,18 +1271,6 @@ void UObject::LoadConfig( UBOOL Propagate, UClass* Class, const TCHAR* InFilenam
 								It->ImportText(*Value, Data, 0);
 							}
 						}
-/*
-						// Otherwise, check each parent class until we find a default property for this value
-						for ( UClass* Cls = Class; Cls && Cls->IsChildOf(It->GetOwnerClass()); Cls = Cls->GetSuperClass() )
-						{
-							if ( Parse(*Cls->DefaultPropText, *Key, Value, TEXT(",() ")) )
-							{
-								It->ImportText(*Value, Data, 0);
-								break;
-							}
-						}
-
-*/
 					}
 				}
 			}
@@ -1334,7 +1298,6 @@ static void LoadLocalizedProp( UProperty* Prop, const TCHAR *IntName, const TCHA
         return;
     }
 
-//	const TCHAR* LocalizedText = Localize( SectionName, KeyPrefix, IntName, NULL, 1 );
 	static TCHAR BigString [8092];
 	BigString[0] = 0;
 
@@ -1370,20 +1333,7 @@ static void LoadLocalizedStruct( UStruct* Struct, const TCHAR *IntName, const TC
             BYTE* NewData = Data + (Prop->Offset) + (i * Prop->ElementSize );
 
 			// rjp -- 
-			// TODO - fully implement support for writing arrays out to localization files properly
-/*			UArrayProperty* ArrayProp = Cast<UArrayProperty>(Prop);
-			if (ArrayProp)
-			{
-				INT InnerSize = ArrayProp->Inner->ElementSize, Count = 0;
-				FArray* Array = (FArray*)NewData;
-				if (Array)
-					Count = Array->Num();
-
-				for (INT j = 0; j < Count; j++)
-					LoadLocalizedProp( ArrayProp->Inner, IntName, SectionName, *NewPrefix, (BYTE*)Array->GetData() + j * InnerSize);
-			}
-			else
-*/
+			// Writing arrays out to localization files is not fully supported.
 			UBOOL bOverride(bQuiet);
 
 			// Might want to override quiet to avoid spamming
@@ -1506,7 +1456,6 @@ void UObject::SaveConfig( DWORD Flags, const TCHAR* InFilename )
 			const TCHAR*    Key     = It->GetName();
 			if ( !PerObject )
 				appStrncpy(Section, BaseClass->GetPathName(), MaxNameSize );
-//			const TCHAR*    Section = PerObject ? GetName() : (It->PropertyFlags & CPF_GlobalConfig) ? It->GetOwnerClass()->GetPathName() : GetClass()->GetPathName();
 			UArrayProperty* Array   = Cast<UArrayProperty>( *It );
 			UMapProperty*   Map     = Cast<UMapProperty>( *It );
 			if( Array )
@@ -1551,15 +1500,6 @@ void UObject::SaveConfig( DWORD Flags, const TCHAR* InFilename )
 				TMultiMap<FString,FString>* Sec = GConfig->GetSectionPrivate( Section, 1, 0, Filename );
 				check(Sec);
 				Sec->Remove( Key );
-				//FArray* Ptr  = (FArray*)((BYTE*)this + It->Offset);
-				//INT     Size = Array->Inner->ElementSize;
-				//for( INT i=0; i<Ptr->Num(); i++ )
-				//{
-				//	TCHAR Buffer[1024]="";
-				//	BYTE* Dest = (BYTE*)Ptr->GetData() + i*Size;
-				//	Array->Inner->ExportTextItem( Buffer, Dest, Dest, 0 );
-				//	Sec->Add( Key, Buffer );
-				//}
 			}
 			else for( INT Index=0; Index<It->ArrayDim; Index++ )
 			{
@@ -1574,17 +1514,6 @@ void UObject::SaveConfig( DWORD Flags, const TCHAR* InFilename )
 		}
 	}
 	GConfig->Flush( 0 );
-
-/*	
-	** Old version ** 
-	for( BaseClass=GetClass(); BaseClass->GetSuperClass(); BaseClass=BaseClass->GetSuperClass() )
-		if( !(BaseClass->GetSuperClass()->ClassFlags & CLASS_Config) )
-			break;
-	if( BaseClass )
-		for( TObjectIterator<UClass> It; It; ++It )
-			if( It->IsChildOf(BaseClass) )
-				It->GetDefaultObject()->LoadConfig( 0 );
-*/
 
 	// Only call LoadConfig() on the current class-default metaobject 
 	// Let LoadConfig() sort out what to do -- rjp
@@ -2007,9 +1936,6 @@ void UObject::InitProperties( BYTE* Data, INT DataCount, UClass* DefaultsClass, 
 
 	// Construct anything required.
 	guardSlow(ConstructProperties);
-
-//	if ( DefaultsClass && DefaultsClass->GetOuter() && !appStricmp(DefaultsClass->GetName(), TEXT("UT2K4PerformWarn")) )
-//		debugf(TEXT(""));
 
 	if( DefaultsClass )
 	{
@@ -3151,7 +3077,6 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 					c++;
 				if( c )
 					HashCount++;
-				//debugf( "%i: %i", i, c );
 			}
 			return 1;
 		}
@@ -3713,8 +3638,6 @@ UBOOL UObject::ResolveName( UObject*& InPackage, const TCHAR*& InName, UBOOL Cre
 			if( !NewPackage )
 			{
 				NewPackage = FindObject<UObject>( InPackage, PartialName );
-//				if ( !NewPackage )
-//					return 0;
 				if( !NewPackage )
 				{
 					// If InPackage was specified, and object wasn't found, return a failure
@@ -3783,21 +3706,6 @@ UObject* UObject::StaticLoadObject( UClass* ObjectClass, UObject* InOuter, const
 	catch( const TCHAR* Error )
 	{
 		EndLoad();
-/*
-		if( InOuter && !(LoadFlags & LOAD_NoRemap) && !Filename )
-		{
-			// Try loading a remapped package.
-			TArray<FName> Remaps;
-			GObjPackageRemap->MultiFind( InOuter->GetFName(), Remaps );
-			for( INT i=0; i<Remaps.Num(); i++ )
-			{
-				InOuter = CreatePackage( NULL, *Remaps(i) );
-				Result  = StaticLoadObject( ObjectClass, InOuter, InName, Filename, LoadFlags|LOAD_NoRemap, Sandbox );
-				if( Result )
-					return Result;
-			}
-		}
-*/
 			SafeLoadError( LoadFlags, Error, LocalizeError(TEXT("FailedLoadObject"),TEXT("Core")), ObjectClass->GetName(), InOuter ? InOuter->GetPathName() : TEXT("None"), InName, Error );
 	}
 	return Result;
@@ -3887,7 +3795,6 @@ void UObject::BeginLoad()
 	if( ++GObjBeginLoadCount == 1 )
 	{
 		// Validate clean load state.
-		//!!needed? check(GObjLoaded.Num()==0);
 		check(!GAutoRegister);
 		for( INT i=0; i<GObjLoaders.Num(); i++ )
 			check(GetLoader(i)->Success);
@@ -4531,18 +4438,7 @@ UBOOL UObject::DeletePackage(const TCHAR* Filename)
    
     if (pkg)
     {
-		/*
-        // delete all objects in the package
-        for (TObjectIterator<UObject> It; It; ++It)
-        {
-            if (It->IsIn(pkg))
-			{
-                delete *It;
-            }
-        }
-		*/
         UObject::ResetLoaders(pkg, 0, 1); // prevents sharing violation
-		//delete pkg;
     }
 
     Success = GFileManager->Delete(Filename);
@@ -4759,14 +4655,11 @@ UObject* UObject::StaticAllocateObject
 		return NULL;
 	}
 
-#if 1
     // sjs - if transient naming is off, call everything 'NAME_Transient' where appropriate
     if( InName==NAME_None && !GTransientNaming && (InOuter==GetTransientPackage() || ( InOuter==NULL || InOuter->IsIn(GetTransientPackage()) ) || InFlags&RF_Transient) ) // sjs will it work?
         InName = NAME_Transient;
-#endif
 
 	// Compose name, if public and unnamed.
-	//if( InName==NAME_None && (InFlags&RF_Public) )
 	if( InName==NAME_None )//oldver?? what about compatibility matching of unnamed objects?
 		InName = MakeUniqueObjectName( InOuter, InClass );
 
@@ -4981,30 +4874,6 @@ private:
 				// For debugging.
 				debugfSlow( NAME_Log, TEXT("%s is referenced by %s"), Obj->GetFullName(), Context ? Context->GetFullName() : NULL );
 			}
-
-/*			// PORTSWAP debugging: if we are serializing a level or UdpGamespyQuery actor, print out what's referencing it.
-			if( (!GIsClient && (Obj->GetClass()->GetFName() == LevelName || Obj->GetClass()->GetFName() == UdpGamespyQueryName)) 
-				//|| (appStrstr(Obj->GetClass()->GetFullName(),TEXT("MapVote")) != NULL || appStrstr(Obj->GetClass()->GetFullName(),TEXT("UT2MainMenu")) != NULL)
-				)
-			{
-				debugf( NAME_Log, TEXT("GC: %s is referenced by %s"), Obj->GetFullName(), Context ? Context->GetFullName() : NULL );
-//				if ( Obj->GetClass()->GetFName() == LevelName )
-				{
-					debugf( TEXT("Referencers of %s:"), Context->GetFullName() );
-					for( FObjectIterator It; It; ++It )
-					{
-						FArchiveFindCulprit ArFind(Context,*It);
-						if( ArFind.GetCount() )
-							debugf( TEXT("   %s"), It->GetFullName() );
-					}
-					debugf(TEXT("") );
-					debugf(TEXT("Shortest reachability from root to %s:"), Context->GetFullName() );
-					TArray<UObject*> Rt = FArchiveTraceRoute::FindShortestRootPath(Context);
-					for( INT i=0; i<Rt.Num(); i++ )
-						debugf(TEXT("   %s%s"), Rt(i)->GetFullName(), i!=0 ? TEXT("") : (Rt(i)->GetFlags()&RF_Native)?TEXT(" (native)"):TEXT(" (root)") );
-				}
-			}
-*/
 			unguardf(( TEXT("(%s)"), Obj->GetFullName() ));
 		}
 
@@ -5025,10 +4894,6 @@ private:
 	}
 	UObject* Context;
 };
-
-// gam ---
-// #define SHOW_GARBAGE_STATS
-// --- gam
 
 //
 // Purge garbage.
@@ -5373,7 +5238,6 @@ void UObject::CacheDrivers( UBOOL ForceRefresh )
 				TArray<FString> Files = GFileManager->FindFiles( Filename, 1, 0 );
 				for( INT j=0; j<Files.Num(); j++ )
 				{
-//					appSprintf( Tmp, TEXT("%s%s"), appBaseDir(), *Files(j) );
 					appSprintf( Tmp, TEXT("%s"), *Files(j) );
 					TCHAR* End = Tmp + appStrlen( Tmp ) - 4;
 					appSprintf( End, TEXT(".%s"), UObject::GetLanguage() );
@@ -5656,9 +5520,7 @@ void UPackage::Destroy()
 		#if !__STATIC_LINK
 		debugf( NAME_Log, TEXT("Unbound to %s%s"), GetName(), DLLEXT );
 		#endif
-		//Danger: If package is garbage collected before its autoregistered classes,
-		//the autoregistered classes will be unmapped from memory.
-		//appFreeDllHandle( DllHandle );
+		// The DLL stays loaded, since autoregistered classes outliving their package would be unmapped from memory.
 	}
 	Super::Destroy();
 	unguard;
@@ -5766,7 +5628,6 @@ IMPLEMENT_CLASS(ULanguage);
 
 static void FindObjRefs(UObject *checkObj)
 {
-	//debugf(TEXT("####### searching for ref to (%s)"),checkObj->GetFullName());
 	for (FObjectIterator It; It; ++It)
 	{
 		// Iterate it's object properties and figure out if there is a

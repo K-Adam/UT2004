@@ -55,7 +55,6 @@ public:
 			// First appError.
 			GIsCriticalError = 1;
 			ErrorType        = Event;
-			// gam --- debugf( NAME_Critical, TEXT("appError called:") );
 			debugf( NAME_Critical, TEXT("%s"), Msg );
 
 			// Shut down.

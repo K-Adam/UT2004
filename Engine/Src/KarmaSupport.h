@@ -14,9 +14,6 @@ const int K_collisionModelsMaxCount = 2500;
 /* Karma integration global data. */
 typedef struct _KarmaGlobals
 {
-    /* Used for batching/displaying Karma debug lines */
-    //KLineBatcher* DebugLines;
-
     /* Temporary storage for querying/colliding triangles. */
     KarmaTriListData TriListData;
 
@@ -76,7 +73,7 @@ void    MEAPI KLineDraw(MeVector3 start, MeVector3 end, MeReal r, MeReal g, MeRe
 void    MEAPI KSetSecName(TCHAR* name);
 
 
-/* KTODO: Maybe make C++ methods. This way keeps them separate though. */
+/* These could be C++ methods, but this way keeps them separate. */
 void    MEAPI KInitGameKarma();
 void    ENGINE_API KTermGameKarma(); // sjs - exported this for deca temp...
 

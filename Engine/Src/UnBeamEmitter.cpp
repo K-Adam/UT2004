@@ -226,7 +226,6 @@ void UBeamEmitter::SpawnParticle( INT Index, FLOAT SpawnTime, INT Flags, INT Spa
 	{
 		if ( UseLowFrequencyScale )
 		{
-			//!!TODO: see UnParticleEmitter.cpp
 			FLOAT RelativeLength = appFractional( i * RLFPs * (LFScaleRepeats+1) );
 			for (INT n=0; n<LFScaleFactors.Num(); n++)
 			{
@@ -394,7 +393,6 @@ void UBeamEmitter::UpdateBeamLength( FLOAT DeltaTime )
 		{
 			if ( UseLowFrequencyScale )
 			{
-				//!!TODO: see UnParticleEmitter.cpp
 				FLOAT RelativeLength = appFractional( i * RLFPs * (LFScaleRepeats+1) );
 				for (INT n=0; n<LFScaleFactors.Num(); n++)
 				{
@@ -528,7 +526,7 @@ INT UBeamEmitter::UpdateParticles( FLOAT DeltaTime )
 	}
 
 	BoundingBox.Init();
-	//!! TODO simply add start/ end and expand by noise
+	// Could simply add start/end and expand by noise.
 	for (INT Index=0; Index<ActiveParticles; Index++)
 	{
 		if ( !(Particles(Index).Flags & PTF_Active) )

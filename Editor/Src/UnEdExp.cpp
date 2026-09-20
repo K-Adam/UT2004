@@ -77,17 +77,6 @@ IMPLEMENT_CLASS(USoundExporterWAV);
 static void RecursiveTagNames( UClass* Class )
 {
 	guard(RecursiveTagNames);
-#if 0 /* Old version */
-	if( (Class->GetFlags() & RF_TagExp) && (Class->GetFlags() & RF_Native) )
-		for( TFieldIterator<UFunction> Function(Class); Function && Function.GetStruct()==Class; ++Function )
-			if
-			(	(Function->FunctionFlags & (FUNC_Event|FUNC_Delegate))
-			&&	!Function->GetSuperFunction() )
-				Function->GetFName().SetFlags( RF_TagExp );
-	for( TObjectIterator<UClass> It; It; ++It )
-		if( It->GetSuperClass()==Class )
-			RecursiveTagNames( *It );
-#else /* Faster version */
 	for( TObjectIterator<UClass> It; It; ++It )
 	{
 		UClass* C=*It;
@@ -96,7 +85,6 @@ static void RecursiveTagNames( UClass* Class )
 				if( (Function->FunctionFlags & (FUNC_Event|FUNC_Delegate)) && !Function->GetSuperFunction() )
 					Function->GetFName().SetFlags(RF_TagExp);
 	}
-#endif
 	unguard;
 }
 
@@ -354,7 +342,7 @@ UBOOL UClassExporterH::ExportText( UObject* Object, const TCHAR* Type, FOutputDe
 				Ar.Logf( appSpc(TextIndent+4) );
 				It->ExportCpp( Ar, 0, 0, 0, 0 );
 
-				// !!! FIXME: This code is duplicated above for structs!  --ryan.
+				// Same packing logic as the struct case above.
 				bool doPack = false;
 
 				if (It->IsA(UBoolProperty::StaticClass()))
@@ -529,8 +517,6 @@ UBOOL UClassExporterH::ExportText( UObject* Object, const TCHAR* Type, FOutputDe
 		Ar.Logf( TEXT("#pragma pack (pop)\r\n") );
 
         // sjs ---
-        //#ifndef UNENGINENATIVE_H
-        //#define UNENGINENATIVE_H
         UObject* expOuter = NULL;
         for( TObjectIterator<UClass> It; It; ++It )
         {
@@ -646,16 +632,7 @@ UBOOL UClassExporterH::ExportText( UObject* Object, const TCHAR* Type, FOutputDe
 			UClass* Class = *ClassIt;
 			if ( (Class->GetFlags() & RF_TagExp) ||
 				((Class->GetFlags() & RF_Native) && (Class->GetOuter() == expOuter) && (Class->ClassFlags & CLASS_NoExport)) )
-//			if( Class->GetFlags() & RF_TagExp )
 			{	
-#if 0
-				// #ifdef'ed out due to compiler limitation
-				for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> PropIt(Class); PropIt; ++PropIt )
-				{
-					if( PropIt.GetStruct()==Class && PropIt->ElementSize && !PropIt->IsA(UBoolProperty::StaticClass()) )
-						Ar.Logf( TEXT("VERIFY_CLASS_OFFSET_NODIE(%s,%s,%s)\r\n"),*FString(Class->GetNameCPP()).Left(1),*FString(Class->GetNameCPP()).Mid(1),PropIt->GetName());
-				}
-#endif
 				Ar.Logf( TEXT("VERIFY_CLASS_SIZE_NODIE(%s)\r\n"), Class->GetNameCPP() );
 			}
 		}

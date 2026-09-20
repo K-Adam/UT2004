@@ -5,10 +5,6 @@
 void UUTVPackageMap::ShowStatus ()
 {
 	debugf (TEXT ("We have %i names and %i objects loaded"), MaxNameIndex, MaxObjectIndex);
-/*	for(int a=0;a<100;++a){
-		printf("%i ",NameIndices(a));
-		IndexToObjectName(NameIndices(a));
-	}*/
 }
 
 void UUTVPackageMap::Compute ()
@@ -27,7 +23,6 @@ void UUTVPackageMap::Compute ()
 			return;
 		}
 
-		//debugf (TEXT ("Package %i (%s) - local %i - remote %i"), j, *List(j).URL, List(j).LocalGeneration, List(j).RemoteGeneration);
 	}
 
 	//Find the object id of our new replication object
@@ -47,7 +42,6 @@ void UUTVPackageMap::Compute ()
 			debugf (TEXT ("Found utvReplication with object id %i"), UTVReplication);
 		}
 
-		//debugf (TEXT ("Loaded %i: %s"), Info.ObjectBase + j, *(Info.Linker->ExportMap(j).ObjectName));
 	}
 
 	if (UTVReplication == 0) {
@@ -110,13 +104,6 @@ void UUTVPackageMap::Compute ()
 		debugf (TEXT ("Could not find utvReplication.GetFromServer!"));
 	}
 
-	//precache
-	//This can crash, and is probably not beneficial anyway
-	/*debugf (TEXT ("Simple precache start.."));
-	UObject* Object;
-	Object = IndexToObject( UTVReplication - 1000, 1 );
-	debugf (TEXT ("Simple precache end.."));*/
-
 	unguard;
 }
 
@@ -152,7 +139,6 @@ void UUTVPackageMap::PostFixLinkers (UPackageMap* Other)
 
 	for (INT i = 0; i < Other->List.Num(); ++i) {
 		if (RealNames(i).Len () > 0) {
-			//debugf (TEXT ("Changing %s to %s"), *Other->List(i).URL, *RealNames (i));
 			Other->List(i).URL = RealNames (i);
 		}
 	}
@@ -172,9 +158,7 @@ INT UUTVPackageMap::GetDepend ()
 
 INT UUTVPackageMap::ObjectToIndex(UObject *Object)
 {
-	//debugf(TEXT("Converting %s to index"), Object->GetFullName());
 	INT i = UPackageMap::ObjectToIndex(Object);
-	//debugf(TEXT("Result: %d"), i);
 	return i;
 }
 
@@ -190,7 +174,7 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 	guard(UUTVPackageMap::SerializeObject);
 
 #if PLATFORM_64BITS
-    check(0);  // !!! FIXME
+    check(0);  // UTV stores object indices in UObject* through DWORD casts, so it is 32-bit only.
     return 0;
 #else
 
@@ -203,17 +187,12 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 		{
 			// Dynamic actor or None.
 			Ar.SerializeInt( Index, UNetConnection::MAX_CHANNELS );
-			//debugf(TEXT("Receiving index: %i"), Index);
 			Object = (UObject*)Index;
-			//Object = Delayer->actors[Index].Actor;
-
-			//debugf(TEXT("Got dynamic object %s"), Object->GetFullName());
 
 			if (Class != NULL) {
 				if (Class->IsChildOf (AActor::StaticClass ()))
 					LastDepend = Index;
 			}
-//			LastDepend = Index;
 		}
 		else
 		{
@@ -235,7 +214,6 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 				debugf(TEXT("Got ok object %s"), tmp->GetFullName()); */
 			Object = tmp;
 
-			//debugf (TEXT ("Static object with index %i %d"), Index, IsRead);
 			Index = Index + 2000;
 			Object = (UObject*)Index;
 		}
@@ -265,29 +243,12 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 UBOOL UUTVPackageMap::SerializeName(FArchive &Ar, DWORD &Index)
 {
 	guard("UTVPackageMap::SerializeName");
-	//debugf(TEXT("Using serializename"));
 	if (Ar.IsLoading()) {
 		
 		if (IsRead)
 			Ar.SerializeInt( Index, MaxNameIndex+1 - ExtraNames);
 		else  
 			Ar.SerializeInt( Index, MaxNameIndex+1 );
-
-/*		FName Name = NAME_None;
-		if( Index<MaxNameIndex && !Ar.IsError() )
-		{
-			for( INT i=0; i<List.Num(); i++ )
-			{
-				FPackageInfo& Info = List(i);
-				if( Index < (DWORD)Info.NameCount )
-				{
-					Name = Info.Linker->NameMap(Index);
-					debugf(TEXT("Got name: %s"), *Name);
-					break;
-				}
-				Index -= Info.NameCount;
-			}
-		}*/
 
 		return 1;
 	}
@@ -297,80 +258,6 @@ UBOOL UUTVPackageMap::SerializeName(FArchive &Ar, DWORD &Index)
 	}
 	unguard;
 }
-
-/*UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Object )
-{
-	guard(UPackageMapLevel::SerializeObject);
-	DWORD Index=0;
-	if( Ar.IsLoading() )
-	{
-		Object = NULL;
-		BYTE B=0; Ar.SerializeBits( &B, 1 );
-		if( B )
-		{
-			// Dynamic actor or None.
-			Ar.SerializeInt( Index, UNetConnection::MAX_CHANNELS );
-			if( Index==0 )
-			{
-				Object = NULL;
-			}
-			else if
-			(	!Ar.IsError()
-			&&	Index>=0
-			&&	Index<UNetConnection::MAX_CHANNELS
-			&&	Connection->Channels[Index]
-			&&	Connection->Channels[Index]->ChType==CHTYPE_Actor 
-			&&	!Connection->Channels[Index]->Closing )
-				Object = ((UActorChannel*)Connection->Channels[Index])->GetActor();
-		}
-		else
-		{
-			// Static object.
-			Ar.SerializeInt( Index, MaxObjectIndex );
-			if( !Ar.IsError() )
-				Object = IndexToObject( Index, 1 );
-		}
-		if( Object && !Object->IsA(Class) )
-		{
-			debugf(TEXT("Forged object: got %s, expecting %s"),Object->GetFullName(),Class->GetFullName());
-			Object = NULL;
-		}
-		return 1;
-	}
-	else
-	{
-		AActor* Actor = Cast<AActor>(Object);
-		if( Actor && !Actor->bStatic && !Actor->bNoDelete )
-		{
-			// Map dynamic actor through channel index.
-			BYTE B=1; Ar.SerializeBits( &B, 1 );
-			UActorChannel* Ch = Connection->ActorChannels.FindRef(Actor);
-			UBOOL Mapped = 0;
-			if( Ch )
-			{
-				Index  = Ch->ChIndex;
-				Mapped = Ch->OpenAcked;
-			}
-			Ar.SerializeInt( Index, UNetConnection::MAX_CHANNELS );
-			return Mapped;
-		}
-		else if( !Object || (Index=ObjectToIndex(Object))==INDEX_NONE )
-		{
-			BYTE B=1; Ar.SerializeBits( &B, 1 );
-			Ar.SerializeInt( Index, UNetConnection::MAX_CHANNELS );
-			return 1;
-		}
-		else
-		{
-			// Map regular object.
-			// Since mappability doesn't change dynamically, there is no advantage to setting Result!=0.
-			BYTE B=0; Ar.SerializeBits( &B, 1 );
-			Ar.SerializeInt( Index, MaxObjectIndex );
-			return 1;
-		}
-	}
-	unguardf(( TEXT("(%s %s)"), Class->GetFullName(), Object->GetFullName() ));
-}*/
 
 INT UUTVPackageMap::GetReplicationId ()
 {
@@ -454,7 +341,6 @@ UBOOL UUTVPackageMap::CreateLinkers ()
 		);
 
 		List(i).LocalGeneration  = List(i).Linker->Summary.Generations.Num();
-		//debugf (TEXT ("Linker %i (%s): %s"), i, *List(i).URL, *List(i).Linker->GetFName ());
 	}
 
 	EndLoad ();
@@ -495,13 +381,10 @@ void UUTVPackageMap::IndexToObjectName( INT Index )
 				//Info.Linker->ExportMap(Index).
 				return;
 				
-				//debugf(TEXT("jao %s"),Info.Linker->ExportMap(Index).ObjectName);
-				//return Info.Linker->ExportMap(Index).ObjectName;
 			}
 			Index -= Info.ObjectCount;
 		}
 	}
-	//return NULL;
 	unguard;
 }
 

@@ -72,7 +72,6 @@ private:
 			guard(FTransaction::SerializeContents);
 			if( Array )
 			{
-				//debugf( "Array %s %i*%i: %i",Object->GetFullName(),Index,ElementSize,InOper);
 				checkSlow((SIZE_T)Array>=(SIZE_T)Object+sizeof(UObject));
 				checkSlow((SIZE_T)Array+sizeof(FArray)<=(SIZE_T)Object+Object->GetClass()->GetPropertiesSize());
 				checkSlow(ElementSize!=0);
@@ -107,7 +106,6 @@ private:
 			}
 			else
 			{
-				//debugf( "Object %s",Object->GetFullName());
 				checkSlow(Index==0);
 				checkSlow(ElementSize==0);
 				checkSlow(Serializer==NULL);
@@ -382,7 +380,7 @@ public:
 	friend class FObjectRecord::FReader;
 	friend class FObjectRecord::FWriter;
 
-// Some versions of GNU C++ seem to need a little nudging here. --ryan.
+// Some versions of GNU C++ seem to need a little nudging here.
 #ifdef __GNUC__
     void *operator new(size_t x) { return ::operator new(x); }
     void *operator new(size_t x, TArray<FTransaction>& t) { return ::operator new(x, t); }
@@ -515,8 +513,6 @@ class EDITOR_API UTransBuffer : public UTransactor
 		if( --ActiveCount==0 )
 		{
 			// End the current transaction.
-			//debugf("EndTrans");
-			//FTransaction& Trans = UndoBuffer.Last();
 			GUndo = NULL;
 		}
 		CheckState();

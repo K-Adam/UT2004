@@ -265,8 +265,6 @@ public:
 			// This function gives a more luminous, specular look to the lighting.
 			FLOAT Temp = (2*S*S*S-3*S*S+1); // Or 1.0-S.
 
-			// This function makes surfaces look more matte.
-			//FLOAT Temp = (1.0-S);
 			LightSqrt[i] = Temp/S;
 		}
 
@@ -474,18 +472,6 @@ BYTE* Illuminate(BYTE* ShadowMap,FBspSurf& Surf,FLightMap* LightMap,FLightBitmap
 	BYTE*	Dest = IlluminationMap;
 	INT		DestStride = SizeX;
 
-#if 0   // !!! FIXME: What is this doing here?  --ryan.
-	{
-	BYTE*	Dummy = new BYTE[Max(SrcStride,DestStride) * SizeY];
-	guard(ValidateSource);
-	appMemcpy( Dummy, Src, SrcStride * SizeY );
-	unguard;
-	guard(ValidateDestination);
-	appMemcpy( Dummy, Dest, DestStride * SizeY );
-	unguard;
-	delete [] Dummy;
-	}
-#endif
 
 	check(Light->Actor);
 

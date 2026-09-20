@@ -508,7 +508,6 @@ UTexture* UTrueTypeFontFactory::CreateTextureFromDC( UFont* Font, PTRINT Indc, I
 		}
 	}
 
-//	Texture->Compress( TEXF_DXT5 );
 	Texture->Compress( ETextureFormat(Compression) );
 
 	return Texture;

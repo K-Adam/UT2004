@@ -36,7 +36,6 @@ void UUTVStats::Show ()
 	//Skip showing when not running, and when the numbers have overflowed
 	if ((UtvEngine->ConnectStatus == 6) && (sleep >= 0.0f) && (sleep <= 100.0f))
 		debugf (TEXT ("Idle: %.1f Run: %.1f Net: %.1f Recv: %.1f Send: %.1f Con: %.1f Dly: %.1f Usr: %d"), sleep, run, net, lrecv, lsend, connectmaint, delayer, UtvEngine->TotalClientsLocal);
-	//debugf (TEXT ("1: %f 2: %f 3: %f 4: %f"), , (float)Times[2] / Times[0], (float)Times[3] / Times[0], (float)Times[4] / Times[0]);
 	Clear ();
 }
 
@@ -133,7 +132,6 @@ void UReplicatorEngine::Init(FString IniFileName)
 		
 		//Make sure bogus ones are not sent
 		if ((url.Len () > 5) && (appStrfind (*url, TEXT ("HTTP")))) {
-			//INT a=DownloadManagers.AddZeroed();
 			new(DownloadManagers) FString(FString::Printf (TEXT ("DLMGR CLASS=IpDrv.HTTPDownload PARAMS=%s COMPRESSION=1"), *url));
 		}
 	}
@@ -222,7 +220,6 @@ void UReplicatorEngine::InitServerState (const FString iniName)
 	ServerState.IP = "127.0.0.1";
 	ServerState.ServerName = "Random UTV server";
 	ServerState.GameType = "UTVGame";
-	//ServerState.GameType = "xDoubleDom";
 	ServerState.CurrentPlayers = 0;
 	ServerState.MaxPlayers = MaxClients;
 	ServerState.Ping = 0;
@@ -376,12 +373,6 @@ void UReplicatorEngine::Tick( FLOAT DeltaSeconds )
 	guard(TickLevel);
 	GameCycles=0;
 	clock(GameCycles);
-/*
-	static int oldStatus=0;
-	if(oldStatus!=ConnectStatus){
-		oldStatus=ConnectStatus;
-		debugf(TEXT("ConnectStatus %i"),ConnectStatus);
-	}*/
 
 	guard(Connect);
 	INT ConnectTick = 0;
@@ -453,18 +444,14 @@ void UReplicatorEngine::Tick( FLOAT DeltaSeconds )
 				//It does this by changing all 2 to 1, except if they end with .u, in which case they are not changed
 				if (It->LocalGeneration == 2) {
 					if (It->URL.Right(2) != TEXT(".u")) {
-						//debugf(TEXT("Adjusting package %s for client (%i->%i)"), *It->URL, It->LocalGeneration, 1);
 						It->LocalGeneration = 1;
 					}
 				}
-
-				//debugf(TEXT("Package %s is %i %i"), It->Parent->GetName(), It->LocalGeneration, It->RemoteGeneration);
 
 				//Notify server of all packages which we are using an older generation of
 				if(It->RemoteGeneration>It->LocalGeneration) {
 					It->RemoteGeneration=It->LocalGeneration;
 					ConnectDriver->ServerConnection->Logf(TEXT("HAVE GUID=%s GEN=%i"),It->Guid.String(),It->LocalGeneration);
-					//debugf(TEXT("Sending have"));
 				}
 			}
 			ConnectDriver->ServerConnection->FlushNet();
@@ -588,49 +575,17 @@ void UReplicatorEngine::Tick( FLOAT DeltaSeconds )
 			for(TMap<INT,INT>::TIterator wi(oc->waitingChannels);wi;++wi){
 				int channel=wi.Key();
 				if(conn->Channels[channel]==0){
-//					new(OpenConnections.Find(conn)->ChannelHistory[channel]) FString("Waiting channel activated");
 					Delayer->OpenChannel(conn,channel,true);
 					wi.RemoveCurrent();
-//					new(OpenConnections.Find(conn)->ChannelHistory[channel]) FString("Waiting channel packets sent");
-//					wi=oc->waitingChannels.erase(wi);
-//					if(wi==oc->waitingChannels.end())
-//						break;
 				}
 			}
 			unguard;
 
-			/*guard(StalledChannels);
-			for(TMap<int,OpenConnection::StalledChannel>::TIterator si(oc->StalledChannels);si;++si){
-				guard(SendBunches);
-				while(!si.Value().bunches.Empty() && SendBunch(conn,&si.Value().bunches.Front(),true)){
-					si.Value().bunches.PopFront();
-				}
-				unguard;
-
-				guard(RemoveEmpty);
-				if(si.Value().bunches.Empty()){
-		//			debugf(TEXT("Stalled channel %i unstalled"),si->first);
-					si.RemoveCurrent();
-//					si=oc->StalledChannels.erase(si);
-//					if(si==oc->StalledChannels.end())
-//						break;
-				}
-				unguard;
-			}
-			unguard;*/
 		}
 		unguard;
 
 		guard(FlushConns);
 		for( INT i=0; i<ListenDriver->ClientConnections.Num(); i++ ) {	
-			//Det här gör att en filtransfer går i maxfart.. kanske man ska ändra
-			/*guard(FileTransfer);
-			if (ListenDriver->ClientConnections(i)->OpenChannels.Num() == 2) {
-				//			printf ("running file transfer fix\n");
-				//ListenDriver->ClientConnections(i)->Tick ();
-				ListenDriver->ClientConnections(i)->QueuedBytes = 0;
-			}
-			unguard; */
 			if(ListenDriver->ClientConnections(i)->Out.GetNumBits() && (SentClientData || ListenDriver->ClientConnections(i)==PrimaryConnection))
 				ListenDriver->ClientConnections(i)->FlushNet();
 		}
@@ -729,7 +684,6 @@ void UReplicatorEngine::Tick( FLOAT DeltaSeconds )
 				FString s=ch;
 
 				SendMessageToClient(PrimaryConnection,s);
-//				debugf(TEXT("Primary info %s"),*s);
 			}
 		}
 
@@ -864,7 +818,6 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 		if( ParseCommand( &Text, TEXT("CHALLENGE") ) )
 		{
 			// Challenged by server.
-			//INT RemoteStats = 0;
 			Parse( Text, TEXT("VER="), Connection->NegotiatedVer );
 			Parse( Text, TEXT("CHALLENGE="), Connection->Challenge );
 			Parse( Text, TEXT("STATS="), needStats );
@@ -875,7 +828,6 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 				else
 					Connection->Logf( TEXT("AUTH HASH=%s USERNAME=%s PASSWORD=%s"), *PrimaryConnection->CDKeyHash,*PrimaryConnection->EncStatsUsername, *PrimaryConnection->EncStatsPassword);
 				Connection->Logf( TEXT("NETSPEED %i"), PrimaryConnection->CurrentNetSpeed );
-				//Connection->Logf( TEXT("NETSPEED %i"), 5000 );
 			} else {
 
 				FString KeyHash;
@@ -927,11 +879,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			debugf (TEXT ("Adding dlmanager: %s"), *Connection->DownloadInfo(i).ClassName);
 			debugf (TEXT ("Dlmanager params: %s"), *Connection->DownloadInfo(i).Params);
 
-			//add it to our list of serverdlmanagers if it is a http redirect
-			//if (appStrfind (*Connection->DownloadInfo(i).ClassName, TEXT ("HTTP"))) {
-				//INT j = ServerDLManagers.AddZeroed ();
 				new(ServerDLManagers) FString(FString::Printf (TEXT ("DLMGR %s"), Text));
-			//}
 
 			Connection->DownloadInfo(i).Class = StaticLoadClass( UDownload::StaticClass(), NULL, *Connection->DownloadInfo(i).ClassName, NULL, LOAD_NoWarn | LOAD_Quiet, NULL );
 			if( !Connection->DownloadInfo(i).Class )
@@ -968,13 +916,11 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			TCHAR PackageName[NAME_SIZE]=TEXT("");
 			Parse( Text, TEXT("GUID=" ), Info.Guid );
 			Parse( Text, TEXT("GEN=" ),  Info.RemoteGeneration );
-			//Parse( Text, TEXT("GEN=" ),  Info.LocalGeneration );
 			Parse( Text, TEXT("SIZE="),  Info.FileSize );
 			Info.DownloadSize = Info.FileSize;
 			Parse( Text, TEXT("FLAGS="), Info.PackageFlags );
 			Parse( Text, TEXT("PKG="), PackageName, ARRAY_COUNT(PackageName) );
 			Parse( Text, TEXT("FNAME="), Info.URL );
-			//Info.RemoteGeneration = Info.LocalGeneration;
 
 			guard(CreateUsesPackage);
 			Info.Parent = CreatePackage(NULL,PackageName);
@@ -1053,11 +999,8 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			// Parse welcome message.
 			Parse( Text, TEXT("LEVEL="), ServerMap ,ARRAY_COUNT(ServerMap));
 			Parse( Text, TEXT("GAME="), GameType ,ARRAY_COUNT(ServerMap));
-			//ParseUBOOL( Text, TEXT("LONE="), LonePlayer );
 			Parse( Text, TEXT("CHALLENGE="), Connection->Challenge );
 
-			//Connection->PackageMap->CopyLinkers (ServerPackageMap);
-			//Connection->PackageMap->List = ServerPackageMap->List;
 			ServerPackageMap->FixLinkers (Connection->PackageMap);
 
 			//Fix the packagemap
@@ -1258,11 +1201,6 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 		}
 		else if( ParseCommand(&Text,TEXT("REPEAT")) )
 		{
-			/*if(Connection==PrimaryConnection && Connection->CurrentPackageCount!=Connection->ExpectedPackageCount){
-				Connection->CurrentPackageCount++;
-				ConnectDriver->ServerConnection->Logf(TEXT("REPEAT %s"),Text);
-				ConnectDriver->ServerConnection->FlushNet();
-			}*/
 		}
 		//not used any more ?
 		//It sure is used.
@@ -1277,7 +1215,6 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 				Parse( Text, TEXT("GEN=" ),gen  );
 				for( TArray<FPackageInfo>::TIterator It(ServerPackageMap->List); It; ++It )
 					if( It->Guid==Guid ){
-						//debugf(TEXT("Primary sends HAVE %s %i %i"),Text,gen,It->RemoteGeneration);
 						//Only update if lower since it's only used then
 						if (gen < It->RemoteGeneration)
 							It->RemoteGeneration=gen;
@@ -1290,7 +1227,6 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 				for( TArray<FPackageInfo>::TIterator It(ServerPackageMap->List); It; ++It ){
 					if( It->Guid==Guid ){
 						if (gen < It->RemoteGeneration) {
-							//Connection->Logf( TEXT("UPGRADE"));
 							Connection->Logf( TEXT("FAILCODE UTV2004 You need to install a newer patch for UT2004 in order to connect to this UTV server"));
 							Connection->FlushNet();
 							Connection->State = USOCK_Closed;
@@ -1303,36 +1239,11 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 		}
 		else if ( ParseCommand(&Text,TEXT("OPENVOICE")) )
 		{
-			//			UGameEngine* GameEngine                     = CastChecked<UGameEngine>( Engine );
-			//			AVoiceChatReplicationInfo* VoiceChatManager = CastChecked<AVoiceChatReplicationInfo>( AVoiceChatReplicationInfo::StaticClass()->GetDefaultObject() );	
 
-			if(/* VoiceChatManager->bEnableVoiceChat && */(appStrcmp(Text,TEXT("")) != 0) )
+			if((appStrcmp(Text,TEXT("")) != 0) )
 			{
-				//				static UBOOL			LanPlay			= ParseParam(appCmdLine(),TEXT("LANPLAY"));
-				EVoiceCodec				VoiceCodec		= CODEC_48NB;//(EVoiceCodec) appAtoi(Text);
-				/*			DWORD					AllowedCodecs	= 0;
-				const TArray<FString>&	Codecs			= LanPlay ? VoiceChatManager->VoIPLANCodecs : VoiceChatManager->VoIPInternetCodecs;
-
-				// Find codec to use.
-				for( INT i=0; i<Codecs.Num(); i++ )
-				{
-				if( appStricmp(*Codecs(i),TEXT("CODEC_48NB")) == 0 )
-				AllowedCodecs |= CODEC_48NB;
-				if( appStricmp(*Codecs(i),TEXT("CODEC_96WB")) == 0 )
-				AllowedCodecs |= CODEC_96WB;
-				}
-
-				// Use 4.8kbs narrow band as safety fallback codec.
-				if( !(VoiceCodec & AllowedCodecs) )
-				VoiceCodec = CODEC_48NB;
-				*/
+				EVoiceCodec				VoiceCodec		= CODEC_48NB;
 				// Create and set up voice channel.
-				/*				if( Connection->Actor && Connection->Actor->PlayerReplicationInfo )
-				{
-				INT PlayerID = Connection->Actor->PlayerReplicationInfo->PlayerID;
-				check(PlayerID);
-				debugf(TEXT("OPENVOICE for PlayerID: %i with codec: %i"), PlayerID, VoiceCodec );
-				*/				
 				// See whether this player already has a voice channel.
 				UVoiceChannel* VoiceChannel = Connection->VoiceChannel;
 
@@ -1353,10 +1264,6 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 
 					// Set server options.
 					DWORD ServerOptions = 0;
-					//						if( VoiceChatManager->VoIPAllowSpatialization )
-					//							ServerOptions |= VOICE_AllowSpatialization;
-					//						if( GameEngine->VoIPAllowVAD )
-					//							ServerOptions |= VOICE_AllowVAD;
 
 					// Find free voice slot.
 
@@ -1364,7 +1271,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 
 					Connection->Driver->VoiceInfos[i]->VoiceSound		= NULL;
 					Connection->Driver->VoiceInfos[i]->VoiceCodec		= VoiceCodec;
-					Connection->Driver->VoiceInfos[i]->PlayerID			= 1;//PlayerID;
+					Connection->Driver->VoiceInfos[i]->PlayerID			= 1;
 					Connection->Driver->VoiceInfos[i]->PacketSize		= UAudioSubsystem::CodecPacketSize[CODEC_TO_INDEX(VoiceCodec)];
 					Connection->Driver->VoiceInfos[i]->ServerOptions	= ServerOptions;
 					Connection->Driver->VoiceInfos[i]->PacketData		= new BYTE[Connection->Driver->VoiceInfos[i]->PacketSize];
@@ -1374,7 +1281,6 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 					VoiceChannel->VoiceIndex = i;
 
 					debugf(TEXT("Opening voice channel %i"),i);
-					//			}
 				}
 			}
 		}
@@ -1405,8 +1311,6 @@ void UReplicatorEngine::NotifyReceivedFile( UNetConnection* Connection, INT Pack
 	UBOOL abort = false;
 	
 	guard(UReplicatorEngine::NotifyReceivedFile);
-
-	//debugf(TEXT("Notify on %s %i"), *Connection->PackageMap->List(PackageIndex).URL, Connection->PackageMap->List(PackageIndex).FileSize);
 
 	//When failing to receive something we wanted, always abort
 	if (*Error) {
@@ -1460,7 +1364,6 @@ void UReplicatorEngine::NotifyReceivedFile( UNetConnection* Connection, INT Pack
 			else {
 	
 				//This seems to be needed, strange things happen otherwise
-				//DoRestart=true;
 				ConnectStatus=3;
 				ServerConnReady=true;
 			}
@@ -1476,7 +1379,6 @@ void UReplicatorEngine::NotifyReceivedFile( UNetConnection* Connection, INT Pack
 
 UBOOL UReplicatorEngine::NotifySendingFile( UNetConnection* Connection, FGuid GUID )
 {
-//	debugf (TEXT ("Allowing file"));
 	return true;
 }
 
@@ -1503,9 +1405,6 @@ void UReplicatorEngine::NotifyProgress(  const TCHAR* CmdStr, const TCHAR* Str1,
 void UReplicatorEngine::OpenChannel(UNetConnection* Connection,FInBunch* Bunch)
 {
 	guard(UReplicatorEngine::OpenChannel);
-//	if(Connection==PrimaryConnection){
-//		debugf(TEXT("Open %i %i %i"),Bunch->bOpen,Bunch->bClose,Bunch->bReliable);
-//	}
 
 	if(Connection->Channels[Bunch->ChIndex]){
 		if(Bunch->bClose){
@@ -1515,8 +1414,7 @@ void UReplicatorEngine::OpenChannel(UNetConnection* Connection,FInBunch* Bunch)
 			}
 			for(int a=UNetConnection::MAX_CHANNELS-2;a<UNetConnection::MAX_CHANNELS-20;--a){
 				if(!Connection->Channels[a]){
-					//printf("Remapping temporary channel %i to %i\n",Bunch->ChIndex,a);
-					Connection->CreateChannel(CHTYPE_Actor,true,a);  // Bunch->ChType
+					Connection->CreateChannel(CHTYPE_Actor,true,a);
 					INT OrgIndex=Bunch->ChIndex;
 					Bunch->ChIndex=a;
 					SendBunch(Connection,Bunch);
@@ -1527,7 +1425,6 @@ void UReplicatorEngine::OpenChannel(UNetConnection* Connection,FInBunch* Bunch)
 		}
 		((UtvChannel*)Connection->Channels[Bunch->ChIndex])->UtvClose();
 		if(Connection==PrimaryConnection){
-//			printf("Opening open channel %i\n",Bunch->ChIndex);
 		}
 		if(Connection->Channels[Bunch->ChIndex]->OpenTemporary) {
 			delete Connection->Channels[Bunch->ChIndex];
@@ -1537,8 +1434,7 @@ void UReplicatorEngine::OpenChannel(UNetConnection* Connection,FInBunch* Bunch)
 		OpenConnections.Find(Connection)->waitingChannels.Set(Bunch->ChIndex,0);
 		return;
 	} 
-	Connection->CreateChannel(CHTYPE_Actor/*Bunch->ChType*/,true,Bunch->ChIndex);
-//	new(OpenConnections.Find(Connection)->ChannelHistory[Bunch->ChIndex]) FString("Channel opened");
+	Connection->CreateChannel(CHTYPE_Actor,true,Bunch->ChIndex);
 	unguard;
 }
 
@@ -1694,8 +1590,6 @@ void UReplicatorEngine::SendMessageToClient (UNetConnection* Connection, const F
 		return;
 
 	if (!ch) {
-		//debugf(TEXT("Retrying create fake actor"));
-		//CreateFakeActor(Connection);
 		return;
 	}
 
@@ -1712,7 +1606,6 @@ void UReplicatorEngine::SendMessageToClient (UNetConnection* Connection, const F
 	FString m (msg);
 	ob << m;
 
-//	debugf (TEXT("Trying to send string (%s) to client"), *msg);
 	SendBunch (Connection, &ob);
 }
 
@@ -1723,8 +1616,6 @@ void UReplicatorEngine::SendActorToClient (UNetConnection* Connection, INT Actor
 	UChannel* ch = Connection->Channels[UNetConnection::MAX_CHANNELS-1];
 
 	if (!ch) {
-		//debugf(TEXT("Retrying create fake actor"));
-		//CreateFakeActor(Connection);
 		return;
 	}
 
@@ -1788,54 +1679,6 @@ bool UReplicatorEngine::SendBunch(UNetConnection* Connection,InternalBunch* IntB
 	}
 	unguard;
 
-/*	guard(CheckStall);
-	if(!fromQue && oc->StalledChannels.Find(Bunch->ChIndex)!=0){  //check if channel is stalled
-		if(Bunch->bClose){
-			oc->StalledChannels.Remove(Bunch->ChIndex);
-	//		debugf(TEXT("Stalled channel %i erased"),Bunch->ChIndex);
-		} else {
-			//Need to make a copy of the bunch since it will most likely be deleted by the caller
-			oc->StalledChannels.Find(Bunch->ChIndex)->bunches.PushBack(InternalBunch(*IntBunch));  //annars lägg till i kön
-			return false;
-		}
-	}
-	unguard; */
-
-/*	guard(CheckDependency);
-	for(INT i=0;i<IntBunch->dependsOn.Num();++i){	
-		int c=IntBunch->dependsOn(i);
-		guard(CheckChannel);
-		if(!Connection->Channels[c]){
-			continue;
-		}
-		unguard;
-
-		guard(HandleStalled);
-		if(!Connection->Channels[c] || Connection->Channels[c]->Closing){  //seems to get deadlocks sometimes if we stall on stalled channels
-			if(!fromQue){
-				guard(StoreBunch);
-				OpenConnection::StalledChannel* sc=oc->StalledChannels.Find(Bunch->ChIndex);
-				if(!sc){
-					guard(CreateNew);
-					OpenConnection::StalledChannel s;
-					oc->StalledChannels.Set(Bunch->ChIndex,s);
-					sc=oc->StalledChannels.Find(Bunch->ChIndex);
-					unguard;
-				}
-				//Need to make a copy here as well
-				guard(CreateCopy);
-				debugf(TEXT("Creating copy"));
-				sc->bunches.PushBack(InternalBunch(*IntBunch));	
-				unguard;
-	//			debugf(TEXT("Channel %i stalled on channel %i"),Bunch->ChIndex,c);
-				unguard;
-			}
-			return false;
-		}
-		unguard;
-	}
-	unguard;*/
-
 	guard(FinalSend);
 	SendBunch(Connection,Bunch);
 	unguard;
@@ -1849,19 +1692,14 @@ void UReplicatorEngine::SendBunch(UNetConnection* Connection,FInBunch* InBunch)
 	guard(UReplicatorEngine::SendBunch2);
 
 	if(Connection->Channels[InBunch->ChIndex]==0){
-	//	printf("Send on null channel %i\n",InBunch->ChIndex);
 		return;
 	}
 	if(Connection->Channels[InBunch->ChIndex]->Closing){
 		if(Connection->Channels[InBunch->ChIndex]->OpenTemporary){
-	//		printf("Deleting temp channel %i\n",InBunch->ChIndex);
 			delete Connection->Channels[InBunch->ChIndex];
 			Connection->Channels[InBunch->ChIndex] = 0;
 			return;
 		}
-	//	if(Connection==PrimaryConnection){
-	//		printf("Send on closing channel %i\n",InBunch->ChIndex);
-	//	}
 		return;
 	}
 
@@ -1870,7 +1708,6 @@ void UReplicatorEngine::SendBunch(UNetConnection* Connection,FInBunch* InBunch)
 		return;
 	}
 
-	//FInBunch tempBunch(*InBunch);//no way to reset position of bunch
 	FOutBunch *outBunch = new FOutBunch(Connection->Channels[InBunch->ChIndex],InBunch->bClose);
 
 	//If the bunch is error'ed here, try to fix this
@@ -1891,8 +1728,6 @@ void UReplicatorEngine::SendBunch(UNetConnection* Connection,FInBunch* InBunch)
 	outBunch->bReliable=InBunch->bReliable;
 
 	outBunch->SerializeBits(InBunch->GetData(), InBunch->GetNumBits());
-//	for(int a=0;a<tempBunch.GetNumBits();++a)
-//		outBunch.WriteBit(tempBunch.ReadBit());
 
 	SendBunch(Connection,outBunch);
 	delete outBunch;
@@ -1906,23 +1741,16 @@ void UReplicatorEngine::SendBunch(UNetConnection* Connection,FInBunch* InBunch)
 void UReplicatorEngine::SendBunch(UNetConnection* Connection,FOutBunch* OutBunch)
 {
 	guard(UReplicatorEngine::SendBunch3);
-//	debugf(TEXT("Send on connection: %i"),(int)Connection);
-//	check(OpenConnections.Find(Connection)!=0);
 
 	if(Connection->Channels[OutBunch->ChIndex]==0){
-	//	printf("Send on null channel %i\n",OutBunch->ChIndex);
 		return;
 	}
 	if(Connection->Channels[OutBunch->ChIndex]->Closing){
 		if(Connection->Channels[OutBunch->ChIndex]->OpenTemporary){
-	//		printf("Deleting temp channel %i\n",OutBunch->ChIndex);
 			delete Connection->Channels[OutBunch->ChIndex];
 			Connection->Channels[OutBunch->ChIndex] = 0;
 			return;
 		}
-	//	if(Connection==PrimaryConnection){
-	//		printf("Send on closing channel %i\n",OutBunch->ChIndex);
-	//	}
 		return;
 	}
 	if(Connection->State==USOCK_Closed)
@@ -1944,16 +1772,11 @@ void UReplicatorEngine::SendBunch(UNetConnection* Connection,FOutBunch* OutBunch
 		return;
 	}
 
-//	FString s=FString::Printf(TEXT("%i %i %i %i"),OutBunch->bOpen,OutBunch->bClose,OutBunch->bReliable,Connection->Channels[OutBunch->ChIndex]->OpenTemporary);
-//	new(OpenConnections.Find(Connection)->ChannelHistory[OutBunch->ChIndex]) FString(s);
-
 	if(OutBunch->bReliable && Connection->Channels[OutBunch->ChIndex]->OpenTemporary){
 		if (Connection == PrimaryConnection) {
 			debugf(TEXT("Reliable bunch on temporary channel for primary client, ignoring"));
 			debugf(TEXT("Flags: %d %d %d"), OutBunch->ChIndex, (int)OutBunch->bOpen, (int)OutBunch->bClose);
 			return;
-			//delete Connection->Channels[OutBunch->ChIndex];
-			//Connection->Channels[OutBunch->ChIndex] = 0;
 		}
 		else {
 			debugf (TEXT ("Reliable bunch on temp channel ?? %i %i %i. Killing client"),OutBunch->ChIndex,(int)OutBunch->bOpen,(int)OutBunch->bClose);
@@ -1963,8 +1786,6 @@ void UReplicatorEngine::SendBunch(UNetConnection* Connection,FOutBunch* OutBunch
 			} else {
 				debugf (TEXT ("No delayed channel"));
 			}
-//		for(TArray<FString>::TIterator opi(OpenConnections.Find(Connection)->ChannelHistory[OutBunch->ChIndex]);opi;++opi)
-//			debugf (TEXT ("Channel Data %s"),*opi);
 			Connection->Logf( TEXT("FAILCODE UTV2004 Reliable bunch on temporary channel, please reconnect"));
 			Connection->FlushNet();
 			Connection->State=USOCK_Closed;
@@ -2012,7 +1833,6 @@ void UReplicatorEngine::Restart(void)
 	OpenConnections.Empty();
 	delete ServerPackageMap;
 	
-//	Delayer->Restart();
 	float dtime = Delayer->DelayTime;
 	delete Delayer;
 	Delayer=new BunchDelayer();
@@ -2056,7 +1876,7 @@ void UReplicatorEngine::InitListenDriver()
 	FString Error;
 
 	// Create net driver.
-	UClass* NetDriverClass = StaticLoadClass( UNetDriver::StaticClass(), NULL, TEXT("IpDrv.TcpNetDriver"/*/"utv2004.TVNetDriver"/**/), NULL, LOAD_NoFail, NULL );
+	UClass* NetDriverClass = StaticLoadClass( UNetDriver::StaticClass(), NULL, TEXT("IpDrv.TcpNetDriver"), NULL, LOAD_NoFail, NULL );
 
 	URL.Port = ListenPort;
 	ListenDriver = (UNetDriver*)StaticConstructObject( NetDriverClass );

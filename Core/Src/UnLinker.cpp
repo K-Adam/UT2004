@@ -323,7 +323,7 @@ ULinkerLoad::ULinkerLoad( UObject* InParent, const TCHAR* InFilename, DWORD InLo
 	*this << Summary;
 
 	// MD5sum the package summary...
-	// !!! FIXME: Can we just hook this up to the serialization code?
+	// Hashes these fields in this order because retail package MD5s depend on it.
 	appMD5Update32( &PMD5Context, Summary.Tag );
 	appMD5Update32( &PMD5Context, Summary.GetFileVersionComplete() );
 	appMD5Update32( &PMD5Context, Summary.PackageFlags );
@@ -402,11 +402,7 @@ ULinkerLoad::ULinkerLoad( UObject* InParent, const TCHAR* InFilename, DWORD InLo
 			NameMap.AddItem( (NameEntry.Flags & _ContextFlags) ? FName( NameEntry.Name, FNAME_Add ) : FName(NAME_None) );
 			appMD5Update32(&PMD5Context, NameEntry.Flags);
 
-			// This is a mistake; the "sizeof" makes this "4" without ever calling appStrlen!!
-			//appMD5Update(&PMD5Context, (BYTE*)&NameEntry.Name,sizeof(appStrlen(NameEntry.Name) * sizeof(TCHAR) ) );
-
-			// Here's a byte-safe version that assumes we're sending four bytes. Remove this when
-			//  fixing the above version.  --ryan.
+			// Retail hashes only the first two characters (four bytes as UTF-16) of each name, so package MD5s depend on exactly this.
             appMD5Update16(&PMD5Context, (_WORD) NameEntry.Name[0]);
             appMD5Update16(&PMD5Context, (_WORD) NameEntry.Name[1]);
 		}
@@ -599,7 +595,6 @@ void ULinkerLoad::VerifyImport( INT i )
 		check(Import.PackageIndex<0);
 		VerifyImport( -Import.PackageIndex-1 );
 		Import.SourceLinker = ImportMap(-Import.PackageIndex-1).SourceLinker;
-		//check(Import.SourceLinker);
 		if( Import.SourceLinker )
 		{
 			FObjectImport* Top;
@@ -614,13 +609,10 @@ void ULinkerLoad::VerifyImport( INT i )
 	// Find this import within its existing linker.
 	UBOOL SafeReplace = 0;
 	Rehack://oldver
-	//new:
 	INT iHash = HashNames( Import.ObjectName, Import.ClassName, Import.ClassPackage) & (ARRAY_COUNT(ExportHash)-1);
 	if( Import.SourceLinker )
 	{
 		for( INT j=Import.SourceLinker->ExportHash[iHash]; j!=INDEX_NONE; j=Import.SourceLinker->ExportMap(j)._iHashNext )
-		//old:
-		//for( INT j=0; j<Import.SourceLinker->ExportMap.Num(); j++ )
 		{
 			FObjectExport& Source = Import.SourceLinker->ExportMap( j );
 			if
@@ -776,9 +768,6 @@ Rehack://oldver
 UObject* ULinkerLoad::Create( UClass* ObjectClass, FName ObjectName, DWORD LoadFlags, UBOOL Checked )
 {
 	guard(ULinkerLoad::Create);
-	//old:
-	//for( INT i=0; i<ExportMap.Num(); i++ )
-	//new:
 	INT Index = FindExportIndex( ObjectClass->GetFName(), ObjectClass->GetOuter()->GetFName(), ObjectName, INDEX_NONE );
 	if( Index!=INDEX_NONE )
 		return (LoadFlags & LOAD_Verify) ? (UObject*)-1 : CreateExport(Index);
@@ -793,11 +782,6 @@ void ULinkerLoad::Preload( UObject* Object )
 	guard(ULinkerLoad::Preload);
 	check(IsValid());
 	check(Object);
-	if( Object->GetFlags() & RF_Preloading )
-	{
-		// Warning for internal development.
-		//debugf( "Object preload reentrancy: %s", Object->GetFullName() );
-	}
 	if( Object->GetLinker()==this )
 	{
 		// Preload the object if necessary.
@@ -821,7 +805,6 @@ void ULinkerLoad::Preload( UObject* Object )
 			Object->SetFlags   ( RF_Preloading );
 			Object->Serialize  ( *this );
 			Object->ClearFlags ( RF_Preloading );
-//				debugf(TEXT("    %s: %i"), Object->GetFullName(), Export.SerialSize );
 
 			// Make sure we serialized the right amount of stuff.
 			if( Tell()-Export.SerialOffset != Export.SerialSize )
@@ -1062,8 +1045,6 @@ void ULinkerLoad::Serialize( void* V, INT Length )
 
 UBOOL ULinkerLoad::LinksToCode()
 {
-//	return ContainsCode();
-
 	if ( !ExportMap.Num() )
 		return false;
 

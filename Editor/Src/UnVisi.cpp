@@ -439,7 +439,6 @@ void FEditorVisibility::AddPortal
 		NumPortals++;
 
 #if DEBUG_PORTALS
-		//debugf("AddPortal: %i verts",Poly.NumVertices);
 		Poly.PolyFlags |= PF_NotSolid;
 		new(DEBUG_Brush->Brush->Polys)FPoly(Poly);
 #endif
@@ -848,20 +847,11 @@ int FEditorVisibility::ClipToMaximalSheetWrapping
 			RefNormal *= Sign / appSqrt(NormalSquared);
 
 			// Test B split to make sure the logic is ok.
-			//static const TCHAR *Sp[4]={"Plane","Front","Back ","Split"};
 			FPoly BB=B; int BSplit = BB.SplitWithPlane(A.Vertex[iA0],Phase*RefNormal,NULL,NULL,1);
 			if( BSplit != SP_Back )
 			{
-				//debugf("Visi: B=%s -- %f : %f/%f",Sp[BSplit],(B.Base-A.Base)|A.Normal,Phase,Sign);
 				continue;
 			}
-
-			/*
-			debugf("Range = %f < %f > %f",Best,Phase * (B.Vertex[iB0] | MyRef),Max);
-			if( iB0==iMAX ) debugf("%f %f Max",Sign,Phase);
-			else if( iB0==iMIN ) debugf("%f %f Min",Sign,Phase);
-			else debugf("%f %f Other",Sign,Phase);
-			*/
 
 			// Clip Poly by plane.
 			if( !Poly.Split( A.Vertex[iA0], RefNormal, 1 ) )
@@ -1023,7 +1013,6 @@ void FEditorVisibility::BspVisibility( INT iNode )
 	for( FPortal* ClipPortal = NodePortals[iNode]; ClipPortal; ClipPortal=ClipPortal->NodeNext )
 		ClipPortal->IsTesting--;
 
-	//debugf("Node %i: %i fragments",iNode,FragmentCount);
 	MaxFragments = Max(MaxFragments,FragmentCount);
 	unguard;
 }
@@ -1337,64 +1326,6 @@ void FEditorVisibility::BuildZoneInfo()
 				Infos++;
 				Model->Zones[Actor->Region.ZoneNumber].ZoneActor = (AZoneInfo*)Actor;
 
-#if 0
-				// Perform aural reverb raytracing.
-				if( Actor->bReverbZone && Actor->bRaytraceReverb )
-				{
-					// Sample a bunch of random oriented vectors to get a feeling for how big the zone is.
-					const int NumTraces = 256;
-					const FLOAT MaxDist = 16384;
-					TArray<FVector> Samples;
-					for( int i=0; i<NumTraces; i++ )
-					{
-						FCheckResult Hit(1.0);
-						Model->LineCheck( Hit, NULL, Actor->Location + MaxDist*VRand(), Actor->Location, FVector(0,0,0), 0, 0 );
-						debugf( NAME_Log, TEXT("   dist=%f"), Hit.Time * MaxDist );
-						new(Samples)FVector(Hit.Time * MaxDist / Actor->SpeedOfSound,1,0);
-					}
-
-					// Quantize the reverb times.
-					while( Samples.Num() > ARRAY_COUNT(Actor->Delay) )
-					{
-						// Find best pair to merge.
-						INT iBest=0, jBest=1;
-						FLOAT BestCost=10000000000000.f;
-						for( int i=0; i<Samples.Num(); i++ )
-						{
-							for( int j=0; j<i; j++ )
-							{
-								FLOAT Cost = Square(Samples(i).X-Samples(j).X) * (Samples(i).Y + Samples(j).Y);
-								if( Cost < BestCost )
-								{
-									BestCost = Cost;
-									iBest    = i;
-									jBest    = j;
-								}
-							}
-						}
-
-						// Merge them.
-						FVector A = Samples(iBest);
-						FVector B = Samples(jBest);
-						Samples(iBest) = FVector( (A.X*A.Y + B.X*B.Y)/(A.Y+B.Y), A.Y+B.Y, 0 );
-						Samples.Remove(jBest);
-					}
-
-					// Sort them.
-					for( int i=0; i<Samples.Num(); i++ )
-						for( int j=0; j<i; j++ )
-							if( Samples(i).X < Samples(j).X )
-								Exchange( Samples(i), Samples(j) );
-
-					// Copy reverb times to the zone info.
-					for( int i=0; i<Samples.Num(); i++ )
-					{
-						Actor->Delay[i] = Clamp( Samples(i).X*1000.0, 0.0, 255.0 );
-						Actor->Gain [i] = Clamp( Samples(i).Y*255.0/NumTraces, 0.0, 255.0 );
-					}
-				}
-#endif
-
 				// Handle warp zones.
 				if
 				(	Actor->IsA(AWarpZoneInfo::StaticClass())
@@ -1699,7 +1630,6 @@ FEditorVisibility::~FEditorVisibility() noexcept(false)
 {
 	guard(FEditorVisibility::FEditorVisibility);
 	Mark.Pop();
-	//!!Visibility->~FSymmetricBitArray;
 	unguard;
 }
 
@@ -1860,15 +1790,6 @@ void FilterBound
 	FBspSurf&		Surf	= Model->Surfs  (Node.iSurf);
 	//BEGIN CONTROVERSIAL CODE
 
-	// OLD: HIDEOUS BUG.
-	//FVector&		Base	= Model->Points(Model->Verts(Node.iVertPool).pVertex);
-
-	// NEW: FIXED. Sort of.
-	//FVector&		Base	= Model->Points(Surf.pBase);
-
-	// NEWER. A less holy workaround.
-	//FVector&		Base	= Node.NumVertices>0? Model->Points(Model->Verts(Node.iVertPool).pVertex): Model->Points(Surf.pBase);
-
 	// NEWEST:
 
 	FVector	Base = Surf.Plane * Surf.Plane.W;
@@ -1970,7 +1891,6 @@ void FilterBound
 	{
 		Node.iRenderBound = Model->Bounds.Add();
 		Model->Bounds(Node.iRenderBound) = Bound;
-		//Node.InclusiveSphereBound = FSphere(&Bound.Min,2);
 	}
 
 	// Update parent bound to enclose this bound.

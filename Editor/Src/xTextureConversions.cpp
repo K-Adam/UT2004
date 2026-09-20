@@ -5,7 +5,7 @@
 //=============================================================================
 
 #if !WIN32
-#include <time.h>  // work around macro clash.  --ryan.
+#include <time.h>  // work around macro clash.
 #endif
 
 #include "EditorPrivate.h"
@@ -37,19 +37,6 @@ UBOOL UEditorEngine::DDSConversion( TCHAR* FileName, const TCHAR* Str, FOutputDe
     if ( dxt==-1 ) // don't compress terrain alpha layers and heightfields
         return 1;
 
-#if 0
-	FString execPath;
-    FString Dir = FileName;
-    while( Dir.Len() && Dir.Right(1)!=PATH_SEPARATOR )
-        Dir = Dir.LeftChop(1);
-    execPath = *Dir;
-    if ( execPath.Len() && appStrstr( FileName, TEXT(":") ) == NULL )
-	{
-		srcName = execPath;
-		srcName += FileName;
-	}
-#endif
-		
 
 	ddsName = srcName;
 	ddsName = ddsName.LeftChop(3);

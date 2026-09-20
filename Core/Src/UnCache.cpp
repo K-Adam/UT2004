@@ -634,8 +634,6 @@ void FMemCache::Tick()
 	// Update the cache's time.
 	Time++;
 	unclock(TickCycles);
-	//debugf(TEXT("Create=%06.3f msec Check=%06.3f"),(CreateCycles*GSecondsPerCycle*1000.0),(TickCycles*GSecondsPerCycle*1000.0));
-	//TickCycles=CreateCycles=0;
 	unguard;
 }
 

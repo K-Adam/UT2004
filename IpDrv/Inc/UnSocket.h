@@ -91,7 +91,7 @@ struct IPDRV_API FIpAddr
 	// serialization
     friend IPDRV_API FArchive& operator<<( FArchive& Ar, FIpAddr& IP )
     {
-        IP.Addr = INTEL_ORDER32(IP.Addr);  // this is not really in "host" order, but intel. --ryan.
+        IP.Addr = INTEL_ORDER32(IP.Addr);  // this is not really in "host" order, but intel.
         return Ar << IP.Addr << IP.Port;
         IP.Addr = INTEL_ORDER32(IP.Addr);
     }

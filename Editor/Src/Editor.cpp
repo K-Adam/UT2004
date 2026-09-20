@@ -63,36 +63,6 @@ void autoInitializeRegistrantsEditor(INT &Lookup)
     autoInitializeRegistrantsEditorStripSource(Lookup);
     autoInitializeRegistrantsEditorMake(Lookup);
 
-// !!! FIXME: do the rest of these...
-//	USoundLocCommandlet::StaticClass();
-//	USetNormalLODCommandlet::StaticClass();
-//	URebuildCommandlet::StaticClass();
-//	UPkgCommandlet::StaticClass();
-//	UDumpConfigCommandlet::StaticClass();
-//	UChecksumPackageCommandlet::StaticClass();
-//	UUpdateUModCommandlet::StaticClass();
-//	UMasterCommandlet::StaticClass();
-//	UMapConvertCommandlet::StaticClass();
-//	UMakeCommandlet::StaticClass();
-//	UGroupRepairCommandlet::StaticClass();
-//	UDXTConvertCommandlet::StaticClass();
-//	URearrangeIntCommandlet::StaticClass();
-//	UMergeIntCommandlet::StaticClass();
-//	UCompareIntCommandlet::StaticClass();
-//	UDumpIntCommandlet::StaticClass();
-//	UObjectRenameCommandlet::StaticClass();
-//	UCutdownContentCommandlet::StaticClass();
-//	UConvertMaterialCommandlet::StaticClass();
-//	UDataRipCommandlet::StaticClass();
-//	UPackageFlagCommandlet::StaticClass();
-//	UClassFlagCommandlet::StaticClass();
-//	UCheckUnicodeCommandlet::StaticClass();
-//	UConformCommandlet::StaticClass();
-//	UBatchImportCommandlet::StaticClass();
-//	UBatchExportCommandlet::StaticClass();
-//	UAnalyzeContentCommandlet::StaticClass();
-//	UAnalyzeBuildCommandlet::StaticClass();
-
 
 	UPolysExporterOBJ::StaticClass();
 	ULevelExporterOBJ::StaticClass();

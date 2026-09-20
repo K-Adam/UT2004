@@ -118,7 +118,6 @@ public:
 			Alpha		= appTrunc( t );
 			Attenuation	= appTrunc( t * tmp_ScaleGlow );
 
-			//DWORD Color = Attenuation | (Attenuation << 8) | (Attenuation << 16) | (Alpha << 24);
 			DWORD Color = MakeAttenuatedColor(Attenuation, Alpha);
 
 			if ( pFx->WeatherType == WT_Rain )
@@ -268,21 +267,6 @@ void AxWeatherEffect::UpdateViewer( FLevelSceneNode* SceneNode )
 void AxWeatherEffect::SetZone( UBOOL bTest, UBOOL bForceRefresh )
 {
 	Super::SetZone(bTest,bForceRefresh);
-/*
-	if ( GIsEditor && XLevel )
-	{
-		APhysicsVolume* NewVolume = PhysicsVolume;
-		for ( INT i=0; i<XLevel->Actors.Num(); i++ )
-		{
-			APhysicsVolume *Next = Cast<APhysicsVolume>(XLevel->Actors(i));
-			if ( Next && Next->Encompasses(Location) && (Next->Priority > NewVolume->Priority) )
-				NewVolume = Next;
-		}
-		PhysicsVolume = NewVolume;
-	}
-
-	CacheBlockers();
-*/
 }
 
 void AxWeatherEffect::PreCalc()

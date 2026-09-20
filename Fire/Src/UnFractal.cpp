@@ -1196,7 +1196,6 @@ void UFireTexture::RedrawSparks()
             {  
 				// Draw harmonic-motion spark based on size, phase, speed (freq).
 				// 'Z' distance suggested by brightness.
-				// DWORD SparkDest = (DWORD)( ThisSpark->X + ( ThisSpark->Y << UBits ));
 
 				BYTE Htemp = Min( PhaseTable[ (ThisSpark->ByteA+64) & 255 ] +  ThisSpark->Heat, 255);
 				BYTE XTemp = ThisSpark->X + (( (PhaseTable[ ThisSpark->ByteA ]) * ThisSpark->ByteB ) >> 8);
@@ -1211,7 +1210,6 @@ void UFireTexture::RedrawSparks()
             {  
 				// Draw harmonic-motion spark based on size, phase, speed (freq).
 				// 'Z' distance suggested by brightness.
-				// DWORD SparkDest = (DWORD)( ThisSpark->X + ( ThisSpark->Y << UBits ));
 
 				if( ((ThisSpark->ByteA+64)&255) < 128 )
 				{
@@ -1229,7 +1227,6 @@ void UFireTexture::RedrawSparks()
             {  
 				// Draw harmonic-motion spark based on size, phase, speed (freq).
 				// 'Z' distance suggested by brightness.
-				// DWORD SparkDest = (DWORD)( ThisSpark->X + ( ThisSpark->Y << UBits ));
 
 				BYTE Htemp = Min( PhaseTable[ (ThisSpark->ByteA+64) & 255 ] +  ThisSpark->Heat, 255 );
 				BYTE YTemp = ThisSpark->Y + (( (PhaseTable[ ThisSpark->ByteA ]) * ThisSpark->ByteB ) >> 8);
@@ -1243,7 +1240,6 @@ void UFireTexture::RedrawSparks()
             {  
 				// Draw harmonic-motion spark based on size, phase, speed (freq).
 				// 'Z' distance suggested by brightness.
-				// DWORD SparkDest = (DWORD)( ThisSpark->X + ( ThisSpark->Y << UBits ));
 
 				BYTE Htemp = LightPhaseTable[ (BYTE) (ThisSpark->ByteA+64) ]; // Light phase == A
 				BYTE XTemp = ThisSpark->X + (( PhaseTable[ ThisSpark->ByteA ] * ThisSpark->Heat ) >> 8);
@@ -1512,9 +1508,6 @@ void UFireTexture::RedrawSparks()
 				Sparks(NS).ByteD = ThisSpark->ByteD;  // Angle delta
 				Sparks(NS).Heat  = ThisSpark->Heat;
 
-				//if( SpeedRand()<1 ) 
-				//	ThisSpark->ByteA = SpeedRand(); // change about every XX sparks
-				//else
 				ThisSpark->ByteA += ThisSpark->ByteC; // Turn spawn direction.
             }
             // move around a bit
@@ -1788,7 +1781,6 @@ void UFireTexture::RedrawSparks()
 	            DWORD SparkDest = (DWORD)( ThisSpark->X + ( ThisSpark->Y << UBits ) );
                 // Set spark.
                 Mips(0).DataArray(SparkDest) = ThisSpark->Heat;
-                // (BYTE) (ThisSpark->ByteC);
                 // Advance position.
                 MoveSpark( ThisSpark );
             }
@@ -1825,9 +1817,6 @@ void UFireTexture::RedrawSparks()
                 // Set spark.
                 Mips(0).DataArray(SparkDest) = ThisSpark->Heat;
 
-				//BYTE TempSpeedX   =  -128 +  (SBYTE)PhaseTable[(ThisSpark->ByteB+64 ) & 255];
-				//BYTE TempSpeedY   = (-128 + ((SBYTE)PhaseTable[ ThisSpark->ByteB ]) );
-
 				BYTE TempSpeedX = SignedPhaseTable[ (ThisSpark->ByteB+64 ) & 255 ];
 				BYTE TempSpeedY = SignedPhaseTable[  ThisSpark->ByteB ];
 
@@ -1852,7 +1841,6 @@ void UFireTexture::RedrawSparks()
 				BYTE TempSpeedY   =  ThisSpark->ByteB; 
 				ThisSpark->ByteA +=  ThisSpark->ByteD; 
 				// Rotate angle.
-                // (BYTE) (ThisSpark->ByteC);
                 // Advance position.
                 MoveSparkXY( ThisSpark, TempSpeedX, TempSpeedY );
             }
@@ -2071,9 +2059,6 @@ void UWaterTexture::CalculateWater()
         DestCell  = WaterMap+ Y*Xdimension*2 ;
         DestPixel = Y*Xdimension*2*2;          // Always lower right pixel dest.
 
-        //DestCell++;
-        //DestPixel+=2;
-
         Output4Pix (
                       *(DestCell-3),
                       *(DestCell-2),
@@ -2258,9 +2243,6 @@ void UWaterTexture::CalculateWater()
     {
         // First 2 wrap, rest goes always same
 
-        // DestCell++;
-        // DestPixel+=2;
-
         DestCell  = WaterMap+ Y*Xdimension*2 +Xdimension;
         DestPixel = Y*Xdimension*2*2 + Xdimension*2 + 1;
 
@@ -2385,7 +2367,6 @@ void UWetTexture::ApplyWetTexture()
 
 		if( !SourceTexture->Mips.Num() || (SourceTexture->Mips(0).DataArray.Num()<(USize*VSize))  )
 		{
-			//debugf(TEXT("WETTEXTURE safety check: %s DataArray size: %i   expected XY: %i  %i "),SourceTexture->GetName(), SourceTexture->Mips(0).DataArray.Num(), USize, VSize ); 
 			return;
 		}
 
@@ -2406,8 +2387,6 @@ void UWetTexture::ApplyWetTexture()
 		for( INT u=0; u<Xdimension; u += 2 )
         {
 
-		 // coolish effect combining half warped, half original.
-		 // LineStart[u] = (  SourceStart[(u+LineStart[u]) & UMask ] + SourceStart[(u+128) & UMask]  ) >> 1;
 		 INT  u2 = u+1;
 
 		 LineStart[ u] =  SourceStart[(  u + LineStart[ u]) & UMask ];
@@ -2512,9 +2491,6 @@ void UIceTexture::BlitTexIce()
 
 		for( INT u=0; u<Xdimension; u+=2 )
         {
-			// Coolish effect combining half warped, half original.
-			// LineStart[u] = (  SourceStart[(u+LineStart[u]) & UMask ] + SourceStart[(u+128) & UMask]  ) >> 1;
-
 			INT u2 = u+1;
 			// Help C++ with pipelining...
 
@@ -2569,9 +2545,6 @@ void UIceTexture::BlitIceTex()
 
 		for( INT u=0; u<Xdimension; u+=2 )
         {
-			// Coolish effect combining half warped, half original.
-			// LineStart[u] = (  SourceStart[(u+LineStart[u]) & UMask ] + SourceStart[(u+128) & UMask]  ) >> 1;
-
 			INT u2 = u+1; // Help C++ with pipelining...
 
 			LineStart[u]  =  TexStart[(  u + UDisp + GlassStart[ u]) & UMask ] ;
@@ -2639,19 +2612,6 @@ void UWaterTexture::WaterRedrawDrops()
             Depth = PhaseTable[ Drops[S].Depth ];
             WaveFieldA[ DropDest ]  =  Depth;
             WaveFieldB[ DropDest ]  =  Depth;
-
-			/*
-			DWORD Phase16 = ((DWORD)Drops[S].ByteB << 8) + (DWORD)Drops[S].ByteA;
-				  Phase16=0xFFFF & ( Phase16 + ((DWORD)Drops[S].ByteD << 8) + (DWORD)Drops[S].ByteC );
-
-			Drops[S].ByteA =    Phase16 & 0xFF;
-			Drops[S].ByteB =  ( Phase16 >> 8 ) & 0xFF;
-
-			// Real 16-bit phase is B:A, delta= D:C
-			Depth = PhaseTable[ Drops[S].ByteB ];
-			WaveFieldA[ DropDest ]  =  Depth;
-			WaveFieldB[ DropDest ]  =  Depth;
-			*/
 
 			}
             break;
@@ -3197,12 +3157,6 @@ UFireTexture::UFireTexture()
 	OldRenderHeat  =  -1; 
 	AuxPhase       =   0;
 	StarStatus	   =   1; // Assume some stars until, we find otherwise.
-
-	// initialize the routines we should call for rising/nonrising fire;
-	// one for Pentium/MMX es and one for Ppro/PII's
-
-	//void (*MergePass)( INT Y, INT X, INT InnerX );
-
 }
 
 //
@@ -3279,7 +3233,6 @@ void UFireTexture::PostLoad()
 	if( ( Palette!=NULL ) && ( GetOuter()!=Palette->GetOuter() ) )
 	{
 		UPalette* NewPalette = new( GetOuter(), GetName() )UPalette;
-		//NewPalette->Colors = Palette->Colors;
 		for( INT i=0; i<256; i++ )
 			new(NewPalette->Colors)FColor( Palette->Colors(i) );
 		Palette = NewPalette->ReplaceWithExisting();
@@ -3335,7 +3288,6 @@ void UFireTexture::PostLoad()
 		{
 			Sparks.Add( SparksLimit - Sparks.Num() );
 		}
-		//Sparks.Debug(); 
 	}
 	// ActiveSparkNum is saved with the texture, while Sparks is not.
 	ActiveSparkNum = Clamp( ActiveSparkNum, 0, Sparks.Num() );
@@ -3416,8 +3368,6 @@ void UFireTexture::Click( DWORD Buttons, FLOAT X, FLOAT Y )
 	}
     else
     {
-        //SparkType = TouchType;
-        //AddSpark( X, Y);
     }
 	unguard;
 }
@@ -3702,7 +3652,6 @@ void UWaveTexture::PostLoad()
 	if( ( Palette!=NULL ) && ( GetOuter()!=Palette->GetOuter() ) )
 	{
 		UPalette* NewPalette = new( GetOuter(), GetName() )UPalette;
-		//NewPalette->Colors = Palette->Colors;
 		for( INT i=0; i<256; i++ )
 			new(NewPalette->Colors)FColor( Palette->Colors(i) );
 		Palette = NewPalette->ReplaceWithExisting();
@@ -3713,7 +3662,7 @@ void UWaveTexture::PostLoad()
 	
 	// Recalculate the rendering LUT
 	// Depends on: WaveAmp, PhongRange, and PhongSize.
-	SetWaveLight(); //TODO: Check params before superfluous updates ??
+	SetWaveLight(); // Could be skipped when the parameters are unchanged
 
 	unguard;
 }
@@ -3755,32 +3704,6 @@ void UWaveTexture::ConstantTimeTick()
 void UWaveTexture::SetWaveLight() 
 {
 	guard(UWaveTexture::SetWaveLight);
-
-#if 0
-	// Compute shades for surface normals.
-    FLOAT Lamp   = PI * BumpMapLight / 255.0;
-    FLOAT Viewer = PI * BumpMapAngle / 255.0;
-
-    for( INT i=0; i<1024 ; i++ )
-    {
-		// Get reflection magnitude.
-        FLOAT Normal = FakeAtan(  ((FLOAT)WaveAmp/255.0F) * (512.0F - (float)i) / 196.0F )  + (PI * 0.5F);
-
-        // Max in this palette is 255, diffuse light reaches to 256-(PhongRange/2). 
-        INT  TempLight = (INT) ( (256-(PhongRange/2)) * appCos ( Normal- Lamp ) );   //* ((FLOAT)WaveAmp/256.0F) );
-
-        // Create a phong-ish highlight.
-        // Based on angle between viewer direction and reflected light:
-        // Reflected light angle : = Normal*2 - Lamp.
-		// Old defaults: PhongRange = 75; PhongRadius=0.11;
-		FLOAT PhongRadius = (FLOAT) PhongSize / 512.0f; 
-        FLOAT Reflected = (Normal*2 - Lamp);
-        if( Square(Reflected-Viewer) < Square(PhongRadius) )
-            TempLight +=  (INT) ((PhongRange * 2 ) * (PhongRadius - Abs(Reflected-Viewer)) / PhongRadius);
-
-        RenderTable[i] = Clamp( TempLight, 0, 255 );
-    }
-#endif
 
 	unguard;
 }
@@ -3827,7 +3750,6 @@ void UFluidTexture::PostLoad()
 	if( ( Palette!=NULL ) && ( GetOuter()!=Palette->GetOuter() ) )
 	{
 		UPalette* NewPalette = new( GetOuter(), GetName() )UPalette;
-		//NewPalette->Colors = Palette->Colors;
 		for( INT i=0; i<256; i++ )
 			new(NewPalette->Colors)FColor( Palette->Colors(i) );
 		Palette = NewPalette->ReplaceWithExisting();
@@ -3838,7 +3760,6 @@ void UFluidTexture::PostLoad()
 	
 	// Recalculate the rendering LUT
 	// Depends on: WaveAmp, PhongRange, and PhongSize.
-	// SetWaveLight(); //TODO: Check params before superfluous updates ??
 
 	for( INT i=0; i<1024 ; i++ )
     {
@@ -4020,9 +3941,6 @@ void UFluidTexture::CalculateFluid()
 
         DestCell  = WaterMap+ Y*Xdimension*2 ;
         DestPixel = Y*Xdimension*2*2;          // Always lower right pixel dest.
-
-        //DestCell++;
-        //DestPixel+=2;
 
         Output4FluidPix (
                       *(DestCell-3),
@@ -4208,9 +4126,6 @@ void UFluidTexture::CalculateFluid()
     {
         // First 2 wrap, rest goes always same
 
-        // DestCell++;
-        // DestPixel+=2;
-
         DestCell  = WaterMap+ Y*Xdimension*2 +Xdimension;
         DestPixel = Y*Xdimension*2*2 + Xdimension*2 + 1;
 
@@ -4358,14 +4273,6 @@ void UWetTexture::PostLoad()
 
 	if( !SourceTexture ) return;
 
-	// Make sure the source texture data is in memory !
-	/*FTextureInfo Info; 
-	if( SourceTexture != this ) 
-	{
-		 SourceTexture->Lock( Info, 0.0, 0, NULL );
-		 SourceTexture->Unlock( Info );
-	}*/
-
 	// Make sure this is the same size as our displacement-waves texture.
 	if( ( SourceTexture->UBits  != UBits) || (SourceTexture->VBits  != VBits)  )
 	{
@@ -4449,15 +4356,6 @@ void UWetTexture::ConstantTimeTick()
 	{
 		if( SourceTexture && USize>=8 && VSize>=8 ) // safe sizes ?
 		{
-			// Make sure referred textures are updated also.
-			/*FTextureInfo Info; 
-			if( SourceTexture != this )  
-			{
-				SourceTexture->Lock( Info, LastUpdateTime, 0, NULL );
-				SourceTexture->Unlock( Info );
-				//SourceTexture->Update(LastUpdateTime);
-			}*/
-
 			//Update the water.
 			WaterRedrawDrops();
 			CalculateWater();  
@@ -4530,14 +4428,6 @@ void UIceTexture::PostLoad()
 	// Validate all sizes: minima & matching requirements.
 	if( SourceTexture )  
 	{
-		// Make sure the source texture data is loaded.
-		/*FTextureInfo Info; 
-		if( SourceTexture != this ) 
-		{
-			SourceTexture->Lock( Info, 0.0, 0, NULL );
-			SourceTexture->Unlock( Info );
-		}*/
-
 		if  (  ((USize<8) || (VSize<8))  )
 		{
 			SourceTexture = NULL;
@@ -4651,26 +4541,11 @@ void UIceTexture::ConstantTimeTick()
 	guard(UIceTexture::ConstantTimeTick);
 	if( __Client )
 	{
-		// Make sure referred textures are updated/loaded also.
 		if( SourceTexture )
 		{
-			/*FTextureInfo Info; 
-			if( SourceTexture != this ) 
-			{
-				SourceTexture->Lock( Info, LastUpdateTime, 0, NULL );
-				SourceTexture->Unlock( Info );
-				//SourceTexture->Update(LastUpdateTime);
-			}*/
 		}
 		if( GlassTexture )
 		{
-			/*FTextureInfo Info; 
-			if( GlassTexture != this ) 
-			{
-				GlassTexture->Lock( Info, LastUpdateTime, 0, NULL );
-				GlassTexture->Unlock( Info );
-				//GlassTexture->Update(LastUpdateTime);
-			}*/
 		}
 		// Simulated 'deltaseconds' for 120 fps.
 		RenderIce(1.0f/120.0f );
@@ -4695,24 +4570,11 @@ void UIceTexture::Tick(FLOAT DeltaSeconds)  //"raw tick" override
 			return;
 		}
 
-		// Make sure referred textures are updated/loaded also.
 		if( SourceTexture )
 		{
-			/*FTextureInfo Info; 
-			if( SourceTexture != this ) 
-			{
-				SourceTexture->Lock( Info, 0.0, 0, NULL );
-				SourceTexture->Unlock( Info );
-			}*/
 		}
 		if( GlassTexture )
 		{
-			/*FTextureInfo Info; 
-			if( GlassTexture != this )
-			{
-				GlassTexture->Lock( Info, 0.0, 0, NULL );
-				GlassTexture->Unlock( Info );
-			}*/
 		}
 		RenderIce(DeltaSeconds);	
 	}

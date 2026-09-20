@@ -520,7 +520,7 @@ void UGUICircularImageList::DrawItem(UCanvas* Canvas, INT Item, FLOAT X, FLOAT Y
 
 	UMaterial* Mat = Cast<UMaterial>(Elements(Item).ExtraData);
 	if (!Mat)
-		Mat = Controller->DefaultPens[0];		// TODO Display fallback texture if no material
+		Mat = Controller->DefaultPens[0];		// Could display a fallback texture when there is no material
 
 	FColor Color;
 	if (bSelected)
@@ -724,7 +724,7 @@ void UGUIVertImageList::DrawItem( UCanvas* Canvas, INT Item, FLOAT X, FLOAT Y, F
 	check(Item >= 0 && Item < ItemCount);
 	UMaterial* Mat = Elements(Item).Image;
 	if (!Mat)
-		Mat = Controller->DefaultPens[0];		// TODO Display fallback texture if no material
+		Mat = Controller->DefaultPens[0];		// Could display a fallback texture when there is no material
 
 	Canvas->DrawTile(Mat,X+HorzBorder,Y+VertBorder,ItemWidth-(HorzBorder*2),ItemHeight-(VertBorder*2),0,0,Mat->MaterialUSize(),Mat->MaterialVSize(),0,Color,FPlane(0.f,0.f,0.f,0.f));
 	if (Elements(Item).Locked)
@@ -1073,8 +1073,6 @@ void UGUIMultiOptionList::PreDraw(UCanvas* Canvas)
 			}
 
 			Elements(i)->WinHeight = ItemHeight * (1.0 - ItemPadding);
-//			Elements(i)->WinWidth = ((Bounds[2] - Bounds[0]) / NumColumns) - Style->BorderOffsets[0] - Style->BorderOffsets[2];
-
 			FLOAT MaxColWidth = ((Bounds[2] - Bounds[0]) / NumColumns) - Style->BorderOffsets[0] - Style->BorderOffsets[2];
 			Elements(i)->WinWidth = MaxColWidth * ColumnWidth;
 
@@ -1574,12 +1572,7 @@ UBOOL UGUIMultiColumnListHeader::MouseMove(INT XDelta, INT YDelta)
 		}
 
 		return true;
-
-/*		FLOAT x = ActualLeft();
-		for( INT i=0;i<SizingCol;i++ )
-			x += MyList->ColumnWidths(i);
-		MyList->ColumnWidths(SizingCol) = Clamp<FLOAT>( CMouseX - x, 0, ActualLeft() + ActualWidth() - x );
-*/	}
+	}
 	else
 	{
 		bCaptureMouse = 0;
@@ -1700,14 +1693,10 @@ void UGUIMultiColumnListHeader::Draw(UCanvas* Canvas)
 				Canvas->DrawTileStretched(BarStyle->Images[DrawState],x,y,w,BarSize);
 			}
 
-//			Style->Draw( Canvas, DrawState, x, Bounds[1], w, HeaderSize );
 			Style->DrawText( Canvas, DrawState, x, ClientBounds[1], w, ClientBounds[3] - ClientBounds[1], 1, *MyList->ColumnHeadings(i), FontScale );
 			x += w;
 		}
     }
-//	FLOAT x2 = ActualWidth()+ActualLeft();
-//	if( x < x2 )
-//		Style->Draw( Canvas, MSAT_Blurry, x, Bounds[1], x2 - x, Bounds[3] - Bounds[1] );
 	unguardobj;
 }
 // =======================================================================================================================================================
@@ -2305,7 +2294,6 @@ static UGUITreeList* GTreeList, *STreeList;
 
 static INT Compare( FGUITreeNode& A, FGUITreeNode& B )
 {
-// FIXME
 	if(GTreeList)
 		return GTreeList->delegateCompareItem(A, B);
 	else
@@ -2352,7 +2340,7 @@ void UGUITreeList::execSortList( FFrame& Stack, RESULT_DECL )
 	P_FINISH;
 	return;
 
-	// FIXME
+	// Returns early like retail, so the sort below is unreachable.
 	// GTreeList being set indicates we should use the script delegate to compare elements.
 	// If no delegate is set - we sort alphabetically.
 	if(DELEGATE_IS_SET(CompareItem))
@@ -2592,7 +2580,6 @@ void UMultiSelectList::Draw(UCanvas* Canvas)
 
 			UBOOL bIsPending = SelectedItems.FindItemIndex(Top+i) != INDEX_NONE;
 
-			//UBOOL bIsSelected = (Top + i) == Index;
 			UBOOL bIsSelected = MElements(Top + i).bSelected;
 
 			bIsPending = ((bDropSource || bDropTarget) && (bIsPending || ((Top + i) == DropIndex)));

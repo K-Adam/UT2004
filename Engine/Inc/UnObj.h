@@ -453,7 +453,7 @@ public:
 		return 0;
 	}
 
-// Some versions of GNU C++ seem to need a little nudging here. --ryan.
+// Some versions of GNU C++ seem to need a little nudging here.
 #ifdef __GNUC__
     void *operator new(size_t x, TArray<FPoly>& t) { return ::operator new(x, t); }
     void *operator new(size_t x, FMemStack& t) { return ::operator new(x, t); }

@@ -36,7 +36,7 @@ UMaterial::UMaterial()
 
 void UMaterial::Serialize( FArchive& Ar )
 {
-	//!!vogel: material duplication code hack.
+	// Material duplication sets bit 8 of GUglyHackFlags.
 	if( !(GUglyHackFlags & 8) )
 		Super::Serialize( Ar );
 }
@@ -1081,8 +1081,6 @@ UMaterial* UMaterial::ConvertPolyFlagsToMaterial( UMaterial* InMaterial, DWORD I
 			if( InPolyFlags&PF_AlphaTexture )
 			{
 				NewMaterial->Opacity = Texture;
-				//!!MAT
-				//NewMaterial->SpecularityMask = FColor(0,0,0,255*Texture->OLDSpecular);
 			}
 			else
 				NewMaterial->SpecularityMask = Texture;

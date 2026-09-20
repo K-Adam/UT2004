@@ -32,7 +32,6 @@ void ASceneSubtitles::ProcessEvent( ESST_Mode Mode )
 	if ( Mode == ESST_SkipToNextLine )
 	{
 		CurrentIndex++;
-		//debugf(TEXT("ASceneSubtitles::ProcessEvent CurrentIndex:%i"), CurrentIndex);
 	}
 
 	unguard;

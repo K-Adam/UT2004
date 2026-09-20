@@ -21,8 +21,6 @@ Revision history:
 #ifndef _KDOP_H
 #define _KDOP_H
 
-//#define KDOP_DEBUG
-
 // Indicates how many "k / 2" there are in the k-DOP. 3 == AABB == 6 DOP
 #define NUM_PLANES	3
 // The number of triangles to store in each leaf

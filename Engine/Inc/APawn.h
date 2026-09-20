@@ -78,7 +78,7 @@ typedef FLOAT ( *NodeEvaluator ) (ANavigationPoint*, APawn*, FLOAT);
 	FLOAT findPathToward(AActor *goal, FVector GoalLocation, NodeEvaluator NodeEval, FLOAT BestWeight, UBOOL bWeightDetours);
 	ANavigationPoint* breadthPathTo(NodeEvaluator NodeEval, ANavigationPoint *start, int moveFlags, FLOAT *Weight, UBOOL bWeightDetours);
 	ANavigationPoint* CheckDetour(ANavigationPoint* BestDest, ANavigationPoint* Start, UBOOL bWeightDetours);
-	int calcMoveFlags(); // FIXME: This used to be inline, but that didn't compile with static linking.
+	int calcMoveFlags();
 	void SetAnchor(ANavigationPoint *NewAnchor);
 
 	// Pawn physics modes
@@ -103,14 +103,14 @@ typedef FLOAT ( *NodeEvaluator ) (ANavigationPoint*, APawn*, FLOAT);
 	FVector NewFallVelocity(FVector OldVelocity, FVector OldAcceleration, FLOAT timeTick);
 	void stepUp(FVector GravDir, FVector DesiredDir, FVector Delta, FCheckResult &Hit);
 
-	// animation functions - temp FIXME - create animation objects with this functionality
+	// animation functions
 	void UpdateMovementAnimation(FLOAT DeltaSeconds);
 	void ZeroMovementAlpha(INT iStart, INT iEnd, FLOAT StepSize);
 
 	// Controller interface
-	UBOOL IsPlayer(); // FIXME: This used to be inline, but that didn't compile with static linking.
-	UBOOL IsHumanControlled(); // FIXME: This used to be inline, but that didn't compile with static linking.
-	UBOOL IsLocallyControlled(); // FIXME: This used to be inline, but that didn't compile with static linking.
+	UBOOL IsPlayer();
+	UBOOL IsHumanControlled();
+	UBOOL IsLocallyControlled();
 
     virtual void PostRender(FLevelSceneNode* SceneNode, FRenderInterface* RI);
     virtual APawn* GetAPawn() { return this; } // sjs

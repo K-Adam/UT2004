@@ -734,7 +734,6 @@ void AONSRVWebProjectileLeader::ApplySpringForces(float DeltaSeconds)
 
 				if(P->bBeingSucked)
 				{
-					//GTempLineBatcher->AddLine(ClosestSuckLocation, P->Location, FColor(255,255,0));
 
 					FVector SuckDir = (ClosestSuckLocation - P->Location).SafeNormal();
 					P->Acceleration += (SuckTargetForce * SuckDir);
@@ -743,7 +742,6 @@ void AONSRVWebProjectileLeader::ApplySpringForces(float DeltaSeconds)
 					if(!OldBeingSucked)
 					{
 						NetUpdateTime = Level->TimeSeconds - 1.f;
-						//P->Velocity *= (1.f - SuckReduceVelFactor);
 						P->Velocity = (SuckReduceVelFactor * ClosestSuckActor->Velocity) + ((1.f - SuckReduceVelFactor) * P->Velocity);
 					}
 				}

@@ -402,7 +402,7 @@ UBOOL UALAudioSubsystem::Init()
 		unguard;
 	#endif
 
-	#ifndef WIN32  // !!! FIXME
+	#ifndef WIN32
 	alcProcessContext( SoundContext );
 	#endif
 
@@ -1159,7 +1159,7 @@ UBOOL UALAudioSubsystem::FindExt( const TCHAR* Name, UBOOL IsALC )
 	guard(UALAudioSubsystem::FindExt);
 
 	ALboolean Result = AL_FALSE;
-	if( IsALC )  // !!! FIXME: May not be NULL device!
+	if( IsALC )
 	{
 		if( alcIsExtensionPresent )
 			Result = alcIsExtensionPresent(NULL, (ALubyte *) appToAnsi(Name));
@@ -1184,18 +1184,15 @@ void UALAudioSubsystem::FindProc( void*& ProcAddress, char* Name, char* SupportN
 	guard(UALAudioSubsystem::FindProc);
 	ProcAddress = NULL;
 
-// !!! FIXME: Shouldn't use this for more than al*GetProcAddress, even
-// !!! FIXME:  when dynamically loading. All entry points should be
-// !!! FIXME:  retrieve via alGetProcAddress (or alcGetProcAddress), since
-// !!! FIXME:  they reserve the right to give different values in certain
-// !!! FIXME:  cases.  --ryan.
+// All entry points should come from alGetProcAddress or alcGetProcAddress,
+// since OpenAL may return different values than the DLL exports.
 #if DYNAMIC_BIND
 	if( !ProcAddress )
 		ProcAddress = appGetDllExport( DLLHandle, appFromAnsi(Name) );
 #endif
 	if( !ProcAddress && Supports && AllowExt )
 	{
-		if( IsALC )  // !!! FIXME: Might need device in some cases...
+		if( IsALC )
 			ProcAddress = alcGetProcAddress( NULL, (ALubyte*) Name );
 		else
 			ProcAddress = alGetProcAddress( (ALubyte*) Name );
@@ -1262,10 +1259,8 @@ void UALAudioSubsystem::SetEAXEffect()
 			EAXProperties.flDecayLFRatio			= 1.00f;
 			EAXProperties.lReflections				= -2602;
 			EAXProperties.flReflectionsDelay		= 0.007f;
-			//EAXProperties.vReflectionsPan			= *((EAXVECTOR*)&Listener->ReflectionsPan);
 			EAXProperties.lReverb					= 200;
 			EAXProperties.flReverbDelay				= 0.011f;
-			//EAXProperties.vReverbPan				= *((EAXVECTOR*)&Listener->ReverbPan);
 			EAXProperties.flEchoTime				= 0.25f;
 			EAXProperties.flEchoDepth				= 0.f;
 			EAXProperties.flModulationTime			= 0.25f;
@@ -1327,7 +1322,7 @@ void UALAudioSubsystem::SetEAXEffect()
 			EAXProperties.flEchoDepth				= Listener->EAXEffect->EchoDepth;
 			EAXProperties.flModulationTime			= Listener->EAXEffect->ModulationTime;
 			EAXProperties.flModulationDepth			= Listener->EAXEffect->ModulationDepth;
-			EAXProperties.flAirAbsorptionHF			= 0.f; // Listener->EAXEffect->AirAbsorptionHF;
+			EAXProperties.flAirAbsorptionHF			= 0.f;
 			EAXProperties.flHFReference				= Listener->EAXEffect->HFReference;
 			EAXProperties.flLFReference				= Listener->EAXEffect->LFReference;
 			EAXProperties.flRoomRolloffFactor		= Listener->EAXEffect->RoomRolloffFactor;
@@ -1428,7 +1423,7 @@ UBOOL UALAudioSubsystem::alError( TCHAR* Text, UBOOL Log )
 				case AL_INVALID_NAME:
 					debugf(TEXT("ALAudio: AL_INVALID_NAME in %s"), Text);
 					break;
-				#if __WIN32__  // !!! FIXME: This isn't in the Linux reference implemention? --ryan.
+				#if __WIN32__
 				case AL_INVALID_ENUM:
 					debugf(TEXT("ALAudio: AL_INVALID_ENUM in %s"), Text);
 					break;
@@ -1436,7 +1431,7 @@ UBOOL UALAudioSubsystem::alError( TCHAR* Text, UBOOL Log )
 				case AL_INVALID_VALUE:
 					debugf(TEXT("ALAudio: AL_INVALID_VALUE in %s"), Text);
 					break;
-				#if __WIN32__  // !!! FIXME: This isn't in the Linux reference implemention? --ryan.
+				#if __WIN32__
 				case AL_INVALID_OPERATION:
 					debugf(TEXT("ALAudio: AL_INVALID_OPERATION in %s"), Text);
 					break;
@@ -1849,12 +1844,9 @@ FALSoundBuffer* FALSoundBuffer::Init( USound* Sound, UALAudioSubsystem* AudioSub
 				return NULL;
 			}
 
-			//INT Flags = WaveInfo.SampleLoopsNum ? SF_Looping : 0;
-
 			ALint Format;
 			if ( *WaveInfo.pBitsPerSample == 8 )
 			{
-				// debugf( NAME_Warning, TEXT("8 bit sound detected [%s]"), Sound->GetPathName() );
 				if (*WaveInfo.pChannels == 1)
 					Format = AL_FORMAT_MONO8;
 				else

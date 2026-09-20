@@ -96,33 +96,6 @@ void USpline::execInitSplineRot( FFrame& Stack, RESULT_DECL )
         return;
     }
 
-/* TODO: revisit SplineE -- this keeps the menu intro/outro camera spline interpolation from working
-    // Rotate through the smallest angle
-    // TODO: fix native code to clamp rotations all the time
-    // Make the rotation components +ve
-    d0.Pitch = (d0.Pitch + 65536) % 65536;
-    d0.Yaw   = (d0.Yaw   + 65536) % 65536;
-    d0.Roll  = (d0.Pitch + 65536) % 65536;
-    d1.Pitch = (d1.Pitch + 65536) % 65536;
-    d1.Yaw   = (d1.Yaw   + 65536) % 65536;
-    d1.Roll  = (d1.Pitch + 65536) % 65536;
-
-    FRotator diff = d1 - d0;
-
-    // huh?
-    if (diff.Pitch > 32768)
-        d1.Pitch -= 65536;
-    else if (diff.Pitch < -32768)
-        d0.Pitch -= 65536;
-    if (diff.Yaw > 32768)
-        d1.Yaw -= 65536;
-    else if (diff.Yaw < -32768)
-        d0.Yaw -= 65536;
-    if (diff.Roll > 32768)
-        d1.Roll -= 65536;
-    else if (diff.Roll < -32768)
-        d0.Roll -= 65536;
-*/
     SplineE =    v1 +   v0 - 2*d1 + 2*d0;
     SplineF = -1*v1 - 2*v0 + 3*d1 - 3*d0;
     SplineG = v0;

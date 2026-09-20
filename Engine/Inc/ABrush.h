@@ -60,15 +60,13 @@ UPrimitive* GetPrimitive();
 FCoords ToLocal() const
 {
 	guardSlow(ABrush::ToLocal);
-//	return GMath.UnitCoords / -PrePivot / Location; // OLD: broke collision volumes.
-	return GMath.UnitCoords / -PrePivot / Rotation / Location; // NEW: fixes collision volumes, be wary of potential UnrealEd breaks due to dependencies on the above unsafe code.
+	return GMath.UnitCoords / -PrePivot / Rotation / Location; // Includes Rotation so collision volumes work.
 	unguardSlow;
 }
 FCoords ToWorld() const
 {
 	guardSlow(ABrush::ToWorld);
-//	return GMath.UnitCoords * Location * -PrePivot; // OLD: broke collision volumes.
-	return GMath.UnitCoords * Location * Rotation * -PrePivot; // NEW: fixes collision volumes, be wary of potential UnrealEd breaks due to dependencies on the above unsafe code.
+	return GMath.UnitCoords * Location * Rotation * -PrePivot; // Includes Rotation so collision volumes work.
 	unguardSlow;
 }
 FLOAT BuildCoords( FModelCoords* Coords, FModelCoords* Uncoords )

@@ -16,7 +16,6 @@
 	time, after it has been imported as a regular UMesh, and re-digests it into new structures 
 	fit for real-time LOD collapse and morphing. 
 
-	TODO:
 	Currently there's a number of collapsing and noncollapsing arrays, the latter are
 	(but not all) inside the Mesh-> hierarchy, but some in TModel too - a bit messy.
 
@@ -31,12 +30,10 @@
     
 #undef  NOTE
 #define NOTE(func)  {}
-//#define NOTE(func) func
 
 
 #undef  NLOG
 #define NLOG(func) {}
-//#define NLOG(func) func
 
 // Is the UV difference for two textured vertices small enough to not duplicate them ?
 // Assume a 1.0 or smaller pixel difference in a 1024x1024 texture can be merged. 
@@ -292,7 +289,6 @@ TFace::~TFace() noexcept(false)
 	{
 		if( Verts[i] ) 
 		{
-			//debugf(TEXT("Removing face %i from vertex %i"),this->OriginalIndex,Verts[i]->OriginalIndex);
 		    INT FaceIndex = Verts[i]->Faces.FindItemIndex(this);
 			// remove the face and the wedge with the same index as the face just removed.
 		    Verts[i]-> Faces.Remove(FaceIndex);
@@ -306,10 +302,8 @@ TFace::~TFace() noexcept(false)
 		if( ! Verts[i] || ! Verts[i2] ) continue;
 
 		Verts[i ]->RemoveIfNonNeighbor( Verts[i2] );
-		//debugf(TEXT("Removing vertex %i if nonneighbor vertex %i "),Verts[i]->OriginalIndex,Verts[i2]->OriginalIndex); 
 
 		Verts[i2]->RemoveIfNonNeighbor( Verts[i ] );
-		//debugf(TEXT("Removing vertex %i if nonneighbor vertex %i "),Verts[i2]->OriginalIndex,Verts[i]->OriginalIndex);
 	}
 	unguard;
 }
@@ -733,13 +727,12 @@ void Collapse(TVertex *u, TVertex *v)
 		// prepare a new wedge for UV-morphing.
 
 		INT MatchedWedgeIdx = INDEX_NONE;
-		// MatchedWedgeIdx = SideWedges.FindItemIndex( UniqueNonSideWedges(i)); //NO! we want to compare UV only.	
+		// Compare UV only.
 		// Vertex match is implied.
 		for( INT w=0; w< SideWedges.Num(); w++)
 		{
 			NOTE(debugf(TEXT("matchtry UVunsw %i %i with UVSide %i %i"),UniqueNonSideWedges(i)->U,UniqueNonSideWedges(i)->V,SideWedges(w).U,SideWedges(w).V);)
 
-			//#TODO - any UV tolerance in preprocessing necessary ?
 			if( (UniqueNonSideWedges(i)->U == SideWedges(w).U) && (UniqueNonSideWedges(i)->V == SideWedges(w).V) )// == compares only U V
 				MatchedWedgeIdx = w;
 		}	
@@ -750,11 +743,6 @@ void Collapse(TVertex *u, TVertex *v)
 			// Vertex it points to, the whole collapse history is retrievable.
 			// Add copy of current wedge to auuxiliary wedge array.
 			TModel.GAuxWedges.AddItem( *UniqueNonSideWedges(i) ); 
-
-			/*
-			if ( UniqueNonSideWedges(i)->VertexIndex == v->OriginalIndex ) debugf(TEXT(" DOUBLE COLLAPSE DETECTED:UNSW %i  U %i  V  %i"), UniqueNonSideWedges(i)->VertexIndex,u->OriginalIndex,v->OriginalIndex);
-			if ( UniqueNonSideWedges(i)->VertexIndex != u->OriginalIndex ) debugf(TEXT(" VERTEX IDENTITY CRISIS:UNSW %i  U %i  V  %i"), UniqueNonSideWedges(i)->VertexIndex,u->OriginalIndex,v->OriginalIndex);
-			*/
 
 			NOTE(debugf(TEXT("Update wedge oix %i from vertex %i to vertex %i"),UniqueNonSideWedges(i)->OriginalIndex,UniqueNonSideWedges(i)->VertexIndex,v->OriginalIndex ));
 			NOTE(debugf(TEXT(" Keep UV %i %i  "), UniqueNonSideWedges(i)->U,UniqueNonSideWedges(i)->V );)
@@ -780,7 +768,6 @@ void Collapse(TVertex *u, TVertex *v)
 
 			// We morphed to another wedge:
 			// Construct that wedge (but keep our originalindex.)
-			// UniqueNonSideWedges(i)->OriginalIndex = DestinationWedge->OriginalIndex; 
 			UniqueNonSideWedges(i)->U			= DestinationWedge->U; 
 			UniqueNonSideWedges(i)->V			= DestinationWedge->V; 
 			UniqueNonSideWedges(i)->VertexIndex = DestinationWedge->VertexIndex; 			
@@ -943,8 +930,6 @@ void UEditorEngine::meshVertLODProcess( UVertMesh* Mesh, TArray<FMeshTri>& RawTr
 				break;
 			}
 		}
-
-		//NOTE( debugf(TEXT("MATERIAL for triangle %i is %i, textureindex %i"),p,m,RawTris(p).TextureIndex);)
 
 		// Add new material.
 		if( Unique )
@@ -1140,7 +1125,6 @@ void UEditorEngine::meshVertLODProcess( UVertMesh* Mesh, TArray<FMeshTri>& RawTr
 	// to only their highest LOD-level wedge. WedgePermutation needed (has OriginalIndices)
 
 	// Build our final Wedge collapse list - !!!!!!!!! use .OriginalIndex....
-	// Mesh->CollapseWedgeThus.Add(TModel.GWedges.Num());  // The collapse list
 	NOTE( debugf(TEXT("Applying the permutation..") ));
 	
 	// Apply the sorted WedgePermutation.
@@ -1234,11 +1218,6 @@ void UEditorEngine::meshVertLODProcess( UVertMesh* Mesh, TArray<FMeshTri>& RawTr
 		NOTE(debugf(TEXT(" Finalwedge: # %4i Wedge UV %3i %3i   Vertex: %4i Origindex: %4i "),w,UniqueWedges(w).U,UniqueWedges(w).V,UniqueWedges(w).VertexIndex,UniqueWedges(w).OriginalIndex ));  
 	}
 
-	//for ( w=0; w<UniqueWedges.Num(); w++) 
-	//{
-	//	 NOTE(debugf(TEXT(" CollapseWedgeThus ( %4i ) = %4i , vertex: %i"), w, Mesh->CollapseWedgeThus(w),UniqueWedges(w).VertexIndex ););
-	//}
-
 	//
 	// Remap wedges inside the Mesh's Tri's.
 	//
@@ -1276,7 +1255,7 @@ void UEditorEngine::meshVertLODProcess( UVertMesh* Mesh, TArray<FMeshTri>& RawTr
 
 	NOTE(debugf(TEXT("## FrameVertNum %i   TrueFrameVertNum %i "),Mesh->FrameVerts, TrueFrameVertNum);)
 	
-	INT FullFrameVertNum = TrueFrameVertNum; // + SpecialCoordVerts.Num();
+	INT FullFrameVertNum = TrueFrameVertNum;
 
 	TArray<INT> FullRemap; 
 	FullRemap.Add(FullFrameVertNum);
@@ -1329,8 +1308,6 @@ void UEditorEngine::meshVertLODProcess( UVertMesh* Mesh, TArray<FMeshTri>& RawTr
 		RawTris(t).iVertex[1] = UnFullRemap( RawTris(t).iVertex[1] );
 		RawTris(t).iVertex[2] = UnFullRemap( RawTris(t).iVertex[2] );
 	}
-	// OldFrameVerts is needed in the texture LOD gauging.
-	// Mesh->OldFrameVerts = FullFrameVertNum;
 	
 	Mesh->FrameVerts = FullFrameVertNum;
 	Mesh->ModelVerts = TrueFrameVertNum;
@@ -1372,14 +1349,6 @@ void UEditorEngine::meshVertLODProcess( UVertMesh* Mesh, TArray<FMeshTri>& RawTr
 		// normalize 
 		NewNormals(i) *= 1.0f/ appSqrt(NewNormals(i).SizeSquared()+0.001f);
 
-		//
-		// 'un'-normalize: make it stretch to the edges of the -1..1 cube in order
-		//  to get more out of quantization.....
-		//
-		// FLOAT MaxComponent = Max( Max( Abs(NewNormals(i).X),Abs(NewNormals(i).Y)),Abs(NewNormals(i).Z));
-		// NewNormals(i) *= 1.0f/MaxComponent;
-		//
-
 		DWORD FNew = (DWORD) 
 		(
 			( (DWORD)(NewNormals(i).Z*511.0f + 512.0f) << 20) +
@@ -1416,7 +1385,7 @@ QSORT_RETURN CDECL CompareBoneWeight( const TWorkWeight* A, const TWorkWeight* B
 
 
 
-// #TODO: Sort with translucency drawn last !
+// Could sort with translucency drawn last.
 QSORT_RETURN CDECL CompareFaces( const VTriangle* A, const VTriangle* B )
 {
 	if     ( A->SmoothingGroups > B->SmoothingGroups ) return 1;		
@@ -1784,7 +1753,6 @@ void UEditorEngine::meshSkelLODProcess( USkeletalMesh* Mesh, FLODProcessInfo* LO
 		NewWedge.OriginalIndex = t;
 		NewWedge.MaterialID = RawData->Wedges(t).MatIndex;
 
-		//NLOG(debugf(TEXT("# Wedges setup:  Wedge %i  Vertex  %i  Via TModel: %i"),t, NewWedge.VertexIndex, TModel.GVerts(Mesh->Wedges(t).iVertex)->OriginalIndex  ));
 		TModel.GWedges.AddItem(NewWedge); 
 	}
 	
@@ -1871,7 +1839,6 @@ void UEditorEngine::meshSkelLODProcess( USkeletalMesh* Mesh, FLODProcessInfo* LO
 	// to only their highest LOD-level wedge. WedgePermutation needed (has OriginalIndices)
 
 	// Build our final Wedge collapse list - !!!!!!!!! use .OriginalIndex....
-	// Mesh->CollapseWedgeThus.Add(TModel.GWedges.Num());  // The collapse list
 	NLOG(debugf(TEXT("Applying the permutation..")) );
 
 	
@@ -2152,8 +2119,6 @@ void UEditorEngine::meshSkelLODProcess( USkeletalMesh* Mesh, FLODProcessInfo* LO
     for( INT b=0; b<RawData->RefBonesBinary.Num(); b++ )
 	{
 		FMeshBone& Bone = Mesh->RefSkeleton(b);
-		// Bone = Mesh->RefSkeleton(b);
-		// GWarn->Logf( NAME_Log, TEXT("1") );
 		
 		Bone.Flags = 0;
 		Bone.BonePos.Position =    RawData->RefBonesBinary(b).BonePos.Position;     // FVector - Origin of bone relative to parent, or root-origin.

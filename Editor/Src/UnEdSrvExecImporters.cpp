@@ -6,7 +6,6 @@
 #include "EditorPrivate.h"
 
 extern TCHAR TempStr[256], TempFname[256], TempName[256];
-//TCHAR TempStr[256], TempFname[256], TempName[256], Temp[256];
 
 #define NODECA 1
 

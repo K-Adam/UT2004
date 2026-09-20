@@ -429,7 +429,6 @@ public:
 	TArray<FVector>		ODStart;
 	TArray<FVector>		ODExtent;
 	TArray<DWORD>		ODFlags;
-	//AActor*				ODActor;
 
 	TArray<FBox>		ODPoint1;
 	TArray<FBox>		ODPoint2;
@@ -445,7 +444,6 @@ public:
 #endif
 
 		Octree = new(TEXT("Collision Octree")) FCollisionOctree;
-		//Octree = new(TEXT("Collision Octree")) FCollisionHash;
 
 		AddMillisec[0] = AddMillisec[1] = 0;
 		RemoveMillisec[0] =	RemoveMillisec[1] =	0;
@@ -485,7 +483,6 @@ public:
 		FMemMark Mark(GMem);
 		for(INT i=0; i<ODStart.Num(); i++)
 		{
-			//Octree->ActorLineCheck(GMem, ODEnd(i), ODStart(i), ODExtent(i), ODFlags(i), 0, ODActor);
 			GTempLineBatcher->AddLine(ODStart(i), ODEnd(i), FColor(0, 0, 255));
 			GTempLineBatcher->AddBox(FBox(ODStart(i)-ODExtent(i), ODStart(i)+ODExtent(i)), FColor(255,128,128));
 			GTempLineBatcher->AddBox(FBox(ODEnd(i)-ODExtent(i), ODEnd(i)+ODExtent(i)), FColor(128,128,255));
@@ -512,7 +509,6 @@ public:
 		guard(FCollisionTester::AddActor);
 
 		if(Actor->bStatic == 0)
-		//if(1)
 		{
 			DWORD Time = 0;
 			clock(Time);
@@ -540,7 +536,6 @@ public:
 		guard(FCollisionTester::RemoveActor);
 
 		if(Actor->bStatic == 0)
-		//if(1)
 		{
 			DWORD Time = 0;
 			clock(Time);
@@ -674,7 +669,6 @@ public:
 			ODEnd.AddItem(End);
 			ODFlags.AddItem(TraceFlags);
 			ODExtent.AddItem(Extent);
-			//ODActor = SourceActor->Owner;
 #endif
 		}
 #endif
@@ -816,16 +810,7 @@ ENGINE_API FCollisionHashBase* GNewCollisionHash()
 {
 	guard(GNewCollisionHash);
 
-	// Octree causes problems in Editor because of Undeo corrupting each Actors
-	// list of OctreeNodes. JTODO: Fix!
-	//if(GIsEditor)
-	//return new(TEXT("FCollisionHash"))FCollisionHash;
-	//else
-	//{
 		return new(TEXT("FCollisionOctree"))FCollisionOctree;
-		//return new(TEXT("FCollisionHash"))FCollisionHash;
-		//return new(TEXT("FCollisionTester"))FCollisionTester;
-	//}
 
 	unguard;
 }
@@ -927,7 +912,6 @@ void FCollisionHash::Tick()
 	guard(FCollisionHash::Tick);
 
 	// All we do here is stats.
-	//debugf(NAME_Log,"Used=%i Added=%i Frags=%i Checks=%i",GUsed,GActorsAdded,GFragsAdded,GChecks);
 	GActorsAdded = GFragsAdded = GChecks = 0;
 
 	unguard;
@@ -1274,7 +1258,7 @@ FCheckResult* FCollisionHash::ActorOverlapCheck( FMemStack& Mem, AActor* Actor, 
 // hits solid space.
 //
 //
-// * FIXME Get rid of ExtraNodeFlags
+// * Could get rid of ExtraNodeFlags
 
 FCheckResult* FCollisionHash::ActorLineCheck
 (
@@ -1425,8 +1409,6 @@ FCheckResult* FCollisionHash::ActorLineCheck
 								&& !SourceActor->IsOwnedBy(Link->Actor) 
 								&& Link->Actor->ShouldTrace(SourceActor,TraceFlags) )
 							{
-								//debugf(TEXT("LC: %s - %s"), Link->Actor->GetName(), SourceActor->GetName());
-
 #if TIME_HASH
 								DWORD Time = 0;
 								clock(Time);

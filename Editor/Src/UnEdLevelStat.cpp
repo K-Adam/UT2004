@@ -190,7 +190,6 @@ UBOOL FLevelStat::Analyze( ULevel* InLevel )
 
 		for( INT i=0; i < InLevel->Model->LightMaps.Num(); i++ )
 		{
-//			FLightMap* lightMap = &InLevel->Model->LightMaps(i);
 		}
 
 		AddBspGeom( InLevel->Model );
@@ -401,33 +400,11 @@ void FLevelStat::AddStaticMeshGeom( UStaticMesh* mesh )
 	FArchiveCountMem memCounter( mesh );
 	ByteTotals[BYTES_GEOM_STATICMESH] += memCounter.GetMax();
 
-#if 0
-	// -- byte counts of all streams and buffers
-	ByteTotals[BYTES_GEOM_STATICMESH] += mesh->VertexStream.GetSize();
-	ByteTotals[BYTES_GEOM_STATICMESH] += mesh->ColorStream.GetSize();
-	ByteTotals[BYTES_GEOM_STATICMESH] += mesh->AlphaStream.GetSize();
-	for( INT uv=0; uv < mesh->UVStreams.Num(); uv++ )
-	{
-		ByteTotals[BYTES_GEOM_STATICMESH] += mesh->UVStreams(uv).GetSize();
-	}
-	ByteTotals[BYTES_GEOM_STATICMESH] += mesh->IndexBuffer.GetSize();
-	ByteTotals[BYTES_GEOM_STATICMESH] += mesh->WireframeIndexBuffer.GetSize();
-	ByteTotals[BYTES_GEOM_STATICMESH] += mesh->Sections.Num() * sizeof(FStaticMeshSection);
-#endif
-
 	CountTotals[COUNT_STATICMESH_VERTS] += mesh->VertexStream.Vertices.Num();
 	for( INT s=0; s < mesh->Sections.Num(); s++ )
 	{
 		CountTotals[COUNT_STATICMESH_PRIMS] += mesh->Sections(s).NumPrimitives;
 	}	
-
-#if 0
-	// -- byte count for collision data -- NOTESZ: this is basically a copy of the static mesh tris/verts
-	ByteTotals[BYTES_GEOM_STATICMESH_COLLISION] += mesh->CollisionTriangles.Num() * sizeof(FStaticMeshCollisionTriangle);
-	ByteTotals[BYTES_GEOM_STATICMESH_COLLISION] += mesh->CollisionNodes.Num() * sizeof(FStaticMeshCollisionNode);
-	CountTotals[COUNT_STATICMESH_COLLISION_VERTS] += mesh->CollisionTriangles.Num() * 3;
-	CountTotals[COUNT_STATICMESH_COLLISION_PRIMS] += mesh->CollisionTriangles.Num();
-#endif
 
 	// -- UModel collision object
 	if( mesh->CollisionModel )
@@ -436,20 +413,6 @@ void FLevelStat::AddStaticMeshGeom( UStaticMesh* mesh )
 		CountTotals[COUNT_STATICMESH_COLLISION_VERTS] += mesh->CollisionModel->Verts.Num();
 		CountTotals[COUNT_STATICMESH_COLLISION_PRIMS] += mesh->CollisionModel->Surfs.Num();
 
-#if 0
-		// -- byte counts
-		DWORD totalSize=0;
-		totalSize += mesh->CollisionModel->Nodes.Num() * sizeof(FBspNode);
-		totalSize += mesh->CollisionModel->Verts.Num() * sizeof(FVert);
-		totalSize += mesh->CollisionModel->Vectors.Num() * sizeof(FVector);
-		totalSize += mesh->CollisionModel->Points.Num() * sizeof(FVector);
-		totalSize += mesh->CollisionModel->Surfs.Num() * sizeof(FBspSurf);
-		totalSize += mesh->CollisionModel->Bounds.Num() * sizeof(FBox);
-		totalSize += mesh->CollisionModel->LeafHulls.Num() * sizeof(INT);
-		totalSize += mesh->CollisionModel->Leaves.Num() * sizeof(FLeaf);
-		totalSize += mesh->CollisionModel->Sections.Num() * sizeof(FBspSection);
-		ByteTotals[BYTES_GEOM_STATICMESH_COLLISION] += totalSize;
-#endif
 		FArchiveCountMem Counter( mesh->CollisionModel );
 		ByteTotals[BYTES_GEOM_STATICMESH_COLLISION] += Counter.GetMax();
 	}
@@ -494,12 +457,6 @@ void FLevelStat::AddMeshGeom( ULodMesh* mesh )
 //------------------------------------------------------------------------------
 void FLevelStat::AddBspGeom( UModel* model )
 {
-	/*
-	{
-		FArchiveCountMem memCounter( model );
-		ByteTotals[BYTES_GEOM_BSP] += memCounter.GetNum();
-	}
-	*/
 
 	// -- byte counts
 	DWORD totalSize=0;
@@ -626,15 +583,6 @@ void FLevelStat::PrintGeomSummary( FOutputDevice& Ar )
 	Ar.Logf( TEXT("%8i %10i %10i %10.1f KB"), 
 		CountTotals[COUNT_MESH], CountTotals[COUNT_MESH_PRIMS], CountTotals[COUNT_MESH_VERTS], 
 		ByteTotals[BYTES_GEOM_MESH]/1024.f );
-
-/*
-	Ar.Logf( TEXT("") );
-	Ar.Logf( TEXT("[SKIN MESH COLLISION]") );
-	Ar.Logf( TEXT("%8s %10s %10s %12s"), TEXT("Count"), TEXT("Prims"), TEXT("Verts"), TEXT("Bytes") );
-	Ar.Logf( TEXT("%8i %10i %10i %10.1f KB"),
-		CountTotals[COUNT_MESH], CountTotals[COUNT_MESH_COLLISION_PRIMS], CountTotals[COUNT_MESH_COLLISION_VERTS],
-		ByteTotals[BYTES_GEOM_MESH_COLLISION]/1024.f );
-*/
 
 	Ar.Logf( TEXT("") );
 	Ar.Logf( TEXT("[BSP]") );

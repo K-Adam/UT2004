@@ -148,8 +148,6 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 
 	UGameEngine* GameEngine = Cast<UGameEngine>( Engine );	// Needed for errors
 
-	//debugf( NAME_DevNet, TEXT("PendingLevel received: %s"), Text );
-
 	// This client got a response from the server.
 	if( ParseCommand(&Text,TEXT("UPGRADE")) )
 	{
@@ -292,7 +290,6 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 	else if( ParseCommand( &Text, TEXT("WELCOME") ) )
 	{
 		// Server accepted connection.
-//		debugf( NAME_DevNet, TEXT("Welcomed by server: %s"), Text );
 
 		// Parse welcome message.
 		Parse( Text, TEXT("LEVEL="), URL.Map );

@@ -78,7 +78,6 @@ void UBrushBuilder::execEndBrush( FFrame& Stack, RESULT_DECL )
 		GEditor->Trans->End();
 		GEditor->RedrawLevel( GEditor->Level );
 		GEditor->SetPivot( GEditor->Level->Brush()->Location, 0, 0, 1 );
-		//GEditor->NoteSelectionChange( GEditor->Level );
 	}
 	*(BITFIELD*)Result=1;
 	unguard;

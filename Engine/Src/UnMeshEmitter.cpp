@@ -61,7 +61,6 @@ INT UMeshEmitter::UpdateParticles( FLOAT DeltaTime )
 }
 
 // Render particles.
-//!! TODO: retrive lights for bounding box!
 INT UMeshEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* SceneNode,TList<FDynamicLight*>* Lights,FRenderInterface* RI)
 {
 	guard(UMeshEmitter::RenderParticles);

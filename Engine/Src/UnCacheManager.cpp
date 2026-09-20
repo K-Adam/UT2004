@@ -12,12 +12,8 @@ Revision history:
 #undef RECORDLOG
 #undef DEBUGRECORDLOG
 
-#if 1
 #undef PROFILELOG
 #define PROFILELOG(typ,sec)				debugf(NAME_Timer, TEXT("Cache hit for type '%s' took %i ms."), TEXT(#typ), (INT)((appSeconds() - sec) * 1000))
-#else
-#define PROFILELOG(typ,sec)
-#endif
 
 #define EPIC_CACHE TEXT("CacheRecords.ucl")
 #define CHECKCLASS(var,cls) var && var->IsChildOf(cls::StaticClass()) && var != cls::StaticClass() && !((var->ClassFlags & CLASS_Abstract)||(var->ClassFlags&CLASS_NoCacheExport))
@@ -754,7 +750,6 @@ UBOOL UCacheManager::RefreshCache()
 	if ( Tracker == NULL || FileManager == NULL )
 		return 0;
 
-	// TODO
 	// Ideally, I'd like to avoid reparsing the .ucl files if no packages have been added or removed
 	// The existing code below resets the entire caching system
 
@@ -1585,15 +1580,6 @@ void UCacheManager::ExportCacheMaps( const FString& NewMap, const TCHAR* DestFil
 					break;
 				}
 			}
-/*
-			else
-			{
-				delete Loader;
-				GWarn->Logf(NAME_Warning, TEXT("Error loading %s !"), *NewMap);
-				return;
-			}
-			delete Loader;
-*/
 		}				
 	}
 	ULevelSummary* MapInfo = Cast<ULevelSummary>(StaticLoadObject( ULevelSummary::StaticClass(), NULL, *(File + TEXT(".LevelSummary")), NULL, LOAD_NoWarn, NULL ));
@@ -1762,8 +1748,6 @@ void UCacheManager::ExportCachePackages( const FString& NewPackageFile, const TC
 		Output = TEXT("");
 		if ( It->IsIn( NewPackage ) )
 		{
-//			if ( It->ClassFlags&CLASS_Cacheable )
-			//{
 				if ( CreatePackageEntry( *It, Output ) )
 				{
 					TArray<FString> OutputArray;
@@ -1779,7 +1763,6 @@ void UCacheManager::ExportCachePackages( const FString& NewPackageFile, const TC
 						FileManager->AddCacheEntry( DestFile, NULL, *Output );
 						new(Result) FString(Output);
 					}
-				//}
 			}
 		}
 	}
@@ -2193,7 +2176,7 @@ UBOOL FCacheTracker::IsValidMap( const TCHAR* Test) const
 	// 2. Extension is UT2
 	// 3. Not demo version
 
-	return appStrstr(Test, TEXT("-")) != NULL && /*appStrnicmp(Test, TEXT("TUT"), 3) &&*/ appStrnicmp(Test, TEXT("UT2"), 3);
+	return appStrstr(Test, TEXT("-")) != NULL && appStrnicmp(Test, TEXT("UT2"), 3);
 
 	unguard;
 }

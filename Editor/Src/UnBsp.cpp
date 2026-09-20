@@ -399,7 +399,6 @@ FPoly *FindBestSplit
 	//PortalBias -- added by Legend on 4/12/2000
 	float	PortalBias = InPortalBias / 100.0f;
 	Balance &= 0xFF;								// keep only the low byte to recover "Balance"
-	//GLog->Logf( TEXT("Balance=%d PortalBias=%f"), Balance, PortalBias );
 
 	if		(Opt==BSP_Optimal)  Inc = 1;					// Test lots of nodes.
 	else if (Opt==BSP_Good)		Inc = Max(1,NumPolys/20);	// Test 20 nodes.
@@ -480,7 +479,6 @@ FPoly *FindBestSplit
 			//
 			Score -= ( 100.0 - float(Balance) ) * Splits * PortalBias; // ignore PortalBias of the split polys -- bias toward portal selection for cutting planes!
 		}
-		//debugf( "  %4d: Score = %f (Front = %4d, Back = %4d, Splits = %4d, Flags = %08X)", Index, Score, Front, Back, Splits, Poly->PolyFlags ); //LEC
 
 		if( Score<BestScore || !Best )
 		{
@@ -2401,8 +2399,6 @@ int DistributePoint
 				else
 				{
 					GErrors++;
-					//debugf( NAME_Warning, "Found tiny side" );
-					//Poly.PolyFlags |= PF_Selected;
 				}
 			}
 			if( i==Model->Nodes(iNode).NumVertices && FoundSide>=0 )
@@ -2419,15 +2415,11 @@ int DistributePoint
 				// with one of this polygon's sides, but slightly outside of this polygon.
 
 				GErrors++;
-				//debugf( NAME_Warning, "Skipped colinear" );
-				//Poly.PolyFlags |= PF_Selected;
 			}
 			else if( SkippedInside )
 			{
 				// Point is on interior of polygon.
 				GErrors++;
-				//debugf( NAME_Warning, "Skipped interior" );
-				//Poly.PolyFlags |= PF_Selected;
 			}
 		}
 	}
@@ -2615,9 +2607,7 @@ void UEditorEngine::bspOptGeom( UModel *Model )
 				}
 
 				// This node doesn't have correct side linking
-				//Model->Surfs(Node.iSurf).PolyFlags |= PF_Selected;
 				GErrors++;
-				//debugf( NAME_Warning, "Failed to link side" );
 			}
 
 			// Go to next side.

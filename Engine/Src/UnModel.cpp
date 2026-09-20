@@ -473,30 +473,6 @@ void UModel::ShrinkModel()
 //
 //	BoxLeavesRecurse
 //
-#if 0
-void BoxLeavesRecurse(UModel* Model,INT iNode,FVector Origin,FVector Extent,TArray<INT>& OutLeaves)
-{
-	FBspNode&	Node = Model->Nodes(iNode);
-	FLOAT		PushOut = FBoxPushOut(Node.Plane,Extent);
-	FLOAT		Distance = Node.Plane.PlaneDot(Origin);
-
-	if(Distance < PushOut)
-	{
-		if(Node.iBack != INDEX_NONE)
-			BoxLeavesRecurse(Model,Node.iBack,Origin,Extent,OutLeaves);
-		else if(Node.iLeaf[0] != INDEX_NONE)
-			OutLeaves.AddItem(Node.iLeaf[0]);
-	}
-
-	if(Distance > -PushOut)
-	{
-		if(Node.iFront != INDEX_NONE)
-			BoxLeavesRecurse(Model,Node.iFront,Origin,Extent,OutLeaves);
-		else if(Node.iLeaf[1] != INDEX_NONE)
-			OutLeaves.AddItem(Node.iLeaf[1]);
-	}
-}
-#else
 
 #define NODE_BUFFER 1
 #if NODE_BUFFER // sjs - shows around ~5% increase in benchmark!
@@ -517,7 +493,6 @@ void BoxLeavesRecurse(UModel* Model,INT iNode,FVector Origin,FVector Extent,TArr
 
 	iNodes[0] = iNode;
 
-#if 1
     float min = Min( Min( Extent.X, Extent.Y ), Extent.Z );
     float max = Max( Max( Extent.X, Extent.Y ), Extent.Z );
 
@@ -573,32 +548,6 @@ void BoxLeavesRecurse(UModel* Model,INT iNode,FVector Origin,FVector Extent,TArr
 		    }
 	    }
     }
-#else
-    while( Index >= 0 )
-	{
-		iNode = iNodes[Index--];
-
-		FBspNode& Node			= Model->Nodes(iNode);
-		register FLOAT PushOut	= FBoxPushOut(Node.Plane,Extent);
-		register FLOAT Distance	= Node.Plane.PlaneDot(Origin);
-
-		if(Distance < PushOut)
-		{
-			if(Node.iBack != INDEX_NONE)
-				iNodes[++Index] = Node.iBack;
-			else if(Node.iLeaf[0] != INDEX_NONE)
-				OutLeaves.AddItem(Node.iLeaf[0]);
-		}
-
-		if(-Distance < PushOut)
-		{
-			if(Node.iFront != INDEX_NONE)
-				iNodes[++Index] = Node.iFront;
-			else if(Node.iLeaf[1] != INDEX_NONE)
-				OutLeaves.AddItem(Node.iLeaf[1]);
-		}
-	}
-#endif
 
 
 #if NODE_BUFFER
@@ -606,7 +555,6 @@ void BoxLeavesRecurse(UModel* Model,INT iNode,FVector Origin,FVector Extent,TArr
 	delete [] iNodes;
 #endif
 }
-#endif
 //
 //	UModel::BoxLeaves
 //	Determine the leaves touched by a bounding box.

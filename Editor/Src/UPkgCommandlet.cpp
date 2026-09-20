@@ -169,8 +169,6 @@ class UPkgCommandlet : public UCommandlet
 						Files  = GFileManager->FindFiles( *(SrcDir + TEXT("\\") + Dirs(dir) + TEXT("\\") + TEXT("*.pcx")  ), 1, 0 );		
 						Files += GFileManager->FindFiles( *(SrcDir + TEXT("\\") + Dirs(dir) + TEXT("\\") + TEXT("*.tga")  ), 1, 0 );		
 						Files += GFileManager->FindFiles( *(SrcDir + TEXT("\\") + Dirs(dir) + TEXT("\\") + TEXT("*.upt")  ), 1, 0 );							
-						//Files += GFileManager->FindFiles( *(SrcDir + TEXT("\\") + Dirs(dir) + TEXT("\\") + TEXT("*.bmp")  ), 1, 0 );							
-						//Files += GFileManager->FindFiles( *(SrcDir + TEXT("\\") + Dirs(dir) + TEXT("\\") + TEXT("*.dds")  ), 1, 0 );								
 					}
 					else // Insert mode: only use the SrcDir as the desired complete path -  a path+(wildcarded)filename.
 					{

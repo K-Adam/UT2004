@@ -68,7 +68,6 @@ public:
                 Buffer = NULL;
             else
                 close(File);  // don't need file handle anymore.
-            //printf("mmap()ing %d bytes was a %s\n", (int) Size, Buffer != NULL ? "SUCCESS" : "FAILURE");
             File = -1;  // don't try to close handle either way.
         }
 
@@ -110,7 +109,6 @@ public:
         {
             munmap(Buffer, MmapSize);
             Buffer = NULL;
-            //printf("munmap()ed %d bytes\n", (int) Size);
         }
 		if( File >= 0 )
         {
@@ -359,7 +357,7 @@ public:
     }
 
 
-    // Hack for Ogg file stream...  --ryan.
+    // Used by the Ogg file stream.
     FILE *fopenReadRespectHomeDir(const TCHAR *FakeFilename)
     {
         char ansipath[PATH_MAX];
@@ -513,8 +511,6 @@ public:
 				appErrorf( TEXT("Failed to write: %s"), &Filename );
 			return NULL;
 		}
-		//if( Flags & FILEWRITE_Unbuffered )
-		//	setvbuf( File, 0, _IONBF, 0 );
 		return new(TEXT("UnixFileWriter"))FArchiveFileWriter(File,Error);
 
 		unguard;
@@ -703,7 +699,6 @@ public:
     	TCHAR* tmp = appStaticString1024();
     	appStrcpy( tmp, appFromAnsi(Home) );
 
-	// !!! FIXME: abstract game.
 		appStrcat( tmp, TEXT("/.ut2004") );
 
         mkdir(appToAnsi(tmp), S_IRWXU);
@@ -713,7 +708,6 @@ public:
         // If STILL not accessible don't use it.
         if ( access( appToAnsi(tmp), F_OK ) == -1 )
         {
-            //debugf(TEXT("can't find homedir at [%s]."), homedir);
         }
         else
         {

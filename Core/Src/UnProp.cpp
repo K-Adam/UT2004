@@ -389,7 +389,6 @@ const TCHAR* UByteProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Por
 	}
 	else
 	{
-		//debugf( "Import: Missing byte" );
 		return NULL;
 	}
 	return Buffer;
@@ -509,8 +508,8 @@ void UPointerProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UPointerProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(PTRINT);
-    // FIXME: These must be aligned to four in current scheme. I think.  --ryan.
-	Offset      = Align( GetOuterUField()->GetPropertiesSize(), 4);  //sizeof(PTRINT) );
+    // Native classes are built under #pragma pack(4), so script offsets must match that layout.
+	Offset      = Align( GetOuterUField()->GetPropertiesSize(), 4);
 
     PropertyFlags |= CPF_Transient;
 
@@ -620,9 +619,6 @@ void UDelegateProperty::CopyCompleteValue( void* Dest, void* Src, UObject* Super
 */
 	if( SuperObject && appStricmp(SuperObject->GetName(), TEXT("None")) != 0 )
 	{
-	// Uncomment to debug
-	//	if (((FScriptDelegate*)Src)->FunctionName != NAME_None)
-	//		debugf(TEXT("breakpoint here"));
 		// Haven't seen arrays of delegates yet, so ArrayDim should always be 1.
 		if( ArrayDim==1)
 		{
@@ -632,10 +628,6 @@ void UDelegateProperty::CopyCompleteValue( void* Dest, void* Src, UObject* Super
 				be none.
 			*/
 			UClass* Cls = Cast<UClass>(((FScriptDelegate*)Src)->Object);
-
-			// Uncomment to debug
-			//if (Cls && appStricmp(Cls->GetName(),TEXT("InstantActionRulesPanel")) == 0) // Substitute the .uc class name where the assignment happens
-			//	debugf(TEXT("breakpoint here too"));
 
 			// Assign the function name.  This will be valid for inherited classes.
 			((FScriptDelegate*)Dest)->FunctionName = ((FScriptDelegate*)Src)->FunctionName;
@@ -951,7 +943,6 @@ const TCHAR* UBoolProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Por
 	}
 	else
 	{
-		//debugf( "Import: Failed to get bool" );
 		return NULL;
 	}
 	return Buffer;
@@ -1117,8 +1108,8 @@ void UObjectProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UObjectProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(UObject*);
-    // FIXME: These must be aligned to four in current scheme. I think.  --ryan.
-	Offset      = Align( GetOuterUField()->GetPropertiesSize(), 4); //sizeof(UObject*) );
+    // Native classes are built under #pragma pack(4), so script offsets must match that layout.
+	Offset      = Align( GetOuterUField()->GetPropertiesSize(), 4);
 	if( ((PropertyFlags & CPF_EditInline) && (PropertyFlags & CPF_ExportObject)) || (PropertyFlags & CPF_Automated) )
 		PropertyFlags |= CPF_NeedCtorLink;
 	unguardobj;
@@ -1202,11 +1193,8 @@ void UObjectProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE
 	UObject* Temp = *(UObject **)PropertyValue;
 	if( Temp != NULL )
 	{
-		// Casting necessary only if target object class & object property class don't match -- rjp
-		// moelfke: commented out because not having a cast causes ImportText() to not load the object if it isn't already in memory
-		//if ( PropertyClass != Temp->GetClass() )
+		// Always includes the class, because ImportText() won't load an object that isn't in memory without it.
 			appSprintf( ValueStr, TEXT("%s'%s'"), Temp->GetClass()->GetName(), Temp->GetPathName() );
-		//else appSprintf( ValueStr, TEXT("%s"), Temp->GetPathName() );
 	}
 	else
 		appStrcpy( ValueStr, TEXT("None") );
@@ -1406,12 +1394,10 @@ const TCHAR* UNameProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Por
 	TCHAR Temp[1024];
 
 #if ((defined __x86_64__) && (defined __GNUC__))
-    // !!! FIXME: I think this is a code generation bug on gcc for x86-64
-    // !!! FIXME:  Linux, but it piddles over memory in ReadToken unless I
-    // !!! FIXME:  move to a temporary buffer first. Odd.  --ryan.
+    // Works around gcc on x86-64 Linux corrupting memory in ReadToken unless the input is copied first.
     TCHAR x[1024];
     appStrcpy(x, Buffer);
-	Buffer = ReadToken( x/*Buffer*/, Temp, ARRAY_COUNT(Temp) );
+	Buffer = ReadToken( x, Temp, ARRAY_COUNT(Temp) );
 #else
 	Buffer = ReadToken( Buffer, Temp, ARRAY_COUNT(Temp) );
 #endif
@@ -1498,7 +1484,6 @@ const TCHAR* UStrProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Port
 		TCHAR Temp[4096];//!!
 		// MC: Use of ParseToken instead of ReadToken
 		ParseToken( Buffer, Temp, ARRAY_COUNT(Temp), 1 );
-//			return NULL;
 		*(FString*)Data = Temp;
 	}
 	return Buffer;
@@ -1999,26 +1984,6 @@ UBOOL UMapProperty::Identical( const void* A, const void* B ) const
 	guardSlow(UMapProperty::Identical);
 	checkSlow(Key);
 	checkSlow(Value);
-	/*
-	INT n = ((FArray*)A)->Num();
-	if( n!=(B ? ((FArray*)B)->Num() : 0) )
-		return 0;
-	INT   c = Inner->ElementSize;
-	BYTE* p = (BYTE*)((FArray*)A)->GetData();
-	if( B )
-	{
-		BYTE* q = (BYTE*)((FArray*)B)->GetData();
-		for( INT i=0; i<n; i++ )
-			if( !Inner->Identical( p+i*c, q+i*c ) )
-				return 0;
-	}
-	else
-	{
-		for( INT i=0; i<n; i++ )
-			if( !Inner->Identical( p+i*c, 0 ) )
-				return 0;
-	}
-	*/
 	return 1;
 	unguardobjSlow;
 }
@@ -2027,25 +1992,6 @@ void UMapProperty::SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) 
 	guardSlow(UMapProperty::SerializeItem);
 	checkSlow(Key);
 	checkSlow(Value);
-	/*
-	INT   c = Inner->ElementSize;
-	INT   n = ((FArray*)Value)->Num();
-	Ar << AR_INDEX(n);
-	if( Ar.IsLoading() )
-	{
-		// Every element takes at least a byte in the data.
-		if( n<0 || n>Ar.RemainingBytes() )
-		{
-			Ar.SetError();
-			n = 0;
-		}
-		((FArray*)Value)->Empty( c );
-		((FArray*)Value)->Add( n, c );
-	}
-	BYTE* p = (BYTE*)((FArray*)Value)->GetData();
-	for( INT i=0; i<n; i++ )
-		Inner->SerializeItem( Ar, p+i*c );
-	*/
 	unguardobjSlow;
 }
 UBOOL UMapProperty::NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const
@@ -2080,21 +2026,6 @@ void UMapProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* D
 	guard(UMapProperty::ExportTextItem);
 	checkSlow(Key);
 	checkSlow(Value);
-	/*
-	*ValueStr++ = '(';
-	FArray* Array       = (FArray*)PropertyValue;
-	FArray* Default     = (FArray*)DefaultValue;
-	INT     ElementSize = Inner->ElementSize;
-	for( INT i=0; i<Array->Num(); i++ )
-	{
-		if( i>0 )
-			*ValueStr++ = ',';
-		Inner->ExportTextItem( ValueStr, (BYTE*)Array->GetData() + i*ElementSize, Default ? (BYTE*)Default->GetData() + i*ElementSize : 0, PortFlags|PPF_Delimited );
-		ValueStr += appStrlen(ValueStr);
-	}
-	*ValueStr++ = ')';
-	*ValueStr++ = 0;
-	*/
 	unguardobj;
 }
 const TCHAR* UMapProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -2102,53 +2033,12 @@ const TCHAR* UMapProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Port
 	guard(UMapProperty::ImportText);
 	checkSlow(Key);
 	checkSlow(Value);
-	/*
-	if( *Buffer++ != '(' )
-		return NULL;
-	FArray* Array       = (FArray*)Data;
-	INT     ElementSize = Inner->ElementSize;
-	Array->Empty( ElementSize );
-	while( *Buffer != ')' )
-	{
-		INT Index = Array->Add( 1, ElementSize );
-		appMemzero( (BYTE*)Array->GetData() + Index*ElementSize, ElementSize );
-		Buffer = Inner->ImportText( Buffer, (BYTE*)Array->GetData() + Index*ElementSize, PortFlags|PPF_Delimited );
-		if( !Buffer )
-			return NULL;
-		if( *Buffer!=',' )
-			break;
-		Buffer++;
-	}
-	if( *Buffer++ != ')' )
-		return NULL;
-	*/
 	return Buffer;
 	unguardobj;
 }
 void UMapProperty::CopySingleValue( void* Dest, void* Src, UObject* SuperObject, UBOOL InstanceSubobjects ) const
 {
 	guardSlow(UMapProperty::CopySingleValue);
-	/*
-	TMap<BYTE,BYTE>* SrcMap    = (TMap<BYTE,BYTE>*)Src;
-	TMap<BYTE,BYTE>* DestMap   = (TMap<BYTE,BYTE>*)Dest;
-	INT              KeySize   = Key->ElementSize;
-	INT              ValueSize = Value->ElementSize;
-	DestMap->Empty( Size, SrcArray->Num() );//must destruct it if really copying
-	if( Inner->PropertyFlags & CPF_NeedsCtorLink )
-	{
-		// Copy all the elements.
-		DestArray->AddZeroed( Size, SrcArray->Num() );
-		BYTE* SrcData  = (BYTE*)SrcArray->GetData();
-		BYTE* DestData = (BYTE*)DestArray->GetData();
-		for( INT i=0; i<DestArray->Num(); i++ )
-			Inner->CopyCompleteValue( DestData+i*Size, SrcData+i*Size );
-	}
-	else
-	{
-		// Copy all the elements.
-		DestArray->Add( SrcArray->Num(), Size );
-		appMemcpy( DestArray->GetData(), SrcArray->GetData(), SrcArray->Num()*Size );
-	}*/
 	unguardobjSlow;
 }
 void UMapProperty::DestroyValue( void* Dest ) const
@@ -2162,18 +2052,6 @@ void UMapProperty::DestroyValue( void* Dest ) const
         return;
     }
     // --- gam
-
-	/*
-	FArray* DestArray = (FArray*)Dest;
-	if( Inner->PropertyFlags & CPF_NeedsCtorLink )
-	{
-		BYTE* DestData = (BYTE*)DestArray->GetData();
-		INT   Size     = Inner->ElementSize;
-		for( INT i=0; i<DestArray->Num(); i++ )
-			Inner->DestroyValue( DestData+i*Size );
-	}
-	DestArray->~FArray();
-	*/
 	unguardobjSlow;
 }
 UBOOL UMapProperty::HasValue( const BYTE* Data ) const

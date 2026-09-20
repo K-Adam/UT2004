@@ -742,9 +742,7 @@ void UGUITabButton::Draw(UCanvas* Canvas)
 		MenuState = MSAT_Focused;
 
 	Super::Draw(Canvas);
-// JOE - This is handled in GUIComponet::Draw Now
-//	if (DELEGATE_IS_SET(OnRender))
-//		delegateOnRender(Canvas);
+	// OnRender is called by GUIComponent::Draw.
 
 	MenuState = CurrentState;
 
@@ -895,12 +893,11 @@ void UGUILabel::Draw(UCanvas* Canvas)
 	FLOAT XL, YL;
 	FLOAT Left = 0.f, Top = 0.f, Width = 0.f, Bottom = 0.f;
 
-		// TODO: Use Bounds or ClientBounds ???
 		Left = ClientBounds[0];
 		Width = ClientBounds[2] - ClientBounds[0];
 		Bottom = ClientBounds[3];
 			
-		// TODO: Make Split Char configurable in GUILabel
+		// The split char could be made configurable in GUILabel.
 		// First get the Height of the font
 		Canvas->ClippedStrLen(NULL, 1.0, 1.0, XL, YL, TEXT("W"));
 		Canvas->WrapStringToArray(*Caption, &Lines, Width, NULL, '|');
@@ -1135,26 +1132,6 @@ void UGUITitleBar::PreDraw(UCanvas* Canvas)
 
 // =======================================================================================================================================================
 // =======================================================================================================================================================
-// UGUIFooter
-// =======================================================================================================================================================
-// =======================================================================================================================================================
-#if 0
-void UGUIFooter::Draw(UCanvas* Canvas)
-{
-	guard(UGUIFooter::Draw);
-
-	if ( INVALIDRENDER )
-		return;
-
-	UGUIComponent::Draw(Canvas);
-	Style->Draw(Canvas, 0, ActualLeft(), ActualTop(), ActualWidth(), ActualHeight() );
-	DrawControls(Canvas);
-
-	unguard;
-}
-#endif
-// =======================================================================================================================================================
-// =======================================================================================================================================================
 // UGUIMenuOption
 // =======================================================================================================================================================
 // =======================================================================================================================================================
@@ -1350,9 +1327,7 @@ void UGUIButton::Draw(UCanvas* Canvas)
 
 	Super::Draw(Canvas);
 
-//	Joe - This is handled in the MultiComp that owns this button
-//	if (delegateOnDraw(Canvas))
-//		return;
+	// OnDraw is handled by the MultiComp that owns this button.
 
 	// Draw the button using it's style object
 	if ( Style )
@@ -2146,11 +2121,6 @@ void UGUISlider::Draw(UCanvas* Canvas)
 		return;
 
 	Super::Draw(Canvas);
-/*
-	if ( FillImage && !bShowMarker )
-		MarkerWidth = Canvas->SizeX * (8.f / 640.f);
-	else MarkerWidth = Canvas->SizeX * (16.0f/640.0f);
-*/
 	FLOAT AL = ActualLeft();
 	FLOAT AH = ActualHeight();
 	FLOAT AW = ActualWidth();
@@ -2369,7 +2339,6 @@ void UGUISectionBackground::Draw(UCanvas* Canvas)
 
 	// This is a big hack.. look away.
 
-//	Canvas->Color = FColor(255,255,255,155);
 	Canvas->Color = FColor(255,255,255,255);
 	Canvas->DrawTileStretched( HeaderBase,ActualLeft(),ActualTop(),ActualWidth(),ActualHeight() );
 
@@ -2401,7 +2370,6 @@ void UGUISectionBackground::Draw(UCanvas* Canvas)
 		FLOAT T = ActualTop()+4;
 		FLOAT H = 22;
 
-//		FLOAT L = Max<FLOAT>(MinX, X1 - 6);
 		if ( X1 - 6 > MinX )
             Canvas->DrawTileStretched(HeaderTop, X1 - 7, T, W + 11, H);
 		else Canvas->DrawTileStretched( HeaderTop, Max<FLOAT>(X1 - 4, MinX), T, Min<FLOAT>(W + 8, X2 - X1), H );
@@ -2417,38 +2385,6 @@ void UGUISectionBackground::Draw(UCanvas* Canvas)
 			Canvas->DrawTileStretched(HeaderBar,X1,T,(X2-X1),H);
 		}
 	}
-	
-
-/*
-
-
-
-
-	FLOAT XL,YL,X(ActualLeft()),Y(ActualTop());
-	CaptionStyle->TextSize(Canvas,MSAT_Blurry,*Caption, XL, YL, 1.0);
-	Canvas->Color = FColor(255,255,255,255);
-	Canvas->DrawTileStretched(HeaderTop,X,Y,ActualWidth(),TopSize);
-	Y+=TopSize;
-
-	if (BarSize>0)
-	{
-		Canvas->DrawTileStretched(HeaderBar,X,Y,ActualWidth(),BarSize);
-		Y+=BarSize;
-	}
-
-	FLOAT BaseSize = ActualHeight()- TopSize - BarSize;
-
-	Canvas->DrawTileStretched(HeaderBase,X,Y,ActualWidth(),BaseSize);
-
-	X = ActualLeft()+ActualWidth() - 8 - XL;
-	Y = ActualTop()+ 3 ;
-	CaptionStyle->DrawText(Canvas,MSAT_Blurry,X,Y,XL,YL,TXTA_Left,*Caption,1.0);
-
-	X = ActualLeft()+15;
-	Y = ActualTop() + ( YL / 2)+2;
-	XL = ActualWidth() - XL - 28;
-	Canvas->DrawTile(Controller->DefaultPens[0],X,Y,XL,2,0,0,16,16,0,CaptionStyle->FontColors[0],FPlane(0,0,0,0));
-*/
 	unguard;
 }
 
@@ -2630,7 +2566,7 @@ void UGUIImage::Draw(UCanvas* Canvas)
 					break;
 				}
 
-				// TODO Support for PartialScaled for sub-images
+				// PartialScaled is not supported for sub-images.
 				Canvas->DrawTile(Image, AL, AT, AW, AH, X, Y, XL, YL, 0, Canvas->Color, FPlane(0,0,0,0));
 				break;
 			}
@@ -2819,7 +2755,7 @@ void UGUIProgressBar::Draw(UCanvas* Canvas)
 		if (W > Width)
 			W = Width;
 
-		// TODO implemente NumDecimals
+		// NumDecimals is ignored.
 		if (bShowValue && bShowHigh)
 			str = FString::Printf(TEXT("%.0f/%.0f"), Value, High);
 		else if (bShowValue)

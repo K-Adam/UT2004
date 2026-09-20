@@ -233,7 +233,7 @@ FStaticMeshBatchVertexStream::FStaticMeshBatchVertexStream(UMaterial* Material)
 
 	// Calculate the stride.
 
-	Normal = 1;//Material->RequiresNormal();
+	Normal = 1;
 	Stride = (Normal ? sizeof(FStaticMeshBatchNormalVertex) : sizeof(FStaticMeshBatchVertex)) + sizeof(FLOAT) * 2 * NumUVs;
 }
 

@@ -251,21 +251,6 @@ template <class T> static void CheckForConflictingNames(TCHAR *WildcardFilter, T
         GWarn->Logf (NAME_Log, TEXT("No objects found (%d packages checked)."), Files.Num());
         return;
     }
-/*
-    GWarn->Logf (NAME_Log, TEXT("Checking for conflicting names..."));
-
-    if( Objects.Num() )
-        Sort( &Objects(0), Objects.Num() );
-
-    for( i = 0; i < Objects.Num() - 1; i++)
-    {
-        if (Objects(i).Name == Objects(i+1).Name)
-        {
-            GWarn->Logf (NAME_Warning, TEXT("Found %s in both %s and %s"), *Objects(i).Name, *Objects(i).Package, *Objects(i+1).Package);
-            i++;
-        }
-    }
-*/
     GWarn->Logf (NAME_Log, TEXT("%d objects checked (spanning %d packages)."), Objects.Num(), Files.Num());
 }
 
@@ -900,62 +885,6 @@ bool CheckGameType( const TCHAR* MapName, const TCHAR* DefaultGameType )
 
     return( appStricmp( DefaultGameType, TEXT("Engine.GameInfo") ) == 0 );
 
-/*	TArray<FRegistryObjectInfo> List;
-	UObject::GetRegistryObjects( List, UClass::StaticClass(), AGameInfo::StaticClass(), 0 );
-
-    bool MatchedAPrefix = false;
-
-    for( INT i = 0; i < List.Num(); i++ )
-    {
-	    UClass* GameClass = Cast<UClass>( UObject::StaticLoadObject( UClass::StaticClass(), NULL, *List(i).Object, NULL, 0, NULL ) );
-
-        if( !GameClass )
-            continue;
-
-    	AGameInfo* GameInfo = CastChecked<AGameInfo>( GameClass->GetDefaultActor() );
-
-        INT PrefixLength = appStrlen( *GameInfo->MapPrefix );
-
-        if( ( appStrnicmp( MapName, *GameInfo->MapPrefix, PrefixLength ) == 0 ) && ( MapName[PrefixLength] == '-' ) )
-        {
-            MatchedAPrefix = true;
-            break;
-        }
-    }
-
-    for( INT i = 0; i < List.Num(); i++ )
-    {
-	    UClass* GameClass = Cast<UClass>( UObject::StaticLoadObject( UClass::StaticClass(), NULL, *List(i).Object, NULL, 0, NULL ) );
-
-        if( !GameClass )
-            continue;
-
-    	AGameInfo* GameInfo = CastChecked<AGameInfo>( GameClass->GetDefaultActor() );
-
-        if( MatchedAPrefix )
-        {
-            if( appStricmp( DefaultGameType, GameClass->GetPathName() ) == 0 )
-            {
-                INT PrefixLength = appStrlen( *GameInfo->MapPrefix );
-
-                if( ( appStrnicmp( MapName, *GameInfo->MapPrefix, PrefixLength ) == 0 ) && ( MapName[PrefixLength] == '-' ) )
-                    return( true );
-                else
-                    return( false );
-            }
-        }
-        else
-        {
-            if( appStricmp( DefaultGameType, GameClass->GetPathName() ) == 0 )
-                return( true );
-        }
-    }
-
-    if( MatchedAPrefix )
-        return( false );
-
-    return( appStricmp( DefaultGameType, TEXT("Engine.GameInfo") ) == 0 );
-*/
 }
 
 void CheckGameType( UObject* Package )

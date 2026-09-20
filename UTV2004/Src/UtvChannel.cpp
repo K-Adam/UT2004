@@ -39,7 +39,6 @@ void UtvChannel::SetClosingFlag()
 void UtvChannel::Close()
 {
 	guard(UtvChannel::Close);
-	//UtvEngine->ChannelClosed(this);
 	printf("Closing channel %i\n",ChIndex);
 	UChannel::Close();
 	unguard;
@@ -70,23 +69,9 @@ void UtvChannel::Destroy()
 //
 void UtvChannel::ReceivedNak( INT NakPacketId )
 {
-/*	guard(UtvChannel::ReceivedNak);
-	for( FOutBunch* Out=OutRec; Out; Out=Out->Next )
-	{
-		// Retransmit reliable bunches in the lost packet.
-		if( Out->PacketId==NakPacketId && !Out->ReceivedAck )
-		{
-			check(Out->bReliable);
-			debugfSlow( NAME_DevNetTraffic, TEXT("      Channel %i nak; resending %i..."), Out->ChIndex, Out->ChSequence );
-			printf("Nak resend %i %i %i\n",ChIndex,Out->bOpen,Out->bClose);
-			Connection->SendRawBunch( *Out, 0 );
-		}
-	}
-	unguard;
-/*/
 	guard(UtvChannel::ReceivedNak);
 	UChannel::ReceivedNak(NakPacketId);
-	unguard;/**/
+	unguard;
 }
 
 
@@ -115,7 +100,6 @@ void UtvChannel::ReceivedBunch( FInBunch& Bunch )
 	}
 
 	delete tempBunch;
-//	UChannel::ReceivedBunch(Bunch);
 	unguard;
 }
 

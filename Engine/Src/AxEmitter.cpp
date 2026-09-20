@@ -14,7 +14,7 @@
 
 #define UNSEEN_SUSPEND  1
 
-// static mesh particle source - todo: fix these awful demo hacks, use mesh collision data for better performance
+// static mesh particle source, mesh collision data would perform better
 struct PclSourceTri
 {
     FVector center;
@@ -622,12 +622,10 @@ void AxEmitter::InitParticle( int index )
     else if ( mSpawningType == ST_ExplodeRing )
     {
 	    FVector emitDir = Randv2D();
-        //if ( mPosRelative )
-          //  emitDir = emitDir.TransformVectorBy(GMath.UnitCoords * Rotation);
         rPcl.pos = emitPos + emitDir * mPosDev;
         rPcl.velocity = emitDir * GetRandomRange(mSpeedRange);
     }
-	else if ( mSpawningType == ST_Line ) // todo: implement
+	else if ( mSpawningType == ST_Line )
 	{
 		if ( mPosRelative )
 		{
@@ -799,15 +797,12 @@ void AxEmitter::PreCalc( void )
 
 		if( maxRegen == 0.0f )
 		{
-			//debugf(TEXT("%s is set to regenerate, but without any regen rate!"), GetName() );
 		}
 		else
 		{
 			int maxRegenAmount = appRound(maxLife * maxRegen);
 			if( maxRegenAmount && maxRegenAmount < mMaxParticles )
 			{
-				//debugf(TEXT("Particles: Truncated %d max to %d [maxLife: %f maxRegen: %f"), mMaxParticles, maxRegenAmount, maxLife, maxRegen );
-				//mMaxParticles = maxRegenAmount + 1;
 			}
 		}
 	}
@@ -820,7 +815,7 @@ void AxEmitter::PreCalc( void )
 		mMaxParticles = mStartParticles;
 
 	PclArrayPtr* ptr = (PclArrayPtr*)&mpParticles;
-	// todo: using tarray right now for particle node mem - change this back to static pools
+	// uses TArray for particle node mem, could change back to static pools
 	if ( !mpParticles )
 	{	
 		(*ptr) = new TArray<ParticleT>;
@@ -833,12 +828,6 @@ void AxEmitter::PreCalc( void )
 		(*ptr)->Empty( mMaxParticles );
         (*ptr)->Add( mMaxParticles );
 	}
-    /*
-	else if ( GIsEditor && ((*ptr)->Num() > mMaxParticles && mRegen==0) )
-	{
-		(*ptr)->Empty(  mMaxParticles );
-        (*ptr)->Add( mMaxParticles );
-	}*/
 
 	// working vars for this emitter
     if ( mPosRelative )
@@ -909,7 +898,6 @@ UBOOL AxEmitter::Tick( FLOAT deltaTime, ELevelTick TickType )
         return( Super::Tick( deltaTime, TickType ) );
 	}
 
-	//debugf(TEXT("AxEmitter::Update"));
     if( mParticleType == PT_Beam ) // fixed shockbeam, but can't this be done elsewhere?
     {
         mBounds.IsValid = 0;
@@ -921,7 +909,6 @@ UBOOL AxEmitter::Tick( FLOAT deltaTime, ELevelTick TickType )
     if( mRegen == 0 && LifeSpan == 0.0f ) // mRegen has been set to false during play!
     {
         LifeSpan = Max(mLifeRange[0], mLifeRange[1]);
-        //debugf(TEXT("%s had LifeSpan imposed!"), GetName() );
     }
 #endif
 
@@ -938,7 +925,6 @@ UBOOL AxEmitter::Tick( FLOAT deltaTime, ELevelTick TickType )
 
     if ( mMaxParticles < 0 )
     {
-        //debugf(TEXT("Delayed Init [%f,%f,%f]"), mSpawnVecA.X, mSpawnVecA.Y, mSpawnVecA.Z);
         mMaxParticles = -mMaxParticles;
         Initialize();
         blockOnNet = 0;
@@ -1047,7 +1033,7 @@ void AxEmitter::Render( FLevelSceneNode* Frame, FRenderInterface* RI )
     if( mRegen == 0 && mpIterator && mTime > 0.0f )
     {
         INT SetupStartTime = appCycles();
-        mT = mTime;//Clamp(deltaTime, 0.0f, 0.3f);
+        mT = mTime;
         if ( mPosRelative )
             mDir = FVector(1,0,0);        
         else
@@ -1133,13 +1119,6 @@ void AxEmitter::Render( FLevelSceneNode* Frame, FRenderInterface* RI )
     GStats.DWORDStats( GEngineStats.STATS_Particle_Particles ) += mNumActivePcl;
     GStats.DWORDStats( GEngineStats.STATS_Particle_RenderCycles ) += (appCycles() - RenderStartTime);
 
-#if 0
-    if( mSpawningType == ST_StaticMesh && Frame->Viewport->IsWire() )
-    {
-        RI->SetTransform(TT_LocalToWorld, SourceStaticMesh->LocalToWorld() ); 
-        cachedOctTree.Draw( Frame );
-    }
-#endif
     
     unguard;
 }

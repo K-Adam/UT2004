@@ -115,8 +115,6 @@ void UCanvas::DrawTile
         if( PrevMaterial && (Style == 255 || PrevMaterial->IsA(UCombiner::StaticClass()) || PrevMaterial->IsA(UShader::StaticClass()) || PrevMaterial->IsA(UFinalBlend::StaticClass())) ) // sjs
             Material = PrevMaterial;
 
-		//!!MAT
-		//if     ( Actor->bSelected              ) PolyFlags |= PF_Selected;
 	}
 
 	pCanvasUtil->DrawTile(X,Y,X + XL,Y + YL,U,V,U + UL,V + VL,0.0f,Material,Color);
@@ -245,11 +243,8 @@ static INT DrawString
 				{
 					if( !Text[i+1] )
 						break; 
-//					if( Text[i+1]!='&' )
-//					{
 						bUnderlineNext = 1;
 						Ch = (TCHARU)Font->RemapChar(Text[i+1]);
-//					}
 				}
 			}
 
@@ -392,7 +387,6 @@ void UCanvas::WrapStringToArray( const TCHAR *Text, TArray<FString> *OutArray, f
 
 			if ( Text[iTestWord] == 2 || Text[iTestWord] == 3 )
 			{
-//				debugf(NAME_DebugRon, TEXT("WrapStringToArray found text control character %i in %s"), Text[iTestWord], Text);
 				iTestWord++;
 				continue;
 			}
@@ -611,8 +605,7 @@ void VARARGS UCanvas::WrappedPrintf( UFont* Font, FLOAT ScaleX, FLOAT ScaleY, UB
 void UCanvas::ClippedStrLen( UFont* Font, FLOAT ScaleX, FLOAT ScaleY, FLOAT& XL, FLOAT& YL, const TCHAR* Text )
 {
 	guard(UCanvas::ClippedStrLen)
-#if 1 // rjp - this method is a HUGE bottleneck for the GUI.  new version isn't *much* faster, 
-	  // but this function is executed hundreds times per second, so every bit counts
+	// This runs hundreds of times per second, so every bit counts.
 
 	if ( !Font )
 		Font = this->Font;
@@ -656,48 +649,6 @@ void UCanvas::ClippedStrLen( UFont* Font, FLOAT ScaleX, FLOAT ScaleY, FLOAT& XL,
 	XL = regXL * ScaleX;
 	YL = regYL * ScaleY;
 
-#else // rjp - old version
-	XL = 0;
-	YL = 0;
-
-	if (Font == NULL)
-		Font = this->Font;
-
-	if (Font == NULL)
-		return;
-
-	INT Skip=0;
-
-	for( INT i=0; Text[i]; i++)
-	{
-    	INT W, H;
-
-		if (int(Text[i])==27)
-			Skip=4;
-
-		if (!Skip)
-		{
-
-			GetCharSize( Font, Text[i], W, H );
-
-			// gam ---
-			if( Text[i + 1] )
-				W = (INT)((FLOAT)(W + SpaceX + Font->Kerning) * ScaleX);
-			else
-				W = (INT)((FLOAT)(W) * ScaleX);
-
-			H = (INT)((FLOAT)(H) * ScaleY);
-			// --- gam
-		
-			XL += W;
-			if(YL < H)
-				YL = H;	
-		}
-		else
-			Skip--;
-
-	}
-#endif
 
 	unguard;
 }
@@ -830,13 +781,9 @@ void UCanvas::execDrawText( FFrame& Stack, RESULT_DECL )
 		return;
 	}
 	INT XL=0, YL=0;
-//	unclock(GScriptCycles);
-//	clock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
 	if( Style!=STY_None )
 		WrappedPrint( (ERenderStyle)Style, XL, YL, Font, FontScaleX, FontScaleY, bCenter, *InText ); // gam
     
-//    unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
-//	clock(GScriptCycles);
 	CurX += XL;
 	CurYL = Max(CurYL,(FLOAT)YL);
 	if( CR )
@@ -866,8 +813,6 @@ void UCanvas::execDrawTile( FFrame& Stack, RESULT_DECL )
 		Stack.Logf( TEXT("DrawTile: Missing Material") );
 		return;
 	}
-//	unclock(GScriptCycles);
-//	clock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
 	if( Style!=STY_None ) DrawTile
 	(
 		Mat,
@@ -883,8 +828,6 @@ void UCanvas::execDrawTile( FFrame& Stack, RESULT_DECL )
 		Color.Plane(),
 		FPlane(0,0,0,0)
 	);
-//	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
-//	clock(GScriptCycles);
 	CurX += XL + SpaceX;
 	CurYL = Max(CurYL,YL);
 	unguardexec;
@@ -905,8 +848,6 @@ void UCanvas::DrawActor( AActor* Actor, UBOOL WireFrame, UBOOL ClearZ, FLOAT Dis
     if (Actor) //amb
 	Viewport->Actor->eventPlayerCalcView(CameraActor,CameraLocation,CameraRotation);
 
-//	unclock(GScriptCycles);
-//	clock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
 	INT OldRendMap;
 	OldRendMap = Viewport->Actor->RendMap;
 	if( WireFrame )
@@ -916,8 +857,6 @@ void UCanvas::DrawActor( AActor* Actor, UBOOL WireFrame, UBOOL ClearZ, FLOAT Dis
     if (Actor) //amb
 	    FActorSceneNode(Viewport,&Viewport->RenderTarget,Actor,CameraActor,CameraLocation,CameraRotation,DisplayFOV).Render(Viewport->RI);
 	Viewport->Actor->RendMap = OldRendMap;
-//	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
-//	clock(GScriptCycles);
 
     unguard;
 }
@@ -1018,8 +957,6 @@ void UCanvas::execDrawTileClipped( FFrame& Stack, RESULT_DECL )
 		if( YL>ClipY-CurY )
 			{VL+=(ClipY-CurY-YL)*VL/YL; YL=ClipY-CurY;}
 	
-//		unclock(GScriptCycles);
-//		clock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
 		if( Style!=STY_None ) 
 			DrawTile
 			(
@@ -1036,8 +973,6 @@ void UCanvas::execDrawTileClipped( FFrame& Stack, RESULT_DECL )
 				Color.Plane(),
 				FPlane(0,0,0,0)
 			);
-//		unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
-//		clock(GScriptCycles);
 
 		CurX += XL + SpaceX;
 		CurYL = Max(CurYL,YL);
@@ -1063,11 +998,7 @@ void UCanvas::execDrawTextClipped( FFrame& Stack, RESULT_DECL )
 	check(Font);
 
 	FPlane DrawColor = Color.Plane();
-//	unclock(GScriptCycles);
-//	clock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
 	DrawString( this, Font, FontScaleX, FontScaleY, (INT) CurX, (INT) CurY, *InText, DrawColor, 1, CheckHotKey ); // gam
-//	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
-//	clock(GScriptCycles);
 
 	unguardexec;
 }
@@ -1089,9 +1020,6 @@ void UCanvas::execTextSize( FFrame& Stack, RESULT_DECL )
 
 	ClippedStrLen( Font, FontScaleX, FontScaleY, *XL, *YL, *InText );
 	
-//	*XL = XLi;
-//	*YL = YLi;
-
 	unguardexec;
 }
 IMPLEMENT_FUNCTION( UCanvas, 470, execTextSize );
@@ -1115,8 +1043,6 @@ void UCanvas::execDrawPortal( FFrame& Stack, RESULT_DECL )
 
 	// Save state.
 
-//	unclock(GScriptCycles);
-//	clock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
 	Viewport->RI->PushState();
 
 	FLOAT	SavedFovAngle = Viewport->Actor->FovAngle;
@@ -1148,8 +1074,6 @@ void UCanvas::execDrawPortal( FFrame& Stack, RESULT_DECL )
 
 	Viewport->Actor->FovAngle = SavedFovAngle;
 	Viewport->RI->PopState();
-//	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
-//	clock(GScriptCycles);
 
 	unguardexec;
 }
@@ -1255,8 +1179,6 @@ void UCanvas::execSetScreenProjector( FFrame& Stack, RESULT_DECL )
 	P_GET_OBJECT(UTexture,pTex);
 	P_FINISH;
 
-	// TODO: 
-
 	unguardexec;
 }
 IMPLEMENT_FUNCTION( UCanvas, -1, execSetScreenProjector );
@@ -1274,9 +1196,6 @@ void UCanvas::DrawScreenActor( AActor* Actor, UBOOL WireFrame, UBOOL ClearZ, FLO
 	AActor*		CameraActor = Viewport->Actor;
 	FVector		CameraLocation = FVector(0,0,0);
 	FRotator	CameraRotation = FRotator(0,0,0);
-
-//	unclock(GScriptCycles);
-//	clock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
 
 	INT OldRendMap = Viewport->Actor->RendMap;
 
@@ -1340,8 +1259,6 @@ void UCanvas::DrawScreenActor( AActor* Actor, UBOOL WireFrame, UBOOL ClearZ, FLO
     for( INT i = 0; i < Actor->Attached.Num(); i++ )
         Actor->Attached(i)->bHidden = 1;
 
-//	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_CanvasCycles));
-//	clock(GScriptCycles);
 
     unguard;
 }

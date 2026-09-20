@@ -9,7 +9,6 @@
 #include "EnginePrivate.h"
 #include "UnNet.h"
 #include "UnLinker.h"
-//#include "UnCacheManager.h"
 extern FCoronaRender GCoronaRender; 
 /*-----------------------------------------------------------------------------
 	ULevelBase implementation.
@@ -400,8 +399,6 @@ void ULevel::SetActorCollision( UBOOL bCollision, UBOOL bFastClear )
 		Hash = GNewCollisionHash();
 		for( INT i=0; i<Actors.Num(); i++ )
 		{
-			//if( GIsEditor )
-			//	GWarn->StatusUpdatef( 0, i, TEXT("Adding Actor %d to collision hash"), i );
 			if( Actors(i) && Actors(i)->bCollideActors )
 				Hash->AddActor( Actors(i) );
 		}
@@ -416,8 +413,6 @@ void ULevel::SetActorCollision( UBOOL bCollision, UBOOL bFastClear )
 		{
 			for( INT i=0; i<Actors.Num(); i++ )
 			{
-				//if( GIsEditor )
-				//	GWarn->StatusUpdatef( 0, i, TEXT("Removing Actor %d from collision hash"), i );
 				if( Actors(i) && Actors(i)->bCollideActors )
 					Hash->RemoveActor( Actors(i) );
 			}
@@ -631,11 +626,6 @@ UBOOL ULevel::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	{
 
 		// Attempt to make the dir if it doesn't exist.
-#if 0
-		Ar.Log(TEXT("Sorry, demo recording is currently disabled"));
-		return 1;
-#endif
-
 		GFileManager->MakeDirectory( TEXT("..\\Demos") );
 
 		FURL URL;
@@ -727,8 +717,6 @@ UBOOL ULevel::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 				delete GameEngine->GPendingLevel;
 				GameEngine->GPendingLevel = NULL;
 			}
-//			else
-//				GameEngine->Client->Viewports(0)->GUIController->eventCloseAll(0,true);
 		}
 		else Ar.Log( TEXT("You must specify a filename") );//!!localize!!
 		return 1;
@@ -1059,11 +1047,9 @@ UBOOL ULevel::NotifyAcceptingChannel( UChannel* Channel )
 	if( Driver->ServerConnection )
 	{
 		// We are a client and the server has just opened up a new channel.
-		//debugf( "NotifyAcceptingChannel %i/%i client %s", Channel->ChIndex, Channel->ChType, GetName() );
 		if( Channel->ChType==CHTYPE_Actor )
 		{
 			// Actor channel.
-			//debugf( "Client accepting actor channel" );
 			return 1;
 		}
 		else if( Channel->ChType==CHTYPE_Voice )
@@ -1129,28 +1115,6 @@ void ULevel::WelcomePlayer( UNetConnection* Connection, char* Optional )
 
 static FString GetDefaultGameType( const TCHAR* MapName )
 {
-/*	TArray<FRegistryObjectInfo> List;
-	UObject::GetRegistryObjects( List, UClass::StaticClass(), AGameInfo::StaticClass(), 0 );
-
-	for( INT i = 0; i < List.Num(); i++ )
-    {
-	    UClass* GameClass = Cast<UClass>( UObject::StaticLoadObject( UClass::StaticClass(), NULL, *List(i).Object, NULL, 0, NULL ) );
-
-        if( !GameClass )
-            continue;
-
-    	AGameInfo* GameInfo = CastChecked<AGameInfo>( GameClass->GetDefaultActor() );
-
-        INT PrefixLength = appStrlen( *GameInfo->MapPrefix );
-
-        if( ( appStrnicmp( MapName, *GameInfo->MapPrefix, PrefixLength ) == 0 ) && ( MapName[PrefixLength] == '-' ) )
-        {
-            return( GameClass->GetPathName() );
-            break;
-        }
-    }
-*/
-
 	// rjp - Reglist no longer contains gameinfo
 	const TArray<FGameRecord>* Records = (TArray<FGameRecord>*)(Cast<UCacheManager>(UCacheManager::StaticClass()->GetDefaultObject())->GetRecords(TEXT("Game")));	
 	check(Records);
@@ -1228,7 +1192,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 	else if( NetDriver->ServerConnection )
 	{
 		// We are the client.
-//		debugf( NAME_DevNet, TEXT("Level client received: %s"), Text );
 		if( ParseCommand(&Text,TEXT("FAILURE")) || ParseCommand(&Text,TEXT("FAILCODE")) )
 		{
 			// Return to entry.
@@ -1266,7 +1229,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 		FLOAT ServerTime = 0.f;
 		clock(ServerTime);
 		// We are the server.
-//		debugf( NAME_DevNet, TEXT("Level server received: %s"), Text );
 		if( ParseCommand(&Text,TEXT("HELLO")) )
 		{
 			// Versions.
@@ -1425,9 +1387,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 				if ( FailCode!=TEXT("") )
 					Connection->Logf( TEXT("FAILCODE %s %s"), *FailCode, *Error );
 
-//				if ( Error!=TEXT("") )
-//					Connection->Logf( TEXT("FAILURE %s"), *Error );
-
 				Connection->FlushNet();
 				Connection->State = USOCK_Closed;
 				return;
@@ -1440,19 +1399,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 			// Make sure Client is verified
 
 			FURL MyURL( NULL, *Connection->RequestURL, TRAVEL_Absolute );
-/*
-			UBOOL Spec = appStrcmp(MyURL.GetOption(TEXT("SpectatorOnly="),TEXT("")), TEXT("") );
-			if ( CastChecked<UGameEngine>( Engine )->bCheatProtection && !Spec  )
-			{
-				if (Connection->ExpectedPackageCount==0 || Connection->ExpectedPackageCount!=Connection->CurrentPackageCount)
-				{
-					Connection->Logf( TEXT("BRAWL SPOOF"));
-					Connection->FlushNet();
-					Connection->State = USOCK_Closed;
-					return;
-				}
-			}
-*/
 			Connection->bValidated=true;
 
 			// Finish computing the package map.
@@ -1465,7 +1411,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 			{
 				// Failed to connect.
 				debugf( NAME_DevNet, TEXT("Join failure: %s"), *Error );
-//				Connection->Logf( TEXT("FAILURE LOGIN %s"), *Error );
 				Connection->Logf( TEXT("FAILCODE LOGIN %s"), *Error );
 				Connection->FlushNet();
 				Connection->State = USOCK_Closed;
@@ -1493,52 +1438,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 		else if ( ParseCommand(&Text,TEXT("REPEAT")) )
 		{
 			FURL MyURL( NULL, *Connection->RequestURL, TRAVEL_Absolute );
-//			UBOOL Spec = appStrcmp(MyURL.GetOption(TEXT("SpectatorOnly="),TEXT("")), TEXT("") );
-
-/*
-			if ( CastChecked<UGameEngine>( Engine )->bCheatProtection ) // && !Spec  )
-			{
-				new(Connection->KeyPackets)FString(Text);
-				Connection->CurrentPackageCount++;
-				if ( Connection->CurrentPackageCount == Connection->ExpectedPackageCount )
-				{
-					UGameEngine* GameEngine = CastChecked<UGameEngine>( Engine );			
-					FString Result = GameEngine->InitNewNetConnection(Connection->KeyPackets,Connection->FinalPackageCount,Connection->Gozer);
-
-					if ( Result!=TEXT("") )
-					{
-						FString FullKey = FString::Printf(TEXT("1230asadkgjk358dmvmbjt6838320yjkdhnchjg4958%s"),*Connection->CDKeyHash);
-					
-							// Perform the MD5 hash of it
-
-						const ANSICHAR* Hash = appToAnsi(*FullKey);
-						BYTE HashDigest[16];
-						FMD5Context Context;
-
-						appMD5Init( &Context );
-						appMD5Update( &Context, (unsigned char*)Hash, FullKey.Len() );
-						appMD5Final( HashDigest, &Context );
-						
-						INT JK;
-						FString SecureKey;
-						FString IP = Connection->LowLevelGetRemoteAddress();
-					
-						for (JK=0; JK<16; JK++)
-							SecureKey += FString::Printf(TEXT("%02x"), HashDigest[JK]);	
-
-						debugf(TEXT("[INVALID PACKAGE] Name   : %s (%s)"),MyURL.GetOption(TEXT("NAME="),TEXT("")), *IP );
-						debugf(TEXT("[INVALID PACKAGE] Ban ID : %s"),*SecureKey);
-						debugf(TEXT("[INVALID PACKAGE] GUID   : %s"),*Result.Left(32) );
-						debugf(TEXT("[INVALID PACKAGE] MD5    : %s"),*Result.Right(32) );
-						debugf(TEXT("[INVALID PACKAGE] Ver.   : %i"),Connection->NegotiatedVer);
-
-						Connection->Logf( TEXT("BRAWL %s"),*Result.Left(32) );
-						Connection->FlushNet();
-						Connection->State = USOCK_Closed;
-					}
-				}
-			}
-*/
 		}
 		else if ( ParseCommand(&Text,TEXT("OPENVOICE")) )
 		{
@@ -1582,8 +1481,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 					{
 						// Set server options.
 						DWORD ServerOptions = 0;
-//						if( VoiceChatManager->VoIPAllowSpatialization )
-//							ServerOptions |= VOICE_AllowSpatialization;
 						if( GameEngine->VoIPAllowVAD )
 							ServerOptions |= VOICE_AllowVAD;
 
@@ -1604,8 +1501,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 			}
 		}
 		unclock(ServerTime);
-		// We are the server.
-		//debugf( TEXT("Took %f"), ServerTime * GSecondsPerCycle * 1000.f );
 	}
 	unguard;
 }

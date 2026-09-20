@@ -12,8 +12,6 @@
 	USparkEmitter.
 -----------------------------------------------------------------------------*/
 
-//!! TODO: TimeBeforeVisible?!
-
 IMPLEMENT_CLASS(USparkEmitter);
 
 void USparkEmitter::PostEditChange()

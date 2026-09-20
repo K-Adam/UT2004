@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include "../../Engine/Inc/UnDDraw.h" //!!
 
-#if __UNIX__  // !!! FIXME: This is dumb. --ryan.
+#if __UNIX__
 #define winAnsiToTCHAR ANSI_TO_TCHAR
 #endif
 
@@ -571,7 +571,6 @@ UObject* ULevelFactory::FactoryCreateText
 		else if( GetBEGIN(&Str,TEXT("BRUSH")) )
 		{
 			guard(ParseBrush);
-			// Warn->StatusUpdatef( 0, 0, TEXT("Importing Brushes") ); gam
 			TCHAR BrushName[NAME_SIZE];
 			if( Parse(Str,TEXT("NAME="),BrushName,NAME_SIZE) )
 			{
@@ -1064,9 +1063,6 @@ UObject* UPolysFactory::FactoryCreateText
 				}
 				else if( Started )
 				{
-					// Replace commas with periods to handle european dxf's.
-					//for( TCHAR* Stupid = appStrchr(*ExtraLine,','); Stupid; Stupid=appStrchr(Stupid,',') )
-					//	*Stupid = '.';
 
 					// Handle codes.
 					if( Code>=10 && Code<=19 )
@@ -1556,7 +1552,7 @@ UObject* UPolysFactory::FactoryCreateText
                 }
                 // --- sjs
 
-				// FIXME : this doesn't work with non-square textures.  Why not?
+				// This doesn't work with non-square textures.
 				FTexCoordsToVectors(
 					Poly.Vertex[0],
 					FVector(ST1.X * ASEMaterial.Width * ASEMaterial.UTiling,(1.0f - ST1.Y) * ASEMaterial.Height * ASEMaterial.VTiling,ST1.Z),

@@ -420,10 +420,8 @@ REGISTER_NAME( 356, BeginPlay		 )
 REGISTER_NAME( 357, PostBeginPlay	 )
 REGISTER_NAME( 358, Probe58			 )
 
-//#ifdef WITH_LIPSINC
 // NOTE: WITH_LIPSINC isn't available to core
 REGISTER_NAME( 366, LIPSincAnimEnd   )
-//#endif
 
 // AI Navigation probes
 REGISTER_NAME( 362, PrepareForMove   )

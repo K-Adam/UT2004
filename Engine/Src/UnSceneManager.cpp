@@ -223,7 +223,6 @@ void ASceneManager::InitializePreviewActors()
 			// Accumulate aiscript-linked pawns.
 			TempPawns.AddItem(TestPawn);
 			TempPawnScriptTags.AddItem(TestPawn->AIScriptTag);
-			//debugf(TEXT("AIscript tag for pawn %s is %s "),TestPawn->GetName(),*(TestPawn->AIScriptTag) );
 		}
 	}
 
@@ -240,7 +239,6 @@ void ASceneManager::InitializePreviewActors()
 	{
 		TempMatineeTriggers.AddItem( EventStart );
 		TempMatineeTriggerTimes.AddItem( 0.0f );
-		//debugf(TEXT("EventStartTrigger for time: %f trigger: [%s] "),0.0f,*EventStart);
 	}
 	
 	// Accumulate all subactions->triggers..	
@@ -251,7 +249,6 @@ void ASceneManager::InitializePreviewActors()
 		{
 			TempMatineeTriggers.AddItem( SAT->EventName );
 			TempMatineeTriggerTimes.AddItem( SAT->PctStarting );
-			//debugf(TEXT("SubActiontrigger for time: %f - %f  trigger: [%s] "), SAT->PctStarting, SAT->PctEnding, *(SAT->EventName) ); 
 		}
 	}
 	
@@ -266,8 +263,6 @@ void ASceneManager::InitializePreviewActors()
 		FString ClassName = It->GetClass()->GetName();		
 		if( ClassName == TEXT("UnrealScriptedSequence") )
 		{					
-			// debugf(TEXT("Found UnrealScriptedSequence AIScript: [%s]"), It->GetName() ); 
-			// debugf(TEXT("With (Events)Tag: [%s]"),*( ((AAIScript*)(*It))->Tag) );
 			FName EventScriptTag = ((AAIScript*)(*It))->Tag;
 
 			FArray* NewArray = NULL;		
@@ -281,12 +276,10 @@ void ASceneManager::InitializePreviewActors()
 				FLOAT MatStartFrame = 0.0f;
 				FName MatAnimSequence = NAME_None;				
 
-				//debugf(TEXT("Found Actions array, elementsize: %i"), ElementSize );
 				for( INT i=0;i<NewArray->Num();i++ )
 				{					
 					UObject** Obj = (UObject**)( (BYTE*)NewArray->GetData() + i * ElementSize );
 					{
-						// debugf(TEXT("Found array item [%s] class [%s]"), (*Obj)->GetName(),(*Obj)->GetClass()->GetName() );						
 						FString ClassName = (*Obj)->GetClass()->GetName();
 						if( ClassName == TEXT("Action_WAITFOREVENT") )
 						{
@@ -294,7 +287,6 @@ void ASceneManager::InitializePreviewActors()
 							if( (*Obj)->FindFNameProperty( TEXT("ExternalEvent"), &EventName ) )
 							{
 								MatAnimWaitsFor = EventName;
-								//debugf(TEXT("EventTag found: [%s]"),*EventName);
 							}								
 						}
 						if( ClassName == TEXT("Action_PLAYANIM") )
@@ -303,13 +295,11 @@ void ASceneManager::InitializePreviewActors()
 							if( (*Obj)->FindFNameProperty( TEXT("BaseAnim"), &SequenceName ) )
 							{
 								MatAnimSequence = SequenceName;
-								//debugf(TEXT("PlayAnim action found. BaseAnim sequence: [%s]"),*SequenceName );							
 							}
 							FLOAT AnimRate;
 							if( (*Obj)->FindFloatProperty( TEXT("AnimRate"), &AnimRate ) )
 							{
 								MatAnimRate = AnimRate;
-								//debugf(TEXT("PlayAnim action found. BaseAnim sequence: [%s]"),*SequenceName );							
 							}
 							FLOAT StartFrame;
 							if( (*Obj)->FindFloatProperty( TEXT("StartFrame"), &StartFrame ) )
@@ -345,7 +335,6 @@ void ASceneManager::InitializePreviewActors()
 					// Commit it to the array here.  
 					if( (MatAnimSequence != NAME_None) && (MatAnimWaitsFor != NAME_None ) )
 					{
-						//debugf(TEXT("Recording action from Aiscript %s EventScrTag: %s Event: %s  PlayAnim: (%s) "),((AAIScript*)(*It))->GetName(),*EventScriptTag,*MatAnimWaitsFor,*MatAnimSequence);
 
 						MatAnimSimEvent TempEvent;
 						TempEvent.ScriptTag =  EventScriptTag;
@@ -374,7 +363,6 @@ void ASceneManager::InitializePreviewActors()
 	for( INT s=0; s< SimEvents.Num(); s++)
 	{
 	    SimEvents(s).Time = 0.0f;
-		//debugf(TEXT("Trying to find anim event time for waitfor %s"),*SimEvents(s).WaitsFor ); 
 
 		// Link up event with matinee trigger:
 		for( INT m=0; m< TempMatineeTriggers.Num(); m++ ) 
@@ -385,7 +373,6 @@ void ASceneManager::InitializePreviewActors()
 				SimEvents(s).Time = TempMatineeTriggerTimes(m);
 			}
 		}
-		//debugf(TEXT("Found anim event time for waitfor %s is %f "),*SimEvents(s).WaitsFor,SimEvents(s).Time ); 
 	}	
 
 	// For each actor, establish an actions list.
@@ -408,7 +395,6 @@ void ASceneManager::InitializePreviewActors()
 				Action->BaseAnimSeq = SimEvents(s).Sequence;
 				Action->AnimRate    = SimEvents(s).Rate; 
 				Action->StartFrame  = SimEvents(s).StartFrame;
-				//debugf(TEXT("Action for %s time %f rate %f animseq [%s] ScrTag(%s)"),TempPawns(p)->GetName(),Action->StartTime,Action->AnimRate,*Action->BaseAnimSeq, *TempPawnScriptTags(p)); //#SKEL
 			}
 		}
 
@@ -430,7 +416,6 @@ void ASceneManager::InitializePreviewActors()
 	//
 	for( INT a=0; a<SimStoryBook->CastList.Num(); a++)
 	{		
-		//debugf(TEXT("CINEMATICPREVIEW Prepared actor: [%s] Actions: [%i]"),SimStoryBook->CastList(a).SourceActor->GetName(), SimStoryBook->CastList(a).Actions.Num() ); 	
 		AActor* OrigActor = SimStoryBook->CastList(a).SourceActor;	
 		// Spawn demo-only actor.
 		// The fact that they're AMatDemoActors marks them as
@@ -446,7 +431,6 @@ void ASceneManager::InitializePreviewActors()
 			SimStoryBook->CastList(a).CurrentMesh = OrigActor->Mesh;
 			
 			// Initialize everything else visually relevant.
-			//CinActor->Location = OrigActor->Location;
 			CinActor->Mesh = OrigActor->Mesh;
 			CinActor->DrawScale = OrigActor->DrawScale;				
 			CinActor->Rotation = OrigActor->Rotation;
@@ -455,7 +439,6 @@ void ASceneManager::InitializePreviewActors()
 			CinActor->DrawType = OrigActor->DrawType;
 			
 			GetLevel()->FarMoveActor( CinActor, OrigActor->Location );
-			//CinActor->SetDrawType(DT_Mesh); // Also adds actor to hash.
 
 			// Initialize its meshinstance.
 			CinActor->Mesh->MeshGetInstance(CinActor);
@@ -538,7 +521,6 @@ void ASceneManager::UpdatePreviewActors( FLOAT InScenePct )
 				}
 			}
 		}	
-		// debugf(TEXT("BestActioIndex %i For Actor: %s "),BestActionIndex, CinActor->GetName());   
 		if( BestActionIndex >= 0  && CinActor->Mesh )
 		{
 			FPreviewAction* Action = &(SimStoryBook->CastList(i).Actions(BestActionIndex));					
@@ -558,8 +540,6 @@ void ASceneManager::UpdatePreviewActors( FLOAT InScenePct )
 
 			FLOAT SceneTimeSinceTrigger = ( InScenePct- Action->StartTime ) * TotalSceneTime;
 
-			//debugf(TEXT("PCT: %f  SceneTimeSinceTrigger: %f   SceneTimeTotal %f  SequenceDuration %f  "),InScenePct,SceneTimeSinceTrigger, TotalSceneTime, SequenceDuration ); 
-
 			if( CinActor->Mesh->IsA(USkeletalMesh::StaticClass()) )
 				((USkeletalMeshInstance*)MInst)->bForceRefpose = false;
 
@@ -573,13 +553,9 @@ void ASceneManager::UpdatePreviewActors( FLOAT InScenePct )
 				MInst->FreezeAnimAt( PoseAnimFrame + Action->StartFrame, 0 );
 
 				FName ActiveSequence = MInst->GetActiveAnimSequence(0);
-				// debugf(TEXT("## Active anim sequence: %s AF %f "), *ActiveSequence, PoseAnimFrame ); 
 			}
 			else
 			{				
-				// Animation ended, and no looping: assume 'hide' again by going to refpose, instead of freezing...?
-				//if( CinActor->Mesh->IsA(USkeletalMesh::StaticClass()) )
-				//	((USkeletalMeshInstance*)MInst)->bForceRefpose = true;
 				 MInst->PlayAnim( 0, Action->BaseAnimSeq, 0.0f, 0.0f, 0 );
 				 MInst->FreezeAnimAt( (FLOAT)(NumFrames-1), 0 ); // LAST frame. In FRAMES ! ...
 			}

@@ -16,8 +16,6 @@ void UTVQueryInterface::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 {
 	guard(UTVQueryInterface::OnReceivedData);
 
-	//debugf (TEXT ("Received %d bytes from %s"), Count, *SrcAddr.GetString(1));
-
 	FArchiveUdpReader ArRecv( Data, Count );
 	FArchiveUdpWriter ArSend( this, SrcAddr );
 	BYTE Command;
@@ -153,7 +151,6 @@ void UTVUplink::OnResolved( FIpAddr a )
 void UTVUplink::OnResolveFailed()
 {
 	debugf (TEXT ("Uplink: Failed to resolve master server %s."), *MasterServerName);
-	//ConnectionFailed = 1;
 }
 
 void UTVUplink::OnConnectionSucceeded()
@@ -164,18 +161,16 @@ void UTVUplink::OnConnectionSucceeded()
 void UTVUplink::OnConnectionFailed()
 {
 	debugf (TEXT ("Uplink: Uplink failed to connect to master server %s."), *MasterServerName);
-	//ConnectionFailed = 1;
 }
 
 void UTVUplink::OnClosed()
 {
-	//ConnectionFailed = 1;
 }
 
 void UTVUplink::SendServerConfig()
 {
-	UBOOL NAT = false; //Actor->ServerBehindNAT;
-	UBOOL Gamespy = false; //GSQueryHeartbeat != NULL;
+	UBOOL NAT = false;
+	UBOOL Gamespy = false;
 	*ArSend << NAT << Gamespy;
 	ArSend->Flush();
 }
@@ -231,16 +226,12 @@ void UTVUplink::OnDataReceived()
 						INT UpgradeVersion;
 						*ArRecv << UpgradeVersion;
 						debugf (TEXT ("Uplink: Rejected. Must upgrade to version %d."), UpgradeVersion);
-						//ShouldTryReconnect = 0;
-						//ConnectionFailed = 1;
 					}
 					else
 					if( Approval == TEXT("MSLIST") )
 					{
 						debugf (TEXT ("Uplink: Receiving new masters, but we don't support this.. Aborting."));
 
-						//ShouldTryReconnect = 1;
-						//ConnectionFailed = 1;
 					}
 					else
 					if( Approval == TEXT("DENIED") )
@@ -251,14 +242,10 @@ void UTVUplink::OnDataReceived()
 							debugf (TEXT ("Your CD key appears to be blank.  Double-check it's installed in the registry correctly."));
 						else
 							debugf (TEXT ("Sent CD key hash: \"%s\""), *GetCDKeyHash() );
-						//ShouldTryReconnect = 0;
-						//ConnectionFailed = 1;
 					}
 					else
 					{
 						// master server busy, or i didn't understand its response
-						//ShouldTryReconnect = 1;
-						//ConnectionFailed = 1;
 					}
 					unguard;
 				}
@@ -297,8 +284,6 @@ void UTVUplink::OnDataReceived()
 							GameHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
 							break;
 						case HB_GamespyQueryPort:
-							//if( GSQueryHeartbeat )
-							//	GSQueryHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
 							break;
 						}
 					}
@@ -318,8 +303,6 @@ void UTVUplink::OnDataReceived()
 							FString ClientChallenge;
 							*ArRecv << Client;
 							*ArRecv << ClientChallenge;
-							//debugf (TEXT ("Uplink: Challenging (%s) (%s)"), *Client, *ClientChallenge);
-							//ChallengeClient( *Client, *ClientChallenge );
 						}
 						break;
 					case MTS_MatchID:
@@ -351,31 +334,11 @@ UBOOL UTVUplink::Poll( INT WaitTime )
 	UBOOL Result = FTcpLink::Poll( WaitTime );
 
 	// answer queries
-//	if( LANInterface )
-//		LANInterface->Poll();
 	if( QueryInterface )
 		QueryInterface->Poll();
 
 	CheckRefresh ();
 
-/*
-	if( ConnectionFailed )
-	{
-		Actor->eventConnectionFailed(ShouldTryReconnect);
-		ConnectionFailed = 0;
-	}
-	else
-	{
-		// See if any CD key challenges have been answered.
-		//CheckOutstandingChallenges();
-
-		// See if we need to update the masterserver's copy of our server state.
-		CheckRefresh();
-
-		// See if we need to send any heartbeats;
-		//CheckUDPHeartbeats();
-	}
-*/
 	return Result;
 	unguard;
 }
@@ -401,7 +364,6 @@ void UTVUplink::CheckRefresh(bool force)
 			BYTE Command = STM_GameState;
 			*ArSend << Command << Clients << UtvEngine->ServerState;
 			ArSend->Flush();
-			//debugf (TEXT ("Uplink: Sending gamestate"));
 		}
 	}
 	unguard;

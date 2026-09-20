@@ -337,7 +337,7 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 	/* Get skeletal mesh name and look up asset. */
 	char cSkelName[512];
 
-    #if WIN32 // !!! FIXME: this conflicts on Linux. --ryan.
+    #if WIN32 // this conflicts on Linux.
 	    wcstombs(cSkelName, *(skelParams->KSkeleton), 512);
     #else
         strncpy(cSkelName, appToAnsi((TCHAR *) *(skelParams->KSkeleton)), 512);
@@ -349,7 +349,6 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 	INT DummyVerts;
 	inst->GetFrame( actor, NULL, NULL, 0, DummyVerts, GF_BonesOnly);
 
-	//MeFAsset  *skelAss = MeAssetDBLookupAsset(KGData->AssetDB, cSkelName);
 	MeFAsset  *skelAss = MeAssetDBLookupAssetByName(KGData->AssetDB, cSkelName);
 	RTN_WITH_ERR_IF(!skelAss, "(Karma): KInitSkeletonKarma: Asset not found.");
 
@@ -362,7 +361,6 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 	// This isn't that effecient - we rarely have ALL the bones physical.
 	inst->KSkelModels.AddZeroed(numBones);
 	inst->KSkelJoints.AddZeroed(numBones);
-	//inst->KSkelLimits.AddZeroed(numBones);
 
 	//  Used to tell the animation system to leave this bone position
 	//	completely up to the Director (not add to default pose).
@@ -406,7 +404,7 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 	for(boneIdx = 0; boneIdx<numBones; boneIdx++)
 	{
 		char cBoneName[512];
-        #if WIN32 // !!! FIXME: this conflicts on Linux. --ryan.
+        #if WIN32 // this conflicts on Linux.
 		    wcstombs(cBoneName, *(skelmesh->RefSkeleton(boneIdx).Name), 512);
         #else
             strncpy(cBoneName, appToAnsi((TCHAR *) *(skelmesh->RefSkeleton(boneIdx).Name)), 512);
@@ -459,7 +457,6 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 
 			// For skeletons we are going to play safe and make sure we are using spherical inertia tensor.
 			MdtBodyEnableNonSphericalInertia(boneBody);
-			//MdtBodyDisableNonSphericalInertia(boneBody);
 			MdtBodyDisableCoriolisForce(boneBody);
 
 			MdtBodySetLinearVelocityDamping(boneBody, skelParams->KLinearDamping);
@@ -500,7 +497,6 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 
 			// Save reference to bone and joint
 			inst->KSkelJoints(boneIdx) = boneJoint;
-			//MdtConstraintSetUserData(boneJoint, (void*)inst);
 		}
 
 		// Set model in instance's array of models.
@@ -570,8 +566,6 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 	{
 		KGMDestroyGeometry(KGData->GeomMan, UnusedGeom(i));
 	}
-
-	//debugf(TEXT("(Karma): Skeleton (%s) sucessfully initialised (%d bones) from Karma Asset!"),	*(skelParams->KSkeleton), modelCount);
 
 	// Store root physics bone index and and last (in array) physics bone index.
 	inst->KPhysRootIndex = INDEX_NONE;
@@ -696,7 +690,6 @@ void MEAPI KTermSkeletonKarma(USkeletalMeshInstance* inst)
 	guard(NotInitialised);
     if(!inst->KSkelIsInitialised)
 	{
-#if 1
 		// TEMPORARY
 		for(INT i=0; i<inst->KSkelModels.Num(); i++)
 		{
@@ -709,7 +702,6 @@ void MEAPI KTermSkeletonKarma(USkeletalMeshInstance* inst)
 			if(inst->KSkelJoints(i) != 0)
 				debugf(TEXT("(Karma:) KTermSkeletonKarma (NI): KSkelJoints Not Empty!"));
 		}
-#endif
 
 		return;
 	}
@@ -783,7 +775,6 @@ void MEAPI KTermSkeletonKarma(USkeletalMeshInstance* inst)
 	check(inst->KPhysLastIndex >= 0 && inst->KPhysLastIndex < inst->KSkelModels.Num());
 
 	// First remove joints.
-	// JTODO: Should be ok not doing this, because destroying a body destroys its constraints. But need to check.
 	guard(Joints);
 	for(INT i=inst->KPhysRootIndex; i<=inst->KPhysLastIndex; i++)
 	{
@@ -852,7 +843,6 @@ void MEAPI KTermSkeletonKarma(USkeletalMeshInstance* inst)
 	}
 	unguard;
 
-#if 1
 	guard(CheckEmpty);
 	// TEMPORARY
 	for(INT i=0; i<inst->KSkelModels.Num(); i++)
@@ -867,18 +857,13 @@ void MEAPI KTermSkeletonKarma(USkeletalMeshInstance* inst)
 			debugf(TEXT("(Karma:) KTermSkeletonKarma (RA): KSkelJoints Not Empty!"));
 	}
 	unguard;
-#endif
 
 	guard(Empty);
 	// Probably dont need to bother with inst...
 	inst->KSkelJoints.Empty();
 	inst->KSkelModels.Empty();
 
-	// Leave these as they are, so that if we are freezing the ragdoll, it will still render correctly.
-	// The 'directors' will persist.
-
-	//inst->NoRefPose.Empty();
-	//inst->bIgnoreMeshOffset = 0;
+	// NoRefPose and bIgnoreMeshOffset are kept so a frozen ragdoll still renders correctly.
 
 	inst->KSkelIsInitialised = 0;
 	unguard;
@@ -916,8 +901,6 @@ void KSetSkelVel(USkeletalMeshInstance* inst, FVector Velocity, FVector AngVeloc
 	if(actor->Physics != PHYS_KarmaRagDoll)
 		return;
 
-	//USkeletalMesh* skelmesh = Cast<USkeletalMesh>(inst->GetMesh());
-
 	if(!inst->KSkelIsInitialised)
 		return;
 
@@ -947,8 +930,6 @@ void KSetSkelVel(USkeletalMeshInstance* inst, FVector Velocity, FVector AngVeloc
 
 				// Then, cross product to find velocity of body.
 				MeVector3Cross(rotVel, kAngVel, bposRel);
-				//debugf(TEXT("%s boneLinVel: %f %f %f"), *(skelmesh->RefSkeleton(i).Name), boneLinVel[0], boneLinVel[1], boneLinVel[2]);
-				//debugf(TEXT("rotVel: %f %f %f"), rotVel[0], rotVel[1], rotVel[2]);
 				MeVector3Add(boneLinVel, boneLinVel, rotVel);
 
 				// Apply to body
@@ -974,7 +955,6 @@ void KUpdateRagdollTrilist(AActor* actor, UBOOL bDoubleRateActors)
 		kp = Cast<UKarmaParams>(actor->KParams);
 
 	// Should always have a KarmaData and allocated tri-list memory if rag-doll physics is on.
-	// check(kp && kp->KTriList); 
 	if(!kp)
 	{
 		debugf(TEXT("(Karma:) UpdateRagdollTrilist: No KarmaParams."));
@@ -1259,7 +1239,6 @@ void AActor::postKarmaStep_skeletal()
 		MdtBodyGetLinearVelocity(body, meVel);
 		if(MeVector3MagnitudeSqr(meVel) > meMaxSpeed * meMaxSpeed)
 		{
-			//debugf(TEXT("Capping Speed"));
 			MeVector3Normalize(meVel);
 			MeVector3Scale(meVel, meMaxSpeed);
 			MdtBodySetLinearVelocity(body, meVel[0], meVel[1], meVel[2]);
@@ -1279,7 +1258,6 @@ void AActor::postKarmaStep_skeletal()
 	{
 		GetLevel()->Hash->RemoveActor(this);
 		inst->KSkelBox = TempSkelBox;
-		//GTempLineBatcher->AddBox(inst->KSkelBox, FColor(255,128,255));
 		GetLevel()->Hash->AddActor(this);
 	}
 	unguard; // 'UpdateHash'
@@ -1435,7 +1413,6 @@ inline void AActor::physKarmaRagDoll_internal(FLOAT deltaTime)
 		if(kparams->bKDoConvulsions)
 		{
 			inst->KNextConvulsionTime = inst->KRagdollAge + kparams->KConvulseSpacing.GetRand();
-			//debugf(TEXT("END CONVULSION. Next Convulsion: %f"), inst->KNextConvulsionTime);
 		}
 	}
 
@@ -1446,8 +1423,6 @@ inline void AActor::physKarmaRagDoll_internal(FLOAT deltaTime)
 		!inst->KLimitsAreReduced &&
 		inst->KRagdollAge > inst->KNextConvulsionTime )
 	{
-		//debugf(TEXT("START CONVULSION."));
-
 		// Call script event for effects etc.
 		eventKSkelConvulse();
 
@@ -1496,8 +1471,6 @@ inline void AActor::physKarmaRagDoll_internal(FLOAT deltaTime)
 
 			MeReal useVel = K_U2MEScale * l->LiftVel.Eval(l->CurrentTime); // vertical velocity, karma scale
 			MeReal useSoft = l->Softness.Eval(l->CurrentTime);
-
-			//debugf(TEXT("Time:%f Vel:%f Soft:%f"), l->CurrentTime, K_ME2UScale* useVel, useSoft);
 
 			// Always keep ragdoll alive while a force is active.
 			MdtBodyEnable(body);

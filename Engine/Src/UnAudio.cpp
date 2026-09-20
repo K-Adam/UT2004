@@ -1014,7 +1014,7 @@ FLOAT FSoundData::GetPeriod()
 USound::USound()
     : Data( this )
 {
-    // TODO: for some reason these aren't being read from the defaultproperties
+    // These aren't read from the defaultproperties, so set them here.
     Duration		= -1.f;
     Likelihood		= 1.f;
 	Flags			= 0;
@@ -1747,7 +1747,6 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 	RiffChunk = FindRiffChunk( WavData, mmioFOURCC('s','m','p','l') );
 	if( RiffChunk )
 	{
-		//GWarn->Logf( TEXT("loop") );
 		FSampleChunk *pSampleChunk = (FSampleChunk *) ((BYTE*)RiffChunk + 8);
 		pSampleLoop = (FSampleLoop*) ((BYTE*)RiffChunk + 8 + sizeof(FSampleChunk));
 
@@ -1759,12 +1758,6 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 
 		SampleLoopsNum = pSampleChunk && pSampleLoop ? Min<INT>( pSampleChunk->cSampleLoops, (WaveDataEnd - (BYTE*)pSampleLoop) / sizeof(FSampleLoop) ) : 0;
 
-		/*
-		FSampleChunk* pSampleChunk =  (FSampleChunk*)( (BYTE*)RiffChunk + 8);
-		SampleLoopsNum  = pSampleChunk->cSampleLoops; // Number of tSampleLoop structures.
-		// First tSampleLoop structure starts right after the tSampleChunk.
-		pSampleLoop = (FSampleLoop*) ((BYTE*)pSampleChunk + sizeof(FSampleChunk)); 
-		*/
 	}
 
 	return 1;
@@ -1806,7 +1799,6 @@ UBOOL FWaveModInfo::UpdateWaveData( TArray<BYTE>& WavData )
 		}		
 			
 		// Now shuffle back all data after wave data by SampleDataSize/2 (+ padding) bytes 
-		// INT SampleShrinkage = ( SampleDataSize/4) * 2;
 		BYTE* NewWaveDataEnd = SampleDataEnd - ChunkShrinkage;
 
 		for ( INT pt = 0; pt< ( WaveDataEnd -  SampleDataEnd); pt++ )
@@ -1817,20 +1809,7 @@ UBOOL FWaveModInfo::UpdateWaveData( TArray<BYTE>& WavData )
 		// Resize the dynamic array.
 		WavData.Remove( WavData.Num() - ChunkShrinkage, ChunkShrinkage );
 		
-		/*
-		static INT SavedBytes = 0;
-		SavedBytes += ChunkShrinkage;
-		debugf(NAME_Log," Audio shrunk by: %i bytes, total savings %i bytes.",ChunkShrinkage,SavedBytes);
-		debugf(NAME_Log," New BitsPerSample: %i ", *pBitsPerSample);
-		debugf(NAME_Log," New SamplesPerSec: %i ", *pSamplesPerSec);
-		debugf(NAME_Log," Olddata/NEW*wav* sizes: %i %i ", SampleDataSize, *pMasterSize);
-		*/
 	}
-
-	// Noise gate filtering assumes 8-bit sound.
-	// Warning: While very useful on SOME sounds, it erased too many low-volume sound fx
-	// in its current form - even when 'noise' level scaled to average sound amplitude.
-	// if (NoiseGate) NoiseGateFilter();
 
 	return 1;
 	unguard;
@@ -2028,7 +2007,7 @@ void FWaveModInfo::NoiseGateFilter()
 				//
 				// Erase an area of low-amplitude sound ( noise... ) if size >= MinBlankSize.
 				//
-				// Todo: try erasing smoothly - decay, create some attack, 
+				// Could try erasing smoothly, decay, create some attack,
 				// proportional to the size of the area. ?
 				//
 				if	(( EndSilence - StartSilence) >= MinBlankSize )

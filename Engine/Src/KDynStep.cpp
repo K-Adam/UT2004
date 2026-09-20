@@ -152,11 +152,9 @@ static void KBuildPartitions(MeDict *enabledBodyDict,
                         if ((bp) && (bp->keaBody.tag != MdtKeaBODYVER1))
                             MeFatalError(0,"KBuildPartitions: Constraint found with invalid or destroyed MdtBody.");
 
-#if 1
 						// Double check we are not adding bodies that have the wrong bKDoubleTickRate flag.
 						if(bp && BodyGetDoubleRate(bp) != bDoubleRateActors)
                             MeFatalError(0,"KBuildPartitions: Constraint found between bodies using different bKDoubleTickRate.");
-#endif
 
                         /* If a body exists AND we are not coming from it.. */
                         if ((bp) && (bp != currentBody) &&
@@ -422,17 +420,6 @@ static UBOOL CheckSim(MdtWorldID w,
         }
     }
     
-#if 0 // Simulated SimErrors
-	{
-		//check(nBodies > 0);
-		//MdtBodyID body = (MdtBody*)keabodyArray[0];
-		//AActor* actor = KBodyGetActor(body);
-
-		if(appFrand() < 0.002f)
-		//if(actor->GetLevel()->GetLevelInfo()->NetMode == NM_DedicatedServer && appFrand() < 0.002f)
-			isError = 1;
-	}
-#endif
 
 	// If partition has blown up (bad!), destroy any actors in this partition.
     if(isError)
@@ -578,10 +565,8 @@ static void AddPostBodyStep(TArray<AActor*> &postActors, MdtBodyID* bodyArray, i
 		if( actor->KStepTag != GKStepTag )
 		{
 			actor->KStepTag = GKStepTag;
-#if 1
 			// Check actor is not already in the array.
 			check(postActors.FindItemIndex(actor) == INDEX_NONE);
-#endif
 				postActors.AddItem(actor);
 		}
 	}
@@ -602,9 +587,7 @@ static void AddPostConstraintStep(TArray<AActor*> &postActors, MdtConstraintID* 
 		if( conActor && conActor->KStepTag != GKStepTag )
 		{
 			conActor->KStepTag = GKStepTag;
-#if 1
 			check(postActors.FindItemIndex(conActor) == INDEX_NONE);
-#endif
 				postActors.AddItem(conActor);
 		}
 	}
@@ -946,13 +929,6 @@ void MEAPI KWorldStepSafeTime(MdtWorldID w, MeReal stepSize, ULevel* level, UBOO
 			/* Ensure safetime is greater than world min safe time */
 			safeTime = MeMAX(safeTime, w->minSafeTime);
 			
-#if 0
-			if(safeTime < partStepSize)
-			{
-				KGData->bAutoEvolve = 0;
-				debugf(TEXT("Timestep Reduced From %f to %f."), partStepSize, safeTime);
-			}
-#endif
 			
 			// Run integrator to update body positions.
 			// We use the entire
@@ -1025,7 +1001,6 @@ void MEAPI KWorldStepSafeTime(MdtWorldID w, MeReal stepSize, ULevel* level, UBOO
         b->safeTime = MEINFINITY; 
     }
 
-#if 1
 	// We should NEVER have an actor in both PostStepActors and DeathRow. That would mean an actor was in
 	// two different partitions. This is some temporary code to check this invariant.
 	for(INT i=0; i<PostStepActors.Num(); i++)
@@ -1036,7 +1011,6 @@ void MEAPI KWorldStepSafeTime(MdtWorldID w, MeReal stepSize, ULevel* level, UBOO
 			check(psActor != DeathRow(j));
 		}
 	}
-#endif
 
 	guard(PostStepAndDestroy);
 

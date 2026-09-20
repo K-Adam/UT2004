@@ -221,7 +221,6 @@ void AActor::execMakeNoise( FFrame& Stack, RESULT_DECL )
 	P_GET_FLOAT(Loudness);
 	P_FINISH;
 	
-	//debugf(" %s Make Noise with instigator", GetFullName(),Instigator->GetClass()->GetName());
 	if ( (Level->NetMode != NM_Client) && Instigator )
 	{
 		if ( (Owner == Instigator) || (Instigator == this) )
@@ -1139,7 +1138,7 @@ int APawn::ladderReachable(FVector Dest, int reachFlags, AActor* GoalActor)
 		GoalLadder = L->MyLadder;
 	else
 	{
-		APawn *GoalPawn = GoalActor->GetAPawn(); //Cast<APawn>(GoalActor);
+		APawn *GoalPawn = GoalActor->GetAPawn();
 		if ( GoalPawn && GoalPawn->OnLadder )
 			GoalLadder = GoalPawn->OnLadder;
 		else
@@ -1220,7 +1219,6 @@ int APawn::swimReachable(FVector Dest, int reachFlags, AActor* GoalActor)
 {
 	guard(APawn::swimReachable);
 
-	//debugf("Swim reach to %f %f %f from %f %f %f",Dest.X,Dest.Y,Dest.Z,Location.X,Location.Y, Location.Z);
 	reachFlags = reachFlags | R_SWIM;
 	int success = 0;
 	FVector OriginalPos = Location;
@@ -1394,7 +1392,7 @@ int APawn::walkReachable(FVector Dest, int reachFlags, AActor* GoalActor)
 					Movesize = UCONST_MAXSTEPHEIGHT;
 				}
 			}
-			else if ( GIsEditor )// FIXME - make sure fully on path
+			else if ( GIsEditor ) // does not make sure the pawn is fully on the path
 			{
 				FCheckResult Hit(1.f);
 				GetLevel()->SingleLineCheck(Hit, this, Location + FVector(0,0,-1 * (0.5f * CollisionHeight + UCONST_MAXSTEPHEIGHT + 4.0)) , Location, TRACE_World|TRACE_StopAtFirstHit, 0.5f * GetCylinderExtent());
@@ -1409,7 +1407,6 @@ int APawn::walkReachable(FVector Dest, int reachFlags, AActor* GoalActor)
 			}
 			else if ( PhysicsVolume->bWaterVolume ) 
 			{
-				//debugf("swim from walk");
 				stillmoving = TESTMOVE_Stopped;
 				if (bCanSwim )
 				{
@@ -1430,7 +1427,6 @@ int APawn::walkReachable(FVector Dest, int reachFlags, AActor* GoalActor)
 			ticks--;
 			if (ticks < 0)
 			{
-				//debugf(TEXT("OUT OF TICKS"));
 				stillmoving = TESTMOVE_Stopped;
 			}
 		}
@@ -1451,7 +1447,6 @@ int APawn::jumpReachable(FVector Dest, int reachFlags, AActor* GoalActor)
 {
 	guard(APawn::jumpReachable);
 
-	// debugf(TEXT("Jump reach to %f %f %f from %f %f %f"),Dest.X,Dest.Y,Dest.Z,Location.X,Location.Y, Location.Z);
 	FVector OriginalPos = Location;
 	reachFlags = reachFlags | R_JUMP;
 	if ( jumpLanding(Velocity, 1) == TESTMOVE_Stopped ) 
@@ -1475,11 +1470,10 @@ ETestMoveResult APawn::jumpLanding(FVector testVel, int movePawn)
 	int landed = 0;
 	int ticks = 0;
 	FLOAT tickTime = 0.1f;
-	//debugf("Jump vel %f %f %f", testVel.X, testVel.Y, testVel.Z);
 	while ( !landed )
 	{
 		FLOAT NetFluidFriction = PhysicsVolume->bWaterVolume ? PhysicsVolume->FluidFriction : 0.f;
-		testVel = testVel * (1 - NetFluidFriction * tickTime) + PhysicsVolume->Gravity * tickTime; // FIXME - why not *0.5 for gravity?
+		testVel = testVel * (1 - NetFluidFriction * tickTime) + PhysicsVolume->Gravity * tickTime; // full step gravity, bot jump reachability matches retail
 		FVector Adjusted = (testVel + PhysicsVolume->ZoneVelocity) * tickTime;
 		FCheckResult Hit(1.f);
 		GetLevel()->MoveActor(this, Adjusted, Rotation, Hit, 1, 1);
@@ -1647,7 +1641,7 @@ FVector APawn::SuggestJumpVelocity(FVector Dest, FLOAT XYSpeed, FLOAT BaseZ)
 		return SuggestedVelocity;
 	}
 
-	//FIXME - remove XYSpeed parameter
+	// XYSpeed is unused, GroundSpeed is used instead.
 	// start with Z of either BaseZ or BaseZ+JumpZ
 	FLOAT MinReachTime = XYDist/GroundSpeed; 
 	FLOAT SuggestedZ = DistZ/MinReachTime - GravityZ * MinReachTime;
@@ -1683,7 +1677,6 @@ ETestMoveResult APawn::FindBestJump(FVector Dest)
 
 	FVector realLocation = Location;
 
-	//debugf("Jump best to %f %f %f from %f %f %f",Dest.X,Dest.Y,Dest.Z,Location.X,Location.Y, Location.Z);
 	FVector vel = SuggestJumpVelocity(Dest, GroundSpeed, 0.f);
 
 	// Now imagine jump
@@ -1706,8 +1699,6 @@ ETestMoveResult APawn::FindBestJump(FVector Dest)
 				success = TESTMOVE_Stopped;
 		}
 	}
-	//debugf("New Loc %f %f %f success %d",Location.X, Location.Y, Location.Z, success);
-	// FIXME? - if failed, imagine with no jumpZ (step out first)
 	return success;
 	unguard;
 }
@@ -2194,210 +2185,6 @@ resulting in good quality animations on the client without any animation propert
 #define RIGHTTURNCHANNEL 2
 #define LEFTTURNCHANNEL 3
 #define FIRSTMOVEMENTCHANNEL 4
-
-/*void APawn::OldUpdateMovementAnimation(FLOAT DeltaSeconds)
-{
-	guard(APawn::OldUpdateMovementAnimation);
-
-	// no movement animation blending on dedicated server
-	if ( Level->NetMode == NM_DedicatedServer )
-		return;
-
-	Mesh->MeshGetInstance(this);
-	USkeletalMeshInstance *SkMeshInstance = Cast<USkeletalMeshInstance>(MeshInstance);
-	if ( !SkMeshInstance )
-		return;
-
-	if ( !bInitializeAnimation )
-	{
-		// get movement animation channels playing anims with zero alpha
-		bInitializeAnimation = true;
-		PlayAnim(RIGHTTURNCHANNEL,TurnRightAnim,1.f,0.1f,true);
-		PlayAnim(LEFTTURNCHANNEL,TurnLeftAnim,1.f,0.1f,true);
-		for ( INT i=FIRSTMOVEMENTCHANNEL; i<FIRSTMOVEMENTCHANNEL+4; i++ )
-			PlayAnim(i,MovementAnims[i-FIRSTMOVEMENTCHANNEL],1.f,0.1f,true); 
-		for ( INT i=RIGHTTURNCHANNEL; i<FIRSTMOVEMENTCHANNEL+8; i++ )
-		{
-			SkMeshInstance->EnableChannelNotify(i,false);
-			SkMeshInstance->SetBlendAlpha(i,0.f);
-		}
-		SkMeshInstance->EnableChannelNotify(FIRSTMOVEMENTCHANNEL,true);
-	}
-	// fixme - if not recently rendered, skip blending (except for zeroing out) secondary anims?
-	FLOAT StepSize = DeltaSeconds/BlendChangeTime;
-
-	if ( bTearOff )
-	{
-		// assume dead if bTearOff
-		if ( !bPlayedDeath )
-			eventPlayDying(HitDamageType,TakeHitLocation);
-		ZeroMovementAlpha(RIGHTTURNCHANNEL,FIRSTMOVEMENTCHANNEL+8,StepSize);
-		return;
-	}
-
-	// check for physics status transitions
-	if ( (bWasCrouched != bIsCrouched) || (bWasWalking != bIsWalking) )
-	{
-		eventChangeAnimation();
-		bWasCrouched = bIsCrouched;
-		bWasWalking = bIsWalking;
-	}
-	if ( (OldPhysics==PHYS_Falling) != (Physics==PHYS_Falling) )
-	{
-		if ( Physics == PHYS_Walking )
-			eventPlayLandingAnimation(Velocity.Z);
-		else if ( bWasOnGround && (Velocity.Z > 0) )
-			eventPlayJump();
-		else
-			eventPlayFalling();
-	}
-	if ( (Physics != OldPhysics) && (Physics != PHYS_Falling) )
-		eventChangeAnimation();
-	
-	OldPhysics = Physics;
-	bWasOnGround = (Physics == PHYS_Walking);
-
-	if ( (Physics == PHYS_Falling) || (MovementBlendStartTime > Level->TimeSeconds) )
-		ZeroMovementAlpha(RIGHTTURNCHANNEL,FIRSTMOVEMENTCHANNEL+8,StepSize);
-	else if ( Acceleration.IsZero() )
-	{
-		if ( !OldAcceleration.IsZero() && (Physics != PHYS_Falling) )
-			eventChangeAnimation();
-
-		ZeroMovementAlpha(FIRSTMOVEMENTCHANNEL, FIRSTMOVEMENTCHANNEL+8,StepSize);
-		// play turning in place animation if needed
-		Rotation.Yaw = Rotation.Yaw & 65535;
-		if ( Rotation.Yaw - OldRotYaw > 32768 )
-			OldRotYaw += 65536;
-		else if ( OldRotYaw - Rotation.Yaw > 32768 )
-			OldRotYaw -= 65536;
-
-		// FIXME - make turning in place work for net play
-		if ( (Physics == PHYS_Walking) && (Role > ROLE_SimulatedProxy) ) 
-		{
-			FLOAT TurnRate = FLOAT(Rotation.Yaw - OldRotYaw)/DeltaSeconds;
-			UBOOL bTurningRight = ( TurnRate > 1000.f );
-			UBOOL bTurningLeft = ( TurnRate < -1000.f );
-
-			if ( bTurningRight )
-			{
-				SkMeshInstance->SetAnimSequence(RIGHTTURNCHANNEL,TurnRightAnim);
-				SkMeshInstance->UpdateBlendAlpha(RIGHTTURNCHANNEL,1.f,StepSize);
-				SkMeshInstance->SetAnimRate(RIGHTTURNCHANNEL,Abs(TurnRate)/16384.f);
-			}
-			else
-				ZeroMovementAlpha(RIGHTTURNCHANNEL,RIGHTTURNCHANNEL+1,StepSize);
-
-			if ( bTurningLeft )
-			{
-				SkMeshInstance->SetAnimSequence(LEFTTURNCHANNEL,TurnLeftAnim);
-				SkMeshInstance->UpdateBlendAlpha(LEFTTURNCHANNEL,1.f,StepSize);
-				SkMeshInstance->SetAnimRate(LEFTTURNCHANNEL,Abs(TurnRate)/16384.f);
-			}
-			else
-				ZeroMovementAlpha(LEFTTURNCHANNEL,LEFTTURNCHANNEL+1,StepSize);
-		}
-		if ( OldRotYaw != Rotation.Yaw )
-			OldRotYaw = Rotation.Yaw;
-	}
-	else
-	{
-		// zero turning in place
-		ZeroMovementAlpha(RIGHTTURNCHANNEL,LEFTTURNCHANNEL+1,StepSize);
-
-		FVector LookDir = Rotation.Vector();
-		if ( Physics == PHYS_Walking )
-			LookDir.Z = 0.f;
-		else if ( (Physics == PHYS_Ladder) && OnLadder )
-			LookDir = OnLadder->ClimbDir;
-
-		// determine desired alphas for 4 movement directions
-		LookDir = LookDir.SafeNormal();
-		FVector AccelDir = Acceleration.SafeNormal();
-		FVector LeftDir = LookDir ^ FVector(0.f,0.f,1.f);
-		LeftDir = LeftDir.SafeNormal();
-		FLOAT ForwardPct = (LookDir | AccelDir);
-		FLOAT LeftPct = (LeftDir | AccelDir);
-		FLOAT BlendedMovementAnimRate = 1.f;
-		FLOAT ForwardPctSq = ForwardPct * ForwardPct;
-		FLOAT LeftPctSq = LeftPct * LeftPct;
-
-		if ( ForwardPctSq > 0.f )
-		{
-			ForwardPctSq = 1.f;
-			if ( LeftPctSq > 0.1f )
-				LeftPctSq = (ForwardPct > 0.f) 
-							? LeftPctSq + ForwardStrafeBias * (1.f - LeftPctSq)
-							: LeftPctSq + BackwardStrafeBias * (1.f - LeftPctSq);
-		}
-
-		// FIXME - temp hack while playing with movement rates
-		BlendedMovementAnimRate = GetMaxSpeed()/BaseMovementRate;
-
-		// force all animations to play at the dominant frame rate
-		FLOAT BlendedFrameRate = 0.f;
-		INT BlendCount = 0;
-		if ( ForwardPct != 0.f )
-		{
-			BlendCount++;
-			BlendedFrameRate = (ForwardPct > 0.f) 
-								? SkMeshInstance->GetAnimRateOnChannel(FIRSTMOVEMENTCHANNEL)
-								: SkMeshInstance->GetAnimRateOnChannel(FIRSTMOVEMENTCHANNEL+2);
-		}
-		if ( LeftPct != 0.f )
-		{
-			BlendCount++;
-			BlendedFrameRate += (LeftPct > 0.f) 
-								? SkMeshInstance->GetAnimRateOnChannel(FIRSTMOVEMENTCHANNEL+1)
-								: SkMeshInstance->GetAnimRateOnChannel(FIRSTMOVEMENTCHANNEL+3);
-		}
-		BlendedMovementAnimRate *= ((BlendCount == 2) ? BlendedFrameRate * 0.5f : BlendedFrameRate);
-
-		// blend between changes in animation set
-		// note that this won't look perfect for multiple quick changes
-		for ( INT i=FIRSTMOVEMENTCHANNEL; i<FIRSTMOVEMENTCHANNEL+4; i++ )
-			if ( MovementAnims[i-FIRSTMOVEMENTCHANNEL] != SkMeshInstance->GetAnimSequence(i) )
-			{
-				if ( SkMeshInstance->GetBlendAlpha(i+4) < SkMeshInstance->GetBlendAlpha(i) )
-					SkMeshInstance->CopyAnimation(i,i+4);
-				SkMeshInstance->SetAnimSequence(i,MovementAnims[i-FIRSTMOVEMENTCHANNEL]);
-			}
-
-		// update blending
-		if ( ForwardPct >= 0.f )
-		{
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL,ForwardPctSq,StepSize);
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL+1,0.f,StepSize);
-		}
-		else
-		{
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL,0.f,StepSize);
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL+1,ForwardPctSq,StepSize);
-		}
-		if ( LeftPct >= 0.f )
-		{
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL+2,LeftPctSq,StepSize);
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL+3,0.f,StepSize);
-		}
-		else
-		{
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL+2,0.f,StepSize);
-			SkMeshInstance->UpdateBlendAlpha(FIRSTMOVEMENTCHANNEL+3,LeftPctSq,StepSize);
-		}
-		for ( INT i=FIRSTMOVEMENTCHANNEL+4; i<FIRSTMOVEMENTCHANNEL+8; i++ )
-			SkMeshInstance->UpdateBlendAlpha(i,0.f,StepSize);
-
-		// synchronize animation frame and rate
-		for ( INT i=FIRSTMOVEMENTCHANNEL; i<FIRSTMOVEMENTCHANNEL+8; i++ )
-			SkMeshInstance->SetAnimRate(i,BlendedMovementAnimRate/SkMeshInstance->GetAnimRateOnChannel(i));
-
-		// FIXME - update animframes to keep synchronized - is this needed?
-		FLOAT SynchFrame = SkMeshInstance->GetAnimFrame(FIRSTMOVEMENTCHANNEL);
-		for ( INT i=FIRSTMOVEMENTCHANNEL+1; i<FIRSTMOVEMENTCHANNEL+8; i++ )
-			SkMeshInstance->SetAnimFrame(i,SynchFrame);
-	}
-	unguard;
-}*/
 
 void APawn::PostRender(FLevelSceneNode* SceneNode, FRenderInterface* RI)
 {

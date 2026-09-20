@@ -150,8 +150,6 @@ void UTrailEmitter::UpdateParticle( FLOAT DeltaTime, INT Index )
 			LastPointIndex	= TrailIndex - (NumPoints-1);
 			if ( LastPointIndex < 0 )	LastPointIndex += MaxPointsPerTrail;
 
-			//debugf(TEXT("Removing 1 point - TI:%i NP:%i LPI:%i"), TrailIndex, NumPoints, LastPointIndex);
-
 			if ( TrailData(Offset + LastPointIndex).Time < Owner->Level->TimeSeconds )
 			{
 				TrailInfo(Index).NumPoints	-= 1;
@@ -204,7 +202,6 @@ void UTrailEmitter::UpdateParticle( FLOAT DeltaTime, INT Index )
 			TrailData(Offset + TrailIndex).Size		= Particle.Size.X;
 			TrailData(Offset + TrailIndex).Time		= Owner->Level->TimeSeconds + PointLifeTime;
 
-			//TrailInfo(Index).LastLocation = PointLocation;
 			// Update Last Location (take in account last interpolated point and not current attached point)
 			TrailInfo(Index).LastLocation = TrailData(Offset + TrailIndex).Location;
 
@@ -247,9 +244,6 @@ void UTrailEmitter::UpdateParticle( FLOAT DeltaTime, INT Index )
 			else if ( TrailShadeType == PTTST_PointLife && PointLifeTime>0.f )
 				PointOpacity = (TrailData(Offset + TrailIndex).Time - Owner->Level->TimeSeconds)/PointLifeTime;
 
-			//debugf(TEXT("Trail Shade Type - TST:%i PN:%i NP:%i PO:%f"), TrailShadeType, i, NumPoints, PointOpacity);
-			//debugf(TEXT("Trail Shade Type - PN:%i NP:%i PO:%f PT:%f LT:%f"), i, NumPoints, PointOpacity, TrailData(Offset + TrailIndex).Time, Owner->Level->TimeSeconds);
-
 			if ( DrawStyle == PTDS_AlphaBlend ||
 				DrawStyle == PTDS_Modulated ||
 				DrawStyle == PTDS_AlphaModulate_MightNotFogCorrectly)
@@ -267,7 +261,6 @@ void UTrailEmitter::UpdateParticle( FLOAT DeltaTime, INT Index )
 			if ( TrailIndex < 0 )	TrailIndex += MaxPointsPerTrail;
 		}
 
-		//TrailIndex = TrailInfo(Index).TrailIndex;
 	}
 
 }
@@ -569,7 +562,6 @@ INT UTrailEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* Scen
 		if( !RenderedParticles || !NumVerts || !NumIndices )
 			return 0;
 
-		//!!vogel: TODO 
 		if( UseCrossedSheets )
 		{
 			NumTris		*= 2;

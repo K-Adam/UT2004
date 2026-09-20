@@ -545,13 +545,11 @@ UBOOL FTcpLink::Poll( INT WaitTime )
 				{
 					if( CheckReadable && !CheckWritable )
 					{
-//						GWarn->Logf(TEXT("Socket is readable"));
 						ReceivePendingData();
 					}
 					else
 					if( CheckWritable && !CheckReadable )
 					{
-//						GWarn->Logf(TEXT("Socket is writable"));
 						SendPendingData();
 					}
 					else
@@ -560,7 +558,6 @@ UBOOL FTcpLink::Poll( INT WaitTime )
 						{
 							if( FD_ISSET( SocketData.Socket, &WritableSocketSet ) )
 							{
-//								GWarn->Logf(TEXT("Socket is writable"));
 								SendPendingData();
 							}
 						}
@@ -568,7 +565,6 @@ UBOOL FTcpLink::Poll( INT WaitTime )
 						{
 							if( FD_ISSET( SocketData.Socket, &ReadableSocketSet ) )
 							{
-//								GWarn->Logf(TEXT("Socket is readable"));
 								ReceivePendingData();
 							}
 						}
@@ -641,7 +637,7 @@ void FTcpLink::ReceivePendingData()
 void FTcpLink::Close( UBOOL Force )
 {
 	guard(FTcpLink::Close);
-	if( /*PendingSend.Num() &&*/ !Force )
+	if( !Force )
 	{
 		// Can't close immediately as there's outgoing data to send.
 		LinkState = LINK_ShutdownPending;
@@ -696,7 +692,6 @@ void FTcpLink::Connect( FIpAddr RemoteAddr )
 
 	// Update bind address.
 	SocketData.UpdateFromSocket();
-//	GWarn->Logf( TEXT("TCP: Bound to local port %d"), SocketData.Port );
 
 	SOCKADDR_IN RemoteHost;
 	RemoteHost.sin_family		= AF_INET;
@@ -754,7 +749,6 @@ void FTcpLink::SendPendingData()
 		}
 		else
 		{
-//			GWarn->Logf(TEXT("SendPendingData() send %d of %d bytes"), sent, PendingSend.Num() );
 			PendingSend.Remove(0,sent);
 			StatBytesSent += sent;
 			LastTrafficTime = GCurrentTime;
@@ -891,7 +885,6 @@ void FArchiveTcpReader::ReceiveDataFromLink()
 			INT l = Min( Avail, Packet->Length - Packet->PacketData.Num() );
 			INT i = Packet->PacketData.Add(l);
 			Link->Recv( &Packet->PacketData(i), l );
-			//GWarn->Logf(TEXT("Received packet data: %d"), l );
 		}
 		else
 		{
@@ -903,7 +896,6 @@ void FArchiveTcpReader::ReceiveDataFromLink()
 			// Read the packet length
 			Link->Recv( (BYTE*)&Packet->Length, sizeof(INT) );
 			Packet->Length = Max( INTEL_ORDER32(Packet->Length), 0 );
-			//GWarn->Logf(TEXT("Received packet: length=%d"), Packet->Length );
 		}
 	}
 	unguard;
@@ -958,7 +950,6 @@ void FArchiveTcpWriter::Flush()
 
 		Link->Send( &SendData(0), SendData.Num() );
 
-		//GWarn->Logf(TEXT("Sending packet: %d bytes"), SendData.Num()-sizeof(INT) );
 		SendData.Empty();
 		SendData.Add(sizeof(INT));
 	}
@@ -995,7 +986,6 @@ FUdpLink::~FUdpLink()
 {
 	if( !ExternalSocket && SocketData.Socket != INVALID_SOCKET )
 	{
-//		GWarn->Logf(TEXT("Closing UDP socket %d"), SocketData.Port);
 		closesocket( SocketData.Socket );
 		SocketData.Socket = INVALID_SOCKET;
 	}
@@ -1061,7 +1051,6 @@ UBOOL FUdpLink::BindPort( INT InPort )
 	if( InPort == 0 )
 		SocketData.UpdateFromSocket();
 
-//	GWarn->Logf(TEXT("UDP: bound to local port %d"), SocketData.Port);
 	return 1;
 
 	unguard;

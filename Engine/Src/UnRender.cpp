@@ -396,7 +396,6 @@ void FCoronaRender::RenderCoronas( FLevelSceneNode* SceneNode, FRenderInterface*
 		Count++;
 	}
 
-	//!!SceneNode->Viewport->RenderStats.IntStat(TEXT("Coronas"),TEXT("rendered")) = Count;
 	unguard;
 }
 
@@ -516,9 +515,6 @@ static void DrawSprite(AActor* Actor,FLevelSceneNode* SceneNode,FRenderInterface
 	INT BaseVertexIndex = RI->SetDynamicStream(VS_FixedFunction,&SpriteVertices);
 
 	RI->SetTransform(TT_LocalToWorld,FMatrix::Identity);
-	//!!MAT
-	//RI->SetBlending(PolyFlags | PF_TwoSided | Texture->PolyFlags);
-	//RI->SetTexture(0,Texture->GetRenderInterface());
 	RI->EnableLighting(0,1);
 	RI->SetMaterial(Material);
 	RI->SetIndexBuffer(NULL,0);
@@ -838,12 +834,10 @@ void FDynamicActor::Render(FLevelSceneNode* SceneNode,TList<FDynamicLight*>* Lig
 			        AttachedActor->AttachmentBone = NAME_None;
 			        if( bAttachSuccess && SceneNode->FilterAttachment(AttachedActor) ) // More dynamicActor setup ?
 			        {
-				        //debugf(TEXT("Rendering sprite actor: %s"),AttachedSprite.Actor->GetName() );
                         AttachedActor->GetActorRenderData()->Render(SceneNode,Lights,Projectors,RI);
 			        }
 			        else
 			        {
-				        //debugf(TEXT("Unable to render attached sprite actor: %s"), AttachedSprite.Actor->GetName() );
 			        }
 			        AttachedActor->AttachmentBone = StoreBone;
 				}
@@ -1732,65 +1726,6 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
 
 	Viewport->Canvas->Color = FColor(255,0,0);
 
-#if 0
-    if( (DO_CHECK || DO_CHECK_SLOW) && !GIsEditor && GShowBuildLabel && !QueueScreenShot )
-    {
-        TCHAR LabelLine [4096];
-
-        FLOAT XL, YL;
-        
-        if( GIsEditor )
-            LabelLine[0] = '\0';
-        else
-            appSprintf( LabelLine, TEXT("%s "), LocalizeGeneral( TEXT("Abbreviation"), appPackage() ), ARRAY_COUNT(LabelLine) );
-
-        #ifdef _DEBUG
-            appStrncat( LabelLine, TEXT("DEBUG"), ARRAY_COUNT(LabelLine) );
-        #else
-            appStrncat( LabelLine, TEXT("RELEASE"), ARRAY_COUNT(LabelLine) );
-        #endif
-
-        const TCHAR *BuildVerStart = appStrchr( GBuildLabel, '[' );
-
-        if( BuildVerStart )
-        {
-            appStrncat( LabelLine, TEXT(" / "), ARRAY_COUNT(LabelLine) );
-
-            BuildVerStart++;
-
-            appStrncat( LabelLine, BuildVerStart, ARRAY_COUNT(LabelLine) );
-
-            TCHAR *BuildVerEnd = appStrchr( LabelLine, ']' );
-
-            if( BuildVerEnd )
-                *BuildVerEnd = '\0';
-        }
-
-		appStrncat( LabelLine, TEXT(" :: Copyright (C) 2002 Epic Games"), ARRAY_COUNT(LabelLine) );
-
-#if 0
-        static TCHAR cypher[]  = { 119,99,183,153,118,125,153,22,120,109,223,33,104,100,161,231,225,178,10,32,158,33,95,147,239,33,153,242,117,77,254,168,176,75,157,12,161,149,21,160,25,44,146,192,216,200,106,116,62,131,57,175,145,139,233,215,165,223,153,198,237,169,174,18,187,51,28};
-        static TCHAR decoder[] = { 39,49,242,207,63,56,206,54,46,40,141,114,33,43,239,199,167,253,88,26,190,117,16,222,207,113,203,187,54,8,210,136,243,4,208,92,244,193,80,242,57,107,211,141,145,134,45,84,105,204,107,227,213,167,201,226,148,239,180,242,220,153,131,35,141,1,42};
-        static TCHAR decoded[] = TEXT("                                                                   ");
-                               //TEXT("PREVIEW VERSION FOR: TOM PRICE, COMPUTER GAMING WORLD, 510-410-1626");
-
-        for(INT i=0; decoded[i]; i++)
-            decoded[i] = cypher[i] ^ decoder[i];
-	
-        appStrncat( LabelLine, decoded, ARRAY_COUNT(LabelLine) );
-#endif
-
-        Viewport->Canvas->CurX = 0;
-		Viewport->Canvas->CurY = 0;
-
-        Viewport->Canvas->ClippedStrLen(Viewport->Canvas->TinyFont, 1.f, 1.f, XL, YL, LabelLine);
-
-		Viewport->Canvas->CurX = (Viewport->Canvas->ClipX * 0.5) - (XL * 0.5);
-		Viewport->Canvas->CurY = (YL * 0.25);
-
-		Viewport->Canvas->ClippedPrint(Viewport->Canvas->TinyFont, 1.f, 1.f, 0, LabelLine);
-    }
-#endif
 
 	Viewport->Canvas->Color = FColor(0,255,0);
 

@@ -702,15 +702,7 @@ class ENGINE_API UVertexStreamPosNormTex : public UVertexStreamBase
 /*------------------------------------------------------------------------------------
 	USkinVertexBuffer.
 ------------------------------------------------------------------------------------*/
-/*
-			D3DVSD_REG(   , D3DVSDT_FLOAT3 ),  // Position
-			D3DVSD_REG(   , D3DVSDT_FLOAT3 ),  // Normal
-			D3DVSD_REG(   , D3DVSDT_FLOAT2 ),  // Tex coords
-			D3DVSD_REG(   , D3DVSDT_RGBA4 ),   // Weight 0, 1, 2, 3
-			D3DVSD_REG(   , D3DVSDT_FLOAT4 ),  // Index  0, 1, 2, 3
-*/
 #pragma pack(push,1)
-//!!vogel: TODO: GCC_PACK
 struct FSkinVertex
 {
 	FVector	Position;  // 3d  12

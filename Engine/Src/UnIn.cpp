@@ -70,7 +70,6 @@ void UInput::StaticInitInput()
 	Q->ArrayDim = ALIAS_MAX;
 
 	// Add key list.
-//	UEnum* InputKeys = FindObjectChecked<UEnum>( UPlayerInput::StaticClass(), TEXT("EInputKey") );
 	UEnum* InputKeys = FindObjectChecked<UEnum>( UInteractions::StaticClass(), TEXT("EInputKey") );
 	for( INT i=0; i<IK_MAX; i++ )
 	{
@@ -95,7 +94,6 @@ void UInput::StaticInitInput()
 UInput::UInput()
 {
 	guard(UInput::UInput);
-//	InputKeys = FindObjectChecked<UEnum>( UPlayerInput::StaticClass(), TEXT("EInputKey") );
 	InputKeys = FindObjectChecked<UEnum>( UInteractions::StaticClass(), TEXT("EInputKey") );
 	unguard;
 }
@@ -198,12 +196,10 @@ void UInput::ExecInputCommands( const TCHAR* Cmd, FOutputDevice& Ar )
         // amb --- alt mode support
         if( bUseAltDef && !ParseCommand(&Str,TEXT("OnAltMode")) )
         {
-            //debugf(TEXT("discarding normal cmd (using alt)... Str=%s"), Str);
             continue;
         }
         else if ( ParseCommand(&Str,TEXT("OnAltMode")) )
         {
-            //debugf(TEXT("discarding alt cmd (using normal)... Str=%s"), Str);
             continue;
         }
         // --- amb
@@ -259,7 +255,6 @@ UBOOL UInput::Exec( const TCHAR* Str, FOutputDevice& Ar )
 			if(GetInputAction() == IST_Press || (GetInputAction()==IST_Release && bHold))
             {
                 bAltMode = !bAltMode;
-                //debugf(TEXT("Setting AltMode to %i"), bAltMode);
             }
         }
         else
@@ -361,14 +356,9 @@ UBOOL UInput::Exec( const TCHAR* Str, FOutputDevice& Ar )
 					else	
 						Speed = -(-Speed-DeadZone)/(0.5f-DeadZone);
 
-					//!!vogel
-#if 0
-					*Axis += SpeedBase * Speed * Invert;
-#else
 // amb ---
 					*Axis += GetInputDelta() * SpeedBase * Speed * Invert;
 // --- amb
-#endif
 				}
 			} else {
 				if( GetInputAction() == IST_Axis )

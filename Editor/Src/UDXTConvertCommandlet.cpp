@@ -57,39 +57,7 @@ class UDXTConvertCommandlet : public UCommandlet
 					if( It->IsA(TexClass) && It->IsIn(Package) )
 					{
 						UTexture* Texture	= (UTexture*) *It;
-#if 1
 						Texture->ConvertDXT();
-#else
-						TCHAR TextureName[1024];
-						appStrcpy(TextureName, Texture->GetName());
-						if ( !  (
-								appStrstr(appStrupr(TextureName), TEXT("ALPHA"))	||
-								appStrstr(appStrupr(TextureName), TEXT("TERRAIN"))  ||
-								(Texture->Format != TEXF_RGBA8)
-								))
-						{
-							UBOOL ConvertToDXT1 = true;
-							
-							INT Width	= Texture->Mips(0).USize;
-							INT Height	= Texture->Mips(0).VSize;
-							
-							// Texture are always lazy loaded.
-							Texture->Mips(0).DataArray.Load();
-							check( &Texture->Mips(0).DataArray(0) )
-
-							INT* Data = (INT*) &Texture->Mips(0).DataArray(0);
-
-							INT Alpha = ETrueColor_A;
-							for( INT Y=0; Y<Height; Y++ );
-								for( INT X=0; X<Width; X++ );
-									Alpha &= (*(Data++) & ETrueColor_A);
-
-							if( Alpha != ETrueColor_A )
-								ConvertToDXT1 = false;
-							
-							Texture->Compress( ConvertToDXT1 ? TEXF_DXT1 : TEXF_DXT5, 1 );
-						}
-#endif
 					}
 				}
 

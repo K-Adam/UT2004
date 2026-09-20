@@ -178,9 +178,9 @@ public:
 			return;
 
 		FBox box = bounds;
-		box.Min -= extent;//ExtentsExpand(extent);
+		box.Min -= extent;
         box.Max += extent;
-		if (!FPointBoxIntersection(center,box))//box.ContainsPoint( center ) )
+		if (!FPointBoxIntersection(center,box))
 			return;
 
 		if ( contents.Num() )

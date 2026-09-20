@@ -2,7 +2,6 @@
 #define UTVUPLINK
 
 #include "EpicInclude.h"
-//#include "UnIpDrv.h"
 
 //It would be nice if it was possible to use these as includes from ipdrv, but it's not
 //Following is mostly copied from MasterServerUplink.cpp 

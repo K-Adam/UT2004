@@ -4,8 +4,6 @@
 	  Revision history:
 		* Created by Jamie Redmond
 
-    Work-in-progress TODO's:
-		
 =============================================================================*/
 
 #if !defined(_TANIMATIONINFO_)
@@ -1074,9 +1072,6 @@ public:
 
 	// Iterate through all talkers, forcing an update on their mesh whether it is visible or not.
 	void ForceUpdate( void );
-
-	// Debugging Only.
-	//void PrintList( void );
 
 protected:
 

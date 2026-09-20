@@ -26,7 +26,7 @@ void AONSTreadCraft::UpdateVehicle(FLOAT DeltaTime)
 	FVector DirY = Coords.YAxis;
 	FVector DirZ = Coords.ZAxis;
 
-	// Get body angular velocity (JTODO: Add AngularVelocity to Actor!)
+	// Get body angular velocity. AngularVelocity could be added to Actor.
 	FKRigidBodyState rbState;
 	KGetRigidBodyState(&rbState);
 	FVector angVel(rbState.AngVel.X, rbState.AngVel.Y, rbState.AngVel.Z);
@@ -224,8 +224,6 @@ void AONSTreadCraft::PostNetReceive()
 	OutputTurn = RangeByteToFloat(TreadState.ServerTurn);
 	DriverViewPitch = TreadState.ServerViewPitch;
 	DriverViewYaw = TreadState.ServerViewYaw;
-
-	//KDrawRigidBodyState(TreadState.ChassisState, false);
 
 	unguard;
 }

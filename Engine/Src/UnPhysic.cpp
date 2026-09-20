@@ -142,7 +142,6 @@ void AActor::setPhysics(BYTE NewPhysics, AActor *NewFloor, FVector NewFloorV)
 
 	if (Physics == NewPhysics)
 		return;
-//	clock(GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles));
 
 	if ( (Physics == PHYS_RootMotion) || (Physics == PHYS_CinMotion) )
 	{
@@ -185,7 +184,6 @@ void AActor::setPhysics(BYTE NewPhysics, AActor *NewFloor, FVector NewFloorV)
 		{				
 			if( Physics == PHYS_RootMotion )
 			{
-				//debugf(TEXT("LOCKING root motion for mesh %s actor %s "),Mesh->GetName(),this->GetName() ); 
 				((USkeletalMeshInstance*)Mesh->MeshGetInstance(this))->LockRootMotion(1);
 			}
 		}
@@ -215,7 +213,6 @@ void AActor::setPhysics(BYTE NewPhysics, AActor *NewFloor, FVector NewFloorV)
 	if ( PhysicsVolume )
 		PhysicsVolume->eventPhysicsChangedFor(this);
 
-//	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles));
 	unguard;
 }
 
@@ -223,7 +220,6 @@ void AMover::performPhysics(FLOAT DeltaSeconds)
 {
 	guard(AMover::performPhysics);
 
-	//FLOAT OldClock = GStats.DWORDStats(GEngineStats.STATS_Game_SpawningCycles);
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles));
 	FVector OldVelocity = Velocity;
 
@@ -263,7 +259,6 @@ void AActor::performPhysics(FLOAT DeltaSeconds)
 
 	if ( (Physics == PHYS_Rotating) && !bInterpolating && (Level->TimeSeconds - LastRenderTime > 1.f) )
 		return;
-//	FLOAT OldClock = GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles);
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles));
 
 	FVector OldVelocity = Velocity;
@@ -303,7 +298,6 @@ void AActor::performPhysics(FLOAT DeltaSeconds)
 		OldTouch->PendingTouch = NULL;
 	}
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles));
-//	debugf(TEXT("%s physics took %f"),GetName(), (GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles) - OldClock) * GSecondsPerCycle * 1000.0f);
 	unguard;
 }
 
@@ -314,7 +308,7 @@ void APawn::performPhysics(FLOAT DeltaSeconds)
 	if( Physics == PHYS_CinMotion )
 	{
 		// change position
-		startNewPhysics(DeltaSeconds,0); // physRootMotion( DeltaSeconds ); //#SKEL
+		startNewPhysics(DeltaSeconds,0);
 		return; 
 		// No PAWN physics consequences for PHYS_CinMotion pawns. -Erik //#SKEL
 	}
@@ -332,7 +326,6 @@ void APawn::performPhysics(FLOAT DeltaSeconds)
 		eventFellOutOfWorld(KILLZ_None);
 		return;
 	}
-//	FLOAT OldClock = GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles);
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles));
 
 	FVector OldVelocity = Velocity;
@@ -384,7 +377,6 @@ void APawn::performPhysics(FLOAT DeltaSeconds)
 	{
 		if( Health <= 0 && Physics == PHYS_Rotating && Rotation != DesiredRotation ) // sjs
 		{
-			//debugf(TEXT("Dead Pawn rotating!"));
 			AActor::physicsRotation( DeltaSeconds );
 		}
 	}
@@ -403,7 +395,6 @@ void APawn::performPhysics(FLOAT DeltaSeconds)
 		}
 	}
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles));
-//	debugf(TEXT("%s physics took %f"),GetName(), (GStats.DWORDStats(GEngineStats.STATS_Game_PhysicsCycles) - OldClock) * GSecondsPerCycle * 1000.0f);
 	unguard;
 }
 
@@ -536,7 +527,7 @@ void APawn::physicsRotation(FLOAT deltaTime, FVector OldVelocity)
 		if ( bRotateToDesired )
 		{
 			// auto-rotate player to DesiredRotation (for auto-aiming)
-			APlayerController *C = Controller->GetAPlayerController();//Cast<APlayerController>(Controller);
+			APlayerController *C = Controller->GetAPlayerController();
 			deltaYaw = appRound(2 * C->EnemyTurnSpeed * deltaTime);
 			DesiredRotation.Pitch = Controller->DesiredRotation.Pitch;
 			DesiredRotation.Yaw = Controller->DesiredRotation.Yaw;
@@ -1550,7 +1541,7 @@ void APawn::processLanded(FVector HitNormal, AActor *HitActor, FLOAT remainingTi
 		FRotator NewRotation = FindSlopeRotation(HitNormal,Rotation);
 		if ( Health <= 0 ) // sjs
 		{
-            // for now, do nothing here! DesiredRotation = NewRotation;
+            // dead pawns don't align to the slope
 		}
 		else
 		GetLevel()->MoveActor(this, FVector(0,0,0), NewRotation, Hit); 
@@ -1709,7 +1700,6 @@ void APawn::physFalling(FLOAT deltaTime, INT Iterations)
 			}
 			else
 			{
-				//check(!Hit.Normal.IsZero());
 				if ( RealAcceleration.IsZero() && Cast<AAIController>(Controller) && !Controller->bNotifyFallingHitWall )
 				{
 					// try aircontrol push
@@ -1726,15 +1716,11 @@ void APawn::physFalling(FLOAT deltaTime, INT Iterations)
 
 				if( (Delta | Adjusted) >= 0.f )
 				{
-					//if ( Delta.Z > 0 ) // friction slows sliding up slopes
-					//	Delta *= 0.5f;	// FIXME should this be gone forever?
 					GetLevel()->MoveActor(this, Delta, Rotation, Hit);
 					if (Hit.Time < 1.f) //hit second wall
 					{
-						// FIXME REMOVE
 						if ( Hit.Normal.IsZero() )
 							debugf(TEXT("Zero normal from hit actor %s"),Hit.Actor->GetName());
-						//check(!Hit.Normal.IsZero());
 						if ( Hit.Normal.Z >= UCONST_MINFLOORZ )
 						{
 							remainingTime = 0.f;
@@ -2175,7 +2161,7 @@ void AActor::GetNetBuoyancy(FLOAT &NetBuoyancy, FLOAT &NetFluidFriction)
 		NetBuoyancy = Buoyancy * depth;
 		NetFluidFriction = WaterVolume->FluidFriction * depth;
 	}
-	else if ( PhysicsVolume->Gravity.Z != Level->GetDefaultPhysicsVolume()->Gravity.Z )// FIXME THIS IS A BUG LEFT IN TO KEEP FALLING BEHAVIOUR CONSISTENT WITH PREVIOUS VERSIONS
+	else if ( PhysicsVolume->Gravity.Z != Level->GetDefaultPhysicsVolume()->Gravity.Z ) // known bug kept so falling behaviour stays consistent with previous versions
 	{
 		NetBuoyancy = 0.5f * Buoyancy;
 		NetFluidFriction = 0.5f * PhysicsVolume->FluidFriction;
@@ -2194,7 +2180,6 @@ INT AVolume::Encompasses(FVector point)
 	if ( !Brush )
 		return 0;
 	FCheckResult Hit(1.f);
-//	debugf(TEXT("%s brush pointcheck %d at %f %f %f"),GetName(),!Brush->PointCheck(Hit,this,	point, FVector(0.f,0.f,0.f), 0), point.X, point.Y,point.Z);
 	return !Brush->PointCheck(Hit,this,	point, FVector(0.f,0.f,0.f), 0); 
 	unguard;
 }
@@ -2383,7 +2368,6 @@ void AActor::physFlying(FLOAT deltaTime, INT Iterations)
 		Iterations++;
 		if ( !Acceleration.IsZero() )
 		{
-			//debugf(TEXT("%s has acceleration!"),GetName());
 			Velocity = Velocity	+ Acceleration * remainingTime;
 		}
 
@@ -2463,7 +2447,6 @@ void AActor::physProjectile(FLOAT deltaTime, INT Iterations)
 		Iterations++;
 		if ( !Acceleration.IsZero() )
 		{
-			//debugf(TEXT("%s has acceleration!"),GetName());
 			Velocity = Velocity	+ Acceleration * remainingTime;
 			BoundProjectileVelocity();
 		}
@@ -2675,7 +2658,6 @@ int APawn::findNewFloor(FVector OldLocation, FLOAT deltaTime, FLOAT remainingTim
 
 	//look for floor
 	FCheckResult Hit(1.f);
-	//debugf("Find new floor for %s", GetFullName());
 	if ( checkFloor(FVector(0,0,1), Hit) )
 		return 1;
 	if ( checkFloor(FVector(0,1,0), Hit) )
@@ -2978,9 +2960,6 @@ void AActor::physRootMotion(FLOAT deltaTime)
 		bBlockActors = false;
 		
 		FVector LocationDelta = SkMInstance->GetRootLocationDelta();
-		//debugf(TEXT("#Cin. Actor     on: %f %f %f   GTicks %i Actor %s "), Location.X, Location.Y, Location.Z, GTicks, this->GetName() ); //#SKEL
-		//debugf(TEXT("#Cin. GetRootLocationDelta: %f %f %f "),LocationDelta.X, LocationDelta.Y, LocationDelta.Z ); //#SKEL
-		//debugf(TEXT("#Cin. MoveActor to: %f %f %f"), Location.X+LocationDelta.X, Location.Y+LocationDelta.Y, Location.Z+LocationDelta.Z );//#SKEL				 
 
 		// Check against NaN #SKEL
 		if( (LocationDelta.X == LocationDelta.X) && (LocationDelta.Y == LocationDelta.Y) && (LocationDelta.Z == LocationDelta.Z) )
@@ -2993,10 +2972,6 @@ void AActor::physRootMotion(FLOAT deltaTime)
 		bCollideWorld = OldbCollideWorld;
 
 		Velocity = FVector(0,0,0); //#SKEL
-
-		// No speed update for CinMotion ?
-        // if (!bJustTeleported)
-		// Velocity = (Location - OldLocation) / deltaTime;
 
 	}	
 
@@ -3062,17 +3037,12 @@ void APawn::physHovering(FLOAT deltaTime, INT Iterations)
 	
 	bIsWalking = 0;
 
-#if 0
-	calcVelocity(AccelDir, deltaTime, AirSpeed, PhysicsVolume->FluidFriction * 0.5f, 0, 0, 0);  
-#else
 	// calc velocity differently
 	UBOOL bFluid = 1;
 
 	float accelSize = Acceleration.Size();
 	if ( accelSize > AccelRate )
 		Acceleration = AccelDir * AccelRate;
-
-	//Acceleration = AccelDir * ( AirSpeed / 2.0f );
 
 
 	float friction = PhysicsVolume->FluidFriction * 0.5f;
@@ -3096,7 +3066,6 @@ void APawn::physHovering(FLOAT deltaTime, INT Iterations)
 		Velocity = OldVelocity * (1 - 2 * PhysicsVolume->FluidFriction * deltaTime) 
 				+ 0.5f * (Acceleration + PhysicsVolume->Gravity * (1.f - Buoyancy/::Max(1.f,Mass))) * deltaTime; 
 	}
-	//Velocity = Velocity + PhysicsVolume->Gravity * deltaTime * (1.f - Buoyancy/Mass);
 
 	// clamp the forward velocity but not falling or repulsive (spring) induced velocity
 	FVector Vel2d = Velocity;
@@ -3110,7 +3079,6 @@ void APawn::physHovering(FLOAT deltaTime, INT Iterations)
 		Velocity.Y = Vel2d.Y;
 	}
 	// end calc velocity
-#endif
     FVector OldLocation = Location; // gam
 	Iterations++;
 	bJustTeleported = 0;
@@ -3140,47 +3108,17 @@ void APawn::physHovering(FLOAT deltaTime, INT Iterations)
 	
 	float idealHover = CollisionHeight * 1.8f * noise;
 	float hoverMult = 2.0f;
-	//float gravScale = 1.0f;
 	float testExtend = idealHover * hoverMult - idealHover;
 	FVector a = Location - FVector(0,0,(idealHover + testExtend));
 	FVector b = Location;
-	//FPlane red(1,0,0,1);
 
 	GetLevel()->SingleLineCheck(Hit, this,
 		a,
 		b,
 		TRACE_ProjTargets);
 
-	//GetLevel()->Engine->DebugLine( a, b, red, 1 );
-
 	if ( !Hit.Actor )
 	{
-		/*
-		FVector partExtent = 0.5 * GetCylinderExtent();
-		partExtent.Z *= 2;
-		int bQuad1 = GetLevel()->SingleLineCheck(Hit, this, Location + FVector(0.5 * CollisionRadius, 0.5 * CollisionRadius, -8),
-			Location + FVector(0.5 * CollisionRadius, 0.5 * CollisionRadius, 0), TRACE_AllColliding, partExtent);
-		int bQuad2 = GetLevel()->SingleLineCheck(Hit, this, Location + FVector(-0.5 * CollisionRadius, 0.5 * CollisionRadius, -8),
-			Location + FVector(-0.5 * CollisionRadius, 0.5 * CollisionRadius, 0), TRACE_AllColliding, partExtent);
-		int bQuad3 = GetLevel()->SingleLineCheck(Hit, this, Location + FVector(-0.5 * CollisionRadius, -0.5 * CollisionRadius, -8),
-			Location + FVector(-0.5 * CollisionRadius, -0.5 * CollisionRadius, 0), TRACE_AllColliding, partExtent);
-		int bQuad4 = GetLevel()->SingleLineCheck(Hit, this, Location + FVector(0.5 * CollisionRadius, -0.5 * CollisionRadius, -8),
-			Location + FVector(0.5 * CollisionRadius, -0.5 * CollisionRadius, 0), TRACE_AllColliding, partExtent);
-		
-		if ( (bQuad1 + bQuad2 + bQuad3 + bQuad4 > 1) && !(bQuad1 + bQuad3 == 0) && !(bQuad2 + bQuad4 == 0) )
-		{
-			//hoverVect = 2 * Clamp( -1.f * Velocity.Z, 30.f, 30.f + CollisionRadius) * 
-			//			FVector((FLOAT)(bQuad1 + bQuad4 - bQuad2 - bQuad3), (FLOAT)(bQuad1 + bQuad2 - bQuad3 - bQuad4) , 0.5);
-
-			// here we'll pitch/roll a bit based on the trace results.
-		}
-		else
-		{
-			float dist = Hit.Location.Z - Location.Z;
-			float diff = idealHover / dist;
-			hoverVect = FVector(0,0,-1) * diff;
-		}
-		*/
 	}
 	else
 	{
@@ -3211,11 +3149,6 @@ void APawn::physHovering(FLOAT deltaTime, INT Iterations)
 			float pitch = 32.0f + (size * 0.3f) + ( 48.0f * velRatio );
 			BYTE p = Clamp( (BYTE)pitch, (BYTE)32, (BYTE)200 );
 			Weapon->SoundPitch = p;
-			//debugf(TEXT(" pitch = %ed"), p);
-			//float NewVelSize = Velocity.Size();
-			//float diff = NewVelSize / VelSize;
-			//Weapon->Rotation.Pitch = int( diff * 8192.0f );
-			//Weapon->Rotation = newRot;
 		}
 
 		hoverVect.Z *= d;
@@ -3223,11 +3156,6 @@ void APawn::physHovering(FLOAT deltaTime, INT Iterations)
 
 		if ( hoverVect.Z < 0.0f ) // cancel pro-gravity forces
 			hoverVect.Z = 0.0f;
-		/*
-		float dif = idealHover / dis;
-		hoverVect = PhysicsVolume->Gravity * -0.5f * dif;
-		//hoverVect = PhysicsVolume->Gravity;
-		*/
 	}
 
 	Velocity += hoverVect;

@@ -15,7 +15,6 @@
 
 /* debug logging */
 #undef  NLOG                
-//#define NLOG(func) func
 #define NLOG(func) {}
 
 
@@ -133,7 +132,7 @@ void UEditorEngine::meshVertImport
 	// Allocate 
 	Mesh = new( InParent, MeshName, RF_Public|RF_Standalone )UVertMesh; 
 
-	// Initialize mesh defaults. TODO: - move into general LOD mesh initialization?
+	// Initialize mesh defaults.
 	// Default LOD settings.
 	Mesh->LODMinVerts	  = 10;		// Minimum number of vertices with which to draw a model. (Minimum for a cube = 8...)
 	Mesh->LODStrength	  = 1.00f;	// Scales the (not necessarily linear) falloff of vertices with distance.
@@ -306,17 +305,6 @@ void UEditorEngine::meshSkelImport//modelImport
 {
 	guard(UEditorEngine::meshSkelImport);
 
-	/*	 
-	// File header structure. 
-	struct VChunkHeader
-	{
-		ANSICHAR	ChunkID[20];  // string ID of up to 19 chars (usually zero-terminated..)
-		INT			TypeFlag;     // Flags/reserved
-		INT         DataSize;     // size per struct following;
-		INT         DataCount;    // number of structs/
-	};
-	*/
-	
 	// Temp structs for importing
 	USkelImport RawData; // local struct
 
@@ -420,7 +408,7 @@ void UEditorEngine::meshSkelImport//modelImport
 		RawData.Faces(f).WedgeIndex[1] = WIdx;
 	}	
 
-	// Initialize mesh defaults. TODO: - move into general LOD mesh initialization?
+	// Initialize mesh defaults.
 	// Default LOD settings.
 	Mesh->LODMinVerts	  = 10;		// Minimum number of vertices with which to draw a model. (Minimum for a cube = 8...)
 	Mesh->LODStrength	  = 1.00f;	// Scales the (not necessarily linear) falloff of vertices with distance.
@@ -468,7 +456,7 @@ void UEditorEngine::meshSkelImport//modelImport
 			Mesh->Materials(i) = NULL;
 	}
 
-	// Pad the texture pointers.. TODO: clean all this up when using materials.
+	// Pad the texture pointers.
 	while( RawData.Materials.Num() > Mesh->Materials.Num() )
 			Mesh->Materials.AddItem( NULL );
 
@@ -485,9 +473,6 @@ void UEditorEngine::meshSkelImport//modelImport
 	// Compute per-frame bounding volumes plus overall bounding volume.
 	Mesh->MeshGetInstance(NULL)->MeshBuildBounds(); 
 
-	//// Default scalings.
-	//Mesh->MeshGetInstance(NULL)->SetScale(FVector(1.0f,1.0f,1.0f));
-		
 	debugf(NAME_Log,TEXT(" * Total materials: %i "),((USkeletalMesh*)Mesh)->MeshMaterials.Num());
 	
 	// display summary info.	
@@ -562,7 +547,6 @@ void UEditorEngine::animationImport
 	RawBoneNames.Add(ChunkHeader.DataCount);	
 	NewAnimation->RefBones.Add(ChunkHeader.DataCount);
 	AnimationFile->Serialize( &RawBoneNames(0), sizeof(FNamedBoneBinary) * ChunkHeader.DataCount);
-	// INT NumBones = ChunkHeader.DataCount;
 
 	// Translate the raw data from the bones to Animation->RefBones FNames
 	for( INT n=0; n<RawBoneNames.Num(); n++)
@@ -644,7 +628,6 @@ void UEditorEngine::movementDigest(	UMeshAnimation* Anim, INT MoveIndex )
 
 	// Builds a FMeshAnimSeq and associated animation data for each new Move.
 	Anim->AnimSeqs.AddZeroed();
-	//FMeshAnimSeq* Seq = &Anim->AnimSeqs(MoveIndex);
 	FMeshAnimSeq* Seq = &Anim->AnimSeqs(Anim->AnimSeqs.Num()-1);
 	
 	debugf(TEXT("Digesting movement number %i"),MoveIndex); 
@@ -696,7 +679,7 @@ void UEditorEngine::movementDigest(	UMeshAnimation* Anim, INT MoveIndex )
 
 	// Fill in the backward-compatible sequence data.
 	// Adding notifys: only done AFTER the digestion.
-	Seq->AddGroup( ThisMoveInfo->Group ); //Seq->Group = ThisMoveInfo->Group;
+	Seq->AddGroup( ThisMoveInfo->Group );
 	Seq->Name =  ThisMoveInfo->Name;
 	Seq->NumFrames = ThisMoveInfo->NumRawFrames;
 	Seq->Rate = ThisMoveInfo->AnimRate;
@@ -722,7 +705,6 @@ void UEditorEngine::movementDigest(	UMeshAnimation* Anim, INT MoveIndex )
 			{
 				// Min() makes sure no illegal key index is used.
 				INT KeyIdx = Min(Anim->DigestHelper->RawAnimKeys.Num()-1,( ThisMoveInfo->FirstRawFrame + f ) * Anim->RefBones.Num() + b);
-				//debugf(TEXT("Raw frame %i KeyIndex %i rawanimkeystotal %i "), f, KeyIdx, Anim->RawAnimKeys.Num());
 				ThisMove->AnimTracks(i).KeyPos.AddItem( Anim->DigestHelper->RawAnimKeys(KeyIdx).Position );
 				ThisMove->AnimTracks(i).KeyQuat.AddItem( Anim->DigestHelper->RawAnimKeys(KeyIdx).Orientation );
 				ThisMove->AnimTracks(i).KeyTime.AddItem( (FLOAT)f/(FLOAT) ThisMoveInfo->NumRawFrames * ThisMove->TrackTime );  
@@ -771,7 +753,6 @@ void UEditorEngine::movementDigest(	UMeshAnimation* Anim, INT MoveIndex )
 		{
 			BoneDepth(b) += BoneDepth(Parent);
 		}
-		//NLOG( debugf(TEXT("Parent of %i  is %i - hierarchy depth: %i"),b,Parent,BoneDepth(b)) );
 
 		if( MaxDepth < BoneDepth(b))
 		{
@@ -784,7 +765,6 @@ void UEditorEngine::movementDigest(	UMeshAnimation* Anim, INT MoveIndex )
 		INT b = Hierarchy(i);
 		// conservative error scaling: root is about 2x as important as end bones ?
 		ErrorBias(i) =  1.0f + (MaxDepth+1-BoneDepth(b))/MaxDepth; 
-		//if (b < 5) ErrorBias(b) = 3.0f;
 		
 	}
 	BoneDepth.Empty();
@@ -895,8 +875,6 @@ void UEditorEngine::movementDigest(	UMeshAnimation* Anim, INT MoveIndex )
 		INT SmallestIdx = -1;
 		FLOAT SmallestError = 100000000.f;
 
-		//debugf(TEXT("Keymax %i Totalkeys %i "),KeyMaximum, TotalKeys );
-
 		guard(Errortest);
 		for( INT i=0; i<ThisMove->AnimTracks.Num(); i++)
 		{
@@ -910,15 +888,11 @@ void UEditorEngine::movementDigest(	UMeshAnimation* Anim, INT MoveIndex )
 
 		guard(Deletelerp);
 		if( SmallestIdx == -1) break; // Less than 3 keys left in all tracks, so exit.
-		// Check whether we need to exit because the smallest overall error is too big to lerp
-		// if( SmallestError > MAXLERPERRX ) break;
 
 		// Delete the most lerp-able key.
 		INT i = MinTrackErrIdx(SmallestIdx);
 		AnalogTrack& Track = ThisMove->AnimTracks(SmallestIdx);
 
-		//debugf(TEXT("Removing %i from keys totals %i %i %i "),i,Track.KeyQuat.Num(),Track.KeyPos.Num(),Track.KeyTime.Num());
-		//debugf(TEXT("Removing %i from  err totals %i %i smallestidx %i "), i,DevTrack(SmallestIdx).QuatErr.Num(),DevTrack(SmallestIdx).PosErr.Num(),SmallestIdx);
 		Track.KeyQuat.Remove(i);
 		Track.KeyPos.Remove(i);
 		Track.KeyTime.Remove(i);
@@ -1082,7 +1056,6 @@ void UEditorEngine::digestMovementRepertoire( UMeshAnimation* Anim)
 		debugf(TEXT("Digesting motion [%s] number %i  raw keys: %i reduction: %f "), (*Anim->DigestHelper->MovesInfo(i).Name), i, Anim->DigestHelper->MovesInfo(i).NumRawFrames * Anim->RefBones.Num(),Anim->DigestHelper->MovesInfo(i).KeyReduction);
 		debugf(TEXT("          motion params: Group: [%s] Rate: [%f]"),(*Anim->DigestHelper->MovesInfo(i).Group),Anim->DigestHelper->MovesInfo(i).AnimRate); 
 		movementDigest( Anim, i ); 
-		// debugf(TEXT("  digested motion : %i keytracks:  %i rate: %f "),Anim->Moves.Num(), Anim->Moves(i).AnimTracks.Num(),Anim->DigestHelper->MovesInfo(i).AnimRate );
 	}
 
 	Anim->AnimSeqs.Shrink(); 

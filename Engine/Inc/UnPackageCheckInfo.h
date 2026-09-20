@@ -24,7 +24,6 @@ public:
 	UBOOL			Native;				// Did this entry come from the master server or from the ini file 
 	int				RevisionLevel;		// The revision level of this CheckInfo
 	void Serialize( FArchive& Ar );			
-	//void PostLoad();
 
 	virtual UBOOL VerifyID(FString CurrentId);	// Check to see if an MD5 is active
 };

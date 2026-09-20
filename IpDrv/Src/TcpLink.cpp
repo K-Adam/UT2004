@@ -59,7 +59,6 @@ void ATcpLink::execBindPort( FFrame& Stack, RESULT_DECL )
 			SetSocketReuseAddr( GetSocket() );
 			if( GetSocket() != INVALID_SOCKET )
 			{
-				//if( SetSocketLinger( GetSocket()) )
 				{
 					sockaddr_in Addr;
 					Addr.sin_family      = AF_INET;
@@ -81,7 +80,6 @@ void ATcpLink::execBindPort( FFrame& Stack, RESULT_DECL )
 					}
 					else Stack.Logf( TEXT("BindPort: bind failed") );
 				}
-				//else Stack.Logf( TEXT("BindPort: setsockopt failed") );
 			}
 			else Stack.Logf( TEXT("BindPort: socket failed") );
 			closesocket(GetSocket());
@@ -245,15 +243,8 @@ UBOOL ATcpLink::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 		s = select( *CheckSocket + 1, &SocketSet, 0, 0, &SelectTime );
 		if (( s != SOCKET_ERROR ) && ( s != 0 ))
 		{
-#if 1
 			u_long numbytes;
 			ioctlsocket( *CheckSocket, FIONREAD, &numbytes );
-#else
-			//!!vogel: old code
-			char TempBuf[256];
-			int numbytes;
-			numbytes = recv( *CheckSocket, TempBuf, 1, MSG_PEEK );
-#endif
 			if (numbytes == 0)
 			{
 				// Disconnect
@@ -305,7 +296,6 @@ void ATcpLink::CheckConnectionQueue()
 		return;
 	}
 	if ( Error == 0 ) {
-		// debugf( NAME_Log, "CheckConnectionQueue: No connections waiting." );
 		return;
 	}
 	SOCKLEN i = sizeof(SOCKADDR);
@@ -531,7 +521,6 @@ void ATcpLink::CheckConnectionAttempt()
 		debugf( NAME_Log, TEXT("CheckConnectionAttempt: Error while checking socket status.") );
 		return;
 	} else if ( Error == 0 ) {
-		//debugf( NAME_Log, "CheckConnectionAttempt: Connection attempt has not yet completed." );
 		return;
 	}
 

@@ -257,12 +257,6 @@ EGotoState UObject::GotoState( FName NewState )
 	StateFrame->Code	   = NULL;
 	StateFrame->ProbeMask  = (StateNode->ProbeMask | GetClass()->ProbeMask) & StateNode->IgnoreMask;
 
-	/* SCRIPTTIME
-	unclock(GScriptCycles);
-	debugf(TEXT("%s goto state %s at %f"),GetName(),*NewState, GScriptCycles * GSecondsPerCycle * 1000.f);
-	clock(GScriptCycles);
-	*/
-
 	// Send BeginState notification.
 	if( NewState!=NAME_None && NewState!=OldStateName && IsProbing(NAME_BeginState) )
 	{
@@ -503,13 +497,6 @@ void UObject::execDebugInfo( FFrame& Stack, RESULT_DECL ) //DEBUGGER
 	INT InputPos	= Stack.ReadInt();
 	BYTE OpCode		= *Stack.Code++;
 
-/*
-	FString InfoType = appFromAnsi((ANSICHAR*)Stack.Code);
-
-	while( *Stack.Code )
-		Stack.Code++;
-	Stack.Code++;
-*/
 	// Only valid when the debugger is running.
 	if ( GDebugger != NULL )
 		GDebugger->DebugInfo( this, &Stack, OpCode, LineNumber, InputPos );
@@ -880,7 +867,6 @@ void UObject::execJump( FFrame& Stack, RESULT_DECL )
 	// Jump immediate.
 	INT Offset = Stack.ReadWord();
 	Stack.Code = &Stack.Node->Script(Offset);
-//	Stack.Code = &Stack.Node->Script(Stack.ReadWord() );
 
 	unguardexecSlow;
 }
@@ -962,7 +948,7 @@ void UObject::execLet( FFrame& Stack, RESULT_DECL )
 		appMemzero( GPropAddr, sizeof(FString) );
 	}
 	else if ( GPropObject && GProperty && (GProperty->PropertyFlags & CPF_Net) )
-		GPropObject->NetDirty(GProperty); //FIXME - use object property instead for performance
+		GPropObject->NetDirty(GProperty); // Using the object property instead would be faster
 
 	if (GRuntimeUCFlags & RUC_ArrayLengthSet)
 	{
@@ -998,7 +984,7 @@ void UObject::execLetBool( FFrame& Stack, RESULT_DECL )
 	Stack.Step( Stack.Object, NULL ); // Variable.
 	BITFIELD*      BoolAddr     = (BITFIELD*)GPropAddr;
 	UBoolProperty* BoolProperty = (UBoolProperty*)GProperty;
-	INT Value=0;  // must be INT...execTrue/execFalse return 32 bits. --ryan.
+	INT Value=0;  // must be INT...execTrue/execFalse return 32 bits.
 	if ( GPropObject && GProperty && (GProperty->PropertyFlags & CPF_Net) )
 		GPropObject->NetDirty(GProperty);
 	Stack.Step( Stack.Object, &Value );
@@ -1103,7 +1089,6 @@ IMPLEMENT_FUNCTION( UObject, EX_GlobalFunction, execGlobalFunction );
 
 void UObject::execDelegateFunction( FFrame& Stack, RESULT_DECL )
 {
-	//guardSlow(UObject::execDelegateFunction);
 	guard(UObject::execDelegateFunction);
 
 	// Look up delegate property
@@ -1120,13 +1105,11 @@ void UObject::execDelegateFunction( FFrame& Stack, RESULT_DECL )
 	else
 		CallFunction( Stack, Result, FindFunctionChecked(DelegateName) );
 	unguardexec;
-	//unguardexecSlow;
 }
 IMPLEMENT_FUNCTION( UObject, EX_DelegateFunction, execDelegateFunction );
 
 void UObject::execDelegateProperty( FFrame& Stack, RESULT_DECL )
 {
-//	guardSlow(UObject::execDelegateProperty);
 	guard(UObject::execDelegateProperty);
 	FName FunctionName = Stack.ReadName();
 	((FScriptDelegate*)Result)->FunctionName = FunctionName;
@@ -1135,13 +1118,11 @@ void UObject::execDelegateProperty( FFrame& Stack, RESULT_DECL )
 	else
 		((FScriptDelegate*)Result)->Object = this;
 	unguardexec;
-//	unguardexecSlow;
 }
 IMPLEMENT_FUNCTION( UObject, EX_DelegateProperty, execDelegateProperty );
 
 void UObject::execLetDelegate( FFrame& Stack, RESULT_DECL )
 {
-//	guardSlow(UObject::execLetDelegate);
 	guard(UObject::execLetDelegate);
 
 	// Get variable address.
@@ -1158,7 +1139,6 @@ void UObject::execLetDelegate( FFrame& Stack, RESULT_DECL )
 		DelegateAddr->Object	   = Delegate.Object;
 	}
 	unguardexec;
-	//unguardexecSlow;
 }
 IMPLEMENT_FUNCTION( UObject, EX_LetDelegate, execLetDelegate );
 
@@ -4418,7 +4398,6 @@ void UObject::execGetPropertyText( FFrame& Stack, RESULT_DECL )
                 *(FString*)Result += TEXT(",");
             *(FString*)Result += Temp;
         }
-		//*(FString*)Result = Temp;
 	}
 	else *(FString*)Result = TEXT("");
 
@@ -5060,7 +5039,6 @@ void UObject::ProcessEvent( UFunction* Function, void* Parms, void* UnusedResult
 	FScopedScriptStats ScriptStats( Function );
 
 	// Start timer.
-	// SCRIPTTIME FLOAT StartTime = GScriptCycles;
 	if( ++GScriptEntryTag == 1 )
 		clock(GScriptCycles);
 

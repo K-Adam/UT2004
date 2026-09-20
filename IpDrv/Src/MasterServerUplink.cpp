@@ -145,7 +145,6 @@ public:
 		UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );
 		check(NetDriver);
 		GameHeartbeat = new FNATHeartbeatLink( NetDriver->GetSocketData(), HB_GamePort );
-		//GameHeartbeat->bConnectionBroken = false;
 		// Gamespy query port NAT heartbeat.
 		if( Actor->GamespyQueryLink )
 			GSQueryHeartbeat = new FNATHeartbeatLink( Actor->GamespyQueryLink->GetSocketData(), HB_GamespyQueryPort );
@@ -552,8 +551,6 @@ public:
 			{
 				for( INT conn=0;conn<NetDriver->ClientConnections.Num(); conn++ )
 				{
-//					if( NetDriver->ClientConnections(conn)->CDKeyResponse != TEXT("") )
-//					{
 						INT idx = OutstandingChallenges.FindItemIndex( NetDriver->ClientConnections(conn)->LowLevelGetRemoteAddress() );
 						if( idx != INDEX_NONE )
 						{
@@ -578,7 +575,6 @@ public:
 							ArSend->Flush();
 							OutstandingChallenges.Remove(idx);
 						}
-//					}
 				}
 			}
 		}
@@ -687,11 +683,9 @@ public:
 			FString StatLineStr = StatLine;
 			*ArSend << Command << StatLineStr;
 			ArSend->Flush();
-			//GWarn->Logf(TEXT("sent stats line >>%s<<"), StatLine);
 		}
 		else
 		{
-			//GWarn->Logf(TEXT("buffering stats line >>%s<<"), StatLine);
 			StatsBuffer(StatsBuffer.AddZeroed()) = StatLine;
 		}
 
@@ -734,11 +728,6 @@ public:
 		if( Conn )
 		{
 			Conn->CDKeyResponse = TEXT("");
-/*
-			APlayerController *PC = Cast<APlayerController>(Conn->Actor);
-			if ( PC )
-				PC->eventClientValidate(Challenge);
-*/
 			OutstandingChallenges(OutstandingChallenges.AddZeroed()) = ClientIP;
 		}
 		unguard;
@@ -787,7 +776,7 @@ public:
 		ArSend->Flush();
 	}
 
-// Some versions of GNU C++ seem to need a little nudging here. --ryan.
+// Some versions of GNU C++ seem to need a little nudging here.
 #ifdef __GNUC__
     void *operator new(size_t x) { return ::operator new(x); }
 #endif
@@ -803,8 +792,6 @@ void FServerQueryInterface::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Cou
 {
 	guard(FServerQueryInterface::OnReceivedData);
 
-//	GWarn->Logf(TEXT("Received %d bytes from %s"), Count, *SrcAddr.GetString(1) );
-
 	FArchiveUdpReader ArRecv( Data, Count );
 	FArchiveUdpWriter ArSend( this, SrcAddr );
 	BYTE Command;
@@ -814,11 +801,9 @@ void FServerQueryInterface::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Cou
 		switch( Command )
 		{
 		case QI_Ping:
-	//		GWarn->Logf(TEXT("Sending ping response to %s"), *SrcAddr.GetString(1) );
 			SendPing( ArSend );
 			break;
 		case QI_Rules:
-	//		GWarn->Logf(TEXT("Sending rules response to %s"), *SrcAddr.GetString(1) );
 			SendRules( ArSend );
 			break;
 		case QI_Players:

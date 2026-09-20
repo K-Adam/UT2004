@@ -6,10 +6,7 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-// !!! FIXME: Some uscript classes have four bytes extra at the end of them
-// !!! FIXME:  on the Hammer, so we need to pad out the memory allocations
-// !!! FIXME:  (32 bytes to be safe)...fixing UnProp.cpp, UnClass.cpp or GCC
-// !!! FIXME:  itself would be smarter, though.  --ryan.
+// Padding stays because some script classes overrun their allocation by four bytes on 64-bit and the cause is still unknown.
 #include "Core.h"
 #if PLATFORM_64BITS
 #define MALLOC_PADDING 32

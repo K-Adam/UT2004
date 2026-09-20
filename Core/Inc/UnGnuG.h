@@ -125,10 +125,6 @@ typedef unsigned char		BYTE;		// 8-bit  unsigned.
 typedef unsigned short		_WORD;		// 16-bit unsigned.
 typedef unsigned int		DWORD;		// 32-bit unsigned.
 typedef unsigned long long	QWORD;		// 64-bit unsigned.
-#if __GNUC__
-//!!vogel: ???
-//typedef unsigned int		OWORD __attribute__ ((mode (TI)));
-#endif
 
 // Signed base types.
 typedef	signed char			SBYTE;		// 8-bit  signed.
@@ -166,7 +162,7 @@ typedef QWORD PTRINT;
 typedef DWORD PTRINT;
 #endif
 
-// !!! FIXME: This should really just include a header.
+// This should really just include a header.
 #if !defined __x86_64__
 typedef unsigned int size_t;
 #endif
@@ -263,7 +259,6 @@ CORE_API FLOAT _wtof( const UNICHAR* Str );
 
 // Memory
 #define appAlloca(size) ((size==0) ? 0 : alloca((size+7)&~7))
-//#define appAlloca(size) ((size==0) ? 0 : malloc((size+7)&~7))
 
 // System identification.
 extern "C"
@@ -283,13 +278,8 @@ char *strlwr(char *str);
 
 #include <math.h>
 
-// Sanjay Patel from Apple says:
-// "The math.h functions are all wrapped with app* functions in UnAnsi.cpp.
-//  This causes an extra level of indirection because gcc doesn't do
-//  cross-file inlining. I commented out the code in this file and put
-//  #define's in Core.h to work around this problem (for example #define
-//  appExp exp). This bought a little less than 1%." ... I cleaned this up
-//  slightly.  --ryan.
+// The math functions map straight to the C library, since gcc doesn't inline
+// the app* wrappers in UnAnsi.cpp across files.
 
 #define DEFINED_appMathIntrinsics 1
 #define appExp(x) exp(x)
@@ -325,7 +315,6 @@ char *strlwr(char *str);
 #define DEFINED_appMemcpy 1
 inline void appMemcpy( void* Dest, const void* Src, INT Count )
 {
-	//!!vogel: TODO
 	memcpy( Dest, Src, Count );
 }
 
@@ -335,7 +324,6 @@ inline void appMemcpy( void* Dest, const void* Src, INT Count )
 #define DEFINED_appMemzero 1
 inline void appMemzero( void* Dest, INT Count )
 {
-	//!!vogel: TODO
 	memset( Dest, 0, Count );
 }
 

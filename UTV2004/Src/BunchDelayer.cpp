@@ -18,8 +18,6 @@ void MoveDelayer::Tick(float DeltaSeconds)
 		WaitingMove wb=WaitingMoves.Front();
 		WaitingMoves.PopFront();
 
-//		debugf (TEXT ("Sending out delayed move: %s"), wb.Move);
-
 		for( INT i=0; i<UtvEngine->ListenDriver->ClientConnections.Num(); i++ ){
 			UNetConnection* Connection=UtvEngine->ListenDriver->ClientConnections(i);
 			if(UtvEngine->OpenConnections.Find(Connection)->isReady && Connection!=UtvEngine->PrimaryConnection){
@@ -177,7 +175,6 @@ BunchDelayer::BunchDelayer(void)
 	CurrentTime=0;
 	DelayTime=0;
 	MaxChannelQueSize=10; //was 5
-//	actors.SetSize (1024);
 	ActorProps ap;
 	ap.ActorClass=0;
 	ap.Actor=0;
@@ -189,7 +186,6 @@ BunchDelayer::BunchDelayer(void)
 	WatcherActor wa;
 	wa.ActorClass = NULL;
 	for (INT i = 0; i <= UNetConnection::MAX_CHANNELS; ++i) {
-//		INT a=WActors.AddZeroed();
 		WActors[i]=wa;
 		OpenChannels[i]=0;
 		DelayedOpenChannels[i]=0;
@@ -240,13 +236,11 @@ void BunchDelayer::Tick(float DeltaSeconds)
 		if(Bunch->bOpen){
 			check(DelayedOpenChannels[Bunch->ChIndex]==0);
 			DelayedOpenChannels[Bunch->ChIndex]=new OpenPackets;
-//			INT a=DelayedOpenChannels[Bunch->ChIndex]->AddZeroed();
 			new (*DelayedOpenChannels[Bunch->ChIndex]) InternalBunch(*wb.Bunch);
 			OpenChannelOnClients(Bunch->ChIndex);
 		} else {
 			check(DelayedOpenChannels[Bunch->ChIndex]!=0);
 			if(DelayedOpenChannels[Bunch->ChIndex]->Num()<(INT)(MaxChannelQueSize* (wb.Important?8:1))){
-//				INT a=DelayedOpenChannels[Bunch->ChIndex]->AddZeroed();
 				new (*DelayedOpenChannels[Bunch->ChIndex]) InternalBunch(*wb.Bunch);
 			}
 		}
@@ -282,7 +276,6 @@ void BunchDelayer::Tick(float DeltaSeconds)
 			if (sentdata > UtvEngine->FlushThreshold) {
 				UtvEngine->ListenDriver->TickDispatch (DeltaSeconds);
 				UtvEngine->ListenDriver->TickFlush();
-				//debugf(TEXT("Running double tick"));
 				sentdata = 0;
 			}
 		}
@@ -322,8 +315,6 @@ void BunchDelayer::ParseProperty(UProperty &Prop, BYTE *Data, int Element, FArch
 	guard(BunchDelayer::ParseProperty);
 	int Offset = useOffset ? Prop.Offset : 0;
 	BYTE *Dest = Data + Offset + Element * Prop.ElementSize;
-
-	//debugf(TEXT("Parsing property %s"), Prop.GetFullName());
 
 	//If we are reading, clear out first
 	if (in)
@@ -391,7 +382,6 @@ UObject *BunchDelayer::ParseObject(FArchive *in, FArchive *out)
 	if (!B) {
 		DWORD Index = 0;
 		in->SerializeInt(Index, MaxIndexRead);
-		//debugf(TEXT("Got index %d %d %d %p"), Index, MaxIndexRead, UtvEngine->ServerPackageMap->GetMaxObjectIndexRead(), out);
 		if (out)
 			out->SerializeInt(Index, UtvEngine->ServerPackageMap->GetMaxObjectIndexWrite());
 		Object = UtvEngine->ServerPackageMap->IndexToObject(Index, 1);
@@ -436,13 +426,10 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 	bool interesting = false;
 	BYTE Data[32768];
 
-	//return false;
-
 	guard(BunchDelayer::ParseProperties);
 
 	FInBunch* Bunch=IntBunch->bunch;
 	FInBunch tmp(*Bunch);
-	//FOutBunch out(UtvEngine->ConnectDriver->ServerConnection->Channels[0], false);
 
 	if (UtvEngine->DemoDriver)
 		UtvEngine->DemoDriver->SetCloak(true);
@@ -509,9 +496,6 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 		INT             RepIndex   = tmp.ReadInt( ClassCache->GetMaxIndex() );
 		FFieldNetCache* FieldCache = tmp.IsError() ? NULL : ClassCache->GetFromIndex( RepIndex );
 		
-		//if (tmp.ChIndex == 1)
-			//debugf (TEXT ("Now parsing actor %s"), (actors[tmp.ChIndex].Actor)->GetName ());
-
 		while( FieldCache ) {
 
 			//Only write the repindex if there was an actual field
@@ -520,7 +504,6 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 
 			if(actors[tmp.ChIndex].PropertiesUsed.Find(RepIndex)==0){
 				actors[tmp.ChIndex].PropertiesUsed.Set(RepIndex,1);	//the 1 doesnt matter
-				//debugf(TEXT("New property %i on channel %i"),RepIndex,tmp.ChIndex);
 				interesting = true;
 			}
 			
@@ -529,8 +512,6 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 
 			if( FieldCache && (It=FlagCast<UProperty,CLASS_IsAUProperty>(FieldCache->Field))!=NULL )
 			{		
-				//if (tmp.ChIndex == 1)
-				//	debugf (TEXT ("PP: Now checking field %s"), It->GetFullName());
 
 				//When doing seeall with a primary client, we need to drop certain bunches
 				if ((UtvEngine->SeeAll) && (!UtvEngine->NoPrimary) && (tmp.ChIndex == 1)) {
@@ -554,22 +535,10 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 
 				ParseProperty(*It, Data, Element, &tmp, out, false);
 
-				//check for dependency
-				/*if (UtvEngine->ServerPackageMap->GetDepend () > 0) {
-//					INT a=IntBunch->dependsOn.AddZeroed();
-					
-					Removed for now
-					//new(IntBunch->dependsOn) INT(UtvEngine->ServerPackageMap->GetDepend ());
-
-					//debugf (TEXT ("Now checking field %s"), It->GetFullName());
-					//debugf (TEXT ("Depending on %i"), UtvEngine->ServerPackageMap->GetDepend ());
-				}*/
-
 				unguard;
 			} 
 			else {
 				//This bunch contains RPC, flag this
-				//debugf(TEXT("RPC Comparison: %d %d"), tmp.GetNumBits(), out.GetNumBits());
 				IntBunch->hasRPC = true;
 	
 				guard(ParseFunction);
@@ -577,12 +546,8 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 				FName Message = FieldCache->Field->GetFName();
 				UFunction* Function = actors[tmp.ChIndex].Actor->FindFunction( Message );
 				// Get the parameters.
-//				FMemMark Mark(GMem);
 
 				if (Function) {
-
-					//if (tmp.ChIndex == 1)
-					//	debugf(TEXT("Got rpc: %s"), Function->GetFullName());
 
 					//When doing seeall with a primary client, we need to drop certain bunches
 					if ((UtvEngine->SeeAll) && (!UtvEngine->NoPrimary) && (tmp.ChIndex == 1)) {
@@ -591,19 +556,14 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 						}
 					}
 
-					//appMemzero (Data, Function->ParmsSize);
-
 					guard(GetParams);
-					//BYTE* Parms = new(GMem,MEM_Zeroed,Function->ParmsSize)BYTE;
 					for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(Function); It && (It->PropertyFlags & (CPF_Parm|CPF_ReturnParm))==CPF_Parm; ++It )
 						if( UtvEngine->ServerPackageMap->ObjectToIndex(*It)!=INDEX_NONE )
 							if( FlagCast<UBoolProperty,CLASS_IsAUBoolProperty>(*It) || tmp.ReadBit() ) {
-								//It->NetSerializeItem(tmp,UtvEngine->ServerPackageMap,Data+It->Offset);
 
 								if (!(FlagCast<UBoolProperty,CLASS_IsAUBoolProperty>(*It)))
 									if (out)
 										out->WriteBit(1);
-								//It->NetSerializeItem(out,UtvEngine->ServerPackageMap,Data+It->Offset);
 
 								ParseProperty(**It, Data, 0, &tmp, out);
 							} 
@@ -613,14 +573,11 @@ bool BunchDelayer::ParseProperties (InternalBunch* IntBunch)
 							}
 					unguard;
 	
-					//Mark.Pop();
-
 				}
 				else {
 					debugf(TEXT("Could not find function %s"), *Message);
 				}
 				unguard;
-				//return interesting;				
 			}
 
 			// Get next
@@ -734,8 +691,6 @@ void BunchDelayer::ParseWatcherProperties (InternalBunch* IntBunch)
 				WActors[tmp.ChIndex].Data.AddItem (NULL);
 			}
 
-			//debugf (TEXT ("Parse: started channel %i: %s"), tmp.ChIndex, WActors[tmp.ChIndex].ActorClass->GetName ());
-
 			unguard;
 		}
 	}
@@ -789,28 +744,6 @@ void BunchDelayer::ParseWatcherProperties (InternalBunch* IntBunch)
 				
 				//Now save this value to our allocated place
 
-				//appMemzero( Data, It->ElementSize * It->ArrayDim);		//suck, kraschar utan denna :)
-
-				//debugf (TEXT ("PW: Now checking field %s"), It->GetFullName ());
-				//It->NetSerializeItem (tmp, UtvEngine->ServerPackageMap, Data + Offset);
-
-				/*
-				if (It->IsA(UBoolProperty::StaticClass())) {
-					INT b = *(char *)(Data + Offset);
-					UBoolProperty *bp = (UBoolProperty *)It;
-					debugf(TEXT("Value: %i (%i)"), b, bp->BitMask);
-				}
-				if (It->IsA(UStrProperty::StaticClass())) {
-					debugf(TEXT("Value: %s"), **(FString *)(Data + Offset));
-				}
-				if (It->IsA(UFloatProperty::StaticClass())) {
-					debugf(TEXT("Value: %f"), *(float *)(Data + Offset));
-				}
-				if (It->IsA(UIntProperty::StaticClass())) {
-					debugf(TEXT("Value: %i"), *(int *)(Data + Offset));
-				}
-				*/
-
 				//This is used by the master server component
 				guard(ExtractName);
 				if (appStrfind(It->GetName(), TEXT("PlayerName"))) {
@@ -847,8 +780,6 @@ void BunchDelayer::AddBunch(FInBunch* Bunch)
 	InternalBunch* ib=new InternalBunch;
 	ib->bunch=new FInBunch(*Bunch);
 
-	//debugf(TEXT("--start--"));
-
 	//This call is important, it creates the outbunch that is actually sent. So it can not be skipped!
 	bool important=ParseProperties(ib);
 
@@ -857,8 +788,6 @@ void BunchDelayer::AddBunch(FInBunch* Bunch)
 	wb.OutTime=CurrentTime+DelayTime;
 	wb.Important = important;
 	
-	//ParseWatcherProperties(wb.Bunch); //test
-
 	unguard;
 	
 
@@ -871,13 +800,11 @@ void BunchDelayer::AddBunch(FInBunch* Bunch)
 		if(Bunch->bOpen){
 			check(OpenChannels[Bunch->ChIndex]==0);
 			OpenChannels[Bunch->ChIndex]=new OpenPackets;
-//			INT a=OpenChannels[Bunch->ChIndex]->AddZeroed();
 			new(*OpenChannels[Bunch->ChIndex]) InternalBunch(*ib);
 			OpenChannel(UtvEngine->PrimaryConnection,Bunch->ChIndex);
 		} else {
 			check(OpenChannels[Bunch->ChIndex]!=0);
 			if(OpenChannels[Bunch->ChIndex]->Num()<(INT)MaxChannelQueSize*(wb.Important?8:1) && Bunch->bReliable){
-//				INT a=OpenChannels[Bunch->ChIndex]->AddZeroed();
 				new(*OpenChannels[Bunch->ChIndex]) InternalBunch(*ib);
 			}
 		}
@@ -889,8 +816,6 @@ void BunchDelayer::AddBunch(FInBunch* Bunch)
 	}
 	unguard;
 
-	//mu
-	//ParseProperties (wb.Bunch, false);
 	unguard;
 }
 
@@ -946,8 +871,6 @@ void BunchDelayer::NewConnection(UNetConnection* Connection)
 			out->bReliable = true;
 			UBOOL written = 0;
 
-			//debugf (TEXT ("Sending replication for %i: %s"), i, WActors[i].ActorClass->GetName ());
-
 			//Now go through all properties to see which have data to send
 			for (INT j = 0; j < WActors[i].Data.Num (); ++j) {
 			
@@ -960,7 +883,6 @@ void BunchDelayer::NewConnection(UNetConnection* Connection)
 
 					//A regular property?
 					if ((It=FlagCast<UProperty,CLASS_IsAUProperty>(FieldCache->Field))!=NULL) {
-						//debugf (TEXT ("Property %i: %s"), j, It->GetName ());
 
 						if (It->ArrayDim != 1) {
 							DWORD Index = j;
@@ -971,18 +893,15 @@ void BunchDelayer::NewConnection(UNetConnection* Connection)
 									BYTE el = k;
 									out->SerializeInt (Index, ClassCache->GetMaxIndex ());
 									*out << el;
-									//It->NetSerializeItem (*out, UtvEngine->ServerPackageMap, Data);								
 									ParseProperty(*It, Data, el, NULL, out, false);
 									written = true;
 								}
 	
-								//Data += It->ElementSize; 
 							} 
 						}
 						else {
 							DWORD Index = j;
 							out->SerializeInt (Index, ClassCache->GetMaxIndex ());
-							//It->NetSerializeItem (*out, UtvEngine->ServerPackageMap, Data);
 							ParseProperty(*It, Data, 0, NULL, out, false);
 							written = true;
 						}
@@ -1022,10 +941,6 @@ void BunchDelayer::OpenChannel(UNetConnection* Connection,INT ChIndex,bool SendQ
 		op=DelayedOpenChannels[ChIndex];
 
 	if(!op){
-//		if(Connection==UtvEngine->PrimaryConnection){
-//			printf("Attempt to open channel without start packet %i\n",ChIndex);
-//		}
-//		new(UtvEngine->OpenConnections.Find(Connection)->ChannelHistory[ChIndex]) FString("Opening channel without start packet");
 		return;
 	}
 

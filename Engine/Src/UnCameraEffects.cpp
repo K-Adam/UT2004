@@ -26,7 +26,7 @@ UBOOL USubActionCameraEffect::Update(FLOAT Percent,ASceneManager* SceneManager)
 
 	if(IsRunning())
 	{
-        APlayerController*	Controller = SceneManager->Viewer ? SceneManager->Viewer->GetAPlayerController() : NULL;//Cast<APlayerController>(SceneManager->Viewer);
+        APlayerController*	Controller = SceneManager->Viewer ? SceneManager->Viewer->GetAPlayerController() : NULL;
 
 		if(Controller && CameraEffect)
 		{

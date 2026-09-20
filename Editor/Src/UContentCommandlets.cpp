@@ -61,8 +61,6 @@ class UCheckTextures : public UCommandlet
 				const FString &File = FilesInPath(FileIndex);
 				UObject* Package;
 
-				//GWarn->Logf(NAME_Log, TEXT("Loading %s"), *File);
-
 				try
 				{
 					Package = UObject::LoadPackage( NULL, *File, 0 );
@@ -311,26 +309,11 @@ class UStaticMeshConvert : public UCommandlet
 						GWarn->Logf(NAME_Log, TEXT("Error loading %s!"), *File);
 						continue;
 					}
-#if 0
-					UClass* StaticMeshClass		= FindObjectChecked<UClass>( ANY_PACKAGE, TEXT("StaticMesh") );
-					guard(LoadStaticMeshes);
-					for( TObjectIterator<UObject> It; It; ++It )
-					{
-						if( It->IsA(StaticMeshClass) && It->IsIn(Package) )
-						{
-							UStaticMesh* StaticMesh = CastChecked<UStaticMesh>(*It);
-							StaticMesh->Build( 1 );
-						}
-					}
-					unguard;
-					UObject::SavePackage( Package, NULL, RF_Standalone, *File, GWarn );
-#else
 					ULevel* Level = FindObject<ULevel>( Package, TEXT("MyLevel") );
 					if( Level )
 						UObject::SavePackage( Package, Level, 0, *File, GWarn );
 					else
 						GWarn->Logf(NAME_Log, TEXT("Error loading %s! (no ULevel)"), *File);
-#endif
 
 				}
 				catch( ... )
@@ -401,8 +384,6 @@ class UCheckStaticMeshes : public UCommandlet
 				const FString &File = FilesInPath(FileIndex);
 				UObject* Package;
 
-				//GWarn->Logf(NAME_Log, TEXT("Loading %s"), *File);
-
 				try
 				{
 					Package = UObject::LoadPackage( NULL, *File, LOAD_NoWarn );
@@ -458,7 +439,6 @@ class UCheckStaticMeshes : public UCommandlet
 							
 								if( ReportMesh )
 								{
-									//GWarn->Logf(NAME_Log, TEXT("[%s] [%s]"),StaticMeshActor->GetPathName(), StaticMeshActor->StaticMesh->GetPathName());
 									RebuildLighting = 1;
 								}
 							}
@@ -949,15 +929,7 @@ class UCompressTextures : public UCommandlet
 						}
 					}
 
-#if 1
 					UObject::SavePackage( Package, NULL, RF_Standalone, *File, GWarn );
-#else
-					ULevel* Level = FindObject<ULevel>( Package, TEXT("MyLevel") );
-					if( Level )
-						UObject::SavePackage( Package, Level, 0, *File, GWarn );
-					else
-						GWarn->Logf(NAME_Log, TEXT("Error loading %s! (no ULevel)"), *File);
-#endif
 
 				}
 				catch( ... )
@@ -1163,8 +1135,6 @@ class UCheckSounds : public UCommandlet
 							FWaveModInfo WaveInfo;
 							
 							if( Sound->GetData().Num() == 0 || !WaveInfo.ReadWaveInfo(Sound->GetData()) )
-//								GWarn->Logf( TEXT("BADBAD %s"), Sound->GetPathName() );
-//							else
 								GWarn->Logf( TEXT("       %s"), Sound->GetPathName() );
 							Sound->GetData().Unload();						
 						}

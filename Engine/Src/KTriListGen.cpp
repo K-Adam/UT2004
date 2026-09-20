@@ -154,7 +154,7 @@ static void MEAPI KAddHeightmapTriangles(ATerrainInfo* t,
                     
                     tri->normal = (&triData->normal_memory[nix]);
                     
-                    /* KTODO: Check angle between tris to set flags. */
+                    /* Could check the angle between tris to set flags. */
                     tri->flags = (McdTriangleFlags)(kMcdTriangleUseSmallestPenetration);
 #if USE_EDGES
                     tri->flags = (McdTriangleFlags)(tri->flags | kMcdTriangleUseEdge0 | kMcdTriangleUseEdge1 | kMcdTriangleUseEdge2 );
@@ -218,7 +218,6 @@ static void MEAPI KAddBSPTriangles(UModel* model, INT iNode, const FSphere* Sphe
                     for(i=0; i<PNode->NumVertices; i++)
                     {
 						FVector uPoint = model->Points(model->Verts(fVert+i).pVertex);
-						//FVector uPoint = model->Sections(PNode->iSection).Vertices.Vertices(PNode->iFirstVertex + i).Position;
 
 						if(triData->num_vert+i >= KTRILIST_SIZE*3)
 							return;
@@ -258,7 +257,7 @@ static void MEAPI KAddBSPTriangles(UModel* model, INT iNode, const FSphere* Sphe
                         tri->normal = &triData->normal_memory[triData->num_norm];
                         
                         // We only want 'edge' contacts for interior edges of the polygon. 
-                        // KTODO: Dont use edges for edges beteen co-planar polys (tricky).
+                        // Could skip edges between co-planar polys (tricky).
 						tri->flags = (McdTriangleFlags)0;
 						tri->flags = (McdTriangleFlags)(tri->flags | kMcdTriangleUseSmallestPenetration);
 
@@ -281,7 +280,6 @@ static void MEAPI KAddBSPTriangles(UModel* model, INT iNode, const FSphere* Sphe
 						triData->num_tri++;
                     }
 
-                    //triData->num_tri += PNode->NumVertices-2;
                     triData->num_vert += PNode->NumVertices;
                     triData->num_norm += 1;
                 }
@@ -484,12 +482,6 @@ void MEAPI KTriListQuery(ULevel* level, FSphere* sphere, KarmaTriListData* triDa
 
 			KLineDraw(normStart, normEnd, coffset, 0, 1-coffset);
 
-#if 0
-			// Draw line from centre of sphere to each triangle.
-			MeVector3 sphereCent;
-			KU2MEPosition(sphereCent, *sphere);
-			KLineDraw(sphereCent, normStart, 0, 1, 0);
-#endif
         }
     }
 

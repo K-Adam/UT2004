@@ -14,7 +14,6 @@ float GParticleAtten = 1.0f;
 
 // arrays for doing faster stuff - could be a static member
 INT			pcl_index[MAX_PARTICLES_PER];
-//static TArray<AxWind*> windActors; // cache of wind actors affecting the current emitter
 
 extern void SpawnBranchParticles( AxEmitter* pEmitter, int* freePclIdx, int numFreePcl );
 extern BranchIterator	sBranchIterator;
@@ -50,7 +49,6 @@ static inline void FetchTextureColor( FPlane& r, UTexture* pTex, float u, float 
 	int SrcYIndex = Clamp( (int)(v * pTex->VSize), 0, pTex->VSize-1 );
 	BYTE b = (BYTE)pBitmap[ SrcXIndex + SrcYIndex * pTex->USize ];
 	r = (*(FColor*)(&pColors[ b ])).Plane();
-	//Exchange( r.X, r.Z );
 }
 
 static inline float LerpInOut( float ratio, float x )
@@ -441,13 +439,6 @@ public:
 	{
         for ( int n=0; n<pEmitter->mMaxParticles; n++, p++ )
 	    {
-/*
-		    if ( *(int*)&p->life == 0 )
-			    continue;
-
-            if( *(int*)&p->delay > 0 )
-                continue;
-*/
 		    if ( /* *(int*)&*/ p->life == 0.f )
 			    continue;
 
@@ -579,7 +570,6 @@ void ParticleIterator::Update( AxEmitter* pEmitter )
 	pEmitter->mSphere = pEmitter->mBounds.Min + 0.5f * ( pEmitter->mBounds.Max - pEmitter->mBounds.Min );
 	pEmitter->mSphere.W = (pEmitter->mSphere - pEmitter->mBounds.Min).Size();
 
-	//ULevel* pLevel = pEmitter->GetLevel();
 	float T = pEmitter->mT;
 	float fT = Clamp( T, 0.0f, 0.05f ); // force clamp
 
@@ -596,7 +586,6 @@ void ParticleIterator::Update( AxEmitter* pEmitter )
 		if( pEmitter->GetLevel()->SinglePointCheck( Hit, pEmitter->mSphere, FVector(1,1,1)*pEmitter->mSphere.W, 0, pEmitter->GetLevel()->GetLevelInfo(), 1 )==0 )
 		{
 			bPotentialCollision = 1;
-			//debugf(TEXT("Potential Collision for: %s"), pEmitter->GetName() );
 		}
 	}
 
@@ -637,14 +626,12 @@ void ParticleIterator::Update( AxEmitter* pEmitter )
 
 	for ( int n=0; n<pEmitter->mMaxParticles; n++,p++ )
 	{
-		//if ( !(*(int*)&p->life) )
 		if ( /* *(int*)&*/ p->life == 0.f )
 		{
 			pcl_index[numfree++] = n;
 			continue;
 		}
 
-		//if ( (*(int*)&p->delay) )
         if( /* *(int*)&*/ p->delay > 0.f )
 		{
 			p->delay -= T;
@@ -700,26 +687,6 @@ void ParticleIterator::Update( AxEmitter* pEmitter )
 		if ( p->spin )
 			p->rot.Roll += p->spin * T;
         
-#if 0
-		if ( bPotentialCollision )
-		{
-			FCheckResult Hit(1.0);
-			if ( !pLevel->SingleLineCheck( Hit, pEmitter, p->pos, lastPos, TRACE_AllColliding, FVector(0,0,0) )) // sjs test FVector(1,1,1)*p->size ) ) (gam)
-			{
-				p->velocity = p->velocity.MirrorByVector( Hit.Normal );
-				p->pos = Hit.Location + Hit.Normal * p->size;
-				p->velocity *= pEmitter->mColElasticity;
-                // amb ---
-                if (pEmitter->mColMakeSound)
-                {
-                    pEmitter->eventCollisionSound();
-                }
-                // --- amb
-			}
-			if ( p->velocity.SizeSquared() < 0.25f )
-				p->velocity = FVector(0,0,0);
-		}
-#endif
 		if ( !pEmitter->mPosRelative )
 		{
 			pEmitter->mBounds += p->pos;
@@ -738,7 +705,6 @@ void ParticleIterator::Update( AxEmitter* pEmitter )
 		pEmitter->mBounds += pEmitter->mMeshNodes[0]->BoundingBox;
 
 
-	//GLog->Logf(TEXT("Num active: %i Total nodes free: %i"), pEmitter->numActive, pEmitter->msFreeNodeCount );
 	float maxSize = pEmitter->mSizeRange[RNG_HI];
 	if ( pEmitter->mGrowthRate > 0.0f )
 		maxSize += pEmitter->mGrowthRate * pEmitter->mLifeRange[RNG_HI];
@@ -777,8 +743,6 @@ void ParticleIterator::Update( AxEmitter* pEmitter )
 	if ( vlen >= pEmitter->mRegenDist && (pEmitter->mRegenPause==0) )
 		pEmitter->mRegenTimer += T * GetRandomRange( pEmitter->mRegenRange ) * GParticleAtten * pEmitter->mRegenBias;
 	
-	//debugf(TEXT("pEmitter %x mRegenTimer %f"), pEmitter, pEmitter->mRegenTimer );
-
 	if ( vlen > 0.0f )
 		interp_spawns = 1;
 
@@ -800,7 +764,6 @@ void ParticleIterator::Update( AxEmitter* pEmitter )
 
 	if ( num_to_spawn > 0)
 	{
-        //debugf(TEXT("spawning %x %d"), pEmitter, num_to_spawn);
 
 		// grab needed particles
 		num_to_spawn = Min( numfree, num_to_spawn ); // num_to_spawn cannot be more than free ones found
@@ -1001,8 +964,6 @@ void static DrawStaticMeshSection(FRenderInterface* RI, UStaticMesh* StaticMesh,
 			Section.MaxVertexIndex
 			);
 	}
-	//Owner->GetLevel()->Engine->Stats->StaticMesh_Sections++;
-	//Owner->GetLevel()->Engine->Stats->StaticMesh_Triangles += Section.NumTriangles;
 }
 
 
@@ -1058,10 +1019,6 @@ void MeshIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame )
 			    DrawStaticMeshSection( pFrame->Viewport->RI, pEmitter->mMeshNodes[0],  pEmitter, section, pEmitter->Skins(0), tile );
 		}
 
-		// tile-based tex coord gen w/blending
-		//CalcParticleUV( p, clr, c2, atten, u, v, pEmitter, blend_anim, nextRow, nextCol, texU, texV );
-        //float uv[2][2] = { { u, v} , {u+texU, v+texV} };
-        //DWORD dwClr = MakeColor(clr);
 	}
 }
 
@@ -1228,7 +1185,6 @@ void DiscIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame )
 	}
 	if ( num_prims > 0 )
 		pFrame->Viewport->RI->DrawDynQuads( num_prims );
-	// obsolete! pM->numTris = num_prims;
 
 	// unlock
 	UnlockTextureSource( pEmitter->mLifeColorMap );
@@ -1345,16 +1301,13 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 
 	emitterMatrix = GMath.UnitCoords * pEmitter->Location / pEmitter->Rotation;
 
-	FVector		uaxis = FVector(1,0,0);// emitterMatrix.XAxis;
-	FVector		vaxis = FVector(0,1,0);//emitterMatrix.YAxis; 
+	FVector		uaxis = FVector(1,0,0);
+	FVector		vaxis = FVector(0,1,0);
 
-    //vaxis = pFrame->WorldToCamera.TransformNormal(vaxis);
-
-	//ParticleT* pPrevPcl = NULL;
 	ParticleT* p = &(*(PclArrayPtr)pEmitter->mpParticles)(0);
 
 	float	ratio = -1.0f;
-	float	tu = 1.0f;//pEmitter->mTime - (int)pEmitter->mTime;
+	float	tu = 1.0f;
 	tu *= -ratio;
 	float	tuinc = -ratio;
 	float	size;
@@ -1377,8 +1330,6 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
     float emAtten = 1.0f;
     if( pEmitter->mRegen == 0 )
         emAtten = (float)pEmitter->mNumActivePcl / (float)pEmitter->mMaxParticles;
-    //if( pEmitter->GetClass()->GetDefaultActor()->LifeSpan != 0.0f )
-        //emAtten = pEmitter->LifeSpan / pEmitter->GetClass()->GetDefaultActor()->LifeSpan;
 	
 	int next = pEmitter->mHeadIndex;
     for ( ; ; )
@@ -1391,8 +1342,7 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 		if ( p->life == PCL_DEAD || p->delay > 0.0f )
 			continue;
         
-		size = p->size;// * (p->life * p->invLifeSpan);
-		//size *= size;// * p->size * pEmitter->DrawScale;
+		size = p->size;
 
 		if ( i == 0 )
 		{
@@ -1406,8 +1356,6 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 
 			verts[3] = verts[0];
 
-			//vaxis = pEmitter->mDir;//emitterDir;
-
 			verts[1] += vaxis * size;
 			verts[2] -= vaxis * size;
 
@@ -1419,7 +1367,6 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 		}
 		else
 		{
-			//vaxis = p->dir;
 
 			verts[1] = tmp[0];
 			verts[2] = tmp[3];
@@ -1437,8 +1384,6 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 			tmp[0] = verts[0];
 			tmp[3] = verts[3];
 		}
-
-		//tuinc = mpCurNodes[curidx].afuvA[0] * .025f;
 
 		float tvA = 0.01f;
 		float tvB = 0.49f;
@@ -1462,9 +1407,6 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
             CalcAttenColor( p, pEmitter, atten, clr, colorPlane );	
 
         DWORD dwClr = MakeColor(clr);
-
-        //if ( p->nextIndex == INDEX_NONE )
-            //dwClr = 0x0;
 
 		if ( i == 0 )
 			prev_color = dwClr;
@@ -1501,8 +1443,6 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 
 			verts[3] = verts[0];
 
-			//vaxis = pEmitter->mDir;//emitterDir;
-
 			verts[1] += uaxis * size;
 			verts[2] -= uaxis * size;
 
@@ -1514,7 +1454,6 @@ void StreamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 		}
 		else
 		{
-			//vaxis = p->dir;
 
 			verts[1] = tmpU[0];
 			verts[2] = tmpU[3];
@@ -1607,15 +1546,14 @@ void BranchIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 
 	emitterMatrix = GMath.UnitCoords * pEmitter->Location * pEmitter->Rotation;
 
-	FVector		uaxis = emitterMatrix.XAxis; //pFrame->Coords.XAxis;
+	FVector		uaxis = emitterMatrix.XAxis;
 	FVector		vaxis = emitterMatrix.YAxis; 
 
-	//ParticleT* pPrevPcl = NULL;
 	ParticleT* p = &(*(PclArrayPtr)pEmitter->mpParticles)(0);
 	ParticleT* mainp = &(*(PclArrayPtr)pEmitter->mpParticles)(0);
 
 	float	ratio = -0.1f;
-	float	tu = 1.0f;//pEmitter->mTime - (int)pEmitter->mTime;
+	float	tu = 1.0f;
 	tu *= -ratio;
 	float	tuinc = -ratio;
 	float	size;
@@ -1666,9 +1604,7 @@ void BranchIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame ) // particle
 			if ( p->life == PCL_DEAD || p->delay > 0.0f )
 				continue;
     
-			size = p->size;// * (p->life * p->invLifeSpan);
-            //if ( next == INDEX_NONE )
-            //    size = 0.0f;
+			size = p->size;
 
 			verts[1] = prevVecA[0];
 			verts[2] = prevVecA[1];
@@ -1805,7 +1741,6 @@ void BeamIterator::Update( AxEmitter* pEmitter )
         if (pEmitter->mStartParticles > 0)
         {
             pEmitter->mLifeRange[1] = pEmitter->mLifeRange[0];
-            //pEmitter->mSizeRange[1] = pEmitter->mSizeRange[0];
             pEmitter->mStartParticles = 0;
         }
 
@@ -1957,7 +1892,7 @@ void BeamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame )
     }
     else
     {
-        PlaneColor = ColorPlane(pEmitter->mColorRange[0]) * pEmitter->ScaleGlow; //FPlane(1.0f, 1.0f, 1.0f, 1.0f);
+        PlaneColor = ColorPlane(pEmitter->mColorRange[0]) * pEmitter->ScaleGlow;
         if (pEmitter->mAttenuate)
         {
             PlaneColor *= Atten*Atten;
@@ -2006,7 +1941,7 @@ void BeamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame )
         }
 
         // color //
-        PlaneColor = ColorPlane(pEmitter->mColorRange[0]) * pEmitter->ScaleGlow; //FPlane(1.0f, 1.0f, 1.0f, 1.0f);
+        PlaneColor = ColorPlane(pEmitter->mColorRange[0]) * pEmitter->ScaleGlow;
         if (pEmitter->mAttenuate)
         {
             PlaneColor *= Atten*Atten;
@@ -2087,49 +2022,6 @@ void BeamIterator::Draw( AxEmitter* pEmitter, FSceneNode* pFrame )
             pOutVerts += 4;
             NumPrims++;
         }
-
-        /*PlaneRot = Spin;
-        Axis = (YAxis * GMath.SinTab(PlaneRot) + ZAxis * GMath.CosTab(PlaneRot)) * Width;
-        U = 0;
-        for (p = 0; p < Planes; p++)
-        {
-            NextPlaneRot = PlaneRot + (32768.0f / Planes);
-            NextAxis = (YAxis * GMath.SinTab(NextPlaneRot) + ZAxis * GMath.CosTab(NextPlaneRot)) * Width;
-            NextU = U + (1.0f / Planes);
-
-            EVerts[p][0] = SecEnd + NextAxis;
-            EVerts[p][1] = SecEnd + Axis;
-
-            EVerts[p][0] = pFrame->WorldToCamera.TransformFVector(EVerts[p][0]);
-            EVerts[p][1] = pFrame->WorldToCamera.TransformFVector(EVerts[p][1]);
-
-            // fill in verts //
-            pOutVerts[0].Point = SVerts[p][0];
-            pOutVerts[0].U = U;
-            pOutVerts[0].V = 0;
-            pOutVerts[0].Color = dwPrevColor;
-
-            pOutVerts[1].Point = EVerts[p][0];
-            pOutVerts[1].U = U;
-            pOutVerts[1].V = 1 * f;
-            pOutVerts[1].Color = dwColor;
-
-            pOutVerts[2].Point = EVerts[p][1];
-            pOutVerts[2].U = NextU;
-            pOutVerts[2].V = 1 * f;
-            pOutVerts[2].Color = dwColor;
-
-            pOutVerts[3].Point = SVerts[p][1];
-            pOutVerts[3].U = NextU;
-            pOutVerts[3].V = 0;
-            pOutVerts[3].Color = dwPrevColor;
-
-            PlaneRot = NextPlaneRot;
-            Axis = NextAxis;
-            U = NextU;
-            pOutVerts += 4;
-            NumPrims++;
-        }*/
 
         appMemcpy(SVerts, EVerts, sizeof(SVerts));
 

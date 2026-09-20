@@ -52,34 +52,6 @@ BYTE FConvexVolume::SphereCheck(const FSphere& Sphere)
 
 	return ClippingFlags;
 }
-//WD: Don't compile original code...  I left this code here for Andrew's (or another developer's) convenience.
-#if 0
-{
-	BYTE ClippingFlags	= CF_Inside;
-
-	for(INT Index = 0;Index < NumPlanes;Index++)
-	{
-		FLOAT	Dist = BoundingPlanes[Index].PlaneDot(Sphere);
-
-		if(Dist > -Sphere.W)
-		{
-			// The sphere is partially outside.
-
-			ClippingFlags |= CF_Outside;
-
-			if(Dist > Sphere.W)
-			{
-				// The sphere is entirely outside.
-
-				ClippingFlags &= ~CF_Inside;
-				 break; // SL added
-			}
-		}
-	}
-
-	return ClippingFlags;
-}
-#endif
 
 //
 //  FConvexVolume::BoxCheck
@@ -93,11 +65,7 @@ BYTE FConvexVolume::BoxCheck(const FVector& Origin,const FVector& Extent)
 		for (INT Index = 0; Index < NumPlanes; Index++)
 		{
 			FPlane& Plane   = BoundingPlanes[Index];
-			//WD: removed 1 level of function calling 
-/*
-			FLOAT   Dist    = Plane.PlaneDot(Origin),
-			PushOut = FBoxPushOut(Extent,Plane);
-*/
+			// FBoxPushOut inlined
 			FLOAT Dist    = Plane.PlaneDot(Origin);
 			FLOAT PushOut = fabs(Extent.X*Plane.X) + fabs(Extent.Y*Plane.Y) + fabs(Extent.Z*Plane.Z);
 
@@ -120,36 +88,6 @@ BYTE FConvexVolume::BoxCheck(const FVector& Origin,const FVector& Extent)
 
 	return ClippingFlags;
 }
-//WD: Don't compile original code...  I left this code here for Andrew's (or another developer's) convenience.
-#if 0
-{
-	BYTE ClippingFlags	= CF_Inside;
-
-	for(INT Index = 0;Index < NumPlanes;Index++)
-	{
-		FPlane&	Plane = BoundingPlanes[Index];
-		FLOAT	Dist = Plane.PlaneDot(Origin),
-				PushOut = FBoxPushOut(Extent,Plane);
-
-		if(Dist > -PushOut)
-		{
-			// The sphere is partially outside.
-
-			ClippingFlags |= CF_Outside;
-
-			if(Dist > PushOut)
-			{
-				// The sphere is entirely outside.
-
-				ClippingFlags &= ~CF_Inside;
-				 break; // SL added
-			}
-		}
-	}
-
-	return ClippingFlags;
-}
-#endif
 
 //
 //  FConvexVolume::ClipPolygon

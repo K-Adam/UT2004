@@ -8,7 +8,7 @@
 
 #include "Core.h"
 
-// This is a hack, but MUST be defined for 64-bit platforms right now! --ryan.
+// Must be defined on 64-bit platforms.
 #ifdef PLATFORM_64BITS
 #define SERIAL_POINTER_INDEX 1
 #endif
@@ -593,7 +593,7 @@ private:
 	// Internal per-object variables.
     // These are represented in object.uc as:
     //  "var native private const pointer ObjectInternal[7];"
-    //  (LastIsA index being element [6], and the vtable being [0].)  --ryan.
+    //  (LastIsA index being element [6], and the vtable being [0].)
 	PTRINT					Index;				// Index of object into table.
 	UObject*				HashNext;			// Next object in this hash bin.
 	FStateFrame*			StateFrame;			// Main script execution stack.

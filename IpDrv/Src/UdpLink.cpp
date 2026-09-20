@@ -125,7 +125,6 @@ void AUdpLink::execSendText( FFrame& Stack, RESULT_DECL )
 		}
 		else
 		{
-			//debugf("Sent %i bytes.", SentBytes);
 		}
 	}
 	*(DWORD*)Result = 1;

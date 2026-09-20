@@ -207,7 +207,6 @@ void FPathBuilder::SetPathCollision(INT bEnabled)
 
 	if ( bEnabled )
 	{
-		//Level->SetActorCollision( 1 );
 		for ( INT i=0; i<Level->Actors.Num(); i++)
 		{
 			AActor *Actor = Level->Actors(i); 
@@ -218,12 +217,9 @@ void FPathBuilder::SetPathCollision(INT bEnabled)
 				{
 					Actor->bPathTemp = 1;
 					Actor->SetCollision(0,Actor->bBlockActors);
-					//debugf(TEXT("Collision turned OFF for %s"),Actor->GetName());
 				}
 				else 
 				{
-					//if ( Actor->bCollideActors && Actor->bBlockActors )
-					//	debugf(TEXT("Collision left ON for %s"),Actor->GetName());
 					Actor->bPathTemp = 0;
 				}
 			}
@@ -240,7 +236,6 @@ void FPathBuilder::SetPathCollision(INT bEnabled)
 				Actor->SetCollision(1,Actor->bBlockActors);
 			}
 		}
-		//Level->SetActorCollision( 0 );
 	}
 	unguard;
 }
@@ -561,24 +556,6 @@ INT AAIScript::AddMyMarker(AActor *S)
 INT AVehicle::AddMyMarker(AActor *S)
 {
 	guard(AVehicle::AddMyMarker);
-/*
-	if ( !bStationary || bAutoTurret  )
-		return 0;
-
-	AScout* Scout = Cast<AScout>(S);
-	if ( !Scout )
-		return 0;
-
-	UBOOL bRealBlockActors = bBlockActors;
-	SetCollision(bCollideActors, false);
-	if ( !Scout->findStart(Location) || (Abs(Scout->Location.Z - Location.Z) > Scout->CollisionHeight) )
-		GetLevel()->FarMoveActor(Scout, Location + FVector(0,0,HUMANRADIUS - CollisionHeight), 1, 1);
-	UClass *pathClass = FindObjectChecked<UClass>( ANY_PACKAGE, TEXT("AIMarker") );
-	SetCollision(bCollideActors, bRealBlockActors);
-	myMarker = Cast<AAIMarker>(GetLevel()->SpawnActor(pathClass, NAME_None, Scout->Location));
-	myMarker->bDestinationOnly = true;
-	return 1;
-*/
 	return 0;
 	unguard;
 }
@@ -1008,11 +985,9 @@ int AScout::findStart(FVector start)
 				return 0;
 			}
 		}
-		//debugf(NAME_DevPath,TEXT("scout placed on valid floor"));
 		return 1;
  	}
 
-	//debugf(NAME_DevPath,TEXT("Scout didn't fit"));
 	return 0;
 	unguard;
 }
@@ -1138,7 +1113,6 @@ void FPathBuilder::Pass2From(FVector start, FVector moveDirection, FLOAT TurnDir
 			stillmoving = 1;
 		else
 			stillmoving = TestWalk(moveDirection * 16.f, Hit, MINMOVETHRESHOLD); 
-		//debugf(TEXT("Now at %f %f"),Scout->Location.X, Scout->Location.Y);
 
 		// check good floor
 		Level->SingleLineCheck(Hit, Scout, Scout->Location - FVector(0,0,(Scout->CollisionHeight + UCONST_MAXSTEPHEIGHT + 4.f)) , Scout->Location, TRACE_World, FVector(16,16,1));
@@ -1149,7 +1123,6 @@ void FPathBuilder::Pass2From(FVector start, FVector moveDirection, FLOAT TurnDir
 			if ( !TestReach(Anchor->Location,RealLoc) )
 			{
 				// find new anchor or place one
-				//debugf(TEXT("ANCHOR NO LONGER VALID"));
 				ANavigationPoint *OldAnchor = Anchor;
 				ANavigationPoint *ClosestPath = NULL;
 				FLOAT ClosestDistSq = 65536.f;
@@ -1163,11 +1136,8 @@ void FPathBuilder::Pass2From(FVector start, FVector moveDirection, FLOAT TurnDir
 
 						if ( NewDistSq < BestDistSq )
 						{
-							//debugf(TEXT("Try %s as anchor"),Nav->GetName());
 							if ( TestReach(Nav->Location,RealLoc) )
 							{
-								//if ( OldAnchor )
-								//	debugf(TEXT("Can reach it - try from %s"), OldAnchor->GetName());
 								if ( NewDistSq < ClosestDistSq )
 								{
 									ClosestDistSq = NewDistSq;
@@ -1175,7 +1145,6 @@ void FPathBuilder::Pass2From(FVector start, FVector moveDirection, FLOAT TurnDir
 								}
 								if ( TestReach(OldAnchor->Location, Nav->Location) )
 								{
-									//debugf(TEXT("Reached new anchor again"));
 									if ( TestReach(OldPos,Nav->Location) )
 									{
 										debugf(TEXT("---------------------- New Anchor %s"), Nav->GetName());
@@ -1311,7 +1280,6 @@ void FPathBuilder::Pass2From(FVector start, FVector moveDirection, FLOAT TurnDir
 				 NumSteps = 3000;
 			if ( RightTurns < 3)
 				moveDirection = FVector(-1 * TurnDir * moveDirection.Y, TurnDir * moveDirection.X, 0);
-			//debugf(TEXT("turn right dir %f %f"), moveDirection.X, moveDirection.Y);
 		}
 		else if ( stillmoving != 1 )
 		{
@@ -1319,7 +1287,6 @@ void FPathBuilder::Pass2From(FVector start, FVector moveDirection, FLOAT TurnDir
 			BlockNormal = -1 * moveDirection;
 			FindBlockingNormal(BlockNormal);
 			moveDirection = FVector(-1 * TurnDir * BlockNormal.Y, TurnDir * BlockNormal.X, 0); 
-			//debugf(TEXT("turn left dir %f %f"), moveDirection.X, moveDirection.Y);
 		}
 		else RightTurns = 0;
 	}
@@ -1388,7 +1355,6 @@ void FPathBuilder::FindBlockingNormal(FVector &BlockNormal)
 	Level->SingleLineCheck(Hit, Scout, Destn + TestDown, Destn, TRACE_World, Scout->GetCylinderExtent());
 	if( Hit.Time < 1.f )
 	{
-		//debugf(TEXT("Found landing when looking for ledge"));
 		return;
 	}
 	Level->SingleLineCheck(Hit, Scout, Scout->Location + TestDown, Destn + TestDown, TRACE_World, Scout->GetCylinderExtent());

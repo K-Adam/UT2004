@@ -10,15 +10,7 @@
 #define UNFIRENATIVE_H
 
 #if __STATIC_LINK
-/* No native execs.
-DECLARE_NATIVE_TYPE(Fire,UFractalTexture);
-DECLARE_NATIVE_TYPE(Fire,UFireTexture);
-DECLARE_NATIVE_TYPE(Fire,UWaterTexture);
-DECLARE_NATIVE_TYPE(Fire,UWaveTexture);
-DECLARE_NATIVE_TYPE(Fire,UFluidTexture);
-DECLARE_NATIVE_TYPE(Fire,UWetTexture);
-DECLARE_NATIVE_TYPE(Fire,UIceTexture);
-*/
+// No native execs.
 
 #define AUTO_INITIALIZE_REGISTRANTS_FIRE \
 	UFractalTexture::StaticClass(); \

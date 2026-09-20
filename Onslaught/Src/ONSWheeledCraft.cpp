@@ -56,7 +56,7 @@ void AONSWheeledCraft::UpdateVehicle(FLOAT DeltaTime)
 
 		// Heuristic to divide torque up so that the wheels that are spinning slower get more of it.
 		// Sum of LSDFactor across all wheels should be 1.
-		// JTODO: Do we need to handle the case of vehicles with different size wheels?
+		// Vehicles with different size wheels are not handled specially.
 		FLOAT LSDSplit, EvenSplit, UseSplit;
 
 		EvenSplit = 1/NumPoweredWheels;
@@ -83,7 +83,6 @@ void AONSWheeledCraft::UpdateVehicle(FLOAT DeltaTime)
 
 		// GripTorque can't be more than the torque needed to invert slip ratio.
 		FLOAT TransInertia = (EngineInertia / Abs(GearRatios[Gear] * TransRatio)) + vw->WheelInertia;
-		//FLOAT SlipAngVel = vw->SlipVel/vw->WheelRadius;
 
 		// Brake torque acts to stop wheels (ie against direction of motion)
 		FLOAT BrakeTorque = 0.0f;
@@ -302,8 +301,6 @@ UBOOL AONSWheeledCraft::Tick(FLOAT DeltaTime, enum ELevelTick TickType)
 		FLOAT DeltaPitch = appAsin( Clamp<FLOAT>(Coords.XAxis | OldCoords.ZAxis, -1.0f, 1.0f) );
 		FLOAT DeltaRoll = appAsin( Clamp<FLOAT>(Coords.YAxis | OldCoords.ZAxis, -1.0f, 1.0f) );
 
-		//debugf( TEXT("DR:%f DP:%f"), DeltaRoll, DeltaPitch );
-
 		UBOOL bCurrentOnGround = (bVehicleOnGround || KP->bContactingLevel);
 		DaredevilPoints = 0;
 
@@ -322,9 +319,6 @@ UBOOL AONSWheeledCraft::Tick(FLOAT DeltaTime, enum ELevelTick TickType)
 				DaredevilPoints += Max<INT>( appFloor( InAirDistance/(0.5f*DaredevilThreshInAirDistance) ) - 1, 0 );
 
 				DaredevilPoints *= 10;
-
-				//debugf( TEXT("S:%f P:%f R:%f T:%f D:%f"), InAirSpin, InAirPitch, InAirRoll, InAirTime, InAirDistance);
-				//debugf( TEXT("POINTS: %d"), DaredevilPoints);
 
 				// A wheel must be touching the ground on landing to get a daredevil
 				if( bVehicleOnGround && DaredevilPoints > 0 )
@@ -478,8 +472,6 @@ void AONSWheeledCraft::PostNetReceive()
 	DriverViewPitch = CarState.ServerViewPitch;
 	DriverViewYaw = CarState.ServerViewYaw;
 
-	//KDrawRigidBodyState(&ChassisState, false);
-
 	unguard;
 }
 
@@ -488,14 +480,14 @@ void AONSWheeledCraft::ChangeGear(UBOOL bReverse)
 	guard(AONSWheeledCraft::Tick);
 
 	// If we want reverse, but aren't there already, and the engine is idling, change to it.
-	if(bReverse && Gear != 0)// && EngineRPM < 100)
+	if(bReverse && Gear != 0)
 	{
 		Gear = 0;
 		return;
 	}
 
 	// If we want forwards, but are in reverse, and the engine is idling, change to it.
-	if(!bReverse && Gear == 0)// && EngineRPM < 100)
+	if(!bReverse && Gear == 0)
 	{
 		Gear = 1;
 		return;
@@ -528,8 +520,6 @@ void AONSWheeledCraft::ProcessCarInput()
 	if(bIsInverted)
 		ForwardVel = 2.0f * StopThreshold;
 
-	//Log("F:"$ForwardVel$"IsI:"$bIsInverted);
-
 	UBOOL bReverse = false;
 
 	if( Driver == NULL )
@@ -544,14 +534,12 @@ void AONSWheeledCraft::ProcessCarInput()
 		{
 			if(ForwardVel < -StopThreshold) // going backwards - so brake first
 			{
-				//debugf(TEXT("F - Brake"));
 				bReverse = true;
 				OutputBrake = Abs(Throttle);
 				bIsDriving = false;
 			}
 			else // stopped or going forwards, so drive
 			{
-				//debugf(TEXT("F - Drive"));
 				OutputBrake = 0.0f;
 				bIsDriving = true;
 			}
@@ -562,13 +550,11 @@ void AONSWheeledCraft::ProcessCarInput()
 			// Also, we can only go into reverse once the engine has slowed down.
 			if(ForwardVel < StopThreshold && bIsDriving == false)
 			{
-				//debugf(TEXT("B - Drive"));
 				bReverse = true;
 				OutputBrake = 0.0f;
 			}
 			else // otherwise, we are going forwards, or still holding brake, so just brake
 			{
-				//debugf(TEXT("B - Brake"));
 				if ( (ForwardVel >= StopThreshold) || IsHumanControlled() )
 					OutputBrake = Abs(Throttle);
 
@@ -580,20 +566,17 @@ void AONSWheeledCraft::ProcessCarInput()
 			// If stationary, stick brakes on
 			if(Abs(ForwardVel) < StopThreshold)
 			{
-				//debugf(TEXT("B - Brake"));
 				OutputBrake = 1.0;
 				bIsDriving = false;
 			}
 			else if(ForwardVel < -StopThreshold) // otherwise, coast (but keep it in reverse if we're going backwards!)
 			{
-				//debugf(TEXT("Coast Backwards"));
 				bReverse = true;
 				OutputBrake = 0.0;
 				bIsDriving = false;
 			}
 			else
 			{
-				//debugf(TEXT("Coast"));
 				OutputBrake = 0.0;
 				bIsDriving = false;
 			}

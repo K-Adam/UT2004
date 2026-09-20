@@ -9,7 +9,7 @@
 
 #include "CorePrivate.h"
 
-// THIS VARIABLE MUST BE 32-BITS, UNSIGNED!  --ryan.
+// Must be 32-bit unsigned.
 unsigned int qRandSeed = 5318271; // sjs
 
 /*-----------------------------------------------------------------------------
@@ -32,7 +32,7 @@ FGlobalMath::FGlobalMath()
 	{for( INT i=0; i<NUM_SQRTS; i++ )
 		SqrtFLOAT[i] = appSqrt((FLOAT)i / 16384.f);}
 
-	// must be 32-bit unsigned or it goes boom in the particle system. --ryan.
+	// Must be 32-bit unsigned or the particle system breaks.
 	check(sizeof(qRandSeed) == 4);
 
 	qRandSeed = appRand() * appRand(); // sjs

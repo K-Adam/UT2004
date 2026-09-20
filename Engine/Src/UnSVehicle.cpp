@@ -162,7 +162,6 @@ void ASVehicle::preContactUpdate()
 		vw->TireLoad = 0.0f;
 		vw->SlipVel = 0.0f;
 		vw->SlipAngle = 0.0f;
-		//vw->SpinVel = 0.0f;
 
 		// Find wheel center in world space.
 		FVector WheelCenter = l2w.TransformFVector(vw->WheelPosition);
@@ -232,13 +231,8 @@ void ASVehicle::preContactUpdate()
 			KU2MEPosition(pos, CheckEnd); 
 			MdtContactSetPosition(contact, pos[0], pos[1], pos[2]);
 
-#if 1
 			// Normal points back along line.
 			MeVector3 cNormal = {-1.f * downVec.X, -1.f * downVec.Y, -1.f * downVec.Z};
-#else
-			// Normal is surface normal at point of contact.
-			MeVector3 cNormal = {Hit.Normal.X, Hit.Normal.Y, Hit.Normal.Z};
-#endif
 
 			MdtContactSetNormal(contact, cNormal[0], cNormal[1], cNormal[2]);
 
@@ -252,21 +246,11 @@ void ASVehicle::preContactUpdate()
 			// Contact penetration - scale to Karma.
 			MeReal pen = (vw->SuspensionPosition * K_U2MEScale) - vw->PenOffset;
 
-#if 0 // PENETRATION SCALE SUSPENSION
-			// Scale depending on suspension travel ie. make it softer within travel range
-			MeReal theta = (pen/(K_U2MEScale*vw->SuspensionTravel))*ME_PI - 0.5f*ME_PI;
-			static MeReal sFac = 0.0f;
-			MeReal pFac = sFac + (1-sFac)*0.5f*(MeSin(theta)+1.0f);
-			pen *= pFac;
-
-			MeReal ContactSoftness = vw->Softness;
-#else // SOFTNESS SUSPENSION
 			MeReal ContactSoftness = vw->Softness;
 
 			// If the contact is beyond its 'soft' travel, make it 'hard'.
 			if(pen > K_U2MEScale * vw->SuspensionTravel)
 				ContactSoftness = 0.001f;
-#endif
 
 			// Final overall penetraion scaling.
 			pen *= vw->PenScale; 
@@ -308,9 +292,6 @@ void ASVehicle::preContactUpdate()
 				FVector cp, d;
 				FLOAT drawLen = 10.0f;
 				KME2UPosition(&cp, pos);
-
-				//KME2UVecCopy(&d, cNormal);
-				//GTempLineBatcher->AddLine(cp, cp + drawLen * d, FColor(255, 0, 0));
 
 				KME2UVecCopy(&d, rollDir);
 				GTempLineBatcher->AddLine(cp, cp + drawLen * d, FColor(0, 255, 0));
@@ -391,17 +372,7 @@ void ASVehicle::preContactUpdate()
 
 			if(i==0)
 			{
-				//GStatGraph->AddDataPoint( FString(TEXT("LongSlipVel")), vw->SlipVel, true );
-				//GStatGraph->AddDataPoint( FString(TEXT("SlipAngle")), vw->SlipAngle, true );
-				//GStatGraph->AddDataPoint( FString(TEXT("NormalForce")), vw->TireLoad, true );
 
-				//debugf(TEXT("%f"), vw->SlipAngle);
-
-				//GStatGraph->AddDataPoint( FString(TEXT("WheelLongVel")), WheelLongVel, true );
-				//GStatGraph->AddDataPoint( FString(TEXT("GroundLongVel")), GroundLongVel, true );
-
-				//if(vw->SlipRatio > 100.0f && GroundLongVel < 1.0f)
-				//	int a=0;
 			}
 
 			vw->bWheelOnGround = true;
@@ -502,7 +473,7 @@ void ASVehicle::PostBeginPlay()
 		USVehicleWheel* vw = Wheels(i);
 
 		INT BoneIndex = smesh->MatchRefBone(vw->BoneName);
-		check(BoneIndex != INDEX_NONE); // JTODO: Make these friendly warnings instead!
+		check(BoneIndex != INDEX_NONE);
 
 		FMatrix BoneMatrix = RefBases(BoneIndex).Matrix() * MeshToWorldMatrix; // Bone -> Actor TM
 		FMatrix BoneMatrix2 = RefBases(BoneIndex).Matrix().Inverse() * MeshToWorldMatrix;

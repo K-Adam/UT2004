@@ -1712,16 +1712,6 @@ INT appCreateBitmap( const TCHAR* Pattern, INT Width, INT Height, DWORD* Data, F
 
 	appSprintf( File, TEXT("%s.bmp"), Pattern);
 
-	/*
-	for( i=0; i<65536; i++ )
-	{
-		appSprintf( File, TEXT("%s%05i.bmp"), Pattern, i );
-		if( FileManager->FileSize(File) < 0 )
-			break;
-	}
-*/	
-//	if( FileManager->FileSize(File)<0 )
-	//{
 		FArchive* Ar = FileManager->CreateFileWriter( File );
 		if( Ar )
 		{
@@ -1785,9 +1775,6 @@ INT appCreateBitmap( const TCHAR* Pattern, INT Width, INT Height, DWORD* Data, F
 		}
 		else 
 			return -1;
-//	}
-	//else 
-		//return -1;
 
 	// Success.
 	return i;
@@ -2162,7 +2149,7 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 	// Parameters.
 	GIsStrict = ParseParam( appCmdLine(), TEXT("STRICT") );
 
-	// make sure logfile notes if this is a platform-specific patch over the usual revision... --ryan.
+	// Make sure the log notes if this is a platform-specific patch over the usual revision.
 	#ifdef PLATFORM_VERSION_BUMP
 		#if LINUX && PLATFORM_64BITS
 		const TCHAR *platform = TEXT("Linux64");

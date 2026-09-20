@@ -80,9 +80,7 @@ FFileManagerUnix FileManager;
 	mainline
 -----------------------------------------------------------------------------*/
 
-// note that this is really Unix specific, and not really SDL specific,
-//  except the splash screen.  --ryan.
-// (Actually, most of this code isn't Unix specific, either.)
+// Not really SDL specific apart from the splash screen.
 #define USE_SDL_SPLASH
 
 #if (!defined USE_SDL_SPLASH)
@@ -666,13 +664,11 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		if( !Parse( appCmdLine(), TEXT("-USERLOGO="), LogoFName, 1024 ) )
 			appSprintf( LogoFName, TEXT("%sLogo.bmp"), GPackage );
 
-		//FString Filename = FString(TEXT("../Help")) * GPackage + TEXT("Logo.bmp");
 		FString Filename = FString(TEXT("../Help")) * LogoFName;
 		if ( appStrlen(GModPath)>0 )
 			Filename = FString(GModPath) * FString(TEXT("Help")) * GModName + TEXT("Logo.bmp");
 		if( GFileManager->FileSize(*Filename)<0 )
 			Filename = FString(TEXT("../Help")) * GPackage + TEXT("Logo.bmp"); // gam
-		//appStrcpy( GPackage, appPackage() );
 		if( (!ShowLog) &&
             (!ParseParam(CmdLine,TEXT("server"))) &&
             (!ParseParam(CmdLine,TEXT("nosplash"))) &&

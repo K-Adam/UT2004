@@ -153,7 +153,6 @@ UBOOL AController::WantsLedgeCheck()
 				FVector LineDir = Pawn->Location - (CurrentPath->Start->Location + (CurrentPathDir | (Pawn->Location - CurrentPath->Start->Location)) * CurrentPathDir);
 				if ( LineDir.SizeSquared() < 0.5f * Pawn->CollisionRadius )
 				{
-					//debugf(TEXT("%s skip ledge check because on path"), Pawn->GetName());
 					return false;
 				}
 			}
@@ -163,13 +162,11 @@ UBOOL AController::WantsLedgeCheck()
 				FVector NeededJump = Pawn->SuggestFallVelocity(MoveTarget->Location, Pawn->Location, Pawn->GroundSpeed, 0.f, 2 * Pawn->JumpZ, Pawn->GroundSpeed);
 				if ( NeededJump.Z < Pawn->JumpZ )
 				{
-					//debugf(TEXT("%s skip ledge check because jump reachable"), Pawn->GetName());
 					return false;
 				}
 			}
 		}
 	}
-	//debugf(TEXT("%s do ledge check"), Pawn->GetName());
 	return ( !Pawn->bCanFly );
 	unguard;
 }
@@ -471,7 +468,6 @@ void AController::execFindBestInventoryPath( FFrame& Stack, RESULT_DECL )
 	if ( *Weight > 0.f )
 		bestPath = SetPath();
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
-	//debugf( TEXT("FindBestInventory Path time %f for %s Enemy %d weight %f"),GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,  *PlayerReplicationInfo->PlayerName, (Enemy != NULL),*Weight );
 	clock(GScriptCycles);
 
 	*(AActor**)Result = bestPath; 
@@ -770,14 +766,11 @@ void AController::execPickWallAdjust( FFrame& Stack, RESULT_DECL )
 	P_FINISH;
 	if ( !Pawn )
 		return;
-	//debugf(TEXT("Start walladjust at %d"),GetLevel()->FindPathCycles);
 	unclock(GScriptCycles);
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
 	*(DWORD*)Result = Pawn->PickWallAdjust(HitNormal, NULL);
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
-	//debugf( TEXT("PickWallAdjust Path time %f for %s"),GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,  *PlayerReplicationInfo->PlayerName );
 	clock(GScriptCycles);
-	//debugf(TEXT("End walladjust at %d"),GetLevel()->FindPathCycles);
 	unguardexecSlow;
 }
 
@@ -926,7 +919,6 @@ void AController::execactorReachable( FFrame& Stack, RESULT_DECL )
 		*(DWORD*)Result = Reach;
 	}
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
-	//debugf( TEXT("ActorReachable Path time %f for %s to %s physics %d goal physics %d"),GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,  *PlayerReplicationInfo->PlayerName, actor->GetName(), Pawn->Physics, actor->Physics );
 	clock(GScriptCycles);
 	unguardexecSlow;
 }
@@ -949,7 +941,6 @@ void AController::execpointReachable( FFrame& Stack, RESULT_DECL )
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
 	*(DWORD*)Result = Pawn->pointReachable(point);  
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
-	//debugf( TEXT("PointReachable Path time %f for %s"),GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,  *PlayerReplicationInfo->PlayerName );
 	clock(GScriptCycles);
 	unguardexecSlow;
 }
@@ -970,8 +961,6 @@ AActor* AController::FindPath(FVector point, AActor* goal, UBOOL bWeightDetours)
 		debugf(NAME_DevPath,TEXT("Warning: No pawn for FindPath by %s in %s"),GetName(), GetStateFrame()->Describe() );
 		return NULL;
 	}
-	//debugf(TEXT("%s FindPath"),GetName());
-	//debugf(TEXT("Start find path at %d"),GetLevel()->FindPathCycles);
 	unclock(GScriptCycles);
 	clock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
 	LastRouteFind = Level->TimeSeconds;
@@ -981,14 +970,7 @@ AActor* AController::FindPath(FVector point, AActor* goal, UBOOL bWeightDetours)
 	if ( Pawn->findPathToward(goal,point,NULL,0.f, bWeightDetours) > 0.f )
 		bestPath = SetPath();
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
-/*
-	if ( goal )
-		debugf( TEXT("At %f FindPath Path time %f for %s to %s"),Level->TimeSeconds,GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,  *PlayerReplicationInfo->PlayerName,goal->GetName() );
-	else
-		debugf( TEXT("At %f FindPath Path time %f for %s"),Level->TimeSeconds,GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,  *PlayerReplicationInfo->PlayerName );
-*/
 	clock(GScriptCycles);
-	//debugf(TEXT("Find path to time was %d"), GetLevel()->FindPathCycles);
 	return bestPath;
 	unguard;
 }
@@ -1075,14 +1057,13 @@ void AController::execFindPathToIntercept( FFrame& Stack, RESULT_DECL )
 	P_GET_UBOOL_OPTX(bWeightDetours, false);
 	P_FINISH;
 
-    APawn *goalPawn = goal ? goal->GetAPawn() : NULL;//Cast<APawn>(goal);
+    APawn *goalPawn = goal ? goal->GetAPawn() : NULL;
 	if ( !goalPawn || !Pawn )
 	{
 		debugf(NAME_DevPath,TEXT("Warning: No goal for FindPathToIntercept by %s in %s"),GetName(), GetStateFrame()->Describe() );
 		*(AActor**)Result = NULL; 
 		return;
 	}
-	// debugf(TEXT("%s Find path to intercept %s going to %s"),Pawn->GetName(),goal->GetName(),OtherRouteGoal->GetName());
 	if ( !Pawn->ValidAnchor() || !goalPawn->Controller || !OtherRouteGoal )
 	{
 		AActor *ResultPath = FindPath(FVector(0,0,0), goalPawn, bWeightDetours);
@@ -1115,7 +1096,6 @@ void AController::execFindPathToIntercept( FFrame& Stack, RESULT_DECL )
 				bFindDirectPath = false;
 				if ( goalPawn->Controller->RouteCache[i] == Pawn->Anchor )
 				{
-//						debugf(TEXT("Already on path"));
 					bFindDirectPath = true;
 					break;
 				}
@@ -1139,7 +1119,6 @@ void AController::execFindPathToIntercept( FFrame& Stack, RESULT_DECL )
 			if ( Nav )
 			{
 				Nav->bTransientEndPoint = true;
-//					debugf(TEXT("Mark %s"),Nav->GetName());
 			}
 			else if ( !goalPawn->Controller->RouteCache[i] )
 				break;
@@ -1202,7 +1181,6 @@ void AController::execFindRandomDest( FFrame& Stack, RESULT_DECL )
 		bestPath = Cast<ANavigationPoint>(RouteGoal);
 
 	unclock(GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles));
-	//debugf( TEXT("FindRandomDest Path time %f for %s"),GStats.DWORDStats(GEngineStats.STATS_Game_FindPathCycles) * GSecondsPerCycle * 1000.0f,  *PlayerReplicationInfo->PlayerName );
 	clock(GScriptCycles);
 
 	*(ANavigationPoint**)Result = bestPath; 
@@ -1416,7 +1394,6 @@ void AController::execCanMakePathTo( FFrame& Stack, RESULT_DECL )
 				FLOAT MaxDist = ::Min<FLOAT>(CurrentPath->CollisionRadius,NextPath->CollisionRadius);
 				FVector Dir = (N->Location - Pawn->Location).SafeNormal();
 				FVector LineDist = CurrentPath->End->Location - (Pawn->Location + (Dir | (CurrentPath->End->Location - Pawn->Location)) * Dir);
-				//debugf(TEXT("Path dist is %f max %f"),LineDist.Size(),MaxDist);
 				Success = ( LineDist.SizeSquared() < MaxDist * MaxDist );
 			}
 		}
@@ -1443,7 +1420,6 @@ void AController::execMoveToward( FFrame& Stack, RESULT_DECL )
 
 	if ( !goal || !Pawn )
 	{
-		//Stack.Log("MoveToward with no goal");
 		return;
 	}
 
@@ -1595,14 +1571,6 @@ void AController::execPollMoveToward( FFrame& Stack, RESULT_DECL )
 
 	if( !MoveTarget || !Pawn || ((MoveTimer < 0.f) && (Pawn->Physics != PHYS_Falling)) )
 	{
-/*		if ( (MoveTimer < 0.f) && MoveTarget && PlayerReplicationInfo )
-		{
-			debugf(TEXT("%s movetimer %f moving toward %s"),*(PlayerReplicationInfo->PlayerName),MoveTimer,MoveTarget->GetName());
-			if ( Pawn )
-				debugf(TEXT("distance remaining %f"),(Pawn->Location - MoveTarget->Location).Size());
-		}
-*/
-		//Stack.Log("MoveTarget cleared during movetoward");
 		GetStateFrame()->LatentAction = 0;
 		return;
 	}
@@ -1768,9 +1736,6 @@ DWORD AController::SeePawn(APawn *Other, UBOOL bMaySkipChecks)
 	if ( Stimulus < Pawn->PeripheralVision )
 		return 0;
 
-	// need to make this only have effect at edge of vision
-	//if ( bMaySkipChecks && (appFrand() * (1.f - Pawn->PeripheralVision) < 1.f - Stimulus) )
-	//	return 0;
 	if ( bMaySkipChecks && bSlowerZAcquire && (appFrand() * dist > 0.1f * maxdist) )
 	{
 		// lower FOV vertically
@@ -2321,7 +2286,7 @@ void AAIController::AdjustFromWall(FVector HitNormal, AActor* HitActor)
 	{
 		if ( Pawn && MoveTarget )
 		{
-            AMover *HitMover = HitActor ? HitActor->GetAMover() : NULL;//Cast<AMover>(HitActor);
+            AMover *HitMover = HitActor ? HitActor->GetAMover() : NULL;
 			if ( HitMover && MoveTarget->HasAssociatedLevelGeometry(HitMover) )
 			{
 				ANavigationPoint *Nav = Cast<ANavigationPoint>(MoveTarget);

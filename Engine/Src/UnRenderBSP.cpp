@@ -561,14 +561,14 @@ void FBspDrawList::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 					}
 					else if(SceneNode->Viewport->Actor->RendMap != REN_Zones || SceneNode->Model->NumZones==0 )
 					{
-						Color = FColor(255,255,255); //Color = Section.Material->MipZero.Plane() * (0.5f + (Nodes[NodeIndex] & 7) / 16.0f);
+						Color = FColor(255,255,255);
 					}
 					else
 					{
 						INT		iZone = Node.iZone[Surf.Plane.PlaneDot(SceneNode->ViewOrigin) >= 0.0f];
 
 						if(iZone == 0)
-							Color = FColor(255,255,255); //Color = Section.Material->MipZero.Plane();
+							Color = FColor(255,255,255);
 						else
 							Color = FVector((iZone * 67) & 255,(iZone * 1371) & 255,(iZone * 1991) & 255) / 256.0f;
 
@@ -616,7 +616,6 @@ void FBspDrawList::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 						BspSelectionFinalBlend->Material = BspSelectionBitmapMaterial;
 						BspSelectionFinalBlend->FrameBufferBlending = FB_Brighten;
 						BspSelectionFinalBlend->ZWrite = 0;
-						//BspSelectionFinalBlend->TwoSided = (Surf.PolyFlags & PF_TwoSided) ? 1 : 0;
 					}
 					);
 

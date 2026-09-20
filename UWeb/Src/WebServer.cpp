@@ -299,7 +299,7 @@ bool UWebResponse::IncludeTextFile(const FString &Root, const FString &Filename,
 
 	// threw this check in here because this is where you'll probably
 	//  crash out if the mirroring is wrong...sizes break if TMultiMap
-	//  changes size.  --ryan.
+	//  changes size.
 	VERIFY_CLASS_SIZE(UWebRequest);
 	VERIFY_CLASS_SIZE(UWebResponse);
 
@@ -444,7 +444,6 @@ bool UWebResponse::IncludeTextFile(const FString &Root, const FString &Filename,
 					if (Text.Mid((Pos + T - I), 5) == TEXT("file="))
 					{
 						T += 5;
-						//debugf( NAME_Log, TEXT("Found 'file='"));
 						while (*T == ' ' || *T == '\t' || *T == '\r' || *T == '\n') T++;
 						
 						if (*T == '\'' || *T == '"')

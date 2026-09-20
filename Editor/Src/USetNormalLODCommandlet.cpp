@@ -8,7 +8,6 @@ Revision history:
 =============================================================================*/
 
 #include "EditorPrivate.h"
-//#include <stdlib.h>
 
 /*-----------------------------------------------------------------------------
 	USetNormalLODCommandlet
@@ -67,13 +66,7 @@ class USetNormalLODCommandlet : public UCommandlet
 					if( !Texture->Mips.Num() )
 						continue;
 
-#if 1
 					DWORD Size = Texture->Mips(0).USize * Texture->Mips(0).VSize;
-#else
-					DWORD Size = 0;
-					for( INT i=0; i<Texture->Mips.Num(); i++ )
-						Size += Texture->Mips(i).USize * Texture->Mips(i).VSize;
-#endif
 
 					switch( Texture->Format )
 					{

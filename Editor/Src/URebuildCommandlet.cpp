@@ -98,28 +98,6 @@ class URebuildCommandlet : public UCommandlet
     			if( appStrstr( *PackageName, TEXT(".ut2") ) )
                 {
                     GWarn->Logf( NAME_Log, TEXT("Skipping %s (currently unsupported)"), *PackageName );
-                    /* MERGE_HACK
-                    GWarn->Logf (NAME_Log, TEXT("Loading %s..."), *PackageName );
-    		        GEditor->Exec( *FString::Printf(TEXT("MAP LOAD FILE=\"%s\""), *FileName ) );
-
-                    GWarn->Logf (NAME_Log, TEXT("Rebuilding static meshes...") );
-			        GEditor->Exec( TEXT("STATICMESH ALLREBUILD") );
-
-                    GWarn->Logf (NAME_Log, TEXT("Rebuilding map...") );
-			        GEditor->Exec( TEXT("MAP REBUILD") );
-
-                    GWarn->Logf (NAME_Log, TEXT("Rebuilding BSP...") );
-			        GEditor->Exec( TEXT("BSP REBUILD") );
-
-                    GWarn->Logf (NAME_Log, TEXT("Rebuilding Lighting...") );
-                    GEditor->Exec( TEXT("LIGHT APPLY") );
-
-                    GWarn->Logf (NAME_Log, TEXT("Rebuilding Paths...") );
-			        GEditor->Exec( TEXT("PATHS DEFINE") );
-
-                    GWarn->Logf (NAME_Log, TEXT("Saving...") );
-                    GEditor->Exec( *FString::Printf(TEXT("MAP SAVE FILE=\"%s\""), *FileName ) );
-                    MERGE_HACK */
                 }
                 else
                 {

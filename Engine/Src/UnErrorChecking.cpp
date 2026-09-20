@@ -30,8 +30,6 @@ void ALevelInfo::CheckForErrors()
 	{
 		if ( !bPathsRebuilt )
 			GWarn->MapCheck_Add( MCTYPE_WARNING, this, *FString::Printf(TEXT("Paths need to be rebuilt!") ) );
-		//if ( !Screenshot )
-		//	GWarn->MapCheck_Add( MCTYPE_WARNING, this, *FString::Printf(TEXT("No screenshot for this level!") ) );
 		if ( Title.Len() == 0 )
 			GWarn->MapCheck_Add( MCTYPE_WARNING, this, *FString::Printf(TEXT("No title for this level!") ) );
 	}

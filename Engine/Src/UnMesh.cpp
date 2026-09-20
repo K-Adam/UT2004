@@ -46,7 +46,6 @@ UMeshInstance* UMesh::MeshGetInstance( const AActor* InActor)
             return DefMeshInstance;
 		}
         // Default instance doesn't exist, so it needs to be created.
-		// debugf(TEXT("MeshGetInstance: setting default instance.") ); 
         pInst = &DefMeshInstance; 
     }
     else
@@ -54,12 +53,10 @@ UMeshInstance* UMesh::MeshGetInstance( const AActor* InActor)
         // Check actor validity.
         if ( InActor->bDeleteMe )
 		{
-			//debugf(TEXT("MeshGetInstance: invalid actor, not constructing meshinstance."));			
 			if( DefMeshInstance )
 			{
 				return DefMeshInstance; 
 			}
-			//debugf(TEXT("MeshGetInstance: WARNING: setting default instance for invalid or expired actor.") );
 			pInst = &DefMeshInstance;
 		}
 		else
@@ -71,7 +68,6 @@ UMeshInstance* UMesh::MeshGetInstance( const AActor* InActor)
 				if ((InActor->MeshInstance->GetActor()==InActor) && (InActor->MeshInstance->GetMesh()==this))
 					return(InActor->MeshInstance);
 
-				// debugf(TEXT("MeshGetInstance: discarding old, creating new one.") ); 
 				// Need a new instance.
 				if( !(InActor->MeshInstance->GetStatus() & MINST_InUse ) )
 				{

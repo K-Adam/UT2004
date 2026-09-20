@@ -150,7 +150,6 @@ void UChannel::Destroy()
 	if ( OutRec )
 	{
 		Connection->PendingOutRec[ChIndex] = OutRec->ChSequence;
-		//debugf(TEXT("%i save pending out bunch %i"),ChIndex,Connection->PendingOutRec[ChIndex]);
 	}
 
 	// Free any pending incoming and outgoing bunches.
@@ -176,11 +175,6 @@ void UChannel::ReceivedAcks()
 	guard(UChannel::ReceivedAcks);
 	check(Connection->Channels[ChIndex]==this);
 
-	// Verify in sequence.
-	/*
-	for( FOutBunch* Out=OutRec; Out && Out->Next; Out=Out->Next )
-		check(Out->Next->ChSequence>Out->ChSequence);
-	*/
 
 	// Release all acknowledged outgoing queued bunches.
 	UBOOL DoClose = 0;
@@ -342,7 +336,6 @@ void UChannel::ReceivedRawBunch( FInBunch& Bunch )
 		*InPtr        = New;
 		NumInRec++;
 		checkSlow(NumInRec<=RELIABLE_BUFFER);
-		//AssertInSequenced();
 		unguard;
 	}
 	else
@@ -368,7 +361,6 @@ void UChannel::ReceivedRawBunch( FInBunch& Bunch )
 			delete Release;
 			if( Deleted )
 				return;
-			//AssertInSequenced();
 		}
 		unguard;
 	}
@@ -709,15 +701,6 @@ void UActorChannel::Destroy()
 			else if( !Actor->bNetTemporary )
 				Actor->GetLevel()->DestroyActor( Actor, 1 );
 		}
-/*
-	FOutBunch* NextOut = NULL;
-
-	for( FOutBunch* Out=OutRec; Out; Out=NextOut )
-	{
-		debugf(TEXT("Channel %i destroy with pending out %i"),OutRec->ChIndex, OutRec->ChSequence);
-	
-	}
-*/
 	}
 	else if( Actor && !OpenAcked )
 	{
@@ -762,13 +745,10 @@ void UActorChannel::SetChannelActor( AActor* InActor )
 	if ( Connection->PendingOutRec[ChIndex] > 0 )
 	{
 		// send empty reliable bunches to synchronize both sides
-		// debugf(TEXT("%i Actor %s WILL BE sending %i vs first %i"), ChIndex, Actor->GetName(), Connection->PendingOutRec[ChIndex],Connection->OutReliable[ChIndex]);
 		INT RealOutReliable = Connection->OutReliable[ChIndex];
 		Connection->OutReliable[ChIndex] = Connection->PendingOutRec[ChIndex] - 1;
 		while ( Connection->PendingOutRec[ChIndex] <= RealOutReliable )
 		{
-			// debugf(TEXT("%i SYNCHRONIZING by sending %i"), ChIndex, Connection->PendingOutRec[ChIndex]);
-
 			FOutBunch Bunch( this, 0 );
 			if( !Bunch.IsError() )
 			{
@@ -886,7 +866,7 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 	// Owned by connection's player?
 	guard(SetNetMode);
 	Actor->bNetOwner = 0;
-	APlayerController* Top = Actor->GetTopPlayerController();//Cast<APlayerController>( Actor->GetTopOwner() );
+	APlayerController* Top = Actor->GetTopPlayerController();
 	UPlayer* Player = Top ? Top->Player : NULL;
 	// Set quickie replication variables.
 	if( Connection->Driver->ServerConnection )
@@ -910,7 +890,6 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 	while( FieldCache || bJustSpawned )
 	{
 		// Save current properties.
-		//debugf(TEXT("Rep %s: %i"),FieldCache->Field->GetFullName(),RepIndex);
 		UBOOL bHasFieldCache = (FieldCache != NULL);
 		if ( bHasFieldCache && (Actor->Role != ROLE_Authority) )
 			Actor->PreNetReceive();
@@ -1041,7 +1020,6 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 				// The bClientDemoNetFunc flag gets cleared in ProcessDemoRecFunction
 				Actor->bClientDemoNetFunc = 1;
 				Actor->ProcessEvent( Function, Parms );
-//				debugf( NAME_DevNetTraffic, TEXT("      Call RPC: %s"), Function->GetName() );
 			}
 
 			// Destroy the parameters.
@@ -1185,8 +1163,6 @@ void UActorChannel::ReplicateActor()
 	Actor->bNetInitial = Actor->bNetInitial || bActorStillInitial; // for replication purposes, bNetInitial stays true until all properties sent
 	bActorMustStayDirty = false;
 	bActorStillInitial = false;
-	//debugf(NAME_DevNetTraffic,TEXT("Replicate %s: NetDirty %d Still Initial %d"),ActorClass->GetName(), Actor->bNetDirty,Actor->bNetInitial);
-
 	// Get memory for retirement list.
 	FMemMark Mark(GMem);
 	appMemzero( &RepEval(0), RepEval.Num() );
@@ -1219,7 +1195,6 @@ void UActorChannel::ReplicateActor()
 						BYTE* Src = (BYTE*)Actor + Offset;
 						if( Op && !Connection->PackageMap->CanSerializeObject(*(UObject**)Src) )
 						{
-							//debugf(TEXT("MUST STAY DIRTY Because of %s"),(*(UObject**)Src)->GetName());
 							bActorMustStayDirty = true;
 							Src = NULL;
 						}
@@ -1288,7 +1263,6 @@ void UActorChannel::ReplicateActor()
 
 		// Send property.
 		UBOOL Mapped = It->NetSerializeItem( Bunch, Connection->PackageMap, (BYTE*)Actor + Offset );
-		//debugf(NAME_DevNetTraffic,TEXT("   Send %s %i"),It->GetName(),Mapped);
 		if( !Bunch.IsError() )
 		{
 			// Update recent value.
@@ -1306,7 +1280,6 @@ void UActorChannel::ReplicateActor()
 			// Stop the changes because we overflowed.
 			Mark.Pop( Bunch );
 			LastRep  = iPtr;
-			//debugf(NAME_DevNetTraffic,TEXT("FILLED UP"));
 			FilledUp = 1;
 			break;
 		}
@@ -1588,7 +1561,7 @@ void UVoiceChannel::SendStatusPacket( FVoiceInfo* InVoiceInfo, EVoicePacketType 
 {
 	guard(UVoiceChannel::SendStatusPacket);
 
-	check( PacketType >= VOICE_MAX_CHATTERS ); //!!VOIP TODO
+	check( PacketType >= VOICE_MAX_CHATTERS );
 
 	// Delivery is not guaranteed because NewBunch may fail.
 	FOutBunch Bunch( this, 0 );
@@ -1607,19 +1580,19 @@ void UVoiceChannel::SendStatusPacket( FVoiceInfo* InVoiceInfo, EVoicePacketType 
 
 		if( PacketType == VOICEPACKET_Initialize )
 		{
-			check( Connection->VoiceChannel == NULL ); //!!VOIP TODO
+			check( Connection->VoiceChannel == NULL );
 			Connection->VoiceChannel = this;
 		}
 		else
 		if( PacketType == VOICEPACKET_AddChatter )
 		{
-			check( Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] == USOCK_Closed ); //!!VOIP TODO
+			check( Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] == USOCK_Closed );
 			Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] = USOCK_Pending;
 		}
 		else
 		if( PacketType == VOICEPACKET_RemoveChatter )
 		{
-			check( Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] != USOCK_Closed ); //!!VOIP TODO
+			check( Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] != USOCK_Closed );
 			Connection->Driver->VoiceAckMap[InVoiceInfo->VoiceIndex][VoiceIndex] = USOCK_Closed;
 		}
 	}
@@ -1829,7 +1802,7 @@ void UVoiceChannel::ReceivedBunch( FInBunch& Bunch )
 					if( VoiceChannel && !VoiceChannel->Closing )
 					{
 						// Don't send data till connection has been established by the other end as packet size is variable.
-						check( VoiceInfo->VoiceIndex == VoiceIndex ); //!!VOIP TODO
+						check( VoiceInfo->VoiceIndex == VoiceIndex );
 						if( Connection->Driver->VoiceAckMap[VoiceInfo->VoiceIndex][VoiceChannel->VoiceIndex] == USOCK_Open )
 							VoiceChannel->SendVoicePacket( VoiceInfo );
 						else
@@ -1900,7 +1873,7 @@ UBOOL UVoiceChannel::AllowVoiceTransmission( APlayerController* Dest, FVoiceInfo
 		{
 			FVector Distance = Connection->Actor->Pawn->Location - Dest->Pawn->Location;
 
-			// VOICECHAT TODO fast line trace to determine if there are any walls between us 
+			// Could do a fast line trace to determine if there are any walls between us.
 			if ( Distance.Size() > Connection->Actor->VoiceReplicationInfo->LocalBroadcastRange )
 				return 0;
 
