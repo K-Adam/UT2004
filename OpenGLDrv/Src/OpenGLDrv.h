@@ -299,7 +299,7 @@ private:
 	FPlane PickShadowLight();
 };
 
-// A colour texture with an optional depth and stencil texture. With multisampling the drawing goes to
+// A colour texture with optional depth and stencil and reflection textures. With multisampling the drawing goes to
 // separate buffers that Resolve copies into the textures.
 struct FOpenGLFramebuffer
 {
@@ -308,7 +308,9 @@ struct FOpenGLFramebuffer
 			DepthTexture,
 			MultisampleFramebuffer,
 			MultisampleColor,
-			MultisampleDepth;
+			MultisampleDepth,
+			ReflectionTexture,
+			MultisampleReflection;
 	INT		Width,
 			Height,
 			Samples;
@@ -327,7 +329,8 @@ class UOpenGLRenderDevice : public URenderDevice
 			Antialiasing,
 			AmbientOcclusion,
 			ContactShadows,
-			Bloom;
+			Bloom,
+			ScreenSpaceReflections;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
@@ -423,15 +426,15 @@ class UOpenGLRenderDevice : public URenderDevice
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
 	void ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth = 0);
 	void UseProgram(GLuint Program);
-	// Covers the framebuffer with Program. Units 0 to 2 sample linearly, unit 3 is the depth texture.
-	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Texture2 = 0,GLuint Depth = 0,UBOOL Additive = 0);
-	void PostProcess(UBOOL DepthPasses,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma);
+	// Covers the framebuffer with Program. Units 0 to 2 and 4 sample linearly, unit 3 is the depth texture.
+	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Texture2 = 0,GLuint Depth = 0,UBOOL Additive = 0,GLuint Texture4 = 0);
+	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma);
 
 private:
 	UBOOL InitContext();
 	UBOOL InitPostProcess(GLuint VertexShader);
 	void ResetStateCache();
-	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1);
+	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,UBOOL HasReflection = 0);
 	void DestroyFramebuffer(FOpenGLFramebuffer& F);
 	void ReleaseObjects();
 };

@@ -1,5 +1,5 @@
-// Post processing of the world: ambient occlusion and contact shadows from depth, bloom, gamma and
-// film grain. The HUD draws over the result unchanged.
+// Post processing of the world: screen space reflections, ambient occlusion and contact shadows from
+// depth, bloom, gamma and film grain. The HUD draws over the result unchanged.
 
 #include "OpenGLDrv.h"
 
@@ -28,7 +28,9 @@ static const ANSICHAR* CopyFragmentShader =
 	"}\n";
 
 // Proj holds 1 / M00, 1 / M11, M22 and M32 of the player's projection. The weapon shares the near and
-// far planes, so its depth linearizes the same way once taken out of its range.
+// far planes, so its depth linearizes the same way once taken out of its range. A neighbour across an
+// edge would tilt the normal, so the one nearer in depth is taken. At the border the clamped neighbour
+// is the centre itself and gives no direction.
 #define POST_COMMON \
 	"#version 300 es\n" \
 	"precision highp float;\n" \
@@ -61,6 +63,20 @@ static const ANSICHAR* CopyFragmentShader =
 	"	float Z = LinearZ(texelFetch(Depth, P, 0).r);\n" \
 	"	vec2 NDC = (vec2(P) + 0.5) / vec2(textureSize(Depth, 0)) * 2.0 - 1.0;\n" \
 	"	return vec3(NDC * Proj.xy * Z, Z);\n" \
+	"}\n" \
+	"vec2 ToUV(vec3 P)\n" \
+	"{\n" \
+	"	return P.xy / (P.z * Proj.xy) * 0.5 + 0.5;\n" \
+	"}\n" \
+	"vec3 NormalAt(ivec2 P, vec3 C)\n" \
+	"{\n" \
+	"	vec3 L = PosAt(P - ivec2(1, 0)), R = PosAt(P + ivec2(1, 0)), B = PosAt(P - ivec2(0, 1)), T = PosAt(P + ivec2(0, 1));\n" \
+	"	vec3 N = normalize(cross(Nearer(R - C, C - L), Nearer(T - C, C - B)));\n" \
+	"	return dot(N, C) > 0.0 ? -N : N;\n" \
+	"}\n" \
+	"float Jitter()\n" \
+	"{\n" \
+	"	return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));\n" \
 	"}\n"
 
 // R is the ambient occlusion and G the contact shadow, at half the world size. Light is the camera
@@ -80,13 +96,8 @@ static const ANSICHAR* OcclusionFragmentShader =
 	"	}\n"
 	"	bool Weapon = D < Split;\n"
 	"	vec3 C = PosAt(P);\n"
-	"	vec3 L = PosAt(P - ivec2(1, 0)), R = PosAt(P + ivec2(1, 0)), B = PosAt(P - ivec2(0, 1)), T = PosAt(P + ivec2(0, 1));\n"
-	// A neighbour across an edge would tilt the normal, the one nearer in depth is taken. At the
-	// border the clamped neighbour is C itself and gives no direction.
-	"	vec3 N = normalize(cross(Nearer(R - C, C - L), Nearer(T - C, C - B)));\n"
-	"	if (dot(N, C) > 0.0)\n"
-	"		N = -N;\n"
-	"	float Noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));\n"
+	"	vec3 N = NormalAt(P, C);\n"
+	"	float Noise = Jitter();\n"
 	"	float Height = float(textureSize(Depth, 0).y);\n"
 	"	float AO = 1.0;\n"
 	"	if (Strength.x > 0.0)\n"
@@ -124,7 +135,7 @@ static const ANSICHAR* OcclusionFragmentShader =
 	"				vec3 S = C + ToLight * (Length * (float(i) + Noise) / 8.0);\n"
 	"				if (S.z < 1.0)\n"
 	"					break;\n"
-	"				vec2 SUV = S.xy / (S.z * Proj.xy) * 0.5 + 0.5;\n"
+	"				vec2 SUV = ToUV(S);\n"
 	"				if (any(lessThan(SUV, vec2(0.0))) || any(greaterThan(SUV, vec2(1.0))))\n"
 	"					break;\n"
 	"				float SD = DepthAt(ivec2(SUV * vec2(textureSize(Depth, 0))));\n"
@@ -180,12 +191,14 @@ static const ANSICHAR* BloomUpFragmentShader =
 	"	FragColor = vec4(S * Params.z / 16.0, 1.0);\n"
 	"}\n";
 
-// Params holds the inverse gamma, whether occlusion is on and the bloom intensity. The half size
-// occlusion is gathered 4x4 with depth weights, which also averages out its noise.
+// Params holds the inverse gamma and the occlusion, bloom and reflection switches. Where the ray finds
+// the reflected surface on screen it replaces the env map, fading out toward the screen edges and the
+// ray's end so misses blend back into it. The half size occlusion is gathered 4x4 with depth
+// weights, which also averages out its noise.
 static const ANSICHAR* CompositeFragmentShader =
 	POST_COMMON
-	"uniform sampler2D Frame, Occlusion, Bloom;\n"
-	"uniform vec3 Params;\n"
+	"uniform sampler2D Frame, Occlusion, Bloom, Reflection;\n"
+	"uniform vec4 Params;\n"
 	"uniform uint Seed;\n"
 	"float Hash(uvec3 V)\n"
 	"{\n"
@@ -199,6 +212,49 @@ static const ANSICHAR* CompositeFragmentShader =
 	"	vec3 Color = texture(Frame, UV).rgb;\n"
 	"	ivec2 P = ivec2(UV * vec2(textureSize(Depth, 0)));\n"
 	"	float D = DepthAt(P);\n"
+	"	vec4 Refl = texelFetch(Reflection, P, 0);\n"
+	"	if (Params.w > 0.0 && D >= Split && D < 1.0 && Refl.a > 0.004)\n"
+	"	{\n"
+	"		vec2 Size = vec2(textureSize(Depth, 0));\n"
+	"		vec3 C = PosAt(P);\n"
+	"		vec3 N = NormalAt(P, C);\n"
+	"		vec3 R = reflect(normalize(C), N);\n"
+	"		float Step = max(8.0, 0.02 * C.z);\n"
+	"		vec3 S = C + N * (0.5 + 0.002 * C.z) + R * Step * Jitter();\n"
+	"		float W = 0.0;\n"
+	"		vec2 HitUV;\n"
+	"		for (int i = 0; i < 24; i++)\n"
+	"		{\n"
+	"			S += R * Step;\n"
+	"			if (S.z < 1.0)\n"
+	"				break;\n"
+	"			vec2 SUV = ToUV(S);\n"
+	"			if (any(lessThan(SUV, vec2(0.0))) || any(greaterThan(SUV, vec2(1.0))))\n"
+	"				break;\n"
+	"			float SD = DepthAt(ivec2(SUV * Size));\n"
+	"			float Behind = S.z - LinearZ(SD);\n"
+	// Behind the weapon or the sky nothing is known.
+	"			if (SD >= Split && SD < 1.0 && Behind > 0.0 && Behind < max(2.0 * Step, 8.0))\n"
+	"			{\n"
+	"				vec3 A = S - R * Step, B = S;\n"
+	"				for (int j = 0; j < 5; j++)\n"
+	"				{\n"
+	"					vec3 M = (A + B) * 0.5;\n"
+	"					if (M.z - LinearZ(DepthAt(ivec2(ToUV(M) * Size))) > 0.0)\n"
+	"						B = M;\n"
+	"					else\n"
+	"						A = M;\n"
+	"				}\n"
+	"				HitUV = ToUV(B);\n"
+	"				vec2 Edge = smoothstep(0.0, 0.1, min(HitUV, 1.0 - HitUV));\n"
+	"				W = Edge.x * Edge.y * (1.0 - float(i) / 24.0);\n"
+	"				break;\n"
+	"			}\n"
+	"			Step *= 1.25;\n"
+	"		}\n"
+	"		if (W > 0.0)\n"
+	"			Color = max(Color + W * (texture(Frame, HitUV).rgb * Refl.a - Refl.rgb), 0.0);\n"
+	"	}\n"
 	"	if (Params.y > 0.0 && D < 1.0)\n"
 	"	{\n"
 	"		bool Weapon = D < Split;\n"
@@ -249,13 +305,16 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 		glUniform1i(glGetUniformLocation(Programs[i],"Occlusion"),1);
 		glUniform1i(glGetUniformLocation(Programs[i],"Bloom"),2);
 		glUniform1i(glGetUniformLocation(Programs[i],"Depth"),3);
+		glUniform1i(glGetUniformLocation(Programs[i],"Reflection"),4);
 	}
 	return 1;
 }
 
-void UOpenGLRenderDevice::PostProcess(UBOOL DepthPasses,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma)
+void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma)
 {
-	FPlane Proj(1.f / CameraToScreen.M[0][0],1.f / CameraToScreen.M[1][1],CameraToScreen.M[2][2],CameraToScreen.M[3][2]);
+	FPlane	Proj(1.f / CameraToScreen.M[0][0],1.f / CameraToScreen.M[1][1],CameraToScreen.M[2][2],CameraToScreen.M[3][2]);
+	UBOOL	DepthPasses = ViewValid && (AmbientOcclusion || ContactShadows),
+			Reflections = ViewValid && ScreenSpaceReflections;
 
 	if( DepthPasses )
 	{
@@ -294,10 +353,10 @@ void UOpenGLRenderDevice::PostProcess(UBOOL DepthPasses,const FMatrix& CameraToS
 	// Disabled inputs still get a valid texture, their weight is zero.
 	UseProgram(CompositeProgram);
 	glUniform4fv(glGetUniformLocation(CompositeProgram,"Proj"),1,&Proj.X);
-	glUniform3f(glGetUniformLocation(CompositeProgram,"Params"),1.f / Max(Gamma,0.1f),DepthPasses ? 1.f : 0.f,Bloom ? 1.f : 0.f);
+	glUniform4f(glGetUniformLocation(CompositeProgram,"Params"),1.f / Max(Gamma,0.1f),DepthPasses ? 1.f : 0.f,Bloom ? 1.f : 0.f,Reflections ? 1.f : 0.f);
 	glUniform1ui(glGetUniformLocation(CompositeProgram,"Seed"),FrameCount++);
 	DrawFullscreen(CompositeProgram,Scene.DrawFramebuffer(),Scene.Width,Scene.Height,World.Texture,
-		DepthPasses ? Occlusion.Texture : World.Texture,Bloom ? BloomLevels[0].Texture : World.Texture,World.DepthTexture);
+		DepthPasses ? Occlusion.Texture : World.Texture,Bloom ? BloomLevels[0].Texture : World.Texture,World.DepthTexture,0,World.ReflectionTexture);
 }
 
 // The light contact shadows follow: the sun if the level has one, otherwise the light strongest at

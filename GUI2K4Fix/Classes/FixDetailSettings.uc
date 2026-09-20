@@ -1,10 +1,10 @@
 class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
-var automated moComboBox co_Resolution;
+var automated moComboBox co_Resolution, co_Reflections;
 var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_Bloom;
 var automated moSlider sl_Gamma;
-var() localized string ResolutionText[2];
+var() localized string ResolutionText[2], ReflectionsText[2];
 
 function InitComponent(GUIController MyController, GUIComponent MyOwner)
 {
@@ -13,10 +13,14 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	co_Resolution.AddItem(ResolutionText[0]);
 	co_Resolution.AddItem(ResolutionText[1]);
 	co_Resolution.ReadOnly(true);
+	co_Reflections.AddItem(ReflectionsText[0]);
+	co_Reflections.AddItem(ReflectionsText[1]);
+	co_Reflections.ReadOnly(true);
 
 	sb_Display.ManageComponent(co_Resolution);
 	sb_Display.ManageComponent(ch_Fullscreen);
 	sb_Display.ManageComponent(sl_Gamma);
+	sb_Display.ManageComponent(co_Reflections);
 	sb_Options.ManageComponent(ch_Shadows);
 	sb_Options.ManageComponent(ch_Antialiasing);
 	sb_Options.ManageComponent(ch_AmbientOcclusion);
@@ -33,6 +37,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 	{
 	case co_Resolution:
 		co_Resolution.SilentSetIndex(int(int(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ResolutionScale")) < 100));
+		break;
+	case co_Reflections:
+		co_Reflections.SilentSetIndex(int(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ScreenSpaceReflections"))));
 		break;
 	case ch_Fullscreen:
 		ch_Fullscreen.SetComponentValue(bool(PC.ConsoleCommand("ISFULLSCREEN")), true);
@@ -69,6 +76,9 @@ function InternalOnChange(GUIComponent Sender)
 	{
 	case co_Resolution:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ResolutionScale" @ (100 - 25 * co_Resolution.GetIndex()));
+		break;
+	case co_Reflections:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ScreenSpaceReflections" @ bool(co_Reflections.GetIndex()));
 		break;
 	case ch_Fullscreen:
 		if (ch_Fullscreen.IsChecked() != bool(PC.ConsoleCommand("ISFULLSCREEN")))
@@ -125,6 +135,7 @@ function ResetClicked()
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice AmbientOcclusion True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ContactShadows True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Bloom True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ScreenSpaceReflections True");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 
@@ -203,6 +214,18 @@ defaultproperties
 	End Object
 	sl_Gamma=GammaSlider
 
+	Begin Object class=moComboBox Name=ReflectionsCombo
+		Caption="Reflections"
+		Hint="Normal adds reflections of the scene to shiny surfaces, Low shows only their reflection maps."
+		IniOption="@Internal"
+		CaptionWidth=0.55
+		bHeightFromComponent=false
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=8
+	End Object
+	co_Reflections=ReflectionsCombo
+
 	Begin Object class=moCheckBox Name=ShadowsCheck
 		Caption="Dynamic Shadows"
 		Hint="Characters and vehicles cast shadows."
@@ -270,6 +293,8 @@ defaultproperties
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"
+	ReflectionsText(0)="Low"
+	ReflectionsText(1)="Normal"
 
 	WinTop=0.15
 	WinLeft=0

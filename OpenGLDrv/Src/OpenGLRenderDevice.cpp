@@ -29,10 +29,11 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("AmbientOcclusion"),RF_Public)UBoolProperty(CPP_PROPERTY(AmbientOcclusion),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ContactShadows"),	RF_Public)UBoolProperty(CPP_PROPERTY(ContactShadows),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("Bloom"),			RF_Public)UBoolProperty(CPP_PROPERTY(Bloom),			TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("ScreenSpaceReflections"),RF_Public)UBoolProperty(CPP_PROPERTY(ScreenSpaceReflections),TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = Bloom = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = Bloom = ScreenSpaceReflections = 1;
 	ResolutionScale = 100;
 }
 
@@ -214,7 +215,7 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	return 1;
 }
 
-void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format,UBOOL HasDepth)
+void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format,UBOOL HasDepth,UBOOL HasReflection)
 {
 	if( F.Framebuffer && Width == F.Width && Height == F.Height && Samples == F.Samples )
 		return;
@@ -238,6 +239,13 @@ void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT 
 		glTexStorage2D(GL_TEXTURE_2D,1,GL_DEPTH24_STENCIL8,Width,Height);
 		glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_TEXTURE_2D,F.DepthTexture,0);
 	}
+	if( HasReflection )
+	{
+		glGenTextures(1,&F.ReflectionTexture);
+		glBindTexture(GL_TEXTURE_2D,F.ReflectionTexture);
+		glTexStorage2D(GL_TEXTURE_2D,1,GL_RGBA8,Width,Height);
+		glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1,GL_TEXTURE_2D,F.ReflectionTexture,0);
+	}
 	GL.Textures[0] = (GLuint)-1;
 
 	if( Samples )
@@ -255,6 +263,13 @@ void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT 
 			glRenderbufferStorageMultisample(GL_RENDERBUFFER,Samples,GL_DEPTH24_STENCIL8,Width,Height);
 			glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_RENDERBUFFER,F.MultisampleDepth);
 		}
+		if( HasReflection )
+		{
+			glGenRenderbuffers(1,&F.MultisampleReflection);
+			glBindRenderbuffer(GL_RENDERBUFFER,F.MultisampleReflection);
+			glRenderbufferStorageMultisample(GL_RENDERBUFFER,Samples,GL_RGBA8,Width,Height);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1,GL_RENDERBUFFER,F.MultisampleReflection);
+		}
 	}
 
 	if( glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE )
@@ -268,11 +283,11 @@ void UOpenGLRenderDevice::DestroyFramebuffer(FOpenGLFramebuffer& F)
 		return;
 	// Zero names are ignored.
 	GLuint	Framebuffers[] = { F.Framebuffer, F.MultisampleFramebuffer },
-			Textures[] = { F.Texture, F.DepthTexture },
-			Renderbuffers[] = { F.MultisampleColor, F.MultisampleDepth };
-	glDeleteFramebuffers(2,Framebuffers);
-	glDeleteTextures(2,Textures);
-	glDeleteRenderbuffers(2,Renderbuffers);
+			Textures[] = { F.Texture, F.DepthTexture, F.ReflectionTexture },
+			Renderbuffers[] = { F.MultisampleColor, F.MultisampleDepth, F.MultisampleReflection };
+	glDeleteFramebuffers(ARRAY_COUNT(Framebuffers),Framebuffers);
+	glDeleteTextures(ARRAY_COUNT(Textures),Textures);
+	glDeleteRenderbuffers(ARRAY_COUNT(Renderbuffers),Renderbuffers);
 	F = FOpenGLFramebuffer();
 	GL.Framebuffer = (GLuint)-1;
 	for( INT i=0; i<OGL_MAX_TEXTURES; i++ )
@@ -422,7 +437,11 @@ FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,IN
 	INT Samples = Antialiasing ? Min<INT>(4,MaxSamples) : 0;
 	CreateFramebuffer(Scene,Viewport->SizeX,Viewport->SizeY,Samples);
 	INT Scale = Clamp(ResolutionScale,50,100);
-	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples);
+	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples,GL_RGBA8,1,1);
+	GLenum Buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glBindFramebuffer(GL_FRAMEBUFFER,World.DrawFramebuffer());
+	glDrawBuffers(ScreenSpaceReflections ? 2 : 1,Buffers);
+	GL.Framebuffer = World.DrawFramebuffer();
 	LockedViewport = Viewport;
 	Scene.Resolved = World.Resolved = 0;
 	RenderInterface.Locked(Viewport);
@@ -445,10 +464,20 @@ void UOpenGLRenderDevice::ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth)
 		glBindFramebuffer(GL_READ_FRAMEBUFFER,F.MultisampleFramebuffer);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER,F.Framebuffer);
 		glBlitFramebuffer(0,0,F.Width,F.Height,0,0,F.Width,F.Height,GL_COLOR_BUFFER_BIT | (Depth ? GL_DEPTH_BUFFER_BIT : 0),GL_NEAREST);
+		if( F.ReflectionTexture )
+		{
+			// A blit reads one colour attachment and writes every draw buffer.
+			GLenum Second[] = { GL_NONE, GL_COLOR_ATTACHMENT1 }, First = GL_COLOR_ATTACHMENT0;
+			glReadBuffer(GL_COLOR_ATTACHMENT1);
+			glDrawBuffers(2,Second);
+			glBlitFramebuffer(0,0,F.Width,F.Height,0,0,F.Width,F.Height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+			glReadBuffer(GL_COLOR_ATTACHMENT0);
+			glDrawBuffers(1,&First);
+		}
 		glEnable(GL_SCISSOR_TEST);
 		glBindFramebuffer(GL_FRAMEBUFFER,F.MultisampleFramebuffer);
-		GLenum Attachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT };
-		glInvalidateFramebuffer(GL_FRAMEBUFFER,2,Attachments);
+		GLenum Attachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT, GL_COLOR_ATTACHMENT1 };
+		glInvalidateFramebuffer(GL_FRAMEBUFFER,F.ReflectionTexture ? 3 : 2,Attachments);
 		GL.Framebuffer = F.MultisampleFramebuffer;
 	}
 	F.Resolved = 1;
@@ -464,7 +493,7 @@ void UOpenGLRenderDevice::UseProgram(GLuint Program)
 }
 
 // ES 3 cannot scale a blit into a multisampled target, a draw can.
-void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Texture2,GLuint Depth,UBOOL Additive)
+void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Texture2,GLuint Depth,UBOOL Additive,GLuint Texture4)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 	glViewport(0,0,Width,Height);
@@ -480,7 +509,7 @@ void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT W
 	else
 		glDisable(GL_BLEND);
 	UseProgram(Program);
-	GLuint Textures[] = { Texture0, Texture1, Texture2, Depth };
+	GLuint Textures[] = { Texture0, Texture1, Texture2, Depth, Texture4 };
 	for( INT i=0; i<ARRAY_COUNT(Textures); i++ )
 	{
 		if( !Textures[i] )

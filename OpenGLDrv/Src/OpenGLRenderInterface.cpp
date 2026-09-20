@@ -162,14 +162,14 @@ void FOpenGLRenderInterface::EndWorld()
 		return;
 	// Depth needs the player's projection and the level in the world framebuffer, letterboxing
 	// moves the projection off the framebuffer.
-	UBOOL DepthPasses = (RenDev->AmbientOcclusion || RenDev->ContactShadows) && ViewModel && WorldDrawn && !Viewport->bRenderCinematics;
+	UBOOL ViewValid = ViewModel && WorldDrawn && !Viewport->bRenderCinematics;
 	InWorld = ViewModel = 0;
 	RenDev->ResolveFramebuffer(RenDev->World,1);
 	FPlane Light(0,0,0,0);
-	if( DepthPasses && RenDev->ContactShadows )
+	if( ViewValid && RenDev->ContactShadows )
 		Light = PickShadowLight();
 	FLOAT Gamma = ParseParam(appCmdLine(),TEXT("NOGAMMA")) ? 1.f : Viewport->GetOuterUClient()->Gamma;
-	RenDev->PostProcess(DepthPasses,ViewCameraToScreen,Light,Gamma);
+	RenDev->PostProcess(ViewValid,ViewCameraToScreen,Light,Gamma);
 	WorldLights.Empty();
 	Clear(0,FColor(0,0,0),1,1.f,0,0);
 }
@@ -200,6 +200,12 @@ void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FL
 	}
 	if( Mask )
 		glClear(Mask);
+	// Cleared pixels reflect nothing, whatever the colour.
+	if( UseColor && InWorld && !CurrentState->RenderTarget && RenDev->ScreenSpaceReflections )
+	{
+		GLfloat Zero[4] = { 0.f, 0.f, 0.f, 0.f };
+		glClearBufferfv(GL_COLOR,1,Zero);
+	}
 }
 
 void FOpenGLRenderInterface::SetCullMode(ECullMode CullMode)

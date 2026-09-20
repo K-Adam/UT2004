@@ -69,7 +69,9 @@ static const ANSICHAR* OpenGLFragmentPrologue =
 	"in vec4 vSpecular;\n"
 	"in vec4 vTexCoord0, vTexCoord1, vTexCoord2, vTexCoord3, vTexCoord4, vTexCoord5, vTexCoord6, vTexCoord7;\n"
 	"uniform float AlphaRef;\n"
-	"out vec4 FragColor;\n"
+	"layout(location = 0) out vec4 FragColor;\n"
+	// What the env map added and how reflective the surface is, the screen space reflections replace it.
+	"layout(location = 1) out vec4 Reflection;\n"
 	// FDynamicLight::SampleIntensity per pixel. Light types: 0 sunlight, 1 cylinder,
 	// 2 non incidence, 3 quadratic non incidence, 4 point, 5 spot.
 	"float SampleIntensity(int i, vec3 P, vec3 N)\n"
@@ -269,6 +271,9 @@ public:
 	FString*							Code;
 	FLOAT								Time;
 	INT									NumTemps;
+	UBOOL								EnvSampled;
+	INT									ReflE,
+										ReflMask;
 	UBOOL								Cube[OGL_MAX_TEXTURES];
 	FString*							ErrorString;
 	UMaterial**							ErrorMaterial;
@@ -279,6 +284,7 @@ public:
 
 	FOpenGLCompiler(FOpenGLRenderInterface* InRI,FOpenGLMaterialState& InState,TArray<BYTE>& InKey,FString* InCode,FString* InErrorString,UMaterial** InErrorMaterial)
 	:	RI(InRI), S(InRI->CurrentState), State(InState), Key(InKey), Code(InCode), NumTemps(0)
+	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE)
 	,	ErrorString(InErrorString), ErrorMaterial(InErrorMaterial), FogMode(FOG_Normal)
 	{
 		Time = RI->Viewport->Actor ? RI->Viewport->Actor->Level->TimeSeconds : 0.f;
@@ -363,6 +369,7 @@ public:
 			Emit(TEXT("\tvec4 r%i = vec4(vCameraPos, 1.0);\n"),T);
 		else
 		{
+			EnvSampled = 1;
 			Emit(TEXT("\tvec4 r%i = vec4(CameraReflection(), 1.0);\n"),T);
 			if( Source == TCS_WorldEnvMapCoords )
 			{
@@ -611,6 +618,8 @@ public:
 		if( Tint == INDEX_NONE )
 			return INDEX_NONE;
 		Emit(TEXT("\tr%i = vec4(clamp(r%i.rgb * r%i.rgb * (1.0 + Options.z), 0.0, 1.0), r%i.a * r%i.a);\n"),C,C,Tint,C,Tint);
+		if( ReflE != INDEX_NONE )
+			Emit(TEXT("\tr%i *= r%i.rgb * (1.0 + Options.z);\n"),ReflE,Tint);
 		return C;
 	}
 
@@ -627,6 +636,17 @@ public:
 		if( State.AlphaTest )
 			Emit(TEXT("\tif (r%i.a <= AlphaRef) discard;\n"),C);
 		Emit(TEXT("\tFragColor = vec4(ApplyFog(r%i.rgb, %s), r%i.a);\n"),C,FogTarget(),C);
+		// Blended draws leave the reflection of the surface below. Modulating and darkening scale it like
+		// the colour, other blends keep it whole, as attachments share the blend and the alpha cannot
+		// both weight and hold the reflectivity.
+		UBOOL	Opaque = State.SrcBlend == GL_ONE && State.DstBlend == GL_ZERO && State.ZWrite,
+				Scales = State.DstBlend == GL_SRC_COLOR || (State.SrcBlend == GL_ZERO && State.DstBlend == GL_ONE_MINUS_SRC_COLOR);
+		if( Opaque && ReflE != INDEX_NONE )
+			Emit(TEXT("\tReflection = vec4(ApplyFog(r%i, vec3(0.0)), ApplyFog(vec3(r%i), vec3(0.0)).x);\n"),ReflE,ReflMask);
+		else if( Scales )
+			Emit(TEXT("\tReflection = vec4(FragColor.rgb, dot(FragColor.rgb, vec3(0.299, 0.587, 0.114)));\n"));
+		else
+			Emit(TEXT("\tReflection = vec4(0.0);\n"));
 	}
 
 	UBOOL Shader(UShader* Shader,FOpenGLModifierInfo Mod)
@@ -684,11 +704,14 @@ public:
 				return 0;
 		}
 
-		INT Spec = INDEX_NONE, SpecMask = INDEX_NONE;
+		INT		Spec = INDEX_NONE, SpecMask = INDEX_NONE;
+		UBOOL	EnvSpecular = 0;
 		if( Shader->Specular )
 		{
+			EnvSampled = 0;
 			if( (Spec = Combined(Shader->Specular,Mod)) == INDEX_NONE )
 				return 0;
+			EnvSpecular = EnvSampled && !Shader->ModulateSpecular2X;
 			if( !Shader->SpecularityMask )
 				Emit(TEXT("\tfloat r%i = 1.0;\n"),SpecMask = NewTemp());
 			else if( Shader->SpecularityMask == Shader->Diffuse )
@@ -721,7 +744,18 @@ public:
 				if( Shader->ModulateSpecular2X )
 					Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb * r%i.rgb * 2.0, 0.0, 1.0);\n"),C,C,Spec);
 				else
+				{
+					// What the clamp let through is the env map's real share of the colour.
+					if( EnvSpecular )
+					{
+						ReflE = NewTemp();
+						ReflMask = SpecMask;
+						Emit(TEXT("\tvec3 r%i = min(r%i.rgb, 1.0);\n"),ReflE,C);
+					}
 					Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb + r%i.rgb * r%i, 0.0, 1.0);\n"),C,C,Spec,SpecMask);
+					if( EnvSpecular )
+						Emit(TEXT("\tr%i = r%i.rgb - r%i;\n"),ReflE,C,ReflE);
+				}
 			}
 			if( ApplyColorModifier(C,Mod) == INDEX_NONE )
 				return 0;
@@ -769,6 +803,11 @@ public:
 		if( Spec != INDEX_NONE )
 			Emit(TEXT("\tr%i += ApplyFog(r%i.rgb * r%i, vec3(0.0));\n"),Base,Spec,SpecMask);
 		Emit(TEXT("\tFragColor = vec4(r%i, r%i.a + r%i - r%i.a * r%i);\n"),Base,C,Glow,C,Glow);
+		// Puddle decals mask colour and reflectivity with one texture, so the opacity is the reflectivity.
+		if( EnvSpecular )
+			Emit(TEXT("\tReflection = vec4(ApplyFog(r%i.rgb * r%i, vec3(0.0)), FragColor.a);\n"),Spec,SpecMask);
+		else
+			Emit(TEXT("\tReflection = vec4(0.0);\n"));
 		return 1;
 	}
 
