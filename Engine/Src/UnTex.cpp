@@ -1479,6 +1479,9 @@ void* FStaticTexture::GetRawTextureData(INT MipIndex)
 {
 	guard(FStaticTexture::GetRawTextureData);
 
+	if( MipIndex >= Texture->Mips.Num() )
+		return NULL;
+
 	if(!Texture->bParametric)
 		Texture->Mips(MipIndex).DataArray.Load();
 
@@ -1495,7 +1498,7 @@ void FStaticTexture::UnloadRawTextureData(INT MipIndex)
 {
 	guard(FStaticTexture::UnloadRawTextureData);
 
-	if(!GIsEditor && !Texture->bParametric)
+	if(!GIsEditor && !Texture->bParametric && MipIndex < Texture->Mips.Num())
 		Texture->Mips(MipIndex).DataArray.Unload();
 
 	unguard;
@@ -1508,6 +1511,13 @@ void FStaticTexture::UnloadRawTextureData(INT MipIndex)
 void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,ETextureFormat DestFormat,UBOOL ColoredMips)
 {
 	guard(FStaticTexture::GetTextureData);
+
+	// Servers often strip texture data from their packages, and a client downloads such a copy when it lacks the full one.
+	if( MipIndex >= Texture->Mips.Num() )
+	{
+		debugf(TEXT("WARNING: Texture [%s] has no data."),Texture->GetPathName());
+		return;
+	}
 
 	FMipmap&		Mipmap = Texture->Mips(MipIndex);
 	ETextureFormat	SourceFormat = (ETextureFormat) Texture->Format;

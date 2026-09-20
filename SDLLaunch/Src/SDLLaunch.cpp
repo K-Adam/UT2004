@@ -765,7 +765,13 @@ extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
 		Error.HandleError();
 		// The GUI build has no console, so the error would otherwise only be in the log.
 		if( GIsClient )
-			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(GErrorHist), NULL );
+		{
+			// The history is one line, which the message box would size to its full width.
+			FString Message = GErrorHist;
+			for( INT i; (i=Message.InStr(TEXT(" <- ")))!=-1; )
+				Message = Message.Left(i) + TEXT("\n") + Message.Mid(i+4);
+			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(*Message), NULL );
+		}
 	}
 #endif
 

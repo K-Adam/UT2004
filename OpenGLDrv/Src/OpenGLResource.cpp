@@ -81,6 +81,7 @@ void FOpenGLTexture::Upload(GLenum Face,INT Level,FTexture* Source,INT SourceMip
 		INT Pitch = ((MipWidth + 3) / 4) * (Format == TEXF_DXT1 ? 8 : 16);
 		INT Size = Pitch * ((MipHeight + 3) / 4);
 		TArray<BYTE> Blocks(Size);
+		appMemzero(&Blocks(0),Size);
 		Source->GetTextureData(SourceMip,&Blocks(0),Pitch,Format);
 		if( InternalFormat != GL_RGBA8 )
 		{

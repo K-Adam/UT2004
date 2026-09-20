@@ -2029,6 +2029,28 @@ UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT 
 		}
 	}
 
+	// Another generation of the package in the cache works like a local file, which matches the GUID whatever its generation.
+	// Servers often send their copies with the texture data stripped, so the largest one, a full copy from elsewhere, is preferred over downloading that.
+	if( Guid && GenerationLevel>0 )
+	{
+		TArray<FString> Files = GFileManager->FindFiles( *(GSys->CachePath * Guid->String() + TEXT("-*") + GSys->CacheExt), 1, 0 );
+		INT Best = -1;
+		for( INT i=0; i<Files.Num(); i++ )
+		{
+			INT Size = GFileManager->FileSize( *(GSys->CachePath * Files(i)) );
+			if( Size > Best )
+			{
+				Best = Size;
+				appStrcpy( Out, *(GSys->CachePath * Files(i)) );
+			}
+		}
+		if( Best >= 0 )
+		{
+			appUpdateFileModTime( Out );
+			return 1;
+		}
+	}
+
 	// Not found.
 	return 0;
 	unguard;
