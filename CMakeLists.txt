@@ -39,9 +39,11 @@ add_custom_target(ut_stage ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/System ${UT_SYSTEM_DIR}
   VERBATIM)
 
+option(UT_STATIC_LINK "Link the engine modules into the executables instead of loading them at runtime" OFF)
+
 add_library(ut_common INTERFACE)
 target_compile_definitions(ut_common INTERFACE
-  UNICODE _UNICODE
+  UNICODE _UNICODE __STATIC_LINK=$<BOOL:${UT_STATIC_LINK}>
   DO_GUARD=1 DO_CHECK=1 DO_STAT=1 DO_CLOCK=1
   DO_GUARD_SLOW=0 DO_STAT_SLOW=0 DO_CLOCK_SLOW=0
   $<IF:$<CONFIG:Debug>,_DEBUG$<SEMICOLON>DEBUG$<SEMICOLON>DO_CHECK_SLOW=1,DO_CHECK_SLOW=0>)
@@ -90,11 +92,16 @@ function(ut_module name type)
   cmake_parse_arguments(A "" "OUTPUT" "SOURCES;PCH;NOPCH;DEPS" ${ARGN})
   list(TRANSFORM A_SOURCES PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/Src/ REGEX "^[^/]")
   if(type STREQUAL "SHARED")
-    add_library(${name} SHARED ${A_SOURCES})
     string(TOUPPER ${name} up)
-    if(MSVC)
+    if(UT_STATIC_LINK)
+      # Static IMPLEMENT_PACKAGE defines G<Package>Package, so each module's GPackage stays apart.
+      add_library(${name} STATIC ${A_SOURCES})
+      target_compile_definitions(${name} PRIVATE ${up}_API= GPackage=G${name}Package)
+    elseif(MSVC)
+      add_library(${name} SHARED ${A_SOURCES})
       target_compile_definitions(${name} PRIVATE ${up}_API=__declspec\(dllexport\))
     else()
+      add_library(${name} SHARED ${A_SOURCES})
       # Every module exports GPackage, ELF would bind all of them to the first one loaded.
       target_compile_definitions(${name} PRIVATE ${up}_API= GPackage=GPackage${name})
       set_target_properties(${name} PROPERTIES PREFIX "")
@@ -115,6 +122,8 @@ function(ut_module name type)
   if(NOT type STREQUAL "SHARED")
     # Executables need the staged data next to them, also when built as single targets.
     add_dependencies(${name} ut_stage)
+    # appGetDllHandle finds linked modules by their exported GLoaded<Package> symbol.
+    set_target_properties(${name} PROPERTIES ENABLE_EXPORTS ${UT_STATIC_LINK})
   endif()
   if(MSVC AND NOT type STREQUAL "SHARED")
     # Garbage collection recurses through the object graph, x64 Debug overflows the 1 MB default.
@@ -199,7 +208,11 @@ add_subdirectory(metoolkit-karma)
 unset(CMAKE_POSITION_INDEPENDENT_CODE)
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
-    XGame XInterface Onslaught UTV2004 UCC SDLDrv SDLLaunch)
+    XGame XInterface Onslaught UCC SDLDrv SDLLaunch)
+# UTV2004 has its own copies of IpDrv's net driver classes, so it only works as a loaded module.
+if(NOT UT_STATIC_LINK)
+  list(APPEND UT_MODULES UTV2004)
+endif()
 if(WIN32)
   list(APPEND UT_MODULES UccDepend)
 endif()

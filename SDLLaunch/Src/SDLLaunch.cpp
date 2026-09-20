@@ -29,6 +29,7 @@ Revision history:
 #include "UWebNative.h"
 #include "OnslaughtPrivate.h"
 void autoInitializeRegistrantsEditor(INT &Lookup);
+extern "C" BYTE GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio;
 
 #endif
 
@@ -645,9 +646,7 @@ int main(int argc, char **argv)
 
 // The linker drops these as dead code without an explicit reference.
 char blah;
-extern BYTE GLoadedSDLDrv; snprintf(&blah, 1, "%d", (int) GLoadedSDLDrv);
-extern BYTE GLoadedOpenGLDrv; snprintf(&blah, 1, "%d", (int) GLoadedOpenGLDrv);
-extern BYTE GLoadedALAudio; snprintf(&blah, 1, "%d", (int) GLoadedALAudio);
+snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 #endif
 
 		// Init mode.

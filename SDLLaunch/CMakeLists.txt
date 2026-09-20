@@ -4,6 +4,11 @@ else()
   set(SDLLAUNCH_OUTPUT ut2004-bin)
 endif()
 ut_module(SDLLaunch WIN32 OUTPUT ${SDLLAUNCH_OUTPUT} SOURCES SDLLaunch.cpp DEPS Engine SDL3::SDL3 ZLIB::ZLIB)
+if(UT_STATIC_LINK)
+  target_link_libraries(SDLLaunch PRIVATE SDLDrv OpenGLDrv ALAudio Fire IpDrv UWeb XGame XInterface Onslaught Editor ${GLES_TARGET})
+  # UnNullRenderDevice.h includes EnginePrivate.h.
+  target_include_directories(SDLLaunch PRIVATE ${CMAKE_SOURCE_DIR}/Engine/Src ${CMAKE_SOURCE_DIR}/OpenGLDrv/Src)
+endif()
 if(WIN32)
   target_sources(SDLLaunch PRIVATE Src/SDLLaunch.rc)
   # A GUI subsystem exe that still enters through main.

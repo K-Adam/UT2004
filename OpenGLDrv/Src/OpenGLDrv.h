@@ -439,4 +439,6 @@ private:
 extern const ANSICHAR* OpenGLVertexShader;
 extern const ANSICHAR* FullscreenVertexShader;
 
+#define AUTO_INITIALIZE_REGISTRANTS_OPENGLDRV UOpenGLRenderDevice::StaticClass();
+
 #endif

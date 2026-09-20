@@ -45,7 +45,11 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 #endif
 
 // Function type macros.
+#if __STATIC_LINK
+#define DLL_IMPORT
+#else
 #define DLL_IMPORT	__declspec(dllimport)	/* Import function from DLL */
+#endif
 #define DLL_EXPORT  __declspec(dllexport)	/* Export function to DLL */
 #define DLL_EXPORT_CLASS	__declspec(dllexport)	/* Export class to DLL */
 #define VARARGS     __cdecl					/* Functions with variable arguments */
@@ -225,7 +229,7 @@ typedef unsigned long PTRINT;
 	#define TCHAR_TO_ANSI(str) winToANSI((ANSICHAR*)appAlloca(winGetSizeANSI(str)),str,winGetSizeANSI(str))
 	#define TCHAR_TO_OEM(str) winToOEM((ANSICHAR*)appAlloca(winGetSizeANSI(str)),str,winGetSizeANSI(str))
 	#define ANSI_TO_TCHAR(str) winToUNICODE((TCHAR*)appAlloca(sizeof(UNICHAR)*winGetSizeUNICODE(str)),str,winGetSizeUNICODE(str))
-	inline CORE_API UNICHAR* winAnsiToTCHAR( char* str );
+	CORE_API UNICHAR* winAnsiToTCHAR( char* str );
 #endif
 
 // Bitfield alignment.

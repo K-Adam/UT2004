@@ -1432,7 +1432,7 @@ void ATerrainInfo::CalcCoords()
 	ToHeightmap = ToWorld.Inverse();
 }
 
-#if __GNUC__
+#if __GNUC__ || __STATIC_LINK
 BYTE ATerrainInfo::GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAlphaMap )
 #else
 inline BYTE ATerrainInfo::GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAlphaMap )
@@ -1483,7 +1483,7 @@ inline BYTE ATerrainInfo::GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAl
 	unguard;
 }
 
-#if __GNUC__
+#if __GNUC__ || __STATIC_LINK
 FColor ATerrainInfo::GetTextureColor( INT x, INT y, UTexture* Texture )
 #else
 inline FColor ATerrainInfo::GetTextureColor( INT x, INT y, UTexture* Texture )
@@ -1509,7 +1509,7 @@ inline FColor ATerrainInfo::GetTextureColor( INT x, INT y, UTexture* Texture )
 	return Color;
 }
 
-#if __GNUC__
+#if __GNUC__ || __STATIC_LINK
 void ATerrainInfo::SetTextureColor( INT x, INT y, UTexture* Texture, FColor& Color )
 #else
 inline void ATerrainInfo::SetTextureColor( INT x, INT y, UTexture* Texture, FColor& Color )
@@ -1537,7 +1537,7 @@ inline void ATerrainInfo::SetTextureColor( INT x, INT y, UTexture* Texture, FCol
 	}
 }
 
-#if __GNUC__
+#if __GNUC__ || __STATIC_LINK
 void ATerrainInfo::SetLayerAlpha( FLOAT x, FLOAT y, INT Layer, BYTE Alpha, UTexture* InAlphaMap )
 #else
 inline void ATerrainInfo::SetLayerAlpha( FLOAT x, FLOAT y, INT Layer, BYTE Alpha, UTexture* InAlphaMap )

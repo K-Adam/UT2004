@@ -40,6 +40,38 @@
       "environment": {
         "PKG_CONFIG_LIBDIR": "/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig"
       }
+    },
+    {
+      "name": "win32-static",
+      "inherits": "win32",
+      "binaryDir": "${sourceDir}/build/win32-static",
+      "cacheVariables": {
+        "UT_STATIC_LINK": "ON"
+      }
+    },
+    {
+      "name": "win64-static",
+      "inherits": "win64",
+      "binaryDir": "${sourceDir}/build/win64-static",
+      "cacheVariables": {
+        "UT_STATIC_LINK": "ON"
+      }
+    },
+    {
+      "name": "linux64-static",
+      "inherits": "linux64",
+      "binaryDir": "${sourceDir}/build/linux64-static",
+      "cacheVariables": {
+        "UT_STATIC_LINK": "ON"
+      }
+    },
+    {
+      "name": "linux32-static",
+      "inherits": "linux32",
+      "binaryDir": "${sourceDir}/build/linux32-static",
+      "cacheVariables": {
+        "UT_STATIC_LINK": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -81,6 +113,46 @@
     {
       "name": "linux32-release",
       "configurePreset": "linux32",
+      "configuration": "Release"
+    },
+    {
+      "name": "win32-static-debug",
+      "configurePreset": "win32-static",
+      "configuration": "Debug"
+    },
+    {
+      "name": "win32-static-release",
+      "configurePreset": "win32-static",
+      "configuration": "Release"
+    },
+    {
+      "name": "win64-static-debug",
+      "configurePreset": "win64-static",
+      "configuration": "Debug"
+    },
+    {
+      "name": "win64-static-release",
+      "configurePreset": "win64-static",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux64-static-debug",
+      "configurePreset": "linux64-static",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux64-static-release",
+      "configurePreset": "linux64-static",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux32-static-debug",
+      "configurePreset": "linux32-static",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux32-static-release",
+      "configurePreset": "linux32-static",
       "configuration": "Release"
     }
   ]
