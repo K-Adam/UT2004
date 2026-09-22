@@ -58,6 +58,11 @@ class USDLClient : public UClient, public FNotifyHook
 	INT                 JoystickNumber;
 	UBOOL               IgnoreUngrabbedMouse;
 	FStringNoInit       TextToSpeechFile;
+	FLOAT               PadDeadZone;
+	FLOAT               PadLookExponent;
+	FLOAT               PadTurnBoost;
+	UBOOL               PadGyro;
+	FLOAT               PadGyroSensitivity;
 
 	// Variables.
 	UBOOL				InMenuLoop;
@@ -95,6 +100,7 @@ class USDLClient : public UClient, public FNotifyHook
 
 	void OpenGamepad();
 	void CloseGamepad();
+	void EnableGyro();
 };
 
 /*-----------------------------------------------------------------------------
@@ -114,6 +120,8 @@ class USDLViewport : public UViewport
 
 	// One bit per SDL button, then LT, RT and the four left stick directions.
 	DWORD				PadHeld;
+	// How long the look stick has been at full deflection, for PadTurnBoost.
+	FLOAT				PadEdgeTime;
 
 	UBOOL				WantGrab;
 	FLOAT				WheelRemainder;

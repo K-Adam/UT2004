@@ -46,6 +46,17 @@ void USDLClient::StaticConstructor()
 	new(GetClass(),TEXT("StartupFullscreen"),    RF_Public)UBoolProperty(CPP_PROPERTY(StartupFullscreen),    TEXT("Display"),  CPF_Config );
 	new(GetClass(),TEXT("IgnoreUngrabbedMouse"), RF_Public)UBoolProperty(CPP_PROPERTY(IgnoreUngrabbedMouse), TEXT("Display"),  CPF_Config );
 	new(GetClass(),TEXT("TextToSpeechFile"),     RF_Public)UStrProperty(CPP_PROPERTY(TextToSpeechFile),      TEXT("Display"),  CPF_Config );
+	new(GetClass(),TEXT("PadDeadZone"),          RF_Public)UFloatProperty(CPP_PROPERTY(PadDeadZone),         TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("PadLookExponent"),      RF_Public)UFloatProperty(CPP_PROPERTY(PadLookExponent),     TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("PadTurnBoost"),         RF_Public)UFloatProperty(CPP_PROPERTY(PadTurnBoost),        TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("PadGyro"),              RF_Public)UBoolProperty(CPP_PROPERTY(PadGyro),              TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("PadGyroSensitivity"),   RF_Public)UFloatProperty(CPP_PROPERTY(PadGyroSensitivity),  TEXT("Joystick"), CPF_Config );
+
+	// This runs on the default object before the config loads, so inis without the keys get these.
+	PadDeadZone = 0.1f;
+	PadLookExponent = 2.f;
+	PadTurnBoost = 1.5f;
+	PadGyroSensitivity = 2.f;
 
 	unguard;
 }
@@ -167,12 +178,31 @@ void USDLClient::OpenGamepad()
 		Gamepad = SDL_OpenGamepad( ID );
 		const char* Name = SDL_GetGamepadNameForID( ID );
 		if( Gamepad )
+		{
 			debugf( NAME_Init, TEXT("Gamepad: %s"), appFromAnsi(Name ? Name : "?") );
+			EnableGyro();
+		}
 		else
 			debugf( NAME_Init, TEXT("Couldn't open gamepad: %s"), appFromAnsi(SDL_GetError()) );
 	}
 	SDL_free( Gamepads );
 
+	unguard;
+}
+
+// Gyro aim needs the accelerometer too, for gravity and calibration.
+void USDLClient::EnableGyro()
+{
+	guard(USDLClient::EnableGyro);
+	if( !SDL_GamepadHasSensor( Gamepad, SDL_SENSOR_GYRO ) || !SDL_GamepadHasSensor( Gamepad, SDL_SENSOR_ACCEL ) )
+		return;
+	bool On = PadGyro != 0;
+	if( On != SDL_GamepadSensorEnabled( Gamepad, SDL_SENSOR_GYRO ) )
+	{
+		SDL_SetGamepadSensorEnabled( Gamepad, SDL_SENSOR_GYRO, On );
+		SDL_SetGamepadSensorEnabled( Gamepad, SDL_SENSOR_ACCEL, On );
+		debugf( NAME_Init, TEXT("Gamepad gyro %s"), On ? TEXT("enabled") : TEXT("disabled") );
+	}
 	unguard;
 }
 
@@ -308,10 +338,12 @@ void USDLClient::PostEditChange()
 	guard(USDLClient::PostEditChange);
 	Super::PostEditChange();
 	// The menu turns UseJoystick on and off with set ini, which ends up here.
-	if( UseJoystick && !Gamepad )
-		OpenGamepad();
-	else if( !UseJoystick )
+	if( !UseJoystick )
 		CloseGamepad();
+	else if( !Gamepad )
+		OpenGamepad();
+	else
+		EnableGyro();
 	unguard;
 }
 

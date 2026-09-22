@@ -20,6 +20,7 @@ Revision history:
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "GamepadMotion.hpp"
 #include "SDLDrv.h"
 
 // Duplicated here for convenience.
@@ -53,6 +54,79 @@ enum EEditorMode
 	EM_Geometry				= 35,	// Geometry editing mode
 	EM_NewCameraMove		= 50,
 };
+
+/*-----------------------------------------------------------------------------
+	Gamepad aim shaping.
+-----------------------------------------------------------------------------*/
+
+// Scaled radial dead zone and response curve on the stick vector. A per axis dead zone or curve would
+// pull diagonals toward the axes. Input is -1 to 1, output -0.5 to 0.5 as the ini binds expect.
+// Returns the deflection past the dead zone, before the curve.
+static FLOAT ShapeStick( FLOAT& X, FLOAT& Y, FLOAT DeadZone, FLOAT Exponent )
+{
+	FLOAT Length = appSqrt( X*X + Y*Y );
+	FLOAT Deflection = Length > DeadZone ? Min( (Length - DeadZone) / (1.f - DeadZone), 1.f ) : 0.f;
+	FLOAT Scale = Deflection > 0.f ? 0.5f * appPow( Deflection, Exponent ) / Length : 0.f;
+	X *= Scale;
+	Y *= Scale;
+	return Deflection;
+}
+
+// Gyro aim after GyroWiki: GamepadMotionHelpers calibrates the bias and finds gravity for player space yaw,
+// soft tiered smoothing removes hand jitter below SmoothThreshold without lagging real turns.
+static GamepadMotion Motion;
+static SDL_JoystickID GyroPad;
+static Uint64 GyroTime;
+static FLOAT GyroAccel[3];
+static FLOAT GyroYaw, GyroPitch;
+static FLOAT SmoothX, SmoothY;
+
+static void SmoothGyro( FLOAT& X, FLOAT& Y, FLOAT DeltaTime )
+{
+	const FLOAT SmoothThreshold = 5.f, SmoothTime = 0.03f;
+	FLOAT Direct = Clamp<FLOAT>( (appSqrt( X*X + Y*Y ) - 0.5f * SmoothThreshold) / (0.5f * SmoothThreshold), 0.f, 1.f );
+	FLOAT Blend = 1.f - appExp( -DeltaTime / SmoothTime );
+	SmoothX += (X * (1.f - Direct) - SmoothX) * Blend;
+	SmoothY += (Y * (1.f - Direct) - SmoothY) * Blend;
+	X = X * Direct + SmoothX;
+	Y = Y * Direct + SmoothY;
+}
+
+// Collects the turn in degrees until UpdateInput sends it. Every sample counts, pads report up to 1000 per second.
+static void ProcessGyro( const SDL_GamepadSensorEvent& Event )
+{
+	if( Event.which != GyroPad )
+	{
+		GyroPad = Event.which;
+		GyroTime = 0;
+		GyroAccel[0] = GyroAccel[1] = GyroAccel[2] = 0.f;
+		Motion.Reset();
+		Motion.ResetContinuousCalibration();
+		Motion.SetCalibrationMode( GamepadMotionHelpers::Stillness );
+	}
+	if( Event.sensor == SDL_SENSOR_ACCEL )
+	{
+		for( INT i=0; i<3; i++ )
+			GyroAccel[i] = Event.data[i] / SDL_STANDARD_GRAVITY;
+		return;
+	}
+	if( Event.sensor != SDL_SENSOR_GYRO )
+		return;
+	Uint64 Time = Event.sensor_timestamp ? Event.sensor_timestamp : Event.timestamp;
+	FLOAT DeltaTime = GyroTime ? (FLOAT)(Time - GyroTime) * 1e-9f : 0.f;
+	GyroTime = Time;
+	// The first sample, and the first after the sensor was off, has no interval.
+	if( DeltaTime <= 0.f || DeltaTime > 0.1f || (!GyroAccel[0] && !GyroAccel[1] && !GyroAccel[2]) )
+		return;
+	const FLOAT ToDegrees = 180.f / PI;
+	Motion.ProcessMotion( Event.data[0] * ToDegrees, Event.data[1] * ToDegrees, Event.data[2] * ToDegrees, GyroAccel[0], GyroAccel[1], GyroAccel[2], DeltaTime );
+	FLOAT Pitch, Yaw;
+	Motion.GetPlayerSpaceGyro( Pitch, Yaw, 2.f );
+	SmoothGyro( Yaw, Pitch, DeltaTime );
+	// SDL rotations are counterclockwise, Unreal yaw turns right.
+	GyroYaw -= Yaw * DeltaTime;
+	GyroPitch += Pitch * DeltaTime;
+}
 
 
 /*-----------------------------------------------------------------------------
@@ -557,14 +631,21 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
             }
         }
         if( !InMenu )
+        {
+            FLOAT V[SDL_GAMEPAD_AXIS_COUNT];
+            for( INT i=0; i<ARRAY_COUNT(V); i++ )
+                V[i] = SDL_GetGamepadAxis( Pad, (SDL_GamepadAxis)i ) / 32767.f;
+            FLOAT DeadZone = Clamp( Client->PadDeadZone, 0.f, 0.9f );
+            ShapeStick( V[SDL_GAMEPAD_AXIS_LEFTX], V[SDL_GAMEPAD_AXIS_LEFTY], DeadZone, 1.f );
+            FLOAT Look = ShapeStick( V[SDL_GAMEPAD_AXIS_RIGHTX], V[SDL_GAMEPAD_AXIS_RIGHTY], DeadZone, Max( Client->PadLookExponent, 0.1f ) );
+            // Holding the look stick at the edge ramps up the turn rate, so fine aim and quick turns both work.
+            PadEdgeTime = Look > 0.95f ? PadEdgeTime + DeltaSeconds : 0.f;
+            V[SDL_GAMEPAD_AXIS_RIGHTX] *= 1.f + Client->PadTurnBoost * Clamp( (PadEdgeTime - 0.15f) / 0.3f, 0.f, 1.f );
+            V[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] *= 0.5f;
+            V[SDL_GAMEPAD_AXIS_RIGHT_TRIGGER] *= 0.5f;
             for( INT i=0; i<ARRAY_COUNT(Axes); i++ )
-            {
-                FLOAT V = SDL_GetGamepadAxis( Pad, (SDL_GamepadAxis)i ) / 65535.f;
-                // Squared response on the look stick for fine aim, the range stays -0.5 to 0.5.
-                if( i == SDL_GAMEPAD_AXIS_RIGHTX || i == SDL_GAMEPAD_AXIS_RIGHTY )
-                    V *= 2.f * Abs( V );
-                Input->DirectAxis( Axes[i], V, DeltaSeconds );
-            }
+                Input->DirectAxis( Axes[i], V[i], DeltaSeconds );
+        }
     }
 	// Windowed menus use the OS cursor, so the menu cursor is where the mouse is.
 	// UGameEngine::Tick releases and restores the grab for them.
@@ -688,6 +769,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 					Client->OpenGamepad();
 				break;
 
+			case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
+				if( USDLClient::Gamepad && Event.gsensor.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
+					ProcessGyro( Event.gsensor );
+				break;
+
 			case SDL_EVENT_GAMEPAD_REMOVED:
 				if( USDLClient::Gamepad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
 				{
@@ -725,6 +811,14 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 		if( W != SizeX || H != SizeY )
 			ResizeViewport( BlitFlags | BLIT_NoWindowChange, W, H );
 	}
+
+	// The JoyU and JoySlider2 binds turn degrees into view rotation, menus drop the turn.
+	if( (GyroYaw || GyroPitch) && !(GUIController && GUIController->bActive) )
+	{
+		CauseInputEvent( IK_JoyU, IST_Axis, GyroYaw * Client->PadGyroSensitivity );
+		CauseInputEvent( IK_JoySlider2, IST_Axis, GyroPitch * Client->PadGyroSensitivity );
+	}
+	GyroYaw = GyroPitch = 0.f;
 
 	// Deliver mouse behavior to the engine.
 	if ( MouseMoved )
