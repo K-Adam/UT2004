@@ -14,11 +14,12 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	LockedViewport	= NULL;
 	ContextReady	= 0;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = 0;
+	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
 	ShadowLight = NULL;
 	FrameCount = 0;
+	FlushShadows();
 }
 
 void UOpenGLRenderDevice::StaticConstructor()
@@ -31,10 +32,11 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("Bloom"),			RF_Public)UBoolProperty(CPP_PROPERTY(Bloom),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ScreenSpaceReflections"),RF_Public)UBoolProperty(CPP_PROPERTY(ScreenSpaceReflections),TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("DepthOfField"),	RF_Public)UBoolProperty(CPP_PROPERTY(DepthOfField),		TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("VolumetricFog"),	RF_Public)UBoolProperty(CPP_PROPERTY(VolumetricFog),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = Bloom = ScreenSpaceReflections = DepthOfField = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = Bloom = ScreenSpaceReflections = DepthOfField = VolumetricFog = 1;
 	ResolutionScale = 100;
 }
 
@@ -171,6 +173,7 @@ UBOOL UOpenGLRenderDevice::InitContext()
 
 	SupportsDXT1		= HasExtension("GL_EXT_texture_compression_s3tc") || HasExtension("GL_EXT_texture_compression_dxt1");
 	SupportsDXT35		= HasExtension("GL_EXT_texture_compression_s3tc") || (HasExtension("GL_ANGLE_texture_compression_dxt3") && HasExtension("GL_ANGLE_texture_compression_dxt5"));
+	SupportsFloatTargets = HasExtension("GL_EXT_color_buffer_float");
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE,&MaxTextureSize);
 	MaxAnisotropy = 1;
 	if( HasExtension("GL_EXT_texture_filter_anisotropic") )
@@ -352,6 +355,10 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	DestroyFramebuffer(World);
 	DestroyFramebuffer(Occlusion);
 	DestroyFramebuffer(Focus);
+	DestroyFramebuffer(Scattering);
+	DestroyFramebuffer(ScatterHistory[0]);
+	DestroyFramebuffer(ScatterHistory[1]);
+	DestroyFramebuffer(Overlay);
 	for( INT i=0; i<BLOOM_LEVELS; i++ )
 		DestroyFramebuffer(BloomLevels[i]);
 	DynamicVertexBuffer.Release();
@@ -360,14 +367,17 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	if( SceneBuffer )			glDeleteBuffers(1,&SceneBuffer);
 	if( VertexArray )			glDeleteVertexArrays(1,&VertexArray);
 	if( EmptyVertexArray )		glDeleteVertexArrays(1,&EmptyVertexArray);
-	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram, DepthOfFieldProgram };
+	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram };
 	for( INT i=0; i<ARRAY_COUNT(PostPrograms); i++ )
 		glDeleteProgram(PostPrograms[i]);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
 	if( FrameFence )			glDeleteSync(FrameFence);
+	GLuint ShadowTextures[] = { ShadowAtlas, SunShadow };
+	glDeleteTextures(ARRAY_COUNT(ShadowTextures),ShadowTextures);
+	FlushShadows();
 	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = 0;
+	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
 }
 
 void UOpenGLRenderDevice::Exit(UViewport* Viewport)
@@ -495,23 +505,24 @@ void UOpenGLRenderDevice::UseProgram(GLuint Program)
 }
 
 // ES 3 cannot scale a blit into a multisampled target, a draw can.
-void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Texture2,GLuint Depth,UBOOL Additive,GLuint Texture4)
+void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Texture2,GLuint Depth,INT Blend,GLuint Texture4,GLuint Texture5)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 	glViewport(0,0,Width,Height);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
-	if( Additive )
+	if( Blend )
 	{
 		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE,GL_ONE);
-		GL.SrcBlend = GL.DstBlend = GL_ONE;
+		GL.SrcBlend = GL_ONE;
+		GL.DstBlend = Blend == 1 ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA;
+		glBlendFunc(GL.SrcBlend,GL.DstBlend);
 	}
 	else
 		glDisable(GL_BLEND);
 	UseProgram(Program);
-	GLuint Textures[] = { Texture0, Texture1, Texture2, Depth, Texture4 };
+	GLuint Textures[] = { Texture0, Texture1, Texture2, Depth, Texture4, Texture5 };
 	for( INT i=0; i<ARRAY_COUNT(Textures); i++ )
 	{
 		if( !Textures[i] )
@@ -532,7 +543,7 @@ void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT W
 	glEnable(GL_SCISSOR_TEST);
 
 	GL.Framebuffer	= Framebuffer;
-	GL.Blend		= Additive;
+	GL.Blend		= Blend != 0;
 	GL.Cull			= 0;
 	appMemset(GL.Viewport,0xff,sizeof(GL.Viewport));
 }

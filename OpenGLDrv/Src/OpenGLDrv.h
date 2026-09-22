@@ -25,6 +25,22 @@ enum
 	OGL_MAX_QUADS		= 5461,
 };
 
+// Defines, so the volumetric fog shader can be built from them.
+#define FOG_LIGHTS		16
+#define FOG_TILE		32	// Octahedral distance map of a light, in texels.
+#define FOG_ATLAS_TILES	16	// Tiles across the atlas.
+#define FOG_SUN_SIZE	64
+
+// The share of the distance fog at X from its start to its end. It builds up exponentially like real
+// fog and ramps in after the start so there is no visible edge, yet still covers everything at the
+// end, where the level is culled.
+#define OGL_FOG_AMOUNT \
+	"float FogAmount(float X, float Density)\n" \
+	"{\n" \
+	"	float Depth = X < 0.3 ? 5.0 * X * X : 3.0 * X - 0.45;\n" \
+	"	return (1.0 - exp(-Density * Depth)) / (1.0 - exp(-Density * 2.55));\n" \
+	"}\n"
+
 enum EOpenGLAttribute
 {
 	GLA_Position,
@@ -173,11 +189,27 @@ struct FOpenGLSceneBlock
 			Fog,
 			FogColor,
 			Ambient,
-			Options;		// X dynamic lights, Y static lighting, Z 2x lighting, W mip bias.
+			Options,		// X dynamic lights, Y static lighting, Z 2x lighting, W mip bias.
+			FogUp;			// World up in camera space, for the volumetric fog's height.
 	FPlane	LightPosition[OGL_MAX_LIGHTS],
 			LightDirection[OGL_MAX_LIGHTS],
 			LightColor[OGL_MAX_LIGHTS],
 			LightParams[OGL_MAX_LIGHTS];
+};
+
+// What the volumetric fog pass needs from the CPU. Positions and directions are in camera space.
+struct FOpenGLFogLights
+{
+	INT		NumLights;
+	FPlane	Position[FOG_LIGHTS],	// W is the radius.
+			Color[FOG_LIGHTS],		// W is the atlas tile, -1 for none.
+			Spot[FOG_LIGHTS],		// W is the cone sine, -1 for a point light.
+			Sun,					// Toward the sun, W 1 if there is one.
+			SunColor,
+			SunU,					// The sun map's axes in texels and the boundary axis in units, W their value at the camera.
+			SunV,
+			SunAxis,
+			Fog;					// Start, end, enabled and the scattering density.
 };
 
 struct FOpenGLStream
@@ -240,12 +272,18 @@ public:
 	EPrecacheMode		PrecacheMode;
 	UBOOL				InWorld,
 						ViewModel,		// Only the first person weapon is left of the world.
-						WorldDrawn;		// The level reached the world framebuffer, a motion blur draws it elsewhere.
+						WorldDrawn,		// The level reached the world framebuffer, a motion blur draws it elsewhere.
+						OverlayUsed;	// 2D drawn within the world went to the overlay this frame.
 	FMatrix				ViewWorldToCamera,
 						ViewCameraToScreen;
 	TArray<FDynamicLight*>	WorldLights;	// The lights actors in the world were lit by.
 	FLOAT				FocusDiopters;
 	DOUBLE				FocusTime;
+	FPlane				ViewFog;		// The player's zone fog, start, end, enabled and W 1 once recorded.
+	FVector				FogUp;
+	FOpenGLFogLights	FogLights;
+	TMap<AActor*,FLOAT>	FogFades;
+	DOUBLE				FogTime;
 
 	TArray<BYTE>		DynamicVertices;
 	INT					DynamicStride,
@@ -300,6 +338,9 @@ private:
 	UBOOL CompileMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial);
 	FPlane PickShadowLight();
 	FLOAT PickFocus();
+	const FOpenGLFogLights* PickFogLights();
+	void TraceShadows(ULevel* Level,const FVector& Camera);
+	FLOAT TraceSunCell(ULevel* Level,INT I,INT J,FLOAT CameraS);
 };
 
 // A colour texture with optional depth and stencil and reflection textures. With multisampling the drawing goes to
@@ -334,11 +375,13 @@ class UOpenGLRenderDevice : public URenderDevice
 			ContactShadows,
 			Bloom,
 			ScreenSpaceReflections,
-			DepthOfField;
+			DepthOfField,
+			VolumetricFog;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
-			SupportsDXT35;
+			SupportsDXT35,
+			SupportsFloatTargets;
 	INT		MaxTextureSize,
 			MaxAnisotropy,
 			MaxSamples;
@@ -362,7 +405,12 @@ class UOpenGLRenderDevice : public URenderDevice
 			BloomDownProgram,
 			BloomUpProgram,
 			CompositeProgram,
-			DepthOfFieldProgram;
+			DepthOfFieldProgram,
+			VolumetricProgram,
+			ResolveProgram,
+			OverlayProgram,
+			ShadowAtlas,		// Distance maps of static lights, as fractions of their radius.
+			SunShadow;			// Where the sun's shadow begins along its axis, world anchored and wrapping.
 	GLsync	FrameFence;
 	PFNGLDRAWELEMENTSBASEVERTEXOESPROC	DrawElementsBaseVertex;
 	FOpenGLDynamicBuffer	DynamicVertexBuffer,
@@ -374,9 +422,32 @@ class UOpenGLRenderDevice : public URenderDevice
 						World,
 						Occlusion,				// Ambient occlusion and contact shadow at half the world size.
 						Focus,					// The lit world with its signed circle of confusion in alpha.
+						Scattering,				// Light scattered by the fog at half the world size.
+						ScatterHistory[2],		// Scattering averaged over frames, alternating.
+						Overlay,				// Labels drawn within the world, laid over it after the post processing.
 						BloomLevels[BLOOM_LEVELS];
 	AActor*				ShadowLight;			// Only compared, never dereferenced, the actor may be gone.
 	DWORD				FrameCount;
+
+	// The volumetric shadows are traced against the level's collision a little each frame. Static lights
+	// keep their tile while they are among the recently used, the sun map follows the camera.
+	struct FShadowTile
+	{
+		AActor*	Light;		// Only compared.
+		FVector	Position;
+		FLOAT	Radius;
+		INT		Rows;		// Traced so far, the tile is used once all are.
+		DOUBLE	Used;
+	};
+	FShadowTile			ShadowTiles[FOG_ATLAS_TILES * FOG_ATLAS_TILES];
+	ULevel*				ShadowLevel;		// Only compared.
+	FVector				SunDirection;
+	INT					SunCells[FOG_SUN_SIZE * FOG_SUN_SIZE][2];
+	UBOOL				SunPending[FOG_SUN_SIZE * FOG_SUN_SIZE];
+	FLOAT				SunTexels[FOG_SUN_SIZE * FOG_SUN_SIZE];
+	FMatrix				PrevWorldToCamera;
+	FPlane				PrevProj;
+	UBOOL				HistoryValid;
 
 	// Last state sent to GL, so Commit only changes what differs.
 	struct FGLState
@@ -432,15 +503,17 @@ class UOpenGLRenderDevice : public URenderDevice
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
 	void ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth = 0);
 	void UseProgram(GLuint Program);
-	// Covers the framebuffer with Program. Units 0 to 2 and 4 sample linearly, unit 3 is the depth texture.
-	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Texture2 = 0,GLuint Depth = 0,UBOOL Additive = 0,GLuint Texture4 = 0);
-	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance);
+	// Covers the framebuffer with Program. Units 0 to 2, 4 and 5 sample linearly, unit 3 is the depth texture.
+	// Blend 1 adds, 2 lays premultiplied alpha over.
+	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Texture2 = 0,GLuint Depth = 0,INT Blend = 0,GLuint Texture4 = 0,GLuint Texture5 = 0);
+	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog);
+	void FlushShadows();
+	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,UBOOL HasReflection = 0);
 
 private:
 	UBOOL InitContext();
 	UBOOL InitPostProcess(GLuint VertexShader);
 	void ResetStateCache();
-	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,UBOOL HasReflection = 0);
 	void DestroyFramebuffer(FOpenGLFramebuffer& F);
 	void ReleaseObjects();
 };

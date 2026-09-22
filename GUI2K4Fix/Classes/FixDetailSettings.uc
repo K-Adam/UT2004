@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_Bloom, ch_DepthOfField;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_Bloom, ch_DepthOfField, ch_VolumetricFog;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2], ReflectionsText[2];
 
@@ -27,6 +27,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Options.ManageComponent(ch_ContactShadows);
 	sb_Options.ManageComponent(ch_Bloom);
 	sb_Options.ManageComponent(ch_DepthOfField);
+	sb_Options.ManageComponent(ch_VolumetricFog);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -65,6 +66,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_DepthOfField:
 		ch_DepthOfField.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice DepthOfField")), true);
+		break;
+	case ch_VolumetricFog:
+		ch_VolumetricFog.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice VolumetricFog")), true);
 		break;
 	}
 }
@@ -109,6 +113,9 @@ function InternalOnChange(GUIComponent Sender)
 	case ch_DepthOfField:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice DepthOfField" @ ch_DepthOfField.IsChecked());
 		break;
+	case ch_VolumetricFog:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice VolumetricFog" @ ch_VolumetricFog.IsChecked());
+		break;
 	}
 }
 
@@ -144,6 +151,7 @@ function ResetClicked()
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Bloom True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ScreenSpaceReflections True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice DepthOfField True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice VolumetricFog True");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 
@@ -230,7 +238,7 @@ defaultproperties
 		bHeightFromComponent=false
 		OnLoadINI=InternalOnLoadINI
 		OnChange=InternalOnChange
-		TabOrder=9
+		TabOrder=10
 	End Object
 	co_Reflections=ReflectionsCombo
 
@@ -311,6 +319,19 @@ defaultproperties
 		TabOrder=8
 	End Object
 	ch_DepthOfField=DepthOfFieldCheck
+
+	Begin Object class=moCheckBox Name=VolumetricFogCheck
+		Caption="Volumetric Fog"
+		Hint="Lights glow in a thin haze, sunlight streams through gaps and distant fog fades in more naturally."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=9
+	End Object
+	ch_VolumetricFog=VolumetricFogCheck
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"

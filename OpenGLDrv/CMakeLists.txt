@@ -1,5 +1,5 @@
 ut_module(OpenGLDrv SHARED
-  SOURCES OpenGLDrv.cpp OpenGLMaterial.cpp OpenGLRenderDevice.cpp OpenGLPostProcess.cpp OpenGLRenderInterface.cpp OpenGLResource.cpp
+  SOURCES OpenGLDrv.cpp OpenGLFog.cpp OpenGLMaterial.cpp OpenGLRenderDevice.cpp OpenGLPostProcess.cpp OpenGLRenderInterface.cpp OpenGLResource.cpp
   PCH OpenGLDrv.h OpenGLDrv.cpp
   DEPS Engine)
 target_link_libraries(OpenGLDrv PRIVATE SDL3::SDL3 ${GLES_TARGET} ${SQUISH_TARGET})

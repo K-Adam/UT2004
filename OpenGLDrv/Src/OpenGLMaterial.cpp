@@ -15,6 +15,7 @@
 	"	vec4 FogColor;\n" \
 	"	vec4 Ambient;\n" \
 	"	vec4 Options;\n" \
+	"	vec4 FogUp;\n" \
 	"	vec4 LightPosition[8];\n" \
 	"	vec4 LightDirection[8];\n" \
 	"	vec4 LightColor[8];\n" \
@@ -136,11 +137,17 @@ static const ANSICHAR* OpenGLFragmentPrologue =
 	"	vec3 E = -normalize(vCameraPos);\n"
 	"	return 2.0 * dot(E, N) * N - E;\n"
 	"}\n"
+	OGL_FOG_AMOUNT
 	"vec3 ApplyFog(vec3 Color, vec3 Target)\n"
 	"{\n"
 	"	if (Fog.z < 0.5)\n"
 	"		return Color;\n"
-	"	return mix(Target, Color, clamp((Fog.y - length(vCameraPos)) / (Fog.y - Fog.x), 0.0, 1.0));\n"
+	"	float Dist = length(vCameraPos);\n"
+	"	float X = clamp((Dist - Fog.x) / (Fog.y - Fog.x), 0.0, 1.0);\n"
+	// Volumetric fog is thinner upward and thicker downward.
+	"	if (Fog.w > 0.5)\n"
+	"		X = FogAmount(X, exp2(-1.5 * dot(vCameraPos, FogUp.xyz) / max(Dist, 1.0)));\n"
+	"	return mix(Color, Target, X);\n"
 	"}\n";
 
 struct FOpenGLModifierInfo
@@ -804,8 +811,9 @@ public:
 			Emit(TEXT("\tr%i += ApplyFog(r%i.rgb * r%i, vec3(0.0));\n"),Base,Spec,SpecMask);
 		Emit(TEXT("\tFragColor = vec4(r%i, r%i.a + r%i - r%i.a * r%i);\n"),Base,C,Glow,C,Glow);
 		// Puddle decals mask colour and reflectivity with one texture, so the opacity is the reflectivity.
+		// The fog hides it like the rest of the surface.
 		if( EnvSpecular )
-			Emit(TEXT("\tReflection = vec4(ApplyFog(r%i.rgb * r%i, vec3(0.0)), FragColor.a);\n"),Spec,SpecMask);
+			Emit(TEXT("\tReflection = vec4(ApplyFog(r%i.rgb * r%i, vec3(0.0)), FragColor.a * ApplyFog(vec3(1.0), vec3(0.0)).x);\n"),Spec,SpecMask);
 		else
 			Emit(TEXT("\tReflection = vec4(0.0);\n"));
 		return 1;

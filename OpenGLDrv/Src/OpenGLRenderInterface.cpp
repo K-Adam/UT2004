@@ -4,7 +4,7 @@
 #include "OpenGLDrv.h"
 
 FOpenGLRenderInterface::FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev)
-:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0)
+:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), ViewFog(0,0,0,0), FogUp(0,0,1), FogTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0)
 {
 	CurrentState = &SavedStates[0];
 	FSavedState& S = *CurrentState;
@@ -86,7 +86,7 @@ void FOpenGLRenderInterface::SetViewport(INT X,INT Y,INT Width,INT Height)
 
 // Binds the target and sets viewport, scissor and depth range. D3D's top left origin flips the
 // scene, and a scaled world maps the viewport's pixels onto fewer.
-static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSavedState* S)
+static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSavedState* S,UBOOL ToOverlay = 0)
 {
 	UOpenGLRenderDevice*	RenDev = RI->RenDev;
 	FOpenGLTexture*		Target = S->RenderTarget;
@@ -97,7 +97,9 @@ static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSav
 		Framebuffer = Target->Framebuffer;
 	else
 	{
-		FOpenGLFramebuffer&	Main = RI->InWorld ? RenDev->World : RenDev->Scene;
+		if( ToOverlay )
+			RenDev->CreateFramebuffer(RenDev->Overlay,RenDev->Scene.Width,RenDev->Scene.Height,0,GL_RGBA8,0);
+		FOpenGLFramebuffer&	Main = ToOverlay ? RenDev->Overlay : RI->InWorld ? RenDev->World : RenDev->Scene;
 		INT					SW = RenDev->Scene.Width, SH = RenDev->Scene.Height,
 							X0 = S->ViewportX * Main.Width / SW,
 							Y0 = S->ViewportY * Main.Height / SH,
@@ -110,7 +112,7 @@ static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSav
 		Rect[3] = Y1 - Y0;
 		// The weapon gets the front of the depth range, so walls never cut into it and the post
 		// processing can tell its pixels apart.
-		if( RI->InWorld )
+		if( RI->InWorld && !ToOverlay )
 		{
 			Near = RI->ViewModel ? 0.f : VIEW_MODEL_DEPTH;
 			Far = RI->ViewModel ? VIEW_MODEL_DEPTH : 1.f;
@@ -134,12 +136,21 @@ static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSav
 		GL.DepthNear = Near;
 		GL.DepthFar = Far;
 	}
+	if( ToOverlay && !RI->OverlayUsed )
+	{
+		glDisable(GL_SCISSOR_TEST);
+		glClearColor(0.f,0.f,0.f,0.f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glEnable(GL_SCISSOR_TEST);
+		RI->OverlayUsed = 1;
+	}
 }
 
 void FOpenGLRenderInterface::BeginWorld()
 {
 	InWorld = 1;
-	ViewModel = WorldDrawn = 0;
+	ViewModel = WorldDrawn = OverlayUsed = 0;
+	ViewFog = FPlane(0,0,0,0);
 	WorldLights.Empty();
 	// The engine's clears before the world began reached Scene.
 	Clear(1,FColor(0,0,0),1,1.f,0,0);
@@ -169,7 +180,11 @@ void FOpenGLRenderInterface::EndWorld()
 	if( ViewValid && RenDev->ContactShadows )
 		Light = PickShadowLight();
 	FLOAT Gamma = ParseParam(appCmdLine(),TEXT("NOGAMMA")) ? 1.f : Viewport->GetOuterUClient()->Gamma;
-	RenDev->PostProcess(ViewValid,ViewCameraToScreen,Light,Gamma,ViewValid && RenDev->DepthOfField ? PickFocus() : 0.f);
+	RenDev->PostProcess(ViewValid,ViewCameraToScreen,Light,Gamma,ViewValid && RenDev->DepthOfField ? PickFocus() : 0.f,
+		ViewValid && RenDev->VolumetricFog ? PickFogLights() : NULL);
+	if( OverlayUsed )
+		RenDev->DrawFullscreen(RenDev->OverlayProgram,RenDev->Scene.DrawFramebuffer(),RenDev->Scene.Width,RenDev->Scene.Height,RenDev->Overlay.Texture,0,0,0,2);
+	OverlayUsed = 0;
 	WorldLights.Empty();
 	Clear(0,FColor(0,0,0),1,1.f,0,0);
 }
@@ -268,6 +283,9 @@ void FOpenGLRenderInterface::SetDistanceFog(UBOOL Enable,FLOAT FogStart,FLOAT Fo
 	CurrentState->FogStart		= Min(FogStart,FogEnd - 1.f);
 	CurrentState->FogEnd		= FogEnd;
 	CurrentState->FogColor		= Color;
+	// The level sets the fog of the player's zone first, its sky, mirrors and coronas follow.
+	if( InWorld && !ViewModel && !CurrentState->RenderTarget && ViewFog.W == 0.f )
+		ViewFog = FPlane(CurrentState->FogStart,FogEnd,Enable ? 1.f : 0.f,1.f);
 }
 
 void FOpenGLRenderInterface::SetGlobalColor(FColor Color)
@@ -469,7 +487,11 @@ void FOpenGLRenderInterface::Commit()
 		else if( !Perspective )
 			EndWorld();
 	}
-	CommitTarget(this,S);
+	// Labels the level draws over itself stay out of its post processing, like the HUD. The overlay
+	// keeps premultiplied alpha, which holds blending over and adding but not multiplying.
+	UBOOL ToOverlay = InWorld && !ViewModel && WorldDrawn && !Perspective && !S->RenderTarget
+		&& (M.DstBlend == GL_ONE_MINUS_SRC_ALPHA || M.DstBlend == GL_ONE);
+	CommitTarget(this,S,ToOverlay);
 
 	RenDev->UseProgram(Program->Program);
 
@@ -479,9 +501,13 @@ void FOpenGLRenderInterface::Commit()
 	Scene.WorldToCamera		= S->WorldToCamera;
 	Scene.CameraToScreen	= S->CameraToScreen;
 	Scene.ClipAdjust		= FPlane(Flip,0.f,1.f / Max(GL.Viewport[2],1),-Flip / Max(GL.Viewport[3],1));
-	Scene.Fog				= FPlane(S->FogStart,S->FogEnd,S->FogEnabled ? 1.f : 0.f,0.f);
+	Scene.Fog				= FPlane(S->FogStart,S->FogEnd,S->FogEnabled ? 1.f : 0.f,RenDev->VolumetricFog ? 1.f : 0.f);
 	Scene.FogColor			= S->FogColor.Plane();
 	Scene.Options			= FPlane(S->UseDynamicLighting ? 1.f : 0.f,S->UseStaticLighting ? 1.f : 0.f,S->LightingModulate2X ? 1.f : 0.f,0.f);
+	// Particles pass camera space vertices with no view transform, they keep the up of the view before them.
+	if( S->WorldToCamera != FMatrix::Identity )
+		FogUp = S->WorldToCamera.TransformNormal(FVector(0,0,1)).SafeNormal();
+	Scene.FogUp				= FPlane(FogUp,0.f);
 	INT NumLights = 0;
 	for( INT i=0; i<OGL_MAX_LIGHTS; i++ )
 	{
@@ -555,7 +581,14 @@ void FOpenGLRenderInterface::Commit()
 
 	UBOOL Blend = !(M.SrcBlend == GL_ONE && M.DstBlend == GL_ZERO);
 	SetCap(GL_BLEND,Blend,GL.Blend);
-	if( Blend && (GL.SrcBlend != M.SrcBlend || GL.DstBlend != M.DstBlend) )
+	if( Blend && ToOverlay )
+	{
+		// Adding leaves what is beneath visible.
+		UBOOL Covers = M.DstBlend != GL_ONE;
+		glBlendFuncSeparate(M.SrcBlend,M.DstBlend,Covers ? GL_ONE : GL_ZERO,Covers ? GL_ONE_MINUS_SRC_ALPHA : GL_ONE);
+		GL.SrcBlend = GL.DstBlend = (GLenum)-1;
+	}
+	else if( Blend && (GL.SrcBlend != M.SrcBlend || GL.DstBlend != M.DstBlend) )
 	{
 		glBlendFunc(M.SrcBlend,M.DstBlend);
 		GL.SrcBlend = M.SrcBlend;
