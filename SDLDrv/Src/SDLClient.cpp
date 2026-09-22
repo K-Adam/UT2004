@@ -10,6 +10,7 @@ Revision history:
 =============================================================================*/
 
 #include "SDLDrv.h"
+#include "xForceFeedback.h"
 
 /*-----------------------------------------------------------------------------
 	Class implementation.
@@ -21,12 +22,7 @@ IMPLEMENT_CLASS(USDLClient);
 	USDLClient implementation.
 -----------------------------------------------------------------------------*/
 
-SDL_Joystick *USDLClient::Joystick = NULL;
 SDL_Gamepad *USDLClient::Gamepad = NULL;
-int USDLClient::JoystickAxes = 0;
-int USDLClient::JoystickButtons = 0;
-int USDLClient::JoystickHats = 0;
-int USDLClient::JoystickBalls = 0;
 
 
 //
@@ -47,11 +43,7 @@ void USDLClient::StaticConstructor()
 
 	new(GetClass(),TEXT("UseJoystick"),          RF_Public)UBoolProperty(CPP_PROPERTY(UseJoystick),          TEXT("Display"),  CPF_Config );
 	new(GetClass(),TEXT("JoystickNumber"),       RF_Public)UIntProperty(CPP_PROPERTY(JoystickNumber),        TEXT("Joystick"), CPF_Config );
-	new(GetClass(),TEXT("JoystickHatNumber"),    RF_Public)UIntProperty(CPP_PROPERTY(JoystickHatNumber),     TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("StartupFullscreen"),    RF_Public)UBoolProperty(CPP_PROPERTY(StartupFullscreen),    TEXT("Display"),  CPF_Config );
-	new(GetClass(),TEXT("ScaleJBX"),             RF_Public)UFloatProperty(CPP_PROPERTY(ScaleJBX),            TEXT("Joystick"), CPF_Config );
-	new(GetClass(),TEXT("ScaleJBY"),             RF_Public)UFloatProperty(CPP_PROPERTY(ScaleJBY),            TEXT("Joystick"), CPF_Config );
-	new(GetClass(),TEXT("IgnoreHat"),            RF_Public)UBoolProperty(CPP_PROPERTY(IgnoreHat),            TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("IgnoreUngrabbedMouse"), RF_Public)UBoolProperty(CPP_PROPERTY(IgnoreUngrabbedMouse), TEXT("Display"),  CPF_Config );
 	new(GetClass(),TEXT("TextToSpeechFile"),     RF_Public)UStrProperty(CPP_PROPERTY(TextToSpeechFile),      TEXT("Display"),  CPF_Config );
 
@@ -85,6 +77,12 @@ static FString SDLClipboardPaste()
 		SDL_free( Text );
 	}
 	return Result;
+}
+
+static void SDLRumble( FLOAT Low, FLOAT High, INT Milliseconds )
+{
+	if( USDLClient::Gamepad )
+		SDL_RumbleGamepad( USDLClient::Gamepad, (Uint16)(Clamp(Low, 0.f, 1.f) * 65535), (Uint16)(Clamp(High, 0.f, 1.f) * 65535), Milliseconds );
 }
 
 static void sdl_atexit_handler(void)
@@ -122,6 +120,20 @@ void USDLClient::Init( UEngine* InEngine )
     atexit(sdl_atexit_handler);
 	GClipboardCopy = SDLClipboardCopy;
 	GClipboardPaste = SDLClipboardPaste;
+	GRumble = SDLRumble;
+
+	// Community mappings for pads SDL does not know, loaded before PostEditChange opens the pad.
+	const char* BasePath = SDL_GetBasePath();
+	char* DBPath = NULL;
+	if( SDL_asprintf( &DBPath, "%sgamecontrollerdb.txt", BasePath ? BasePath : "" ) >= 0 )
+	{
+		int Mappings = SDL_AddGamepadMappingsFromFile( DBPath );
+		if( Mappings < 0 )
+			debugf( NAME_Init, TEXT("Couldn't load gamecontrollerdb.txt: %s"), appFromAnsi(SDL_GetError()) );
+		else
+			debugf( NAME_Init, TEXT("Loaded %i gamepad mappings"), Mappings );
+		SDL_free( DBPath );
+	}
 
 	// Note configuration.
 	PostEditChange();
@@ -140,60 +152,36 @@ void USDLClient::Init( UEngine* InEngine )
 
 
 //
-// Opens joystick JoystickNumber, or the first one. Devices SDL knows a gamepad mapping for open as
-// gamepads, so every pad gets the same button and axis layout.
+// Opens gamepad JoystickNumber, or the first one. Only devices with a gamepad mapping open, since the binds
+// assume the gamepad layout and a wheel or pedal axis resting at full travel would spin the view.
 //
-void USDLClient::OpenJoystick()
+void USDLClient::OpenGamepad()
 {
-	guard(USDLClient::OpenJoystick);
+	guard(USDLClient::OpenGamepad);
 
 	int Count = 0;
-	SDL_JoystickID* Joysticks = SDL_GetJoysticks( &Count );
-	JoystickButtons = JoystickAxes = JoystickHats = JoystickBalls = 0;
+	SDL_JoystickID* Gamepads = SDL_GetGamepads( &Count );
 	if( Count > 0 )
 	{
-		SDL_JoystickID ID = Joysticks[JoystickNumber >= 0 && JoystickNumber < Count ? JoystickNumber : 0];
-		if( SDL_IsGamepad( ID ) )
-		{
-			Gamepad = SDL_OpenGamepad( ID );
-			Joystick = Gamepad ? SDL_GetGamepadJoystick( Gamepad ) : NULL;
-		}
+		SDL_JoystickID ID = Gamepads[JoystickNumber >= 0 && JoystickNumber < Count ? JoystickNumber : 0];
+		Gamepad = SDL_OpenGamepad( ID );
+		const char* Name = SDL_GetGamepadNameForID( ID );
+		if( Gamepad )
+			debugf( NAME_Init, TEXT("Gamepad: %s"), appFromAnsi(Name ? Name : "?") );
 		else
-			Joystick = SDL_OpenJoystick( ID );
-
-		const char* Name = SDL_GetJoystickNameForID( ID );
-		if( !Name )
-			Name = "?";
-		if( !Joystick )
-			debugf( NAME_Init, TEXT("Couldn't open joystick %s: %s"), appFromAnsi(Name), appFromAnsi(SDL_GetError()) );
-		else if( Gamepad )
-			debugf( NAME_Init, TEXT("Gamepad: %s"), appFromAnsi(Name) );
-		else
-		{
-			// Joy13 to Joy16 are the hat, x + y + z + r + u + v + 2 sliders are the 8 axes.
-			JoystickHats	= SDL_GetNumJoystickHats( Joystick );
-			JoystickBalls	= SDL_GetNumJoystickBalls( Joystick );
-			JoystickButtons	= Min( SDL_GetNumJoystickButtons( Joystick ), (JoystickHats > 0 && !IgnoreHat) ? 12 : 16 );
-			JoystickAxes	= Min( SDL_GetNumJoystickAxes( Joystick ), 8 );
-			if( JoystickHatNumber < 0 || JoystickHatNumber >= JoystickHats )
-				JoystickHatNumber = 0;
-			debugf( NAME_Init, TEXT("Joystick: %s, %i buttons, %i axes, %i hats, %i balls"), appFromAnsi(Name), JoystickButtons, JoystickAxes, JoystickHats, JoystickBalls );
-		}
+			debugf( NAME_Init, TEXT("Couldn't open gamepad: %s"), appFromAnsi(SDL_GetError()) );
 	}
-	SDL_free( Joysticks );
+	SDL_free( Gamepads );
 
 	unguard;
 }
 
-void USDLClient::CloseJoystick()
+void USDLClient::CloseGamepad()
 {
-	guard(USDLClient::CloseJoystick);
+	guard(USDLClient::CloseGamepad);
 	if( Gamepad )
 		SDL_CloseGamepad( Gamepad );
-	else if( Joystick )
-		SDL_CloseJoystick( Joystick );
 	Gamepad = NULL;
-	Joystick = NULL;
 	unguard;
 }
 
@@ -218,9 +206,10 @@ void USDLClient::Destroy()
 	GLContext = NULL;
 	Window = NULL;
 
-	CloseJoystick();
+	CloseGamepad();
 	GClipboardCopy = NULL;
 	GClipboardPaste = NULL;
+	GRumble = NULL;
 
     SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
 
@@ -319,10 +308,10 @@ void USDLClient::PostEditChange()
 	guard(USDLClient::PostEditChange);
 	Super::PostEditChange();
 	// The menu turns UseJoystick on and off with set ini, which ends up here.
-	if( UseJoystick && !Joystick )
-		OpenJoystick();
+	if( UseJoystick && !Gamepad )
+		OpenGamepad();
 	else if( !UseJoystick )
-		CloseJoystick();
+		CloseGamepad();
 	unguard;
 }
 

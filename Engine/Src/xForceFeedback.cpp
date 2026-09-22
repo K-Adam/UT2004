@@ -1,11 +1,35 @@
+#include "EnginePrivate.h"
 #include "xForceFeedback.h"
 
-// Immersion's IFC was a DirectInput-only library, so force feedback is unavailable.
 int GForceFeedbackAvailable = 0;
+void (*GRumble)( FLOAT Low, FLOAT High, INT Milliseconds ) = NULL;
 
-void InitForceFeedback(void* hInstance, void* hWnd) {}
-void ExitForceFeedback() {}
-void PlayFeedbackEffect( const char* EffectName ) {}
+void InitForceFeedback(void* hInstance, void* hWnd) { GForceFeedbackAvailable = GRumble != NULL; }
+void ExitForceFeedback() { GForceFeedbackAvailable = 0; }
+
+// Script plays Damage on every hit and on death. The other effects were tuned for Immersion's force feedback mice.
+void PlayFeedbackEffect( const char* EffectName )
+{
+	if( GRumble && GForceFeedbackAvailable && EffectName && !strcmp( EffectName, "Damage" ) )
+		GRumble( 0.5f, 0.8f, 150 );
+}
+
 void StopFeedbackEffect( const char* EffectName ) {}
 void ChangeBaseParamsForceFeedback( const char* EffectName, int DirectionX, int DirectionY, unsigned int Gain ) {}
 void ChangeSpringFeedbackEffect( const char* EffectName, int CenterX, int CenterY ) {}
+
+// Script has no explosion feedback, so a splash damage projectile going away near the view rumbles.
+// Also fires for a projectile that expires without exploding, an explode hook would be exact.
+void ProjectileFeedback( AProjectile* Projectile )
+{
+	if( !GForceFeedbackAvailable || Projectile->Damage <= 0.f || Projectile->DamageRadius <= 0.f )
+		return;
+	UClient* Client = Projectile->XLevel->Engine->Client;
+	APlayerController* PC = Client && Client->Viewports.Num() ? Client->Viewports(0)->Actor : NULL;
+	if( !PC || PC->XLevel != Projectile->XLevel || !PC->bEnableDamageForceFeedback )
+		return;
+	AActor* View = PC->ViewTarget ? PC->ViewTarget : PC;
+	FLOAT Strength = 1.f - FDist( Projectile->Location, View->Location ) / (2.f * Projectile->DamageRadius);
+	if( Strength > 0.f )
+		GRumble( Strength, 0.6f * Strength, 250 );
+}

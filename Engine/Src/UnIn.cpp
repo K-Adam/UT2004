@@ -746,7 +746,6 @@ const TCHAR* UInput::GetLocalizedKeyName( EInputKey Key ) const
 {
 	guard(UInput::GetLocalizedKeyName);
 	if( Key>=0 && Key<IK_MAX )
-#if WIN32
 	{
 		TCHAR* KeyName = appStaticString1024();
 
@@ -783,11 +782,6 @@ const TCHAR* UInput::GetLocalizedKeyName( EInputKey Key ) const
 
 		return appStrupr(KeyName);
 	}
-#else
-	{
-		return GetKeyName( Key );
-	}
-#endif
 	return TEXT("");
 	unguard;
 }

@@ -56,10 +56,6 @@ class USDLClient : public UClient, public FNotifyHook
 	BITFIELD			UseJoystick;
 	BITFIELD			StartupFullscreen;
 	INT                 JoystickNumber;
-	INT                 JoystickHatNumber;
-	FLOAT               ScaleJBX;
-	FLOAT               ScaleJBY;
-	UBOOL               IgnoreHat;
 	UBOOL               IgnoreUngrabbedMouse;
 	FStringNoInit       TextToSpeechFile;
 
@@ -72,12 +68,7 @@ class USDLClient : public UClient, public FNotifyHook
 	SDL_Window*			Window;
 	SDL_GLContext		GLContext;
 
-    static SDL_Joystick *Joystick;
     static SDL_Gamepad *Gamepad;
-    static int JoystickAxes;
-    static int JoystickButtons;
-    static int JoystickHats;
-    static int JoystickBalls;
 
 	// Constructors.
 	USDLClient();
@@ -102,8 +93,8 @@ class USDLClient : public UClient, public FNotifyHook
 	class UViewport* NewViewport( const FName Name );
     void TeardownSR();
 
-	void OpenJoystick();
-	void CloseJoystick();
+	void OpenGamepad();
+	void CloseGamepad();
 };
 
 /*-----------------------------------------------------------------------------
@@ -121,8 +112,10 @@ class USDLViewport : public UViewport
 	// Variables.
 	DWORD				BlitFlags;
 
-	// Joystick Hat Hack
-	EInputKey 			LastJoyHat;
+	// Remembered per button, SDL buttons then LT and RT, so the release matches the press after a menu opened or closed.
+	EInputKey			PadKeys[SDL_GAMEPAD_BUTTON_MISC1 + 3];
+	DWORD				PadHeld;
+	FLOAT				PadWarpX, PadWarpY;
 
 	UBOOL				WantGrab;
 	FLOAT				WheelRemainder;

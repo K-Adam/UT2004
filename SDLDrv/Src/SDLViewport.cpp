@@ -162,7 +162,6 @@ USDLViewport::USDLViewport()
 	FullscreenOnly = 0;
 	TextToSpeechObject = -1;
 	ColorBytes = 4;
-	LastJoyHat = IK_None;
 	debugf( TEXT("Created and initialized a new SDL viewport.") );
 
 	unguard;
@@ -508,46 +507,68 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 	USDLClient* Client = GetOuterUSDLClient();
 
+	UBOOL InMenu = GUIController && GUIController->bActive;
+	FLOAT PadDX = 0, PadDY = 0;
     if( Client->UseJoystick && USDLClient::Gamepad )
     {
-        // The hat's keys for the d-pad and the default binds' axes for the sticks. Axes span -0.5 to 0.5, like the raw path.
-        static const EInputKey Buttons[SDL_GAMEPAD_BUTTON_MISC1 + 1] = { IK_Joy1, IK_Joy2, IK_Joy3, IK_Joy4, IK_Joy5, IK_Joy6, IK_Joy7, IK_Joy8, IK_Joy9, IK_Joy10, IK_Joy11, IK_Joy13, IK_Joy14, IK_Joy15, IK_Joy16, IK_Joy12 };
+        // Guide and Misc1 belong to the system overlay and capture, so the triggers take their keys.
+        // Axes span -0.5 to 0.5, the range the ini DeadZone values assume.
+        static const EInputKey GameKeys[ARRAY_COUNT(PadKeys)] = { IK_Joy1, IK_Joy2, IK_Joy3, IK_Joy4, IK_Joy5, IK_None, IK_Joy7, IK_Joy8, IK_Joy9, IK_Joy10, IK_Joy11, IK_Joy13, IK_Joy14, IK_Joy15, IK_Joy16, IK_None, IK_Joy6, IK_Joy12 };
+        // Menus are mouse driven: A clicks, B and Start go back, the d-pad moves focus.
+        static const EInputKey MenuKeys[ARRAY_COUNT(PadKeys)] = { IK_LeftMouse, IK_Escape, IK_None, IK_None, IK_None, IK_None, IK_Escape, IK_None, IK_None, IK_None, IK_None, IK_Up, IK_Down, IK_Left, IK_Right, IK_None, IK_None, IK_None };
         static const EInputKey Axes[SDL_GAMEPAD_AXIS_COUNT] = { IK_JoyX, IK_JoyY, IK_JoyV, IK_JoySlider1, IK_JoyZ, IK_JoyR };
+        SDL_Gamepad* Pad = USDLClient::Gamepad;
         SDL_UpdateGamepads();
-        for( INT i=0; i<ARRAY_COUNT(Buttons); i++ )
+        for( INT i=0; i<ARRAY_COUNT(PadKeys); i++ )
         {
-            UBOOL Pressed = SDL_GetGamepadButton( USDLClient::Gamepad, (SDL_GamepadButton)i );
-            if( Pressed != (Input->KeyDown( Buttons[i] ) != 0) )
-                CauseInputEvent( Buttons[i], Pressed ? IST_Press : IST_Release );
+            DWORD Bit = 1 << i;
+            UBOOL Pressed;
+            if( i <= SDL_GAMEPAD_BUTTON_MISC1 )
+                Pressed = SDL_GetGamepadButton( Pad, (SDL_GamepadButton)i );
+            else
+            {
+                // Hysteresis, so a trigger resting near the threshold does not chatter.
+                SDL_GamepadAxis Trigger = i == SDL_GAMEPAD_BUTTON_MISC1 + 1 ? SDL_GAMEPAD_AXIS_LEFT_TRIGGER : SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
+                Pressed = SDL_GetGamepadAxis( Pad, Trigger ) > ((PadHeld & Bit) ? 6000 : 10000);
+            }
+            // Keys follow press edges only, so a button held while a menu opens or closes neither sticks nor fires late.
+            if( Pressed && !(PadHeld & Bit) )
+            {
+                PadHeld |= Bit;
+                PadKeys[i] = InMenu ? MenuKeys[i] : GameKeys[i];
+                if( PadKeys[i] )
+                    CauseInputEvent( PadKeys[i], IST_Press );
+            }
+            else if( !Pressed && (PadHeld & Bit) )
+            {
+                PadHeld &= ~Bit;
+                if( PadKeys[i] )
+                    CauseInputEvent( PadKeys[i], IST_Release );
+                PadKeys[i] = IK_None;
+            }
         }
-        for( INT i=0; i<ARRAY_COUNT(Axes); i++ )
-            Input->DirectAxis( Axes[i], SDL_GetGamepadAxis( USDLClient::Gamepad, (SDL_GamepadAxis)i ) / 65535.f, DeltaSeconds );
+        if( InMenu )
+        {
+            // The left stick moves the cursor, at full tilt one screen height per second.
+            FLOAT X = SDL_GetGamepadAxis( Pad, SDL_GAMEPAD_AXIS_LEFTX ) / 32767.f, Y = SDL_GetGamepadAxis( Pad, SDL_GAMEPAD_AXIS_LEFTY ) / 32767.f;
+            FLOAT Len = appSqrt( X*X + Y*Y );
+            if( Len > 0.2f )
+            {
+                FLOAT Speed = Square( (Min( Len, 1.f ) - 0.2f) / 0.8f ) * SizeY * DeltaSeconds / Len;
+                PadDX = X * Speed;
+                PadDY = Y * Speed;
+            }
+        }
+        else
+            for( INT i=0; i<ARRAY_COUNT(Axes); i++ )
+            {
+                FLOAT V = SDL_GetGamepadAxis( Pad, (SDL_GamepadAxis)i ) / 65535.f;
+                // Squared response on the look stick for fine aim, the range stays -0.5 to 0.5.
+                if( i == SDL_GAMEPAD_AXIS_RIGHTX || i == SDL_GAMEPAD_AXIS_RIGHTY )
+                    V *= 2.f * Abs( V );
+                Input->DirectAxis( Axes[i], V, DeltaSeconds );
+            }
     }
-    else if ((Client->UseJoystick) && (USDLClient::Joystick != NULL))
-    {
-        SDL_UpdateJoysticks();
-
-        int i;
-        int max = USDLClient::JoystickButtons;
-        for (i = 0; i < max; i++)
-        {
-            UBOOL Pressed = SDL_GetJoystickButton(USDLClient::Joystick, i);
-		    INT Button = IK_Joy1 + i;
-			if( !Input->KeyDown( Button ) && Pressed )
-				CauseInputEvent( Button, IST_Press );
-			else if( Input->KeyDown( Button ) && !Pressed )
-				CauseInputEvent( Button, IST_Release );
-        }
-
-        static EInputKey axes[] = { IK_JoyX, IK_JoyY, IK_JoyZ, IK_JoyR, IK_JoyU, IK_JoyV, IK_JoySlider1, IK_JoySlider2 };
-        check(USDLClient::JoystickAxes <= 8);
-        for (i = 0; i < USDLClient::JoystickAxes; i++)
-        {
-            float pos = SDL_GetJoystickAxis(USDLClient::Joystick, i) / 65535.f;
-		    Input->DirectAxis(axes[i], pos, DeltaSeconds);
-        }
-	}
-
 	// Windowed menus use the OS cursor, so the menu cursor is where the mouse is.
 	// UGameEngine::Tick releases and restores the grab for them.
 	if( bShowWindowsMouse != WindowsMouseShown )
@@ -572,11 +593,8 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 	// Mouse movement management.
 	UBOOL MouseMoved = false;
-	UBOOL JoyHatMoved = false;
 	UBOOL Resized = false;
 	FLOAT DX = 0, DY = 0;
-	EInputKey ThisJoyHat = IK_None;
-	SDL_JoystickID JoystickID = USDLClient::Joystick ? SDL_GetJoystickID( USDLClient::Joystick ) : 0;
 
 	static const EInputKey MouseButtons[] = { IK_None, IK_LeftMouse, IK_MiddleMouse, IK_RightMouse, IK_Mouse4, IK_Mouse5, IK_Mouse6, IK_Mouse7, IK_Mouse8 };
 
@@ -664,56 +682,23 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				DY += Event.motion.yrel;
 				break;
 
-			case SDL_EVENT_JOYSTICK_ADDED:
-				if( Client->UseJoystick && !USDLClient::Joystick )
-					Client->OpenJoystick();
+			case SDL_EVENT_GAMEPAD_ADDED:
+				if( Client->UseJoystick && !USDLClient::Gamepad )
+					Client->OpenGamepad();
 				break;
 
-			case SDL_EVENT_JOYSTICK_REMOVED:
-				if( Event.jdevice.which == JoystickID )
+			case SDL_EVENT_GAMEPAD_REMOVED:
+				if( USDLClient::Gamepad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
 				{
-					Client->CloseJoystick();
-					JoystickID = 0;
+					Client->CloseGamepad();
+					// Falls back to another connected pad, which sends no added event.
+					if( Client->UseJoystick )
+						Client->OpenGamepad();
+					appMemzero( PadKeys, sizeof(PadKeys) );
+					PadHeld = 0;
+					if( GUIController )
+						GUIController->ResetInput();
 					Input->ResetInput();
-				}
-				break;
-
-			case SDL_EVENT_JOYSTICK_BALL_MOTION:
-				if ( Event.jball.which != JoystickID || !Client->UseJoystick )
-	                break;
-				MouseMoved = true;
-				DX += Event.jball.xrel * Client->ScaleJBX;
-				DY += Event.jball.yrel * Client->ScaleJBY;
-	                break;
-
-			case SDL_EVENT_JOYSTICK_HAT_MOTION:
-				if ( (Event.jhat.which != JoystickID) || USDLClient::Gamepad ||
-				     (Event.jhat.hat != Client->JoystickHatNumber) ||
-				     (!Client->UseJoystick) ||
-				     (Client->IgnoreHat) )
-				{
-					break;
-				}
-
-				JoyHatMoved = true;
-
-				switch ( Event.jhat.value )
-				{
-					case SDL_HAT_UP :
-						ThisJoyHat = IK_Joy13;
-						break;
-					case SDL_HAT_DOWN :
-						ThisJoyHat = IK_Joy14;
-						break;
-					case SDL_HAT_LEFT :
-						ThisJoyHat = IK_Joy15;
-						break;
-					case SDL_HAT_RIGHT :
-						ThisJoyHat = IK_Joy16;
-						break;
-					default :
-						ThisJoyHat = (EInputKey) 0;
-						break;
 				}
 				break;
 
@@ -739,6 +724,32 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 		SDL_GetWindowSizeInPixels( Client->Window, &W, &H );
 		if( W != SizeX || H != SizeY )
 			ResizeViewport( BlitFlags | BLIT_NoWindowChange, W, H );
+	}
+
+	// The OS cursor follows a warp, the engine's own menu cursor follows mouse deltas.
+	if( PadDX || PadDY )
+	{
+		if( WindowsMouseShown )
+		{
+			// Warps land on whole pixels, so the fraction carries over to the next frame.
+			PadWarpX += PadDX;
+			PadWarpY += PadDY;
+			INT StepX = appTrunc( PadWarpX ), StepY = appTrunc( PadWarpY );
+			if( StepX || StepY )
+			{
+				float X, Y;
+				SDL_GetMouseState( &X, &Y );
+				SDL_WarpMouseInWindow( Client->Window, X + StepX, Y + StepY );
+				PadWarpX -= StepX;
+				PadWarpY -= StepY;
+			}
+		}
+		else
+		{
+			MouseMoved = true;
+			DX += PadDX;
+			DY += PadDY;
+		}
 	}
 
 	// Deliver mouse behavior to the engine.
@@ -769,15 +780,6 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				Repaint( 1 );
             }
 		}
-	}
-
-	if ( (LastJoyHat != ThisJoyHat) && JoyHatMoved )
-	{
-		if (LastJoyHat)
-			CauseInputEvent( LastJoyHat, IST_Release );
-		if (ThisJoyHat)
-			CauseInputEvent( ThisJoyHat, IST_Press );
-		LastJoyHat = ThisJoyHat;
 	}
 
 	unguard;

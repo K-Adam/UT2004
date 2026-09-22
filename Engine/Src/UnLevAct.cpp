@@ -8,6 +8,7 @@ Revision history:
 
 #include "EnginePrivate.h"
 #include "UnNet.h"
+#include "xForceFeedback.h"
 
 /*-----------------------------------------------------------------------------
 	Level actor management.
@@ -273,6 +274,9 @@ UBOOL ULevel::DestroyActor( AActor* ThisActor, UBOOL bNetForce )
 	unguardSlow;
 
 	ThisActor->bPendingDelete = true;
+
+	if( GRumble && !GIsEditor && ThisActor->IsA(AProjectile::StaticClass()) )
+		ProjectileFeedback( (AProjectile*)ThisActor );
 
 	// Send EndState notification.
 	guardSlow(EndState);
