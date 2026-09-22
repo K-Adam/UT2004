@@ -183,7 +183,7 @@ void FOpenGLRenderInterface::EndWorld()
 	RenDev->PostProcess(ViewValid,ViewCameraToScreen,Light,Gamma,ViewValid && RenDev->DepthOfField ? PickFocus() : 0.f,
 		ViewValid && RenDev->VolumetricFog ? PickFogLights() : NULL);
 	if( OverlayUsed )
-		RenDev->DrawFullscreen(RenDev->OverlayProgram,RenDev->Scene.DrawFramebuffer(),RenDev->Scene.Width,RenDev->Scene.Height,RenDev->Overlay.Texture,0,0,0,2);
+		RenDev->DrawFullscreen(RenDev->OverlayProgram,RenDev->Scene.DrawFramebuffer(),RenDev->Scene.Width,RenDev->Scene.Height,RenDev->Overlay.Texture,0,0,1);
 	OverlayUsed = 0;
 	WorldLights.Empty();
 	Clear(0,FColor(0,0,0),1,1.f,0,0);

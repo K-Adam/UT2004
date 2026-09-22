@@ -373,7 +373,6 @@ class UOpenGLRenderDevice : public URenderDevice
 			Antialiasing,
 			AmbientOcclusion,
 			ContactShadows,
-			Bloom,
 			ScreenSpaceReflections,
 			DepthOfField,
 			VolumetricFog;
@@ -402,8 +401,6 @@ class UOpenGLRenderDevice : public URenderDevice
 			VertexShaderObject,
 			CopyProgram,
 			OcclusionProgram,
-			BloomDownProgram,
-			BloomUpProgram,
 			CompositeProgram,
 			DepthOfFieldProgram,
 			VolumetricProgram,
@@ -417,15 +414,13 @@ class UOpenGLRenderDevice : public URenderDevice
 						DynamicIndexBuffer;
 
 	// The world is drawn into World, scaled by ResolutionScale, and post processed into Scene. Scene then goes to the window.
-	enum { BLOOM_LEVELS = 5 };
 	FOpenGLFramebuffer	Scene,
 						World,
 						Occlusion,				// Ambient occlusion and contact shadow at half the world size.
 						Focus,					// The lit world with its signed circle of confusion in alpha.
 						Scattering,				// Light scattered by the fog at half the world size.
 						ScatterHistory[2],		// Scattering averaged over frames, alternating.
-						Overlay,				// Labels drawn within the world, laid over it after the post processing.
-						BloomLevels[BLOOM_LEVELS];
+						Overlay;				// Labels drawn within the world, laid over it after the post processing.
 	AActor*				ShadowLight;			// Only compared, never dereferenced, the actor may be gone.
 	DWORD				FrameCount;
 
@@ -503,9 +498,9 @@ class UOpenGLRenderDevice : public URenderDevice
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
 	void ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth = 0);
 	void UseProgram(GLuint Program);
-	// Covers the framebuffer with Program. Units 0 to 2, 4 and 5 sample linearly, unit 3 is the depth texture.
-	// Blend 1 adds, 2 lays premultiplied alpha over.
-	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Texture2 = 0,GLuint Depth = 0,INT Blend = 0,GLuint Texture4 = 0,GLuint Texture5 = 0);
+	// Covers the framebuffer with Program. Units 0, 1, 3 and 4 sample linearly, unit 2 is the depth texture.
+	// Over lays premultiplied alpha over.
+	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Depth = 0,UBOOL Over = 0,GLuint Texture3 = 0,GLuint Texture4 = 0);
 	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog);
 	void FlushShadows();
 	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,UBOOL HasReflection = 0);

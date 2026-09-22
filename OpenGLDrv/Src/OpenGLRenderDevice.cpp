@@ -14,7 +14,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	LockedViewport	= NULL;
 	ContextReady	= 0;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
 	ShadowLight = NULL;
@@ -29,14 +29,13 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("Antialiasing"),	RF_Public)UBoolProperty(CPP_PROPERTY(Antialiasing),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("AmbientOcclusion"),RF_Public)UBoolProperty(CPP_PROPERTY(AmbientOcclusion),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ContactShadows"),	RF_Public)UBoolProperty(CPP_PROPERTY(ContactShadows),	TEXT("Options"),CPF_Config);
-	new(GetClass(),TEXT("Bloom"),			RF_Public)UBoolProperty(CPP_PROPERTY(Bloom),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ScreenSpaceReflections"),RF_Public)UBoolProperty(CPP_PROPERTY(ScreenSpaceReflections),TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("DepthOfField"),	RF_Public)UBoolProperty(CPP_PROPERTY(DepthOfField),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("VolumetricFog"),	RF_Public)UBoolProperty(CPP_PROPERTY(VolumetricFog),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = Bloom = ScreenSpaceReflections = DepthOfField = VolumetricFog = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = 1;
 	ResolutionScale = 100;
 }
 
@@ -359,15 +358,13 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	DestroyFramebuffer(ScatterHistory[0]);
 	DestroyFramebuffer(ScatterHistory[1]);
 	DestroyFramebuffer(Overlay);
-	for( INT i=0; i<BLOOM_LEVELS; i++ )
-		DestroyFramebuffer(BloomLevels[i]);
 	DynamicVertexBuffer.Release();
 	DynamicIndexBuffer.Release();
 	if( QuadIndices )			glDeleteBuffers(1,&QuadIndices);
 	if( SceneBuffer )			glDeleteBuffers(1,&SceneBuffer);
 	if( VertexArray )			glDeleteVertexArrays(1,&VertexArray);
 	if( EmptyVertexArray )		glDeleteVertexArrays(1,&EmptyVertexArray);
-	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram };
+	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram };
 	for( INT i=0; i<ARRAY_COUNT(PostPrograms); i++ )
 		glDeleteProgram(PostPrograms[i]);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
@@ -377,7 +374,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	FlushShadows();
 	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = BloomDownProgram = BloomUpProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
 }
 
 void UOpenGLRenderDevice::Exit(UViewport* Viewport)
@@ -505,29 +502,29 @@ void UOpenGLRenderDevice::UseProgram(GLuint Program)
 }
 
 // ES 3 cannot scale a blit into a multisampled target, a draw can.
-void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Texture2,GLuint Depth,INT Blend,GLuint Texture4,GLuint Texture5)
+void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Depth,UBOOL Over,GLuint Texture3,GLuint Texture4)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 	glViewport(0,0,Width,Height);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
-	if( Blend )
+	if( Over )
 	{
 		glEnable(GL_BLEND);
 		GL.SrcBlend = GL_ONE;
-		GL.DstBlend = Blend == 1 ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA;
+		GL.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
 		glBlendFunc(GL.SrcBlend,GL.DstBlend);
 	}
 	else
 		glDisable(GL_BLEND);
 	UseProgram(Program);
-	GLuint Textures[] = { Texture0, Texture1, Texture2, Depth, Texture4, Texture5 };
+	GLuint Textures[] = { Texture0, Texture1, Depth, Texture3, Texture4 };
 	for( INT i=0; i<ARRAY_COUNT(Textures); i++ )
 	{
 		if( !Textures[i] )
 			continue;
-		GLuint Sampler = GetSampler(GSF_ClampU | GSF_ClampV | (i == 3 ? GSF_Nearest : 0));
+		GLuint Sampler = GetSampler(GSF_ClampU | GSF_ClampV | (i == 2 ? GSF_Nearest : 0));
 		glActiveTexture(GL_TEXTURE0 + i);
 		glBindTexture(GL_TEXTURE_2D,Textures[i]);
 		glBindSampler(i,Sampler);
@@ -543,7 +540,7 @@ void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT W
 	glEnable(GL_SCISSOR_TEST);
 
 	GL.Framebuffer	= Framebuffer;
-	GL.Blend		= Blend != 0;
+	GL.Blend		= Over;
 	GL.Cull			= 0;
 	appMemset(GL.Viewport,0xff,sizeof(GL.Viewport));
 }

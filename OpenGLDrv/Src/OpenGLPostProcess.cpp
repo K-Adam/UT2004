@@ -1,5 +1,5 @@
 // Post processing of the world: screen space reflections, ambient occlusion and contact shadows from
-// depth, volumetric fog, depth of field, bloom, gamma and film grain. The HUD draws over the result unchanged.
+// depth, volumetric fog, depth of field, gamma and film grain. The HUD draws over the result unchanged.
 
 #include "OpenGLDrv.h"
 
@@ -166,65 +166,11 @@ static const ANSICHAR* OcclusionFragmentShader =
 	"	FragColor = vec4(AO, Shadow, 0.0, 1.0);\n"
 	"}\n";
 
-// Params holds the source texel size, Z is set when sampling the world. Nothing in the frame is
-// brighter than white, so lamps are told apart by being far brighter than lit surfaces. Taking them
-// before averaging keeps small lamps from fading into their dark surroundings. The sky and what
-// fades into bright fog only glow near white. With Z 2 what the env maps added is left out, a
-// reflected sky is no lamp either. Proj is the player's as in POST_COMMON, Fog the start, end and
-// switch of the distance fog.
-#define BLOOM_COMMON \
-	"#version 300 es\n" \
-	"precision mediump float;\n" \
-	"uniform sampler2D Frame, Reflection;\n" \
-	"uniform highp sampler2D Depth;\n" \
-	"uniform vec3 Params;\n" \
-	"uniform highp vec4 Proj;\n" \
-	"uniform highp vec3 Fog;\n" \
-	"in vec2 UV;\n" \
-	"out vec4 FragColor;\n" \
-	"const highp float Split = " STRINGIFY(VIEW_MODEL_DEPTH) ";\n" \
-	"vec3 Tap(float X, float Y)\n" \
-	"{\n" \
-	"	vec2 P = UV + vec2(X, Y) * Params.xy;\n" \
-	"	vec3 C = texture(Frame, P).rgb;\n" \
-	"	if (Params.z == 0.0)\n" \
-	"		return C;\n" \
-	"	if (Params.z > 1.5)\n" \
-	"		C = max(C - texture(Reflection, P).rgb, 0.0);\n" \
-	"	highp float D = texture(Depth, P).r;\n" \
-	"	float Sky = step(1.0, D);\n" \
-	"	if (Fog.z > 0.0 && D >= Split && D < 1.0)\n" \
-	"		Sky = clamp((Proj.w / ((D - Split) / (1.0 - Split) - Proj.z) - Fog.x) / (Fog.y - Fog.x), 0.0, 1.0);\n" \
-	"	return C * smoothstep(mix(0.7, 0.95, Sky), mix(0.9, 1.0, Sky), max(C.r, max(C.g, C.b)));\n" \
-	"}\n"
-
-static const ANSICHAR* BloomDownFragmentShader =
-	BLOOM_COMMON
-	"void main()\n"
-	"{\n"
-	"	vec3 A = Tap(-2.0, -2.0), B = Tap(0.0, -2.0), C = Tap(2.0, -2.0), D = Tap(-1.0, -1.0), E = Tap(1.0, -1.0);\n"
-	"	vec3 F = Tap(-2.0, 0.0), G = Tap(0.0, 0.0), H = Tap(2.0, 0.0), I = Tap(-1.0, 1.0), J = Tap(1.0, 1.0);\n"
-	"	vec3 K = Tap(-2.0, 2.0), L = Tap(0.0, 2.0), M = Tap(2.0, 2.0);\n"
-	"	FragColor = vec4((D + E + I + J) * 0.125 + (A + C + K + M) * 0.03125 + (B + F + H + L) * 0.0625 + G * 0.125, 1.0);\n"
-	"}\n";
-
-// A 3x3 tent over the smaller level, added onto the larger one. Z weakens each wider level, so the
-// glow stays close to its light like in a lens.
-static const ANSICHAR* BloomUpFragmentShader =
-	BLOOM_COMMON
-	"void main()\n"
-	"{\n"
-	"	vec3 S = Tap(-1.0, -1.0) + Tap(1.0, -1.0) + Tap(-1.0, 1.0) + Tap(1.0, 1.0)\n"
-	"		+ 2.0 * (Tap(0.0, -1.0) + Tap(-1.0, 0.0) + Tap(1.0, 0.0) + Tap(0.0, 1.0)) + 4.0 * Tap(0.0, 0.0);\n"
-	"	FragColor = vec4(S * Params.z / 16.0, 1.0);\n"
-	"}\n";
-
-// Params holds the inverse gamma and the occlusion, bloom and reflection switches. Focus holds the
+// Params holds the inverse gamma, the occlusion switch and in W the reflection switch. Focus holds the
 // circle of confusion in world pixels of a sharp point at infinity, the focus distance and the largest
 // circle, zero X turns depth of field off. The film grain is strongest in the midtones like on film,
 // it also breaks up banding.
 #define POST_FINISH \
-	"uniform sampler2D Bloom;\n" \
 	"uniform vec4 Params;\n" \
 	"uniform vec3 Focus;\n" \
 	"uniform uint Seed;\n" \
@@ -237,14 +183,16 @@ static const ANSICHAR* BloomUpFragmentShader =
 	"}\n" \
 	"vec3 Finish(vec3 Color)\n" \
 	"{\n" \
-	"	Color += texture(Bloom, UV).rgb * Params.z;\n" \
 	"	Color = pow(clamp(Color, 0.0, 1.0), vec3(Params.x));\n" \
 	"	float Luma = dot(Color, vec3(0.299, 0.587, 0.114));\n" \
 	"	return Color + (Hash(uvec3(uvec2(gl_FragCoord.xy), Seed)) - 0.5) * 0.024 * (0.3 + 2.8 * Luma * (1.0 - Luma));\n" \
 	"}\n"
 
 // Where the ray finds the reflected surface on screen it replaces the env map, fading out toward the
-// screen edges and the ray's end so misses blend back into it. The half size occlusion and fog
+// screen edges and the ray's end so misses blend back into it. Decals such as puddles leave the
+// depth of the ground beneath them, so nearly level normals are taken as level, Up is world up in
+// camera space. The hit is spread by how far the reflection travelled, which softens distant
+// reflections and dithers their stair steps. The half size occlusion and fog
 // scattering are gathered 4x4 with depth weights, which also averages out their noise. With depth
 // of field the lit world goes to Focus with the signed circle of confusion of a thin lens, which
 // grows with depth.
@@ -253,6 +201,7 @@ static const ANSICHAR* CompositeFragmentShader =
 	POST_FINISH
 	"uniform sampler2D Frame, Occlusion, Reflection, Scattering;\n"
 	"uniform float Volumetric;\n"
+	"uniform vec3 Up;\n"
 	"void main()\n"
 	"{\n"
 	"	vec3 Color = texture(Frame, UV).rgb;\n"
@@ -264,10 +213,11 @@ static const ANSICHAR* CompositeFragmentShader =
 	"		vec2 Size = vec2(textureSize(Depth, 0));\n"
 	"		vec3 C = PosAt(P);\n"
 	"		vec3 N = NormalAt(P, C);\n"
+	"		N = normalize(mix(N, Up, smoothstep(0.8, 0.95, dot(N, Up))));\n"
 	"		vec3 R = reflect(normalize(C), N);\n"
 	"		float Step = max(8.0, 0.02 * C.z);\n"
 	"		vec3 S = C + N * (0.5 + 0.002 * C.z) + R * Step * Jitter();\n"
-	"		float W = 0.0;\n"
+	"		float W = 0.0, Spread = 0.0;\n"
 	"		vec2 HitUV;\n"
 	"		for (int i = 0; i < 24; i++)\n"
 	"		{\n"
@@ -292,6 +242,7 @@ static const ANSICHAR* CompositeFragmentShader =
 	"						A = M;\n"
 	"				}\n"
 	"				HitUV = ToUV(B);\n"
+	"				Spread = min(2.0 * length(B - C) / B.z, 3.0);\n"
 	"				vec2 Edge = smoothstep(0.0, 0.1, min(HitUV, 1.0 - HitUV));\n"
 	"				W = Edge.x * Edge.y * (1.0 - float(i) / 24.0);\n"
 	"				break;\n"
@@ -299,7 +250,13 @@ static const ANSICHAR* CompositeFragmentShader =
 	"			Step *= 1.25;\n"
 	"		}\n"
 	"		if (W > 0.0)\n"
-	"			Color = max(Color + W * (texture(Frame, HitUV).rgb * Refl.a - Refl.rgb), 0.0);\n"
+	"		{\n"
+	"			float A = 6.283 * Jitter();\n"
+	"			vec2 O = vec2(cos(A), sin(A)) * Spread / Size, O2 = vec2(-O.y, O.x);\n"
+	"			vec3 Hit = (texture(Frame, HitUV + O).rgb + texture(Frame, HitUV - O).rgb\n"
+	"				+ texture(Frame, HitUV + O2).rgb + texture(Frame, HitUV - O2).rgb) * 0.25;\n"
+	"			Color = max(Color + W * (Hit * Refl.a - Refl.rgb), 0.0);\n"
+	"		}\n"
 	"	}\n"
 	"	if ((Params.y > 0.0 || Volumetric > 0.0) && D < 1.0)\n"
 	"	{\n"
@@ -464,7 +421,7 @@ static const ANSICHAR* VolumetricFragmentShader =
 	"			}\n"
 	"			Light += W * (1.0 - Fogged(Dist));\n"
 	"		}\n"
-	"		Sum += LightColor[i].rgb * Light * Step;\n"
+	"		Sum += LightColor[i].rgb * Light * Step * 2.0;\n"
 	"	}\n"
 	"	vec3 Tint = vec3(0.0);\n"
 	"	if (Sun.w > 0.0)\n"
@@ -479,7 +436,7 @@ static const ANSICHAR* VolumetricFragmentShader =
 	// Henyey-Greenstein, one where scattering is even, partly even so the shafts also show from the side.
 	"		float G = 0.6, Cos = dot(V, Sun.xyz);\n"
 	"		float Phase = 0.25 + 0.75 * (1.0 - G * G) / pow(1.0 + G * G - 2.0 * G * Cos, 1.5);\n"
-	"		Sum += SunColor.rgb * Lit * Step * 0.3 * Phase;\n"
+	"		Sum += SunColor.rgb * Lit * Step * 0.6 * Phase;\n"
 	"		if (Fog.z > 0.5)\n"
 	"			Tint = SunColor.rgb / max(max(SunColor.r, max(SunColor.g, SunColor.b)), 1.0) * pow(max(Cos, 0.0), 8.0) * 0.25 * (D < 1.0 ? Fogged(T) : 1.0);\n"
 	"	}\n"
@@ -518,15 +475,13 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 {
 	CopyProgram			= CompileProgram(VertexShader,CopyFragmentShader);
 	OcclusionProgram	= CompileProgram(VertexShader,OcclusionFragmentShader);
-	BloomDownProgram	= CompileProgram(VertexShader,BloomDownFragmentShader);
-	BloomUpProgram		= CompileProgram(VertexShader,BloomUpFragmentShader);
 	CompositeProgram	= CompileProgram(VertexShader,CompositeFragmentShader);
 	DepthOfFieldProgram	= CompileProgram(VertexShader,DepthOfFieldFragmentShader);
 	VolumetricProgram	= CompileProgram(VertexShader,VolumetricFragmentShader);
 	ResolveProgram		= CompileProgram(VertexShader,ResolveFragmentShader);
 	OverlayProgram		= CompileProgram(VertexShader,OverlayFragmentShader);
 
-	GLuint Programs[] = { CopyProgram, OcclusionProgram, BloomDownProgram, BloomUpProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram };
+	GLuint Programs[] = { CopyProgram, OcclusionProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram };
 	for( INT i=0; i<ARRAY_COUNT(Programs); i++ )
 	{
 		if( !Programs[i] )
@@ -535,10 +490,9 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 		glUseProgram(Programs[i]);
 		glUniform1i(glGetUniformLocation(Programs[i],"Frame"),0);
 		glUniform1i(glGetUniformLocation(Programs[i],"Occlusion"),1);
-		glUniform1i(glGetUniformLocation(Programs[i],"Bloom"),2);
-		glUniform1i(glGetUniformLocation(Programs[i],"Depth"),3);
-		glUniform1i(glGetUniformLocation(Programs[i],"Reflection"),4);
-		glUniform1i(glGetUniformLocation(Programs[i],"Scattering"),5);
+		glUniform1i(glGetUniformLocation(Programs[i],"Depth"),2);
+		glUniform1i(glGetUniformLocation(Programs[i],"Reflection"),3);
+		glUniform1i(glGetUniformLocation(Programs[i],"Scattering"),4);
 		glUniform1i(glGetUniformLocation(Programs[i],"SunMap"),1);
 		glUniform1i(glGetUniformLocation(Programs[i],"History"),1);
 	}
@@ -558,41 +512,15 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		glUniform4fv(glGetUniformLocation(OcclusionProgram,"Proj"),1,&Proj.X);
 		glUniform4fv(glGetUniformLocation(OcclusionProgram,"Light"),1,&Light.X);
 		glUniform2f(glGetUniformLocation(OcclusionProgram,"Strength"),AmbientOcclusion ? 1.f : 0.f,ContactShadows ? 0.6f : 0.f);
-		DrawFullscreen(OcclusionProgram,Occlusion.Framebuffer,Occlusion.Width,Occlusion.Height,0,0,0,World.DepthTexture);
-	}
-
-	if( Bloom )
-	{
-		GLuint	Source = World.Texture;
-		INT		SourceWidth = World.Width, SourceHeight = World.Height;
-		const FPlane& ViewFog = RenderInterface.ViewFog;
-		UseProgram(BloomDownProgram);
-		glUniform4fv(glGetUniformLocation(BloomDownProgram,"Proj"),1,&Proj.X);
-		glUniform3f(glGetUniformLocation(BloomDownProgram,"Fog"),ViewFog.X,ViewFog.Y,ViewValid ? ViewFog.Z : 0.f);
-		for( INT i=0; i<BLOOM_LEVELS; i++ )
-		{
-			FOpenGLFramebuffer& Level = BloomLevels[i];
-			CreateFramebuffer(Level,Max(World.Width >> (i + 1),1),Max(World.Height >> (i + 1),1),0,GL_RGB10_A2,0);
-			glUniform3f(glGetUniformLocation(BloomDownProgram,"Params"),1.f / SourceWidth,1.f / SourceHeight,i ? 0.f : ScreenSpaceReflections ? 2.f : 1.f);
-			DrawFullscreen(BloomDownProgram,Level.Framebuffer,Level.Width,Level.Height,Source,0,0,World.DepthTexture,0,World.ReflectionTexture);
-			Source			= Level.Texture;
-			SourceWidth		= Level.Width;
-			SourceHeight	= Level.Height;
-		}
-		UseProgram(BloomUpProgram);
-		for( INT i=BLOOM_LEVELS - 1; i>0; i-- )
-		{
-			FOpenGLFramebuffer &Small = BloomLevels[i], &Large = BloomLevels[i - 1];
-			glUniform3f(glGetUniformLocation(BloomUpProgram,"Params"),1.f / Small.Width,1.f / Small.Height,0.7f);
-			DrawFullscreen(BloomUpProgram,Large.Framebuffer,Large.Width,Large.Height,Small.Texture,0,0,0,1);
-		}
+		DrawFullscreen(OcclusionProgram,Occlusion.Framebuffer,Occlusion.Width,Occlusion.Height,0,0,World.DepthTexture);
 	}
 
 	if( Fog )
 	{
 		static const ANSICHAR* Names[] = { "Sun", "SunColor", "SunU", "SunV", "SunAxis", "Fog" };
 		FMatrix WorldToCamera = RenderInterface.ViewWorldToCamera;
-		CreateFramebuffer(Scattering,(World.Width + 1) / 2,(World.Height + 1) / 2,0,GL_RGB10_A2,0);
+		GLenum ScatterFormat = SupportsFloatTargets ? GL_R11F_G11F_B10F : GL_RGB10_A2;
+		CreateFramebuffer(Scattering,(World.Width + 1) / 2,(World.Height + 1) / 2,0,ScatterFormat,0);
 		UseProgram(VolumetricProgram);
 		glUniform4fv(glGetUniformLocation(VolumetricProgram,"Proj"),1,&Proj.X);
 		glUniform1i(glGetUniformLocation(VolumetricProgram,"NumLights"),Fog->NumLights);
@@ -603,14 +531,14 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		glUniform4fv(glGetUniformLocation(VolumetricProgram,"LightSpot"),FOG_LIGHTS,&Fog->Spot[0].X);
 		for( INT i=0; i<ARRAY_COUNT(Names); i++ )
 			glUniform4fv(glGetUniformLocation(VolumetricProgram,Names[i]),1,&(&Fog->Sun)[i].X);
-		DrawFullscreen(VolumetricProgram,Scattering.Framebuffer,Scattering.Width,Scattering.Height,ShadowAtlas,SunShadow,0,World.DepthTexture);
+		DrawFullscreen(VolumetricProgram,Scattering.Framebuffer,Scattering.Width,Scattering.Height,ShadowAtlas,SunShadow,World.DepthTexture);
 
-		// Ten bits would leave dim haze stuck a few steps off once it nears its value.
+		// Ten bits would clip bright glows, and the history would leave dim haze stuck a few steps off.
 		FOpenGLFramebuffer &Resolved = ScatterHistory[FrameCount & 1], &History = ScatterHistory[~FrameCount & 1];
 		for( INT i=0; i<2; i++ )
 			if( ScatterHistory[i].Width != Scattering.Width || ScatterHistory[i].Height != Scattering.Height )
 			{
-				CreateFramebuffer(ScatterHistory[i],Scattering.Width,Scattering.Height,0,SupportsFloatTargets ? GL_R11F_G11F_B10F : GL_RGB10_A2,0);
+				CreateFramebuffer(ScatterHistory[i],Scattering.Width,Scattering.Height,0,ScatterFormat,0);
 				HistoryValid = 0;
 			}
 		FMatrix Reproject = WorldToCamera.Inverse() * PrevWorldToCamera;
@@ -619,7 +547,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		glUniform4fv(glGetUniformLocation(ResolveProgram,"PrevProj"),1,&PrevProj.X);
 		glUniformMatrix4fv(glGetUniformLocation(ResolveProgram,"Reproject"),1,GL_FALSE,&Reproject.M[0][0]);
 		glUniform1f(glGetUniformLocation(ResolveProgram,"HistoryWeight"),HistoryValid ? 0.9f : 0.f);
-		DrawFullscreen(ResolveProgram,Resolved.Framebuffer,Resolved.Width,Resolved.Height,Scattering.Texture,History.Texture,0,World.DepthTexture);
+		DrawFullscreen(ResolveProgram,Resolved.Framebuffer,Resolved.Width,Resolved.Height,Scattering.Texture,History.Texture,World.DepthTexture);
 		PrevWorldToCamera	= WorldToCamera;
 		PrevProj			= Proj;
 		HistoryValid		= 1;
@@ -635,8 +563,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	FLOAT	FocalLength = 12.f / Proj.Y,
 			FocusMM = Max(FocusDistance * 19.05f,FocalLength * 2.f);
 	FVector	Lens(Defocus ? Square(FocalLength) / 1.4f / (FocusMM - FocalLength) / 24.f * World.Height : 0.f,FocusDistance,0.01f * World.Height);
-	FPlane	Params(1.f / Max(Gamma,0.1f),DepthPasses ? 1.f : 0.f,Bloom ? 1.f : 0.f,Reflections ? 1.f : 0.f);
-	GLuint	BloomTexture = Bloom ? BloomLevels[0].Texture : World.Texture;
+	FPlane	Params(1.f / Max(Gamma,0.1f),DepthPasses ? 1.f : 0.f,0.f,Reflections ? 1.f : 0.f);
 	DWORD	Seed = FrameCount++;
 
 	// Disabled inputs still get a valid texture, their weight is zero.
@@ -646,11 +573,13 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	glUniform3fv(glGetUniformLocation(CompositeProgram,"Focus"),1,&Lens.X);
 	glUniform1ui(glGetUniformLocation(CompositeProgram,"Seed"),Seed);
 	glUniform1f(glGetUniformLocation(CompositeProgram,"Volumetric"),Fog ? 1.f : 0.f);
+	FVector Up = RenderInterface.ViewWorldToCamera.TransformNormal(FVector(0,0,1)).SafeNormal();
+	glUniform3fv(glGetUniformLocation(CompositeProgram,"Up"),1,&Up.X);
 	if( Defocus )
 		CreateFramebuffer(Focus,World.Width,World.Height,0,GL_RGBA8,0);
 	FOpenGLFramebuffer& Target = Defocus ? Focus : Scene;
 	DrawFullscreen(CompositeProgram,Target.DrawFramebuffer(),Target.Width,Target.Height,World.Texture,
-		DepthPasses ? Occlusion.Texture : World.Texture,BloomTexture,World.DepthTexture,0,World.ReflectionTexture,ScatterTexture);
+		DepthPasses ? Occlusion.Texture : World.Texture,World.DepthTexture,0,World.ReflectionTexture,ScatterTexture);
 
 	if( Defocus )
 	{
@@ -658,7 +587,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		glUniform4fv(glGetUniformLocation(DepthOfFieldProgram,"Params"),1,&Params.X);
 		glUniform3fv(glGetUniformLocation(DepthOfFieldProgram,"Focus"),1,&Lens.X);
 		glUniform1ui(glGetUniformLocation(DepthOfFieldProgram,"Seed"),Seed);
-		DrawFullscreen(DepthOfFieldProgram,Scene.DrawFramebuffer(),Scene.Width,Scene.Height,Focus.Texture,0,BloomTexture,World.DepthTexture);
+		DrawFullscreen(DepthOfFieldProgram,Scene.DrawFramebuffer(),Scene.Width,Scene.Height,Focus.Texture,0,World.DepthTexture);
 	}
 }
 

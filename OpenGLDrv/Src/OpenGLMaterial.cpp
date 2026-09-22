@@ -280,7 +280,8 @@ public:
 	INT									NumTemps;
 	UBOOL								EnvSampled;
 	INT									ReflE,
-										ReflMask;
+										ReflMask,
+										Lit;		// The dynamic and static lighting, once applied.
 	UBOOL								Cube[OGL_MAX_TEXTURES];
 	FString*							ErrorString;
 	UMaterial**							ErrorMaterial;
@@ -291,7 +292,7 @@ public:
 
 	FOpenGLCompiler(FOpenGLRenderInterface* InRI,FOpenGLMaterialState& InState,TArray<BYTE>& InKey,FString* InCode,FString* InErrorString,UMaterial** InErrorMaterial)
 	:	RI(InRI), S(InRI->CurrentState), State(InState), Key(InKey), Code(InCode), NumTemps(0)
-	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE)
+	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE)
 	,	ErrorString(InErrorString), ErrorMaterial(InErrorMaterial), FogMode(FOG_Normal)
 	{
 		Time = RI->Viewport->Actor ? RI->Viewport->Actor->Level->TimeSeconds : 0.f;
@@ -557,7 +558,11 @@ public:
 	INT ApplyLighting(INT C,UBOOL Diffuse,UBOOL Lightmap)
 	{
 		if( Diffuse )
-			Emit(TEXT("\t{ vec4 L = Lighting(); r%i = vec4(clamp(r%i.rgb * L.rgb * (1.0 + Options.z), 0.0, 1.0), r%i.a * L.a); }\n"),C,C,C);
+		{
+			Lit = NewTemp();
+			Emit(TEXT("\tvec4 r%i = Lighting();\n"),Lit);
+			Emit(TEXT("\tr%i = vec4(clamp(r%i.rgb * r%i.rgb * (1.0 + Options.z), 0.0, 1.0), r%i.a * r%i.a);\n"),C,C,Lit,C,Lit);
+		}
 		if( Lightmap )
 		{
 			FOpenGLModifierInfo Mod;
@@ -730,6 +735,9 @@ public:
 					return 0;
 				Emit(TEXT("\tfloat r%i = r%i.a;\n"),SpecMask = NewTemp(),M);
 			}
+			// Unlike D3D9Drv, highlights and reflections fade where the mesh is in shade.
+			if( Lit != INDEX_NONE )
+				Emit(TEXT("\tr%i *= smoothstep(0.15, 0.6, dot(r%i.rgb, vec3(0.299, 0.587, 0.114)) * (1.0 + Options.z));\n"),SpecMask,Lit);
 		}
 
 		if( !Opacity )
@@ -1154,13 +1162,7 @@ public:
 
 	UBOOL OpacityAttenuation(INT C,BYTE Blending,UMaterial* BaseOpacity,const FOpenGLModifierInfo& Mod)
 	{
-		UBitmapMaterial* Bitmap = CheckMaterial<UBitmapMaterial,MT_BitmapMaterial>(Time,BaseOpacity);
-		if( !Bitmap )
-		{
-			Fail(TEXT("Base opacity isn't a bitmap"),BaseOpacity);
-			return 0;
-		}
-		INT O = Sample(Bitmap,Mod);
+		INT O = Combined(BaseOpacity,Mod);
 		if( O == INDEX_NONE )
 			return 0;
 		Attenuate(C,Blending,O,TEXT("a"));
@@ -1346,8 +1348,12 @@ void FOpenGLRenderInterface::SetMaterial(UMaterial* Material,FString* ErrorStrin
 	Material->PreSetMaterial(Viewport->Actor ? Viewport->Actor->Level->TimeSeconds : 0.f);
 	if( !CompileMaterial(Material,ErrorString,ErrorMaterial) )
 	{
-		// Content the fixed function drivers could not render may name a fallback.
-		UBOOL Compiled = Material->FallbackMaterial && CompileMaterial(Material->FallbackMaterial,NULL,NULL);
+		// Content the fixed function drivers could not render may name a chain of fallbacks. Only the
+		// editor rejects circular chains.
+		UBOOL Compiled = 0;
+		UMaterial* Fallback = Material->FallbackMaterial;
+		for( INT i=0; i<8 && Fallback && !Compiled; i++, Fallback=Fallback->FallbackMaterial )
+			Compiled = CompileMaterial(Fallback,NULL,NULL);
 		if( !Compiled )
 		{
 			debugf(NAME_Warning,TEXT("OpenGLDrv: %s is not renderable"),Material->GetFullName());
