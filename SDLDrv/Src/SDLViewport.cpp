@@ -508,58 +508,55 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	USDLClient* Client = GetOuterUSDLClient();
 
 	UBOOL InMenu = GUIController && GUIController->bActive;
-	FLOAT PadDX = 0, PadDY = 0;
     if( Client->UseJoystick && USDLClient::Gamepad )
     {
         // Guide and Misc1 belong to the system overlay and capture, so the triggers take their keys.
+        // Menus get the same keys, the GUI maps them to its own navigation.
         // Axes span -0.5 to 0.5, the range the ini DeadZone values assume.
-        static const EInputKey GameKeys[ARRAY_COUNT(PadKeys)] = { IK_Joy1, IK_Joy2, IK_Joy3, IK_Joy4, IK_Joy5, IK_None, IK_Joy7, IK_Joy8, IK_Joy9, IK_Joy10, IK_Joy11, IK_Joy13, IK_Joy14, IK_Joy15, IK_Joy16, IK_None, IK_Joy6, IK_Joy12 };
-        // Menus are mouse driven: A clicks, B and Start go back, the d-pad moves focus.
-        static const EInputKey MenuKeys[ARRAY_COUNT(PadKeys)] = { IK_LeftMouse, IK_Escape, IK_None, IK_None, IK_None, IK_None, IK_Escape, IK_None, IK_None, IK_None, IK_None, IK_Up, IK_Down, IK_Left, IK_Right, IK_None, IK_None, IK_None };
+        // The last four are the left stick pushed up, down, left and right, which works as the d-pad in menus.
+        static const EInputKey Keys[SDL_GAMEPAD_BUTTON_MISC1 + 7] = { IK_Joy1, IK_Joy2, IK_Joy3, IK_Joy4, IK_Joy5, IK_None, IK_Joy7, IK_Joy8, IK_Joy9, IK_Joy10, IK_Joy11, IK_Joy13, IK_Joy14, IK_Joy15, IK_Joy16, IK_None, IK_Joy6, IK_Joy12, IK_Joy13, IK_Joy14, IK_Joy15, IK_Joy16 };
         static const EInputKey Axes[SDL_GAMEPAD_AXIS_COUNT] = { IK_JoyX, IK_JoyY, IK_JoyV, IK_JoySlider1, IK_JoyZ, IK_JoyR };
         SDL_Gamepad* Pad = USDLClient::Gamepad;
         SDL_UpdateGamepads();
-        for( INT i=0; i<ARRAY_COUNT(PadKeys); i++ )
+        FLOAT StickX = SDL_GetGamepadAxis( Pad, SDL_GAMEPAD_AXIS_LEFTX ) / 32767.f, StickY = SDL_GetGamepadAxis( Pad, SDL_GAMEPAD_AXIS_LEFTY ) / 32767.f;
+        for( INT i=0; i<ARRAY_COUNT(Keys); i++ )
         {
             DWORD Bit = 1 << i;
             UBOOL Pressed;
             if( i <= SDL_GAMEPAD_BUTTON_MISC1 )
                 Pressed = SDL_GetGamepadButton( Pad, (SDL_GamepadButton)i );
-            else
+            else if( i <= SDL_GAMEPAD_BUTTON_MISC1 + 2 )
             {
                 // Hysteresis, so a trigger resting near the threshold does not chatter.
                 SDL_GamepadAxis Trigger = i == SDL_GAMEPAD_BUTTON_MISC1 + 1 ? SDL_GAMEPAD_AXIS_LEFT_TRIGGER : SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
                 Pressed = SDL_GetGamepadAxis( Pad, Trigger ) > ((PadHeld & Bit) ? 6000 : 10000);
             }
-            // Keys follow press edges only, so a button held while a menu opens or closes neither sticks nor fires late.
+            else
+            {
+                // Along the dominant axis only, so a diagonal steps once.
+                INT Dir = i - (SDL_GAMEPAD_BUTTON_MISC1 + 3);
+                FLOAT V = Dir < 2 ? StickY : StickX, Other = Dir < 2 ? StickX : StickY;
+                if( Dir == 0 || Dir == 2 )
+                    V = -V;
+                Pressed = (PadHeld & Bit) ? V > 0.35f : V > 0.5f && V > Abs( Other );
+            }
+            // Keys follow press edges only, so a button held while a menu opens or closes does not fire late.
+            // The stick is tracked in game too but only sends keys in menus, so one already pushed when a menu opens does not step it.
+            UBOOL Send = Keys[i] && (InMenu || i <= SDL_GAMEPAD_BUTTON_MISC1 + 2);
             if( Pressed && !(PadHeld & Bit) )
             {
                 PadHeld |= Bit;
-                PadKeys[i] = InMenu ? MenuKeys[i] : GameKeys[i];
-                if( PadKeys[i] )
-                    CauseInputEvent( PadKeys[i], IST_Press );
+                if( Send )
+                    CauseInputEvent( Keys[i], IST_Press );
             }
             else if( !Pressed && (PadHeld & Bit) )
             {
                 PadHeld &= ~Bit;
-                if( PadKeys[i] )
-                    CauseInputEvent( PadKeys[i], IST_Release );
-                PadKeys[i] = IK_None;
+                if( Send )
+                    CauseInputEvent( Keys[i], IST_Release );
             }
         }
-        if( InMenu )
-        {
-            // The left stick moves the cursor, at full tilt one screen height per second.
-            FLOAT X = SDL_GetGamepadAxis( Pad, SDL_GAMEPAD_AXIS_LEFTX ) / 32767.f, Y = SDL_GetGamepadAxis( Pad, SDL_GAMEPAD_AXIS_LEFTY ) / 32767.f;
-            FLOAT Len = appSqrt( X*X + Y*Y );
-            if( Len > 0.2f )
-            {
-                FLOAT Speed = Square( (Min( Len, 1.f ) - 0.2f) / 0.8f ) * SizeY * DeltaSeconds / Len;
-                PadDX = X * Speed;
-                PadDY = Y * Speed;
-            }
-        }
-        else
+        if( !InMenu )
             for( INT i=0; i<ARRAY_COUNT(Axes); i++ )
             {
                 FLOAT V = SDL_GetGamepadAxis( Pad, (SDL_GamepadAxis)i ) / 65535.f;
@@ -574,11 +571,15 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	if( bShowWindowsMouse != WindowsMouseShown )
 	{
 		WindowsMouseShown = bShowWindowsMouse;
-		if( WindowsMouseShown )
+		UpdateMouseGrabState();
+	}
+	bool WantCursor = WindowsMouseShown && !bHideCursor;
+	if( WantCursor != SDL_CursorVisible() )
+	{
+		if( WantCursor )
 			SDL_ShowCursor();
 		else
 			SDL_HideCursor();
-		UpdateMouseGrabState();
 	}
 
 	// Text input only while a menu or the console reads it, so an IME does not take game keys.
@@ -694,7 +695,6 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 					// Falls back to another connected pad, which sends no added event.
 					if( Client->UseJoystick )
 						Client->OpenGamepad();
-					appMemzero( PadKeys, sizeof(PadKeys) );
 					PadHeld = 0;
 					if( GUIController )
 						GUIController->ResetInput();
@@ -724,32 +724,6 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 		SDL_GetWindowSizeInPixels( Client->Window, &W, &H );
 		if( W != SizeX || H != SizeY )
 			ResizeViewport( BlitFlags | BLIT_NoWindowChange, W, H );
-	}
-
-	// The OS cursor follows a warp, the engine's own menu cursor follows mouse deltas.
-	if( PadDX || PadDY )
-	{
-		if( WindowsMouseShown )
-		{
-			// Warps land on whole pixels, so the fraction carries over to the next frame.
-			PadWarpX += PadDX;
-			PadWarpY += PadDY;
-			INT StepX = appTrunc( PadWarpX ), StepY = appTrunc( PadWarpY );
-			if( StepX || StepY )
-			{
-				float X, Y;
-				SDL_GetMouseState( &X, &Y );
-				SDL_WarpMouseInWindow( Client->Window, X + StepX, Y + StepY );
-				PadWarpX -= StepX;
-				PadWarpY -= StepY;
-			}
-		}
-		else
-		{
-			MouseMoved = true;
-			DX += PadDX;
-			DY += PadDY;
-		}
 	}
 
 	// Deliver mouse behavior to the engine.

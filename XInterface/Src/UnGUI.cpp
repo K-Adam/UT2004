@@ -128,6 +128,44 @@ UBOOL UGUIPage::NativeKeyEvent(BYTE& iKey, BYTE& State, FLOAT Delta )
 	if ( Super::NativeKeyEvent(iKey, State, Delta) )
 		return true;
 
+	UGUIComponent* F = C->FocusedControl && C->FocusedControl->PageOwner == this ? C->FocusedControl : NULL;
+
+	// Lists act on a double click, such as starting a map or joining a server, so Enter does the same.
+	if ( State == IST_Press && iKey == IK_Enter && F && F->IsA(UGUIListBase::StaticClass()) && OBJ_DELEGATE_IS_SET(F, OnDblClick) )
+	{
+		F->delegateOnDblClick(F);
+		return true;
+	}
+
+	// Arrows no control used step a combo box or move focus like Tab, so menus work without a mouse.
+	if ( State == IST_Press && iKey >= IK_Left && iKey <= IK_Down )
+	{
+		UBOOL Back = iKey == IK_Left || iKey == IK_Up;
+		if ( iKey == IK_Left || iKey == IK_Right )
+		{
+			for ( UGUIComponent* W = F; W && W != this; W = W->MenuOwner )
+			{
+				UGUIComboBox* Combo = Cast<UGUIComboBox>(W);
+				if ( Combo && Combo->List && !Combo->bValueReadOnly )
+				{
+					struct { INT I; } Parms;
+					Parms.I = Clamp( Combo->List->Index + (Back ? -1 : 1), 0, Max( Combo->List->ItemCount - 1, 0 ) );
+					if ( Parms.I != Combo->List->Index )
+						Combo->ProcessEvent( Combo->FindFunctionChecked(FName(TEXT("SetIndex"))), &Parms );
+					return true;
+				}
+			}
+		}
+		// Down from a tab strip enters its open panel, where Tab order would skip to the next sibling.
+		if ( !F || (iKey == IK_Down && F->IsA(UGUITabControl::StaticClass())) )
+			(F ? F : this)->eventFocusFirst(NULL);
+		else if ( Back )
+			F->eventPrevControl(NULL);
+		else
+			F->eventNextControl(NULL);
+		return true;
+	}
+
 	// Handle Close	-- Add support for aborting
 	if ( State == IST_Press && iKey == IK_Escape && C->DropSource == NULL )
 		C->eventCloseMenu(true);

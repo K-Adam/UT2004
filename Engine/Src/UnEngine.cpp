@@ -588,6 +588,18 @@ UBOOL UEngine::InputEvent( UViewport* Viewport, EInputKey iKey, EInputAction Sta
 	}
 	else
 	{
+		// Retail cinematics such as the intro only skip on fire and the menu key, so the pad's A and B skip them too.
+		if ( State == IST_Press && (iKey == IK_Joy1 || iKey == IK_Joy2) && Viewport->Actor && !(Viewport->GUIController && Viewport->GUIController->bActive) )
+		{
+			static FName NAME_CinematicPlayer(TEXT("CinematicPlayer"));
+			for ( UClass* C = Viewport->Actor->GetClass(); C; C = C->GetSuperClass() )
+				if ( C->GetFName() == NAME_CinematicPlayer )
+				{
+					Viewport->Exec(TEXT("SHOWMENU"), *GLog);
+					return 1;
+				}
+		}
+
 		if ( (Client->InteractionMaster) && ( Client->InteractionMaster->MasterProcessKeyEvent(iKey, State, Delta ) ) )
 		{
 			if ( (State==IST_Release) || (Client->InteractionMaster->bRequireRawJoystick) )

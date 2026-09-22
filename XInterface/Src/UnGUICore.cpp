@@ -524,8 +524,9 @@ void  UGUIController::NativeTick(FLOAT DeltaTime)
 		RepeatTime-=DeltaTime;
 		if ( RepeatTime <= 0 )
 		{
-			BYTE Hold=IST_Hold;
-			NativeKeyEvent(RepeatKey, Hold, RepeatDelta);
+			// A copy, since handlers may remap the key they are given.
+			BYTE Key=RepeatKey, Hold=IST_Hold;
+			NativeKeyEvent(Key, Hold, RepeatDelta);
 			RepeatTime=ButtonRepeatDelay;
 		}
 	}
@@ -702,7 +703,7 @@ void  UGUIController::NativePostRender(UCanvas* Canvas)
 			MouseOffset = MouseCursorOffset(0);
 		}
 
-		if (MouseMat!=NULL)
+		if (MouseMat!=NULL && !CastChecked<UViewport>(ViewportOwner)->bHideCursor)
 		{
 
 			FColor OldColor         = Canvas->Color;
@@ -1557,12 +1558,65 @@ UBOOL UGUIController::NativeKeyEvent(BYTE& iKey, BYTE& State, FLOAT Delta )
 	AltPressed = KeyDown[IK_Alt];
 	CtrlPressed = KeyDown[IK_Ctrl];
 
+	// Keyboard and pad navigation hide the cursor and its hover until the mouse is used again.
+	UViewport* Viewport = CastChecked<UViewport>(ViewportOwner);
+	UBOOL MouseKey = iKey == IK_LeftMouse || iKey == IK_RightMouse || iKey == IK_MiddleMouse || (iKey >= IK_Mouse4 && iKey <= IK_Mouse8)
+		|| (iKey >= IK_MouseX && iKey <= IK_MouseW) || iKey == IK_MouseWheelUp || iKey == IK_MouseWheelDown;
+	if ( MouseKey )
+		Viewport->bHideCursor = 0;
+	else if ( !Viewport->bHideCursor && State == IST_Press && iKey != IK_Shift && iKey != IK_Ctrl && iKey != IK_Alt )
+	{
+		Viewport->bHideCursor = 1;
+		if ( ActiveControl )
+		{
+			if ( ActiveControl->MenuState == MSAT_Watched )
+				ActiveControl->eventMenuStateChange(ActiveControl->LastMenuState);
+			if ( ActiveControl->delegateOnEndTooltip() )
+				MouseOver = NULL;
+		}
+	}
+	UBOOL CursorHidden = Viewport->bHideCursor;
+
+	// Pad buttons reach the menus as the keys the retail pages already handle.
+	switch ( iKey )
+	{
+	case IK_Joy1:	iKey = IK_Enter; break;
+	case IK_Joy2:
+	case IK_Joy7:	iKey = IK_Escape; break;
+	case IK_Joy3:	iKey = IK_Backspace; break;
+	case IK_Joy13:
+	case IK_Joy14:
+	case IK_Joy15:
+	case IK_Joy16:
+		// Repeats arrive as presses, like keyboard auto repeat, since controls only act on presses.
+		iKey = iKey == IK_Joy13 ? IK_Up : iKey == IK_Joy14 ? IK_Down : iKey == IK_Joy15 ? IK_Left : IK_Right;
+		if ( State == IST_Hold )
+			State = IST_Press;
+		break;
+	case IK_Joy10:
+	case IK_Joy11:
+		// The bumpers switch tab pages, or step focus like Tab where a page has no tabs, so the pad can leave a list.
+		if ( State == IST_Press && ActivePage && !ContextMenu )
+		{
+			UGUIComponent* F = FocusedControl && FocusedControl->PageOwner == ActivePage ? FocusedControl : ActivePage;
+			UBOOL Next = iKey == IK_Joy11;
+			if ( !(Next ? F->eventNextPage() : F->eventPrevPage()) )
+			{
+				if ( Next )
+					F->eventNextControl(NULL);
+				else
+					F->eventPrevControl(NULL);
+			}
+		}
+		return true;
+	}
+
 	// If we are in design mode, allow components to be moved around
 	if ( bModAuthor && DesignKeyEvent(iKey, State, Delta) )
 		return true;
 
 	// The UGUIControl automatically tracks Mouse X/Y changes
-	if ( iKey==IK_MouseX || iKey==IK_MouseY || bForceMouseCheck )
+	if ( iKey==IK_MouseX || iKey==IK_MouseY || (bForceMouseCheck && !CursorHidden) )
 	{
 		bForceMouseCheck = false;
 
@@ -1585,7 +1639,7 @@ UBOOL UGUIController::NativeKeyEvent(BYTE& iKey, BYTE& State, FLOAT Delta )
 		if ( iKey == IK_MouseX || iKey == IK_MouseY )
 			return true;
 	}
-	else if ( !FocusedControl || !FocusedControl->bFocusOnWatch )
+	else if ( !CursorHidden && (!FocusedControl || !FocusedControl->bFocusOnWatch) )
 		LookUnderCursor(0.f,0.f);
 
 	if ( GIsEditor )

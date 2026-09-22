@@ -112,10 +112,8 @@ class USDLViewport : public UViewport
 	// Variables.
 	DWORD				BlitFlags;
 
-	// Remembered per button, SDL buttons then LT and RT, so the release matches the press after a menu opened or closed.
-	EInputKey			PadKeys[SDL_GAMEPAD_BUTTON_MISC1 + 3];
+	// One bit per SDL button, then LT, RT and the four left stick directions.
 	DWORD				PadHeld;
-	FLOAT				PadWarpX, PadWarpY;
 
 	UBOOL				WantGrab;
 	FLOAT				WheelRemainder;

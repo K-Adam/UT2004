@@ -252,6 +252,7 @@ class ENGINE_API UViewport : public UPlayer
 	UBOOL			FullscreenOnly; // Engine requires desktop set to 32 bpp for windowed mode.	
 	FVector			TerrainPointAtLocation;	// The 3D location currently being pointed at on the terrain
 	UBOOL			UseSoftwareRasterizer;
+	UBOOL			bHideCursor;	// Menu navigation by keyboard or pad hides the menu cursor until the mouse moves.
 
 	FViewportRenderTarget	RenderTarget;	// A dummy render target that exposes the viewport's size to interfaces that take a FRenderTarget.
 
