@@ -33,12 +33,21 @@ enum
 
 // The share of the distance fog at X from its start to its end. It builds up exponentially like real
 // fog and ramps in after the start so there is no visible edge, yet still covers everything at the
-// end, where the level is culled.
+// end, where the level is culled. FogAt is the share at camera space P, for the scene block's Fog.
+// Volumetric fog is thinner upward and thicker downward.
 #define OGL_FOG_AMOUNT \
 	"float FogAmount(float X, float Density)\n" \
 	"{\n" \
 	"	float Depth = X < 0.3 ? 5.0 * X * X : 3.0 * X - 0.45;\n" \
 	"	return (1.0 - exp(-Density * Depth)) / (1.0 - exp(-Density * 2.55));\n" \
+	"}\n" \
+	"float FogAt(vec3 P, vec3 Up, vec4 Fog)\n" \
+	"{\n" \
+	"	if (Fog.z < 0.5)\n" \
+	"		return 0.0;\n" \
+	"	float Dist = length(P);\n" \
+	"	float X = clamp((Dist - Fog.x) / (Fog.y - Fog.x), 0.0, 1.0);\n" \
+	"	return Fog.w > 0.5 ? FogAmount(X, exp2(-1.5 * dot(P, Up) / max(Dist, 1.0))) : X;\n" \
 	"}\n"
 
 enum EOpenGLAttribute
@@ -167,7 +176,8 @@ struct FOpenGLMaterialState
 	FLOAT			AlphaRef;
 	UBOOL			ZWrite,
 					ZTest,
-					TwoSided;
+					TwoSided,
+					Beam;			// A fake light shaft, drawn after the rest of the level.
 
 	void Reset();
 };
@@ -279,7 +289,8 @@ public:
 	TArray<FDynamicLight*>	WorldLights;	// The lights actors in the world were lit by.
 	FLOAT				FocusDiopters;
 	DOUBLE				FocusTime;
-	FPlane				ViewFog;		// The player's zone fog, start, end, enabled and W 1 once recorded.
+	FPlane				ViewFog,		// The player's zone fog, start, end, enabled and W 1 once recorded.
+						ViewFogColor;
 	FVector				FogUp;
 	FOpenGLFogLights	FogLights;
 	TMap<AActor*,FLOAT>	FogFades;
@@ -289,8 +300,25 @@ public:
 	INT					DynamicStride,
 						DynamicSize;
 	DWORD				DynamicComponents;
+	FIndexBuffer*		DynamicIndices;		// The last SetDynamicIndexBuffer source, kept to copy deferred draws.
+	INT					DynamicIndicesFirst;
+
+	struct FDeferredDraw
+	{
+		FSavedState		State;
+		EPrimitiveType	Type;
+		INT				FirstIndex,
+						NumPrimitives,
+						MinIndex,
+						MaxIndex,
+						IndexOffset,		// Into DeferredIndices, for draws from the dynamic index buffer.
+						IndexBytes;
+	};
+	TArray<FDeferredDraw>	DeferredDraws;
+	TArray<BYTE>			DeferredIndices;
 
 	FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev);
+	void DrawDeferred();
 
 	void Locked(UViewport* InViewport);
 	void Unlocked();

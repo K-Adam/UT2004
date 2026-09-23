@@ -140,14 +140,7 @@ static const ANSICHAR* OpenGLFragmentPrologue =
 	OGL_FOG_AMOUNT
 	"vec3 ApplyFog(vec3 Color, vec3 Target)\n"
 	"{\n"
-	"	if (Fog.z < 0.5)\n"
-	"		return Color;\n"
-	"	float Dist = length(vCameraPos);\n"
-	"	float X = clamp((Dist - Fog.x) / (Fog.y - Fog.x), 0.0, 1.0);\n"
-	// Volumetric fog is thinner upward and thicker downward.
-	"	if (Fog.w > 0.5)\n"
-	"		X = FogAmount(X, exp2(-1.5 * dot(vCameraPos, FogUp.xyz) / max(Dist, 1.0)));\n"
-	"	return mix(Color, Target, X);\n"
+	"	return mix(Color, Target, FogAt(vCameraPos, FogUp.xyz, Fog));\n"
 	"}\n";
 
 struct FOpenGLModifierInfo
@@ -191,6 +184,28 @@ struct FOpenGLModifierInfo
 		TexCoordProjected		= Projected;
 	}
 };
+
+// Stock materials that fake light shafts with translucent meshes. Nothing else marks them.
+static const TCHAR* LightBeams[][2] =
+{
+	{ TEXT("Litespray_shade"),			TEXT("AWGlobal.Shaders.Litespray_shade") },
+	{ TEXT("TowerLightConePanner"),		TEXT("TowerTerrain.General.TowerLightConePanner") },
+	{ TEXT("TowerLightConeGradient"),	TEXT("TowerTerrain.General.TowerLightConeGradient") },
+	{ TEXT("lightbeamendshader1"),		TEXT("HourAdaraTexor.lightbeamendshader1") },
+	{ TEXT("SC_SpotLightGrad_S"),		TEXT("SC_Intro.SpotLights.SC_SpotLightGrad_S") },
+	{ TEXT("streaker"),					TEXT("Egypt_tech_Epic.Shaders.streaker") },
+	{ TEXT("LightBoxFB"),				TEXT("PC_UrbanTex.pauls_stuff.LightBoxFB") },
+	{ TEXT("LightBox"),					TEXT("Bastien.Effects.LightBox") },
+};
+
+// Runs for every draw, so the path is only built when the name matches.
+static UBOOL IsLightBeam(UMaterial* Material)
+{
+	for( INT i=0; i<ARRAY_COUNT(LightBeams); i++ )
+		if( appStricmp(Material->GetName(),LightBeams[i][0]) == 0 && appStricmp(Material->GetPathName(),LightBeams[i][1]) == 0 )
+			return 1;
+	return 0;
+}
 
 // Uses the material type bits where set, because Cast<> is slow.
 template<class T,DWORD Type> static T* MaterialCast(UMaterial* Material)
@@ -282,6 +297,7 @@ public:
 	INT									ReflE,
 										ReflMask,
 										Lit;		// The dynamic and static lighting, once applied.
+	UBOOL								Beam;
 	UBOOL								Cube[OGL_MAX_TEXTURES];
 	FString*							ErrorString;
 	UMaterial**							ErrorMaterial;
@@ -292,7 +308,7 @@ public:
 
 	FOpenGLCompiler(FOpenGLRenderInterface* InRI,FOpenGLMaterialState& InState,TArray<BYTE>& InKey,FString* InCode,FString* InErrorString,UMaterial** InErrorMaterial)
 	:	RI(InRI), S(InRI->CurrentState), State(InState), Key(InKey), Code(InCode), NumTemps(0)
-	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE)
+	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE), Beam(0)
 	,	ErrorString(InErrorString), ErrorMaterial(InErrorMaterial), FogMode(FOG_Normal)
 	{
 		Time = RI->Viewport->Actor ? RI->Viewport->Actor->Level->TimeSeconds : 0.f;
@@ -643,6 +659,20 @@ public:
 
 	void Output(INT C)
 	{
+		K(Beam);
+		if( Beam )
+		{
+			if( State.SrcBlend == GL_SRC_ALPHA )
+				Emit(TEXT("\tr%i.rgb *= r%i.a;\n"),C,C);
+			// Fading toward the silhouette makes the flat cone read as a volume, fading near the camera
+			// keeps it from popping when driving through it, and far away the boost would glare.
+			Emit(TEXT("\tr%i.rgb *= 1.2 * pow(abs(dot(normalize(mat3(WorldToCamera) * vWorldNormal), normalize(vCameraPos))), 1.5) * smoothstep(32.0, 160.0, length(vCameraPos)) * mix(1.0, 0.5, smoothstep(1500.0, 5000.0, length(vCameraPos)));\n"),C);
+			SetBlend(GL_ONE,GL_ONE,FOG_Black);
+			State.ZWrite	= 0;
+			State.TwoSided	= 1;
+			State.AlphaTest	= 0;
+			State.Beam		= 1;
+		}
 		K(FogMode);
 		K(State.AlphaTest);
 		if( State.AlphaTest )
@@ -788,7 +818,7 @@ public:
 		if( ApplyColorModifier(C,Mod) == INDEX_NONE )
 			return 0;
 
-		UBOOL Premultiply = (SelfIllumination || Spec != INDEX_NONE) && State.SrcBlend == GL_SRC_ALPHA && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA;
+		UBOOL Premultiply = !Beam && (SelfIllumination || Spec != INDEX_NONE) && State.SrcBlend == GL_SRC_ALPHA && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA;
 		K(Premultiply);
 		if( !Premultiply )
 		{
@@ -1189,6 +1219,7 @@ public:
 
 		if( S->LightingOnly )
 			return LightingOnly();
+		Beam = IsLightBeam(Material);
 		if( (Shader = CheckMaterial<UShader,MT_Shader>(Time,Material,&Mod)) != NULL )
 			return this->Shader(Shader,Mod);
 		UMaterial* Base = CheckMaterial<UCombiner,MT_Combiner>(Time,Material,&Mod);
@@ -1236,6 +1267,7 @@ void FOpenGLMaterialState::Reset()
 	ZWrite				= 1;
 	ZTest				= 1;
 	TwoSided			= 0;
+	Beam				= 0;
 }
 
 static TArray<ANSICHAR> ToAnsi(const FString& Source)

@@ -4,7 +4,7 @@
 #include "OpenGLDrv.h"
 
 FOpenGLRenderInterface::FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev)
-:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), ViewFog(0,0,0,0), FogUp(0,0,1), FogTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0)
+:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), ViewFog(0,0,0,0), FogUp(0,0,1), FogTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0), DynamicIndices(NULL), DynamicIndicesFirst(0)
 {
 	CurrentState = &SavedStates[0];
 	FSavedState& S = *CurrentState;
@@ -160,6 +160,7 @@ void FOpenGLRenderInterface::BeginViewModel(const FMatrix& WorldToCamera,const F
 {
 	if( !InWorld )
 		return;
+	DrawDeferred();
 	ViewModel			= 1;
 	ViewWorldToCamera	= WorldToCamera;
 	ViewCameraToScreen	= CameraToScreen;
@@ -171,6 +172,7 @@ void FOpenGLRenderInterface::EndWorld()
 {
 	if( !InWorld )
 		return;
+	DrawDeferred();
 	// Depth needs the player's projection and the level in the world framebuffer, letterboxing
 	// moves the projection off the framebuffer.
 	UBOOL ViewValid = ViewModel && WorldDrawn && !Viewport->bRenderCinematics;
@@ -198,6 +200,9 @@ void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FL
 			return;
 		EndWorld();
 	}
+	// Sky zones and mirrors draw first and the level clears depth over them, their beams belong to their depth.
+	if( UseDepth && InWorld && !CurrentState->RenderTarget )
+		DrawDeferred();
 	CommitTarget(this,CurrentState);
 	GLbitfield Mask = 0;
 	if( UseColor )
@@ -285,7 +290,10 @@ void FOpenGLRenderInterface::SetDistanceFog(UBOOL Enable,FLOAT FogStart,FLOAT Fo
 	CurrentState->FogColor		= Color;
 	// The level sets the fog of the player's zone first, its sky, mirrors and coronas follow.
 	if( InWorld && !ViewModel && !CurrentState->RenderTarget && ViewFog.W == 0.f )
-		ViewFog = FPlane(CurrentState->FogStart,FogEnd,Enable ? 1.f : 0.f,1.f);
+	{
+		ViewFog			= FPlane(CurrentState->FogStart,FogEnd,Enable ? 1.f : 0.f,1.f);
+		ViewFogColor	= Color.Plane();
+	}
 }
 
 void FOpenGLRenderInterface::SetGlobalColor(FColor Color)
@@ -384,6 +392,8 @@ INT FOpenGLRenderInterface::SetDynamicIndexBuffer(FIndexBuffer* IndexBuffer,INT 
 	if( BYTE* Dest = RenDev->DynamicIndexBuffer.Lock(IndexBuffer->GetSize(),IndexSize,Offset) )
 		IndexBuffer->GetContents(Dest);
 	RenDev->DynamicIndexBuffer.Unlock();
+	DynamicIndices					= IndexBuffer;
+	DynamicIndicesFirst				= Offset / IndexSize;
 	RenDev->GL.ElementBuffer		= RenDev->DynamicIndexBuffer.Buffer;
 	CurrentState->IndexBuffer		= RenDev->DynamicIndexBuffer.Buffer;
 	CurrentState->IndexSize			= IndexSize;
@@ -695,6 +705,29 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 	if( !CurrentState->Material.Program || !CurrentState->Material.Program->Program || NumPrimitives <= 0 )
 		return;
 
+	// The engine sorts translucent actors by their centre, which puts long beams behind foliage they
+	// stand in front of. Adding is order independent, so beams wait until the level is done.
+	FSavedState* S = CurrentState;
+	if( S->Material.Beam && InWorld && !ViewModel && !S->RenderTarget && S->Streams[0].Buffer != RenDev->DynamicVertexBuffer.Buffer )
+	{
+		FDeferredDraw& D	= DeferredDraws(DeferredDraws.Add());
+		D.State				= *S;
+		D.Type				= PrimitiveType;
+		D.FirstIndex		= FirstIndex;
+		D.NumPrimitives		= NumPrimitives;
+		D.MinIndex			= MinIndex;
+		D.MaxIndex			= MaxIndex;
+		D.IndexBytes		= 0;
+		if( S->IndexBuffer && S->IndexBuffer == RenDev->DynamicIndexBuffer.Buffer )
+		{
+			D.IndexBytes	= DynamicIndices->GetSize();
+			D.IndexOffset	= DeferredIndices.Add(D.IndexBytes);
+			D.FirstIndex	-= DynamicIndicesFirst;
+			DynamicIndices->GetContents(&DeferredIndices(D.IndexOffset));
+		}
+		return;
+	}
+
 	GLenum	Mode;
 	INT		Count;
 	switch( PrimitiveType )
@@ -739,4 +772,39 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 		glDrawArrays(Mode,FirstIndex,Count);
 
 	unguard;
+}
+
+struct FDeferredIndices : public FIndexBuffer
+{
+	BYTE*	Data;
+	INT		Size,
+			IndexSize;
+
+	FDeferredIndices(BYTE* InData,INT InSize,INT InIndexSize) : Data(InData), Size(InSize), IndexSize(InIndexSize) {}
+	virtual QWORD GetCacheId() { return 0; }
+	virtual INT GetRevision() { return 0; }
+	virtual INT GetSize() { return Size; }
+	virtual void GetContents(void* Dest) { appMemcpy(Dest,Data,Size); }
+	virtual INT GetIndexSize() { return IndexSize; }
+};
+
+void FOpenGLRenderInterface::DrawDeferred()
+{
+	PushState();
+	for( INT i=0; i<DeferredDraws.Num(); i++ )
+	{
+		FDeferredDraw& D = DeferredDraws(i);
+		*CurrentState = D.State;
+		CurrentState->Material.Beam = 0;
+		INT FirstIndex = D.FirstIndex;
+		if( D.IndexBytes )
+		{
+			FDeferredIndices Indices(&DeferredIndices(D.IndexOffset),D.IndexBytes,D.State.IndexSize);
+			FirstIndex += SetDynamicIndexBuffer(&Indices,D.State.IndexBufferBase);
+		}
+		DrawPrimitive(D.Type,FirstIndex,D.NumPrimitives,D.MinIndex,D.MaxIndex);
+	}
+	PopState();
+	DeferredDraws.Empty(DeferredDraws.Num());
+	DeferredIndices.Empty(DeferredIndices.Num());
 }

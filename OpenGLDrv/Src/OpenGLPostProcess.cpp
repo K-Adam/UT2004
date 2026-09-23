@@ -199,9 +199,11 @@ static const ANSICHAR* OcclusionFragmentShader =
 static const ANSICHAR* CompositeFragmentShader =
 	POST_COMMON
 	POST_FINISH
+	OGL_FOG_AMOUNT
 	"uniform sampler2D Frame, Occlusion, Reflection, Scattering;\n"
 	"uniform float Volumetric;\n"
-	"uniform vec3 Up;\n"
+	"uniform vec3 Up, FogColor;\n"
+	"uniform vec4 Fog;\n"
 	"void main()\n"
 	"{\n"
 	"	vec3 Color = texture(Frame, UV).rgb;\n"
@@ -281,9 +283,12 @@ static const ANSICHAR* CompositeFragmentShader =
 	"		if (Params.y > 0.0)\n"
 	"		{\n"
 	"			vec2 O = Weights > 0.0 ? Sum / Weights : vec2(1.0);\n"
+	// Occlusion darkens the surface under the fog, not the fog in front of it.
+	"			vec3 Haze = min(FogColor * FogAt(PosAt(P), Up, Fog), Color);\n"
+	"			vec3 Surface = Color - Haze;\n"
 	// Bright surfaces lose less light to occlusion, they bounce more of it back.
-	"			vec3 A = 2.0404 * Color - 0.3324, B = -4.7951 * Color + 0.6417, K = 2.7552 * Color + 0.6903;\n"
-	"			Color *= max(vec3(O.x), ((O.x * A + B) * O.x + K) * O.x) * O.y;\n"
+	"			vec3 A = 2.0404 * Surface - 0.3324, B = -4.7951 * Surface + 0.6417, K = 2.7552 * Surface + 0.6903;\n"
+	"			Color = Haze + Surface * max(vec3(O.x), ((O.x * A + B) * O.x + K) * O.x) * O.y;\n"
 	"		}\n"
 	"		if (Weights > 0.0)\n"
 	"			Color += Scatter / Weights * Volumetric;\n"
@@ -575,6 +580,10 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	glUniform1f(glGetUniformLocation(CompositeProgram,"Volumetric"),Fog ? 1.f : 0.f);
 	FVector Up = RenderInterface.ViewWorldToCamera.TransformNormal(FVector(0,0,1)).SafeNormal();
 	glUniform3fv(glGetUniformLocation(CompositeProgram,"Up"),1,&Up.X);
+	FPlane CompositeFog = RenderInterface.ViewFog;
+	CompositeFog.W = VolumetricFog ? 1.f : 0.f;
+	glUniform4fv(glGetUniformLocation(CompositeProgram,"Fog"),1,&CompositeFog.X);
+	glUniform3fv(glGetUniformLocation(CompositeProgram,"FogColor"),1,&RenderInterface.ViewFogColor.X);
 	if( Defocus )
 		CreateFramebuffer(Focus,World.Width,World.Height,0,GL_RGBA8,0);
 	FOpenGLFramebuffer& Target = Defocus ? Focus : Scene;

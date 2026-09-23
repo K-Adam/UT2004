@@ -349,6 +349,9 @@ void FStaticMeshBatchVertexStream::GetStreamData(void* Dest)
 			CalculateStaticMeshLighting(StaticMesh,StaticMeshInstance,DynamicActor);
 
 		INT	NumExistingUVs = Min(NumUVs,StaticMesh->UVStreams.Num());
+		// Normals take the inverse transpose, or non-uniform scaling bends them toward the stretched axis.
+		FMatrix	NormalToWorld = DynamicActor->LocalToWorld.TransposeAdjoint();
+		FLOAT	NormalSign = DynamicActor->Determinant < 0.0f ? -1.0f : 1.0f;
 
 		for(INT VertexIndex = Section.MinVertexIndex;VertexIndex <= Section.MaxVertexIndex;VertexIndex++)
 		{
@@ -357,7 +360,7 @@ void FStaticMeshBatchVertexStream::GetStreamData(void* Dest)
 			*DestPosition = DynamicActor->LocalToWorld.TransformFVector(SrcVertex->Position);
 
 			if(Normal)
-				*DestNormal = DynamicActor->LocalToWorld.TransformNormal(SrcVertex->Normal);
+				*DestNormal = (FVector)NormalToWorld.TransformNormal(SrcVertex->Normal).SafeNormal() * NormalSign;
 
 			if( UseCustomVertexColor )
 				*DestLighting = CustomVertexColor;
