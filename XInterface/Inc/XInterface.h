@@ -22,6 +22,8 @@ XINTERFACE_API void   GUIappSprintf( INT MaxLen, TCHAR* Dest, const TCHAR* Fmt, 
 
 #include "XInterfaceClasses.h"
 
+FLOAT GUIScale( UGUIController* Controller );
+
 #if __STATIC_LINK
 #define NAMES_ONLY
 #define NATIVE_DEFS_ONLY

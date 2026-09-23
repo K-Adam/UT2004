@@ -278,8 +278,8 @@ static INT DrawString
 					{
 						if( bClip )
 						{
-							if( X        < 0.f           ) { CU-=X; CUSize+=X; X=0;  }
-							if( Y        < 0.f           ) { CV-=Y; CVSize+=Y; Y=0;  }
+							if( X        < 0.f           ) { CU-=X/ScaleX; CUSize+=X/ScaleX; X=0;  }
+							if( Y        < 0.f           ) { CV-=Y/ScaleY; CVSize+=Y/ScaleY; Y=0;  }
 							if( X+(CUSize*ScaleX) > Canvas->ClipX ) { CUSize=(INT) (Canvas->ClipX-X)/ScaleX; }
 							if( Y+(CVSize*ScaleY) > Canvas->ClipY ) { CVSize=(INT) (Canvas->ClipY-Y)/ScaleY; } 
 						}
@@ -397,10 +397,8 @@ void UCanvas::WrapStringToArray( const TCHAR *Text, TArray<FString> *OutArray, f
 			if (!Skip)
 			{
 				GetCharSize(pFont, Text[iTestWord], ChW, ChH);
-				ChW*=pFont->ScaleFactor;
-				ChH*=pFont->ScaleFactor;
-
-				TestXL              += ChW + SpaceX + pFont->Kerning; // gam
+				// Spacing scales with the glyphs, as DrawString lays them out.
+				TestXL              += (INT)((FLOAT)(ChW + SpaceX + pFont->Kerning) * pFont->ScaleFactor);
 		
 				if( TestXL>Width )
 					break;
@@ -496,10 +494,9 @@ void UCanvas::WrappedPrint( ERenderStyle Style, INT& XL, INT& YL, UFont* Font, F
 
 			INT ChW, ChH;
 			GetCharSize(Font, Text[iTestWord], ChW, ChH);
-			ChW *= Font->ScaleFactor;
 			ChH *= Font->ScaleFactor;
 
-			TestXL              += (INT) ((FLOAT)(ChW + SpaceX + Font->Kerning) * ScaleX); // gam
+			TestXL              += (INT) ((FLOAT)(ChW + SpaceX + Font->Kerning) * ScaleX * Font->ScaleFactor);
 			TestYL               = (INT) ((FLOAT)(Max( TestYL, ChH + (INT)SpaceY)) * ScaleY); // gam
 			if( TestXL>ClipX )
 				break;
@@ -1725,8 +1722,9 @@ void VARARGS UCanvas::DrawTextJustified(BYTE Justification, FLOAT x1, FLOAT y1, 
 	CurY = 0;
 	ClippedStrLen(  Font, 1.0,1.0, XL, YL, Text );
 
-	// Adjust the Y so the Font is centered in the bounding box
-	CurY = ((y2-y1) / 2) - (YL/2);
+	// Text taller than its box spills out evenly instead of being cut.
+	FLOAT Spill = Max( YL - (y2-y1), 0.f ) / 2;
+	CurY = Max( ((y2-y1) - YL) / 2, 0.f );
 
 	if (Justification == 0)						// Left
 		CurX = 0;
@@ -1747,9 +1745,9 @@ void VARARGS UCanvas::DrawTextJustified(BYTE Justification, FLOAT x1, FLOAT y1, 
 
 	// Clip to box
 	OrgX = x1;
-	OrgY = y1;
+	OrgY = y1 - Spill;
 	ClipX = x2-x1;
-	ClipY = y2-y1;
+	ClipY = y2-y1 + 2*Spill;
 
 	ClippedPrint(Font, 1.0, 1.0, false, Text);
 

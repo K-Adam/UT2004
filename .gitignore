@@ -2,3 +2,4 @@
 /Android/.gradle/
 /Android/build/
 /Android/local.properties
+__pycache__/

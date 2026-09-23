@@ -345,6 +345,16 @@ void UGUITabControl::PreDraw(UCanvas* Canvas)
 	if (ATabHeight<1)
 		ATabHeight = C->ResY * ATabHeight;
 
+	// The tabs grow with captions drawn larger than their font.
+	if ( GUIScale(C) > 1.f )
+		for ( INT i=0; i<TabStack.Num(); i++ )
+			if ( TabStack(i) && TabStack(i)->Style )
+			{
+				TabStack(i)->Style->TextSize(Canvas,TabStack(i)->MenuState,*(TabStack(i)->Caption),XL,YL,TabStack(i)->FontScale);
+				ATabHeight = Max( ATabHeight, YL + TabStack(i)->Style->BorderOffsets[1] + TabStack(i)->Style->BorderOffsets[3] );
+				break;
+			}
+
 
 	// Account for Style
 
@@ -1341,9 +1351,9 @@ void UGUIButton::PreDraw(UCanvas* Canvas)
 	if ( INVALIDRENDER )
 		return;
 
+	FLOAT XL(0.f), YL(0.f);
 	if ( Style && Style->Fonts[MenuState + (5 * FontScale)] )
 	{
-		FLOAT XL(0.f), YL(0.f);
 		Canvas->ClippedStrLen(Style->Fonts[MenuState+(5*FontScale)]->eventGetFont(Canvas->ClipX), 1, 1, XL, YL, SizingCaption != TEXT("") ? *SizingCaption : *Caption);
 
 		if ( bAutoSize && (XL > ActualWidth() || bAutoShrink))
@@ -1353,6 +1363,17 @@ void UGUIButton::PreDraw(UCanvas* Canvas)
 	}
 
 	Super::PreDraw(Canvas);
+
+	// A caption drawn larger than its font grows the button about its centre, kept on screen. The layout keeps its size.
+	FLOAT Grow = Style && Caption != TEXT("") ? YL + Style->BorderOffsets[1] + Style->BorderOffsets[3] - (Bounds[3] - Bounds[1]) : 0.f;
+	if ( Grow > 0.f && GUIScale(Controller) > 1.f )
+	{
+		FLOAT Top = Clamp( Bounds[1] - Grow / 2, 0.f, Max( Controller->ResY - (Bounds[3] - Bounds[1] + Grow), 0.f ) );
+		Bounds[3] = Top + Bounds[3] - Bounds[1] + Grow;
+		Bounds[1] = Top;
+		ClientBounds[1] = Bounds[1] + Style->BorderOffsets[1];
+		ClientBounds[3] = Bounds[3] - Style->BorderOffsets[3];
+	}
 	unguardobj;
 }
 

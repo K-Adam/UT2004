@@ -749,6 +749,9 @@ int main(int argc, char **argv)
 		Root = SDL_GetAndroidInternalStoragePath();
 	if( !ExtractAssets(Root) )
 		return 1;
+	// Apps have no usable HOME, which is where the download cache would go otherwise.
+	if( const char* Cache = SDL_GetAndroidCachePath() )
+		setenv( "XDG_CACHE_HOME", Cache, 1 );
 	// The engine runs from System/ like on the desktop.
 	char SystemDir[1024];
 	SDL_snprintf( SystemDir, sizeof(SystemDir), "%s/UT2004/System", Root );

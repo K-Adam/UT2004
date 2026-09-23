@@ -607,7 +607,19 @@ UBOOL UEngine::InputEvent( UViewport* Viewport, EInputKey iKey, EInputAction Sta
 
 			return 1;
 		}
-		else if ( Viewport->Input->PreProcess( iKey, State, Delta ) && Viewport->Input->Process( *GLog, iKey, State, Delta ) )
+
+		// Escape, and so Android's back, cancels a pending connect like F10. Its retail ShowMenu binding only opens the disconnect page.
+		if ( State == IST_Press && iKey == IK_Escape && !(Viewport->GUIController && Viewport->GUIController->bActive) )
+		{
+			UGameEngine* GameEngine = Cast<UGameEngine>(this);
+			if ( GameEngine && GameEngine->GPendingLevel )
+			{
+				Viewport->Exec(TEXT("CANCEL"), *GLog);
+				return 1;
+			}
+		}
+
+		if ( Viewport->Input->PreProcess( iKey, State, Delta ) && Viewport->Input->Process( *GLog, iKey, State, Delta ) )
 		{
 			// Input system handled it.
 			return 1;

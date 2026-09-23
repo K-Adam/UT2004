@@ -379,12 +379,9 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	}
 	else if( ParseCommand(&Cmd,TEXT("VIRTUALJOYSTICK")) )
 	{
-		GetOuterUSDLClient()->SetVirtualJoystick( !USDLClient::VirtualPad );
-		// The pad block stops polling once no pad is open, so held pad keys would never release.
-		PadHeld = 0;
-		if( GUIController )
-			GUIController->ResetInput();
-		Input->ResetInput();
+		USDLClient* Client = GetOuterUSDLClient();
+		Client->VJWanted = !Client->VJWanted;
+		SwitchVirtualJoystick( Client->VJWanted );
 		Ar.Logf( TEXT("Virtual joystick %s"), USDLClient::VirtualPad ? TEXT("on") : TEXT("off") );
 		return 1;
 	}
@@ -588,16 +585,17 @@ void USDLViewport::UpdateMousePosition()
 //
 // Pixel layout of the on-screen controls: the move stick bottom left, the look stick bottom right
 // and the buttons in an arc above and inside the look stick, where the right thumb reaches.
+// Use sits above and inside the move stick for the left thumb.
 //
 void USDLViewport::VJLayout( INT i, FLOAT& X, FLOAT& Y, FLOAT& R )
 {
 	FLOAT StickR = SizeY * 0.11f, Margin = SizeY * 0.06f;
-	X = i == VJ_Move ? Margin + StickR : SizeX - Margin - StickR;
+	X = i == VJ_Move || i == VJ_Use ? Margin + StickR : SizeX - Margin - StickR;
 	Y = SizeY - Margin - StickR;
 	R = StickR;
 	if( i >= VJ_Fire )
 	{
-		static const FLOAT Angles[] = { 165.f, 120.f, 75.f };
+		static const FLOAT Angles[] = { 165.f, 120.f, 75.f, 60.f };
 		FLOAT A = Angles[i - VJ_Fire] * PI / 180.f;
 		X += appCos( A ) * StickR * 1.7f;
 		Y -= appSin( A ) * StickR * 1.7f;
@@ -631,6 +629,9 @@ void USDLViewport::VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y )
 	}
 	else if( i == VJ_Jump )
 		SDL_SetJoystickVirtualButton( Joystick, 0, Held != 0 );
+	// The third button is the pad's west button, bound to Use like E.
+	else if( i == VJ_Use )
+		SDL_SetJoystickVirtualButton( Joystick, 2, Held != 0 );
 	else
 		SDL_SetJoystickVirtualAxis( Joystick, i == VJ_Fire ? SDL_GAMEPAD_AXIS_RIGHT_TRIGGER : SDL_GAMEPAD_AXIS_LEFT_TRIGGER, Held ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN );
 	unguard;
@@ -658,7 +659,18 @@ UBOOL USDLViewport::VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Ph
 				break;
 		}
 		if( i < 0 )
+		{
+			for( INT t=0; t<TouchTargets.Num(); t++ )
+			{
+				const FTouchTarget& T = TouchTargets(t);
+				if( X >= T.X1 && X < T.X2 && Y >= T.Y1 && Y < T.Y2 )
+				{
+					Exec( *T.Command, *GLog );
+					return 1;
+				}
+			}
 			return 0;
+		}
 		VJTouch[i] = Touch;
 		VJFinger[i] = Finger;
 	}
@@ -670,6 +682,31 @@ UBOOL USDLViewport::VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Ph
 		VJFinger[i] = 0;
 	return 1;
 	unguard;
+}
+
+//
+// Turns the on-screen controls on or off, which swaps the virtual pad for a real one.
+//
+void USDLViewport::SwitchVirtualJoystick( UBOOL On )
+{
+	guard(USDLViewport::SwitchVirtualJoystick);
+	GetOuterUSDLClient()->SetVirtualJoystick( On );
+	// The pad block stops polling once no pad is open, so held pad keys would never release.
+	PadHeld = 0;
+	if( GUIController )
+		GUIController->ResetInput();
+	Input->ResetInput();
+	unguard;
+}
+
+void USDLViewport::AddTouchTarget( FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, const TCHAR* Command )
+{
+	FTouchTarget* T = new(TouchTargets) FTouchTarget;
+	T->X1 = X1;
+	T->Y1 = Y1;
+	T->X2 = X2;
+	T->Y2 = Y2;
+	T->Command = Command;
 }
 
 void USDLViewport::VJRelease()
@@ -712,8 +749,8 @@ void USDLViewport::RenderOverlay()
 	DECLARE_STATIC_UOBJECT( UProxyBitmapMaterial, WhiteMaterial, { WhiteMaterial->SetTextureInterface(&WhiteTexture); } );
 	DECLARE_STATIC_UOBJECT( UFinalBlend, WhiteBlend, { WhiteBlend->FrameBufferBlending = FB_AlphaBlend; WhiteBlend->Material = WhiteMaterial; WhiteBlend->ZWrite = 0; WhiteBlend->ZTest = 0; } );
 
-	static const FColor Tints[] = { FColor(230,70,60,0), FColor(240,160,40,0), FColor(80,200,90,0) };
-	static const TCHAR* Captions[] = { TEXT("FIRE"), TEXT("ALT"), TEXT("JUMP") };
+	static const FColor Tints[] = { FColor(230,70,60,0), FColor(240,160,40,0), FColor(80,200,90,0), FColor(70,140,230,0) };
+	static const TCHAR* Captions[] = { TEXT("FIRE"), TEXT("ALT"), TEXT("JUMP"), TEXT("USE") };
 	FCanvasUtil* CU = Canvas->pCanvasUtil;
 	for( INT i=0; i<VJ_Count; i++ )
 	{
@@ -1005,21 +1042,18 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 			case SDL_EVENT_FINGER_MOTION:
 			case SDL_EVENT_FINGER_UP:
 			case SDL_EVENT_FINGER_CANCELED:
-				if( VJShown )
+				if( VJShown && USDLClient::VirtualPad )
 					VJPointer( Event.tfinger.touchID, Event.tfinger.fingerID, Event.type, Event.tfinger.x * SizeX, Event.tfinger.y * SizeY );
+				// Touching the game brings back the controls a mouse or pad put away.
+				else if( Event.type == SDL_EVENT_FINGER_DOWN && Client->VJWanted && !USDLClient::VirtualPad && !InMenu )
+					SwitchVirtualJoystick( 1 );
 				break;
 
 			case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			case SDL_EVENT_MOUSE_BUTTON_UP:
-				if( VJShown && Event.button.button == SDL_BUTTON_LEFT )
-				{
-					// Touch and pen already arrived as fingers.
-					if( Event.button.which == SDL_TOUCH_MOUSEID || Event.button.which == SDL_PEN_MOUSEID )
-						break;
-					FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
-					if( VJPointer( 0, 1, Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? SDL_EVENT_FINGER_DOWN : SDL_EVENT_FINGER_UP, Event.button.x * Density, Event.button.y * Density ) )
-						break;
-				}
+				// Touch and pen arrive as fingers too. VJShown follows a frame later, VirtualPad at once.
+				if( VJShown && USDLClient::VirtualPad && Event.button.which != SDL_TOUCH_MOUSEID && Event.button.which != SDL_PEN_MOUSEID )
+					SwitchVirtualJoystick( 0 );
 				if( Event.button.which == SDL_TOUCH_MOUSEID && Event.button.button == SDL_BUTTON_LEFT )
 				{
 					if( InMenu && Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN )
@@ -1063,14 +1097,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 			}
 
 			case SDL_EVENT_MOUSE_MOTION:
-				// The cursor is absolute while it works the on-screen controls, so it does not turn the view.
+				// The cursor is absolute while the on-screen controls show, so it does not turn the view.
 				if( VJShown )
 				{
-					if( Event.motion.which != SDL_TOUCH_MOUSEID && Event.motion.which != SDL_PEN_MOUSEID )
-					{
-						FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
-						VJPointer( 0, 1, SDL_EVENT_FINGER_MOTION, Event.motion.x * Density, Event.motion.y * Density );
-					}
+					if( USDLClient::VirtualPad && Event.motion.which != SDL_TOUCH_MOUSEID && Event.motion.which != SDL_PEN_MOUSEID )
+						SwitchVirtualJoystick( 0 );
 					break;
 				}
 				if ((!MouseIsGrabbed) && (Client->IgnoreUngrabbedMouse))
@@ -1084,6 +1115,16 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 			case SDL_EVENT_GAMEPAD_ADDED:
 				if( Client->UseJoystick && !USDLClient::Gamepad )
 					Client->OpenGamepad();
+				else if( !USDLClient::WatchedPad )
+					Client->WatchPads();
+				break;
+
+			// Using a real pad puts the on-screen controls away and hands it the game.
+			case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+			case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+				if( USDLClient::WatchedPad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::WatchedPad )
+					&& (Event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || Abs( (INT)Event.gaxis.value ) > 16000) )
+					SwitchVirtualJoystick( 0 );
 				break;
 
 			case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
@@ -1096,6 +1137,8 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				break;
 
 			case SDL_EVENT_GAMEPAD_REMOVED:
+				if( USDLClient::WatchedPad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::WatchedPad ) )
+					Client->WatchPads();
 				if( USDLClient::Gamepad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
 				{
 					Client->CloseGamepad();
@@ -1190,6 +1233,9 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 UBOOL USDLViewport::Lock( BYTE* HitData, INT* HitSize )
 {
 	guard(USDLViewport::Lock);
+
+	// The HUD adds the frame's targets as it draws.
+	TouchTargets.Empty( TouchTargets.Num() );
 
 	// Success here, so pass to superclass.
 	return UViewport::Lock(HitData,HitSize);

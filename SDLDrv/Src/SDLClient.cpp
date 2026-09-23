@@ -24,6 +24,7 @@ IMPLEMENT_CLASS(USDLClient);
 
 SDL_Gamepad *USDLClient::Gamepad = NULL;
 SDL_JoystickID USDLClient::VirtualPad = 0;
+SDL_Gamepad* USDLClient::WatchedPad = NULL;
 
 
 //
@@ -91,10 +92,40 @@ static FString SDLClipboardPaste()
 	return Result;
 }
 
+static SDL_Haptic* DeviceHaptic;
+static bool DeviceHapticInit;
+
+static void CloseDeviceHaptic()
+{
+	if( DeviceHaptic )
+		SDL_CloseHaptic( DeviceHaptic );
+	DeviceHaptic = NULL;
+	if( DeviceHapticInit )
+		SDL_QuitSubSystem( SDL_INIT_HAPTIC );
+	DeviceHapticInit = false;
+}
+
 static void SDLRumble( FLOAT Low, FLOAT High, INT Milliseconds )
 {
-	if( USDLClient::Gamepad )
-		SDL_RumbleGamepad( USDLClient::Gamepad, (Uint16)(Clamp(Low, 0.f, 1.f) * 65535), (Uint16)(Clamp(High, 0.f, 1.f) * 65535), Milliseconds );
+	if( USDLClient::Gamepad && SDL_RumbleGamepad( USDLClient::Gamepad, (Uint16)(Clamp(Low, 0.f, 1.f) * 65535), (Uint16)(Clamp(High, 0.f, 1.f) * 65535), Milliseconds ) )
+		return;
+	// The on-screen controls' virtual pad can't rumble, so the phone or tablet showing them vibrates itself.
+	// SDL lists Android's own vibrator first.
+	if( !USDLClient::VirtualPad )
+		return;
+	if( !DeviceHapticInit && (DeviceHapticInit = SDL_InitSubSystem( SDL_INIT_HAPTIC )) )
+	{
+		int Count = 0;
+		SDL_HapticID* IDs = SDL_GetHaptics( &Count );
+		if( Count > 0 && (DeviceHaptic = SDL_OpenHaptic( IDs[0] )) && !SDL_InitHapticRumble( DeviceHaptic ) )
+		{
+			SDL_CloseHaptic( DeviceHaptic );
+			DeviceHaptic = NULL;
+		}
+		SDL_free( IDs );
+	}
+	if( DeviceHaptic )
+		SDL_PlayHapticRumble( DeviceHaptic, Clamp( Max(Low, High), 0.f, 1.f ), Milliseconds );
 }
 
 static void sdl_atexit_handler(void)
@@ -151,7 +182,10 @@ void USDLClient::Init( UEngine* InEngine )
 	PostEditChange();
 
 	if( ParseParam(appCmdLine(),TEXT("VIRTUALJOYSTICK")) )
+	{
+		VJWanted = 1;
 		SetVirtualJoystick( 1 );
+	}
 
 	if( ParseParam(appCmdLine(),TEXT("defaultres")) )
 	{
@@ -269,7 +303,7 @@ void USDLClient::SetVirtualJoystick( UBOOL On )
 		SDL_INIT_INTERFACE( &Desc );
 		Desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
 		Desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
-		Desc.nbuttons = 1;
+		Desc.nbuttons = 3;
 		Desc.name = "UT2004 Virtual Joystick";
 		VirtualPad = SDL_AttachVirtualJoystick( &Desc );
 		if( VirtualPad )
@@ -282,17 +316,40 @@ void USDLClient::SetVirtualJoystick( UBOOL On )
 			SDL_SetJoystickVirtualAxis( Joystick, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
 			debugf( NAME_Init, TEXT("Virtual joystick on") );
 			EnableGyro();
+			WatchPads();
 			return;
 		}
 		// SDL builds without HIDAPI have no virtual joystick driver.
 		debugf( NAME_Init, TEXT("Couldn't attach virtual joystick: %s"), appFromAnsi(SDL_GetError()) );
+		VJWanted = 0;
 	}
 	if( VirtualPad )
 		SDL_DetachVirtualJoystick( VirtualPad );
 	VirtualPad = 0;
+	WatchPads();
 	CloseDeviceSensors();
 	if( UseJoystick )
 		OpenGamepad();
+	unguard;
+}
+
+//
+// Opens the first real pad while the on-screen controls are on and pads are enabled, otherwise closes it.
+//
+void USDLClient::WatchPads()
+{
+	guard(USDLClient::WatchPads);
+	if( WatchedPad )
+		SDL_CloseGamepad( WatchedPad );
+	WatchedPad = NULL;
+	if( !VirtualPad || !UseJoystick )
+		return;
+	int Count = 0;
+	SDL_JoystickID* Pads = SDL_GetGamepads( &Count );
+	for( INT i=0; i<Count && !WatchedPad; i++ )
+		if( Pads[i] != VirtualPad )
+			WatchedPad = SDL_OpenGamepad( Pads[i] );
+	SDL_free( Pads );
 	unguard;
 }
 
@@ -318,8 +375,10 @@ void USDLClient::Destroy()
 	Window = NULL;
 
 	CloseGamepad();
-	CloseDeviceSensors();
 	VirtualPad = 0;
+	WatchPads();
+	CloseDeviceSensors();
+	CloseDeviceHaptic();
 	GClipboardCopy = NULL;
 	GClipboardPaste = NULL;
 	GRumble = NULL;
@@ -427,6 +486,7 @@ void USDLClient::PostEditChange()
 		OpenGamepad();
 	else
 		EnableGyro();
+	WatchPads();
 	unguard;
 }
 

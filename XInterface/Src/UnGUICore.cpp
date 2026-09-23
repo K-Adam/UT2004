@@ -2318,7 +2318,7 @@ UBOOL UGUIController::HasMouseMoved( FLOAT ErrorMargin )
 // =======================================================================================================================================================
 // =======================================================================================================================================================
 
-static FLOAT GUIScale( UGUIController* Controller )
+FLOAT GUIScale( UGUIController* Controller )
 {
 	UViewport* Viewport = Controller ? Cast<UViewport>(Controller->ViewportOwner) : NULL;
 	return Viewport ? Viewport->GUIFontScale() : 1.f;
@@ -2889,8 +2889,9 @@ FLOAT UGUIComponent::ActualHeight( FLOAT Val, UBOOL bForce ) const
 
 	if ( Val == INDEX_NONE )
 	{
+		// Standardized controls hold one line of text, so they grow with it.
 		if (bStandardized)
-			return StandardHeight * Controller->ResY;
+			return StandardHeight * Controller->ResY * GUIScale( Controller );
 		else
 			Val = WinHeight;
 	}

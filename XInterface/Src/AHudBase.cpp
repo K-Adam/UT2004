@@ -105,6 +105,17 @@ void AHudBase::DrawSpriteWidget( UCanvas* Canvas, FSpriteWidget* Widget )
             break;
     }
 
+	// The retail weapon bar script can't change, so its slots are found here to make them tappable on touch screens.
+	// Looked up each time, a server's HUD class can go away with its level. HudCDeathmatch puts slot 8 on key 0.
+	UStructProperty* Bar = FindField<UStructProperty>( GetClass(), TEXT("BarBorder") );
+	BYTE* BarBase = Bar ? (BYTE*)this + Bar->Offset : NULL;
+	if( BarBase && Canvas->Viewport && (BYTE*)Widget >= BarBase && (BYTE*)Widget < BarBase + Bar->ArrayDim * Bar->ElementSize )
+	{
+		INT Slot = ((BYTE*)Widget - BarBase) / Bar->ElementSize;
+		FLOAT X = Canvas->OrgX + ScreenX, Y = Canvas->OrgY + ScreenY;
+		Canvas->Viewport->AddTouchTarget( X, Y, X + ScreenDX, Y + ScreenDY, *FString::Printf( TEXT("SwitchWeapon %d"), (Slot + 1) % Bar->ArrayDim ) );
+	}
+
     Canvas->CurX = ScreenX;
 	Canvas->CurY = ScreenY;
 	Canvas->Style = Widget->RenderStyle;

@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The LAN server list finds games by UDP broadcast, which Wi-Fi drops without a multicast lock. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Hits vibrate the device when no gamepad can rumble. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application android:label="UT2004"
         android:icon="@mipmap/ic_launcher"

@@ -76,6 +76,10 @@ class USDLClient : public UClient, public FNotifyHook
     static SDL_Gamepad *Gamepad;
 	// The attached SDL virtual joystick behind the on-screen controls.
 	static SDL_JoystickID VirtualPad;
+	// A real pad opened while the on-screen controls stand in for it, only to notice it being used.
+	static SDL_Gamepad* WatchedPad;
+	// The on-screen controls are on, they step aside while a mouse or a real pad is used.
+	UBOOL				VJWanted;
 
 	// Constructors.
 	USDLClient();
@@ -104,13 +108,20 @@ class USDLClient : public UClient, public FNotifyHook
 	void CloseGamepad();
 	void EnableGyro();
 	void SetVirtualJoystick( UBOOL On );
+	void WatchPads();
 };
 
 /*-----------------------------------------------------------------------------
 	USDLViewport.
 -----------------------------------------------------------------------------*/
 
-enum { VJ_Move, VJ_Look, VJ_Fire, VJ_AltFire, VJ_Jump, VJ_Count };
+enum { VJ_Move, VJ_Look, VJ_Fire, VJ_AltFire, VJ_Jump, VJ_Use, VJ_Count };
+
+struct FTouchTarget
+{
+	FLOAT X1, Y1, X2, Y2;
+	FString Command;
+};
 
 //
 // An SDL viewport.
@@ -132,6 +143,7 @@ class USDLViewport : public UViewport
 	SDL_TouchID			VJTouch[VJ_Count];
 	SDL_FingerID		VJFinger[VJ_Count];
 	UBOOL				VJShown;
+	TArray<FTouchTarget> TouchTargets;
 
 	UBOOL				WantGrab;
 	FLOAT				WheelRemainder;
@@ -166,6 +178,7 @@ class USDLViewport : public UViewport
 	void UpdateMousePosition();
 	void RenderOverlay();
 	FLOAT GUIFontScale();
+	void AddTouchTarget( FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, const TCHAR* Command );
 
 	// USDLViewport interface.
 	void UpdateMouseGrabState();
@@ -181,6 +194,7 @@ class USDLViewport : public UViewport
 	UBOOL VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Phase, FLOAT X, FLOAT Y );
 	void VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y );
 	void VJRelease();
+	void SwitchVirtualJoystick( UBOOL On );
 
 	virtual UBOOL TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY, UBOOL Fullscreen );
     void SetTitleBar();

@@ -354,6 +354,8 @@ class ENGINE_API UViewport : public UPlayer
 	virtual void RenderOverlay() {}
 	// How much larger GUI text should be than its resolution step picks.
 	virtual FLOAT GUIFontScale() { return 1.f; }
+	// A HUD part drawn this frame that a tap on it runs Command for.
+	virtual void AddTouchTarget( FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, const TCHAR* Command ) {}
 	virtual void SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL FocusOnly=0 )=0;
 	virtual void Repaint( UBOOL Blit )=0;
 	virtual UBOOL Exec( const TCHAR* Cmd, FOutputDevice& Ar=*GLog );
