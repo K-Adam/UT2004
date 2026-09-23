@@ -125,11 +125,13 @@ struct FOpenGLDynamicBuffer
 	GLenum	Target;
 	GLuint	Buffer;
 	INT		Size,
-			Used;
-	UBOOL	Mapped;
+			Used,
+			LockedOffset,
+			LockedBytes;
+	TArray<BYTE>	Scratch;
 
-	FOpenGLDynamicBuffer(GLenum InTarget) : Target(InTarget), Buffer(0), Size(0), Used(0), Mapped(0) {}
-	// Maps Bytes at the next aligned offset, which Offset receives. NULL for no bytes or a failed map.
+	FOpenGLDynamicBuffer(GLenum InTarget) : Target(InTarget), Buffer(0), Size(0), Used(0), LockedOffset(0), LockedBytes(0) {}
+	// Returns room for Bytes at the next aligned offset, which Offset receives, uploaded by Unlock. NULL for no bytes.
 	BYTE* Lock(INT Bytes,INT Alignment,INT& Offset);
 	void Unlock();
 	void Release();

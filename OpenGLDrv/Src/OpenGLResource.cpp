@@ -295,20 +295,21 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 		Offset = 0;
 	}
 	Used = Offset + Bytes;
-	// Unsynchronized, nothing has drawn from this range since the store was orphaned.
-	BYTE* Result = Bytes > 0 ? (BYTE*)glMapBufferRange(Target,Offset,Bytes,GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_UNSYNCHRONIZED_BIT) : NULL;
-	Mapped = Result != NULL;
-	return Result;
+	// Not mapped: ANGLE maps into a staging copy and then copies the whole buffer back before
+	// every draw that reads it. Uploading with glBufferSubData keeps its system memory copy current.
+	LockedOffset	= Offset;
+	LockedBytes		= Bytes;
+	if( Scratch.Num() < Bytes )
+		Scratch.Add(Bytes - Scratch.Num());
+	return Bytes > 0 ? &Scratch(0) : NULL;
 }
 
 void FOpenGLDynamicBuffer::Unlock()
 {
 	// Lock left the buffer bound.
-	if( Mapped )
-	{
-		glUnmapBuffer(Target);
-		Mapped = 0;
-	}
+	if( LockedBytes > 0 )
+		glBufferSubData(Target,LockedOffset,LockedBytes,&Scratch(0));
+	LockedBytes = 0;
 }
 
 void FOpenGLDynamicBuffer::Release()
@@ -316,5 +317,6 @@ void FOpenGLDynamicBuffer::Release()
 	if( Buffer )
 		glDeleteBuffers(1,&Buffer);
 	Buffer = 0;
-	Size = Used = 0;
+	Size = Used = LockedBytes = 0;
+	Scratch.Empty();
 }
