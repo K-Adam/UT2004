@@ -1324,36 +1324,53 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	appMemset(Program->SentMatrices,0xff,sizeof(Program->SentMatrices));
 	appMemset(Program->SentConstants,0xff,sizeof(Program->SentConstants));
 	appMemset(&Program->SentAlphaRef,0xff,sizeof(Program->SentAlphaRef));
-	Program->Program = RenDev->CompileProgram(RenDev->VertexShaderObject,&ToAnsi(Fragment)(0));
+	Program->Program = RenDev->StartProgram(RenDev->VertexShaderObject,&ToAnsi(Fragment)(0),Program->FragmentShader);
+	Program->Pending = 1;
 	RenDev->Programs.Add(Hash,Program);
-	if( Program->Program )
-	{
-		Program->LocalToWorld	= glGetUniformLocation(Program->Program,"LocalToWorld");
-		Program->NormalToWorld	= glGetUniformLocation(Program->Program,"NormalToWorld");
-		Program->AlphaRef		= glGetUniformLocation(Program->Program,"AlphaRef");
-		glUseProgram(Program->Program);
-		RenDev->GL.Program = Program->Program;
-		ANSICHAR Name[8];
-		for( INT i=0; i<State.NumTextures; i++ )
-		{
-			sprintf(Name,"s%i",i);
-			glUniform1i(glGetUniformLocation(Program->Program,Name),i);
-		}
-		for( INT i=0; i<OGL_MAX_MATRICES; i++ )
-		{
-			sprintf(Name,"m%i",i);
-			Program->Matrices[i] = glGetUniformLocation(Program->Program,Name);
-		}
-		for( INT i=0; i<OGL_MAX_CONSTANTS; i++ )
-		{
-			sprintf(Name,"c%i",i);
-			Program->Constants[i] = glGetUniformLocation(Program->Program,Name);
-		}
-	}
 	State.Program = Program;
 	return 1;
 
 	unguard;
+}
+
+UBOOL UOpenGLRenderDevice::ProgramReady(FOpenGLProgram* P,UBOOL Wait)
+{
+	if( !P->Pending )
+		return 1;
+	if( ParallelCompile && !Wait )
+	{
+		GLint Done = 0;
+		glGetProgramiv(P->Program,GL_COMPLETION_STATUS_KHR,&Done);
+		if( !Done )
+			return 0;
+	}
+	P->Pending = 0;
+	P->Program = FinishProgram(P->Program,P->FragmentShader);
+	if( !P->Program )
+		return 1;
+
+	P->LocalToWorld		= glGetUniformLocation(P->Program,"LocalToWorld");
+	P->NormalToWorld	= glGetUniformLocation(P->Program,"NormalToWorld");
+	P->AlphaRef			= glGetUniformLocation(P->Program,"AlphaRef");
+	UseProgram(P->Program);
+	ANSICHAR Name[8];
+	// Samplers the program lacks have location -1, which glUniform ignores.
+	for( INT i=0; i<OGL_MAX_TEXTURES; i++ )
+	{
+		sprintf(Name,"s%i",i);
+		glUniform1i(glGetUniformLocation(P->Program,Name),i);
+	}
+	for( INT i=0; i<OGL_MAX_MATRICES; i++ )
+	{
+		sprintf(Name,"m%i",i);
+		P->Matrices[i] = glGetUniformLocation(P->Program,Name);
+	}
+	for( INT i=0; i<OGL_MAX_CONSTANTS; i++ )
+	{
+		sprintf(Name,"c%i",i);
+		P->Constants[i] = glGetUniformLocation(P->Program,Name);
+	}
+	return 1;
 }
 
 void FOpenGLRenderInterface::SetMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial,INT* NumPasses)

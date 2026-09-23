@@ -66,6 +66,25 @@ static UBOOL HasExtension(const char* Name)
 	return 0;
 }
 
+static void LogShaderError(GLuint Shader)
+{
+	ANSICHAR Log[4096] = "";
+	glGetShaderInfoLog(Shader,sizeof(Log),NULL,Log);
+	debugf(NAME_Warning,TEXT("OpenGLDrv: Shader compile failed: %s"),appFromAnsi(Log));
+	GLint Length = 0;
+	glGetShaderiv(Shader,GL_SHADER_SOURCE_LENGTH,&Length);
+	TArray<ANSICHAR> Source;
+	Source.AddZeroed(Length + 1);
+	glGetShaderSource(Shader,Length + 1,NULL,&Source(0));
+	// Logged line by line, the log truncates long lines.
+	FString Text(&Source(0));
+	for( INT Pos = Text.InStr(TEXT("\n")); Pos >= 0; Pos = Text.InStr(TEXT("\n")) )
+	{
+		debugf(NAME_Warning,TEXT("    %s"),*Text.Left(Pos));
+		Text = Text.Mid(Pos + 1);
+	}
+}
+
 static GLuint CompileShader(GLenum Type,const ANSICHAR* Source)
 {
 	GLuint Shader = glCreateShader(Type);
@@ -75,54 +94,65 @@ static GLuint CompileShader(GLenum Type,const ANSICHAR* Source)
 	glGetShaderiv(Shader,GL_COMPILE_STATUS,&Status);
 	if( !Status )
 	{
-		ANSICHAR Log[4096] = "";
-		glGetShaderInfoLog(Shader,sizeof(Log),NULL,Log);
-		debugf(NAME_Warning,TEXT("OpenGLDrv: Shader compile failed: %s"),appFromAnsi(Log));
-		// Logged line by line, the log truncates long lines.
-		FString Text(Source);
-		for( INT Pos = Text.InStr(TEXT("\n")); Pos >= 0; Pos = Text.InStr(TEXT("\n")) )
-		{
-			debugf(NAME_Warning,TEXT("    %s"),*Text.Left(Pos));
-			Text = Text.Mid(Pos + 1);
-		}
+		LogShaderError(Shader);
 		glDeleteShader(Shader);
 		return 0;
 	}
 	return Shader;
 }
 
-GLuint UOpenGLRenderDevice::CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource)
+GLuint UOpenGLRenderDevice::StartProgram(GLuint VertexShader,const ANSICHAR* FragmentSource,GLuint& FragmentShader)
 {
-	GLuint FragmentShader = CompileShader(GL_FRAGMENT_SHADER,FragmentSource);
-	if( !VertexShader || !FragmentShader )
-		return 0;
-
 	static const ANSICHAR* Attributes[GLA_Max] = { "aPosition", "aNormal", "aDiffuse", "aSpecular",
 		"aTexCoord0", "aTexCoord1", "aTexCoord2", "aTexCoord3", "aTexCoord4", "aTexCoord5", "aTexCoord6", "aTexCoord7" };
+	FragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(FragmentShader,1,&FragmentSource,NULL);
+	glCompileShader(FragmentShader);
 	GLuint Program = glCreateProgram();
 	glAttachShader(Program,VertexShader);
 	glAttachShader(Program,FragmentShader);
 	for( INT i=0; i<GLA_Max; i++ )
 		glBindAttribLocation(Program,i,Attributes[i]);
+	// Shaders stay attached, ANGLE would wait for the link to detach them.
 	glLinkProgram(Program);
-	glDetachShader(Program,VertexShader);
-	glDetachShader(Program,FragmentShader);
-	glDeleteShader(FragmentShader);
+	return Program;
+}
 
+GLuint UOpenGLRenderDevice::FinishProgram(GLuint Program,GLuint FragmentShader)
+{
 	GLint Status = 0;
 	glGetProgramiv(Program,GL_LINK_STATUS,&Status);
-	if( !Status )
+	if( Status )
 	{
-		ANSICHAR Log[4096] = "";
-		glGetProgramInfoLog(Program,sizeof(Log),NULL,Log);
-		debugf(NAME_Warning,TEXT("OpenGLDrv: Program link failed: %s"),appFromAnsi(Log));
-		glDeleteProgram(Program);
-		return 0;
+		GLuint Block = glGetUniformBlockIndex(Program,"Scene");
+		if( Block != GL_INVALID_INDEX )
+			glUniformBlockBinding(Program,Block,0);
 	}
-	GLuint Block = glGetUniformBlockIndex(Program,"Scene");
-	if( Block != GL_INVALID_INDEX )
-		glUniformBlockBinding(Program,Block,0);
+	else
+	{
+		glGetShaderiv(FragmentShader,GL_COMPILE_STATUS,&Status);
+		if( !Status )
+			LogShaderError(FragmentShader);
+		else
+		{
+			ANSICHAR Log[4096] = "";
+			glGetProgramInfoLog(Program,sizeof(Log),NULL,Log);
+			debugf(NAME_Warning,TEXT("OpenGLDrv: Program link failed: %s"),appFromAnsi(Log));
+		}
+		glDeleteProgram(Program);
+		Program = 0;
+	}
+	glDeleteShader(FragmentShader);
 	return Program;
+}
+
+GLuint UOpenGLRenderDevice::CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource)
+{
+	if( !VertexShader )
+		return 0;
+	GLuint FragmentShader;
+	GLuint Program = StartProgram(VertexShader,FragmentSource,FragmentShader);
+	return FinishProgram(Program,FragmentShader);
 }
 
 GLuint UOpenGLRenderDevice::GetSampler(DWORD Flags)
@@ -188,7 +218,17 @@ UBOOL UOpenGLRenderDevice::InitContext()
 		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexOES");
 	else if( HasExtension("GL_EXT_draw_elements_base_vertex") )
 		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexEXT");
-	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL);
+	ParallelCompile = 0;
+	if( HasExtension("GL_KHR_parallel_shader_compile") )
+	{
+		PFNGLMAXSHADERCOMPILERTHREADSKHRPROC MaxShaderCompilerThreads = (PFNGLMAXSHADERCOMPILERTHREADSKHRPROC)SDL_GL_GetProcAddress("glMaxShaderCompilerThreadsKHR");
+		if( MaxShaderCompilerThreads )
+		{
+			MaxShaderCompilerThreads(0xFFFFFFFF);
+			ParallelCompile = 1;
+		}
+	}
+	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile);
 
 	VertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader);
 	GLuint FullscreenVertex = CompileShader(GL_VERTEX_SHADER,FullscreenVertexShader);
@@ -215,6 +255,8 @@ UBOOL UOpenGLRenderDevice::InitContext()
 
 	ResetStateCache();
 	ContextReady = 1;
+	// The level may have loaded before this context existed, so its Flush never asked for a precache.
+	PrecacheOnFlip = 1;
 	return 1;
 }
 
@@ -403,6 +445,8 @@ void UOpenGLRenderDevice::Flush(UViewport* Viewport)
 	{
 		if( It.Value()->Program )
 			glDeleteProgram(It.Value()->Program);
+		if( It.Value()->Pending )
+			glDeleteShader(It.Value()->FragmentShader);
 		delete It.Value();
 	}
 	Programs.Empty();
@@ -462,6 +506,10 @@ FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,IN
 void UOpenGLRenderDevice::Unlock(FRenderInterface* RI)
 {
 	RenderInterface.Unlocked();
+	// The loading screen covers the compiles the precache started, so the first frame has the whole level.
+	if( LockedViewport && LockedViewport->Precaching )
+		for( TMultiMap<DWORD,FOpenGLProgram*>::TIterator It(Programs); It; ++It )
+			ProgramReady(It.Value(),1);
 	LockedViewport = NULL;
 }
 

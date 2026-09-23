@@ -702,7 +702,9 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 {
 	guard(FOpenGLRenderInterface::DrawPrimitive);
 
-	if( !CurrentState->Material.Program || !CurrentState->Material.Program->Program || NumPrimitives <= 0 )
+	FOpenGLProgram* Program = CurrentState->Material.Program;
+	// Render targets may be drawn only once, so they wait instead of keeping the hole.
+	if( NumPrimitives <= 0 || !Program || !RenDev->ProgramReady(Program,CurrentState->RenderTarget != NULL) || !Program->Program )
 		return;
 
 	// The engine sorts translucent actors by their centre, which puts long beams behind foliage they

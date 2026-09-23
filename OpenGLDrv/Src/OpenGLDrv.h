@@ -138,7 +138,9 @@ struct FOpenGLDynamicBuffer
 struct FOpenGLProgram
 {
 	TArray<BYTE>	Key;
-	GLuint			Program;
+	GLuint			Program,
+					FragmentShader;	// Kept until the link finishes, for its error log.
+	UBOOL			Pending;
 	GLint			LocalToWorld,
 					NormalToWorld,
 					AlphaRef,
@@ -408,7 +410,8 @@ class UOpenGLRenderDevice : public URenderDevice
 
 	UBOOL	SupportsDXT1,
 			SupportsDXT35,
-			SupportsFloatTargets;
+			SupportsFloatTargets,
+			ParallelCompile;
 	INT		MaxTextureSize,
 			MaxAnisotropy,
 			MaxSamples;
@@ -524,6 +527,11 @@ class UOpenGLRenderDevice : public URenderDevice
 	FOpenGLResource* GetCachedResource(QWORD CacheId);
 	GLuint GetSampler(DWORD Flags);
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
+	// Links without waiting, FinishProgram blocks until the result is known.
+	GLuint StartProgram(GLuint VertexShader,const ANSICHAR* FragmentSource,GLuint& FragmentShader);
+	GLuint FinishProgram(GLuint Program,GLuint FragmentShader);
+	// Without Wait an unfinished program returns 0 and its draws are skipped.
+	UBOOL ProgramReady(FOpenGLProgram* Program,UBOOL Wait);
 	void ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth = 0);
 	void UseProgram(GLuint Program);
 	// Covers the framebuffer with Program. Units 0, 1, 3 and 4 sample linearly, unit 2 is the depth texture.
