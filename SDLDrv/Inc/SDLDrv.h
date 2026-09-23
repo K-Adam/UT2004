@@ -137,6 +137,9 @@ class USDLViewport : public UViewport
 	FLOAT				WheelRemainder;
 	UBOOL				MouseIsGrabbed;
 	UBOOL				WindowsMouseShown;
+	UBOOL				TextWanted;
+	// A touch tap in a menu still to be delivered, see UpdateInput.
+	BYTE				TapState;
 	INT					TextToSpeechObject;  // file descriptor for named pipe.
 
 	// Constructor.
@@ -162,6 +165,7 @@ class USDLViewport : public UViewport
 	void SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL FocusOnly );
 	void UpdateMousePosition();
 	void RenderOverlay();
+	FLOAT GUIFontScale();
 
 	// USDLViewport interface.
 	void UpdateMouseGrabState();

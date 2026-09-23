@@ -352,6 +352,8 @@ class ENGINE_API UViewport : public UPlayer
 	virtual void UpdateMousePosition() {}
 	// Drawn on Canvas over the world and under the HUD.
 	virtual void RenderOverlay() {}
+	// How much larger GUI text should be than its resolution step picks.
+	virtual FLOAT GUIFontScale() { return 1.f; }
 	virtual void SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL FocusOnly=0 )=0;
 	virtual void Repaint( UBOOL Blit )=0;
 	virtual UBOOL Exec( const TCHAR* Cmd, FOutputDevice& Ar=*GLog );

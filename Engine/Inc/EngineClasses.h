@@ -3825,7 +3825,7 @@ public:
     DECLARE_FUNCTION(execOpenLog);
     DECLARE_CLASS(AFileLog,AInfo,0,Engine)
 	void FinishLog();
-	void AFileLog::Destroy();
+	void Destroy();
 };
 
 struct ENGINE_API FHitFXData

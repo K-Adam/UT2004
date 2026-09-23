@@ -14,3 +14,7 @@ if(WIN32)
   # A GUI subsystem exe that still enters through main.
   target_link_options(SDLLaunch PRIVATE /ENTRY:mainCRTStartup)
 endif()
+if(ANDROID)
+  # The assets ship xz compressed inside the APK and are unpacked on first run.
+  target_link_libraries(SDLLaunch PRIVATE LibLZMA::LibLZMA)
+endif()

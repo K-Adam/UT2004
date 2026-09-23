@@ -3,8 +3,14 @@ project(UT2004 LANGUAGES C CXX)
 
 if(WIN32)
   enable_language(RC)
+elseif(ANDROID)
+  if(NOT UT_STATIC_LINK)
+    message(FATAL_ERROR "Android needs UT_STATIC_LINK, the app is a single libmain.so: cmake --preset android-arm64")
+  endif()
+  # The static modules end up in that shared library.
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|i.86")
-  message(FATAL_ERROR "Only Windows and x86 or x64 Linux are supported: cmake --preset win32|win64|linux|linux32")
+  message(FATAL_ERROR "Only Windows, x86 or x64 Linux and arm64 Android are supported: cmake --preset win32|win64|linux|linux32|android-arm64")
 endif()
 
 # Each build runs from its own game folder, so architectures don't overwrite each other and runtime
@@ -23,7 +29,7 @@ endif()
 # Read-only data the engine reads from next to System/.
 foreach(dir Help Web KarmaData)
   if(NOT EXISTS ${CMAKE_BINARY_DIR}/${dir})
-    if(WIN32)
+    if(CMAKE_HOST_WIN32)
       # A junction, because symbolic links need administrator rights on Windows.
       file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/${dir} link)
       file(TO_NATIVE_PATH ${CMAKE_SOURCE_DIR}/${dir} target)
@@ -76,10 +82,13 @@ else()
   # so the stores a destructor makes must not be optimized away.
   target_compile_options(ut_common INTERFACE
     -fshort-wchar -fsigned-char -fno-strict-aliasing -fno-delete-null-pointer-checks -w
-    $<$<COMPILE_LANGUAGE:CXX>:-fpermissive -fno-lifetime-dse>)
+    $<$<CXX_COMPILER_ID:GNU>:$<$<COMPILE_LANGUAGE:CXX>:-fpermissive -fno-lifetime-dse>>
+    # Like MSVC, template bodies that use classes declared later in the header are checked at instantiation.
+    $<$<CXX_COMPILER_ID:Clang>:$<$<COMPILE_LANGUAGE:CXX>:-fdelayed-template-parsing -Wno-register>>)
   # 32-bit stat fails with EOVERFLOW on large inode numbers (WSL drives, XFS) without 64-bit file offsets.
   target_compile_definitions(ut_common INTERFACE __LINUX_X86__ LINUX=1 __FILE_NOCASE=1 _FILE_OFFSET_BITS=64)
-  target_link_libraries(ut_common INTERFACE dl pthread)
+  find_package(Threads REQUIRED)
+  target_link_libraries(ut_common INTERFACE dl Threads::Threads)
   if(CMAKE_SIZEOF_VOID_P EQUAL 4)
     # x87 math loads maps three times slower. MSVC uses SSE2 for Win32 too.
     target_compile_options(ut_common INTERFACE -msse2 -mfpmath=sse)
@@ -106,6 +115,10 @@ function(ut_module name type)
       target_compile_definitions(${name} PRIVATE ${up}_API= GPackage=GPackage${name})
       set_target_properties(${name} PROPERTIES PREFIX "")
     endif()
+  elseif(ANDROID)
+    # SDLActivity loads the app as libmain.so and calls its SDL_main.
+    add_library(${name} SHARED ${A_SOURCES})
+    set(A_OUTPUT main)
   elseif(type STREQUAL "WIN32")
     add_executable(${name} WIN32 ${A_SOURCES})
   else()
@@ -147,11 +160,16 @@ function(ut_module name type)
 endfunction()
 
 find_package(ZLIB REQUIRED)
-if(WIN32)
+if(WIN32 OR ANDROID)
   find_package(Vorbis CONFIG REQUIRED)
   find_package(OpenAL CONFIG REQUIRED)
-  find_package(unofficial-angle CONFIG REQUIRED)
-  set(GLES_TARGET unofficial::angle::libGLESv2)
+  if(ANDROID)
+    find_library(GLES_TARGET GLESv3 REQUIRED)
+    find_package(LibLZMA REQUIRED)
+  else()
+    find_package(unofficial-angle CONFIG REQUIRED)
+    set(GLES_TARGET unofficial::angle::libGLESv2)
+  endif()
   find_package(unofficial-libsquish CONFIG REQUIRED)
   set(SQUISH_TARGET unofficial::libsquish::squish)
   # ports/speex patches in the voice formats retail clients use, see ports/speex/ut2004.patch.
@@ -205,10 +223,16 @@ add_subdirectory(Tools/NVTriStrip)
 # Static, but linked into Engine.so.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(metoolkit-karma)
-unset(CMAKE_POSITION_INDEPENDENT_CODE)
+if(NOT ANDROID)
+  unset(CMAKE_POSITION_INDEPENDENT_CODE)
+endif()
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
-    XGame XInterface Onslaught UCC SDLDrv SDLLaunch)
+    XGame XInterface Onslaught SDLDrv SDLLaunch)
+# Nothing built for Android runs on the host, so the script packages come from a desktop build.
+if(NOT ANDROID)
+  list(APPEND UT_MODULES UCC)
+endif()
 # UTV2004 has its own copies of IpDrv's net driver classes, so it only works as a loaded module.
 if(NOT UT_STATIC_LINK)
   list(APPEND UT_MODULES UTV2004)
@@ -219,6 +243,10 @@ endif()
 foreach(m ${UT_MODULES})
   add_subdirectory(${m})
 endforeach()
+if(ANDROID)
+  add_subdirectory(Android)
+  return()
+endif()
 
 # -NOH keeps the checked-in *Classes.h headers. The source path is relative because the engine's
 # command line parser stops at spaces.

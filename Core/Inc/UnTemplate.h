@@ -861,7 +861,7 @@ public:
 	{
 		guardSlow(TTransArray::ModifyAllItems);
 		if( GUndo )
-			GUndo->SaveArray( Owner, this, 0, Num(), 0, sizeof(T), SerializeItem, DestructItem );
+			GUndo->SaveArray( Owner, this, 0, this->Num(), 0, sizeof(T), SerializeItem, DestructItem );
 		unguardSlow;
 	}
 	friend FArchive& operator<<( FArchive& Ar, TTransArray& A )
@@ -996,7 +996,7 @@ public:
 		if( SavedPos<0 )
 		{
 			// Unload it now.
-			Empty();
+			this->Empty();
 			SavedPos *= -1;
 		}
 		unguard;
@@ -1764,7 +1764,7 @@ public:
 			if( Pairs(i).Key==InKey )
 				{Pairs.Remove(i); Count++;}
 		if( Count )
-			Relax();
+			this->Relax();
 		return Count;
 		unguardSlow;
 	}
@@ -2008,7 +2008,7 @@ public:
 			if ( this->Pairs(i).Key == InKey )
 				{this->Pairs.Remove(i); Count++;}
 		if ( Count )
-			Relax();
+			this->Relax();
 		return Count;
 		unguardSlow;
 	}
@@ -2020,7 +2020,7 @@ public:
 			if( this->Pairs(i).Key==InKey && this->Pairs(i).Value==InValue )
 				{this->Pairs.Remove(i); Count++;}
 		if( Count )
-			Relax();
+			this->Relax();
 		return Count;
 		unguardSlow;
 	}

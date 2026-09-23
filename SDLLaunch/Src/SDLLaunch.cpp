@@ -96,6 +96,42 @@ static void ExitSplash(void) {}
 #include <SDL3/SDL.h>
 #pragma pack(pop)
 
+#ifdef __ANDROID__
+// Android has one window, so SDLDrv takes this one over and the logo stays up until the game draws.
+// It gets the GL ES 3 context OpenGLDrv asks for, so the window's EGL config suits that one too.
+static void InitSplash(const TCHAR *filename)
+{
+    SDL_Surface *bmp = filename ? SDL_LoadBMP(appToAnsi(filename)) : NULL;
+    if (bmp == NULL || !SDL_Init(SDL_INIT_VIDEO))
+    {
+        SDL_DestroySurface(bmp);
+        return;
+    }
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+    // SDLDrv destroys the renderer when it adopts the window.
+    SDL_Window *window = NULL;
+    SDL_Renderer *renderer = NULL;
+    if (SDL_CreateWindowAndRenderer("UT2004", 0, 0, SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN, &window, &renderer))
+    {
+        SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, bmp);
+        int w, h;
+        SDL_GetCurrentRenderOutputSize(renderer, &w, &h);
+        float scale = SDL_min(0.6f * w / bmp->w, 0.6f * h / bmp->h);
+        SDL_FRect dest = { (w - bmp->w * scale) / 2, (h - bmp->h * scale) / 2, bmp->w * scale, bmp->h * scale };
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_RenderTexture(renderer, texture, NULL, &dest);
+        SDL_RenderPresent(renderer);
+        SDL_DestroyTexture(texture);
+    }
+    SDL_DestroySurface(bmp);
+}
+
+static void ExitSplash(void) {}
+#else
 static SDL_Window* SplashWindow = NULL;
 
 static void InitSplash(const TCHAR *filename)
@@ -131,6 +167,131 @@ static void ExitSplash(void)
     SDL_DestroyWindow(SplashWindow);
     SplashWindow = NULL;
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+#endif
+#endif
+
+
+#ifdef __ANDROID__
+#pragma pack(push,8)
+#include <SDL3/SDL_main.h>
+#include <lzma.h>
+#pragma pack(pop)
+#include <unistd.h>
+
+static bool AndroidFail(const char* Fmt, const char* Arg)
+{
+    char Msg[1024];
+    SDL_snprintf(Msg, sizeof(Msg), Fmt, Arg);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "UT2004", Msg, NULL);
+    return false;
+}
+
+// Decodes the APK asset <Rel>.xz into Dest.
+static bool ExtractAsset(const char* Rel, const char* Dest, lzma_stream& Strm)
+{
+    static uint8_t InBuf[1 << 16], OutBuf[1 << 18];
+    char Path[1024];
+    SDL_snprintf(Path, sizeof(Path), "%s.xz", Rel);
+    // A relative path is looked up in the APK assets.
+    SDL_IOStream* In = SDL_IOFromFile(Path, "rb");
+    if (!In)
+        return false;
+    SDL_strlcpy(Path, Dest, sizeof(Path));
+    *SDL_strrchr(Path, '/') = 0;
+    SDL_CreateDirectory(Path);
+    SDL_IOStream* Out = SDL_IOFromFile(Dest, "wb");
+    bool Ok = Out && lzma_stream_decoder(&Strm, UINT64_MAX, 0) == LZMA_OK;
+    Strm.avail_in = 0;
+    lzma_ret Ret = LZMA_OK;
+    while (Ok && Ret != LZMA_STREAM_END)
+    {
+        if (Strm.avail_in == 0)
+        {
+            Strm.next_in = InBuf;
+            Strm.avail_in = SDL_ReadIO(In, InBuf, sizeof(InBuf));
+        }
+        Strm.next_out = OutBuf;
+        Strm.avail_out = sizeof(OutBuf);
+        Ret = lzma_code(&Strm, Strm.avail_in ? LZMA_RUN : LZMA_FINISH);
+        size_t Got = sizeof(OutBuf) - Strm.avail_out;
+        Ok = (Ret == LZMA_OK || Ret == LZMA_STREAM_END) && SDL_WriteIO(Out, OutBuf, Got) == Got;
+    }
+    SDL_CloseIO(In);
+    if (Out && !SDL_CloseIO(Out))
+        Ok = false;
+    return Ok;
+}
+
+// The engine reads its files with fopen, which can't see into the APK, so they are unpacked once per APK build.
+static bool ExtractAssets(const char* Root)
+{
+    char* Manifest = (char*)SDL_LoadFile("manifest.txt", NULL);
+    char* Rel = Manifest ? SDL_strchr(Manifest, '\n') : NULL;
+    if (!Rel)
+        return AndroidFail("The APK has no %s, it was built without assets.", "manifest.txt");
+    *Rel++ = 0;
+
+    char StampPath[1024];
+    SDL_snprintf(StampPath, sizeof(StampPath), "%s/assets.stamp", Root);
+    char* Stamp = (char*)SDL_LoadFile(StampPath, NULL);
+    bool Ok = Stamp && SDL_strcmp(Stamp, Manifest) == 0;
+    SDL_free(Stamp);
+    if (Ok)
+    {
+        SDL_free(Manifest);
+        return true;
+    }
+
+    INT Total = 0;
+    for (const char* C = Rel; *C; C++)
+        Total += *C == '\n';
+
+    SDL_Window* Window = NULL;
+    SDL_Renderer* Renderer = NULL;
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_CreateWindowAndRenderer("UT2004", 0, 0, SDL_WINDOW_FULLSCREEN, &Window, &Renderer);
+
+    lzma_stream Strm = LZMA_STREAM_INIT;
+    Ok = true;
+    for (INT Done = 0; Ok && *Rel; Done++)
+    {
+        char* End = SDL_strchr(Rel, '\n');
+        *End = 0;
+        if (Renderer)
+        {
+            int W, H;
+            SDL_GetCurrentRenderOutputSize(Renderer, &W, &H);
+            SDL_FRect Back = { W * 0.1f, H * 0.48f, W * 0.8f, H * 0.04f };
+            SDL_FRect Bar = Back;
+            Bar.w *= (float)Done / Total;
+            SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
+            SDL_RenderClear(Renderer);
+            SDL_SetRenderDrawColor(Renderer, 60, 60, 60, 255);
+            SDL_RenderFillRect(Renderer, &Back);
+            SDL_SetRenderDrawColor(Renderer, 230, 160, 40, 255);
+            SDL_RenderFillRect(Renderer, &Bar);
+            SDL_RenderPresent(Renderer);
+        }
+        SDL_PumpEvents();
+
+        char Dest[1024];
+        SDL_snprintf(Dest, sizeof(Dest), "%s/%s", Root, Rel);
+        Ok = ExtractAsset(Rel, Dest, Strm);
+        if (!Ok)
+            AndroidFail("Couldn't unpack %s. Is the device out of storage?", Rel);
+        Rel = End + 1;
+    }
+    lzma_end(&Strm);
+    SDL_DestroyRenderer(Renderer);
+    SDL_DestroyWindow(Window);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+
+    // Written last, so an interrupted unpack starts over on the next launch.
+    if (Ok)
+        SDL_SaveFile(StampPath, Manifest, SDL_strlen(Manifest));
+    SDL_free(Manifest);
+    return Ok;
 }
 #endif
 
@@ -578,6 +739,22 @@ static UEngine* InitEngine()
 //
 int main(int argc, char **argv)
 {
+#ifdef __ANDROID__
+	SDL_SetHint( SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight" );
+	// Back opens and closes menus like Escape instead of closing the app.
+	SDL_SetHint( SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1" );
+	// App specific storage needs no permission, and players can still reach the inis over USB.
+	const char* Root = SDL_GetAndroidExternalStoragePath();
+	if( !Root )
+		Root = SDL_GetAndroidInternalStoragePath();
+	if( !ExtractAssets(Root) )
+		return 1;
+	// The engine runs from System/ like on the desktop.
+	char SystemDir[1024];
+	SDL_snprintf( SystemDir, sizeof(SystemDir), "%s/UT2004/System", Root );
+	if( chdir(SystemDir) != 0 )
+		return AndroidFail( "Couldn't open %s.", SystemDir ), 1;
+#endif
 	TCHAR CmdLine[1024] = TEXT("");
 #ifdef WIN32
 	// appInit skips the executable name on Windows, as GetCommandLine starts with it.

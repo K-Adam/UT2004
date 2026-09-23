@@ -194,10 +194,46 @@ void USDLClient::OpenGamepad()
 	unguard;
 }
 
+// The on-screen controls have no motion sensors, so the phone or tablet showing them aims with its own.
+static SDL_Sensor* DeviceSensors[2];
+static bool DeviceSensorsInit;
+
+static void CloseDeviceSensors()
+{
+	for( INT i=0; i<2; i++ )
+	{
+		if( DeviceSensors[i] )
+			SDL_CloseSensor( DeviceSensors[i] );
+		DeviceSensors[i] = NULL;
+	}
+	if( DeviceSensorsInit )
+		SDL_QuitSubSystem( SDL_INIT_SENSOR );
+	DeviceSensorsInit = false;
+}
+
 // Gyro aim needs the accelerometer too, for gravity and calibration.
 void USDLClient::EnableGyro()
 {
 	guard(USDLClient::EnableGyro);
+	if( VirtualPad && PadGyro )
+	{
+		if( !DeviceSensorsInit && (DeviceSensorsInit = SDL_InitSubSystem( SDL_INIT_SENSOR )) )
+		{
+			int Count = 0;
+			SDL_SensorID* IDs = SDL_GetSensors( &Count );
+			for( INT i=0; i<Count; i++ )
+			{
+				SDL_SensorType Type = SDL_GetSensorTypeForID( IDs[i] );
+				INT Slot = Type == SDL_SENSOR_GYRO ? 0 : Type == SDL_SENSOR_ACCEL ? 1 : -1;
+				if( Slot >= 0 && !DeviceSensors[Slot] )
+					DeviceSensors[Slot] = SDL_OpenSensor( IDs[i] );
+			}
+			SDL_free( IDs );
+			debugf( NAME_Init, DeviceSensors[0] && DeviceSensors[1] ? TEXT("Device gyro enabled") : TEXT("No device gyro") );
+		}
+		return;
+	}
+	CloseDeviceSensors();
 	if( !SDL_GamepadHasSensor( Gamepad, SDL_SENSOR_GYRO ) || !SDL_GamepadHasSensor( Gamepad, SDL_SENSOR_ACCEL ) )
 		return;
 	bool On = PadGyro != 0;
@@ -245,6 +281,7 @@ void USDLClient::SetVirtualJoystick( UBOOL On )
 			SDL_SetJoystickVirtualAxis( Joystick, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
 			SDL_SetJoystickVirtualAxis( Joystick, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
 			debugf( NAME_Init, TEXT("Virtual joystick on") );
+			EnableGyro();
 			return;
 		}
 		// SDL builds without HIDAPI have no virtual joystick driver.
@@ -253,6 +290,7 @@ void USDLClient::SetVirtualJoystick( UBOOL On )
 	if( VirtualPad )
 		SDL_DetachVirtualJoystick( VirtualPad );
 	VirtualPad = 0;
+	CloseDeviceSensors();
 	if( UseJoystick )
 		OpenGamepad();
 	unguard;
@@ -280,6 +318,7 @@ void USDLClient::Destroy()
 	Window = NULL;
 
 	CloseGamepad();
+	CloseDeviceSensors();
 	VirtualPad = 0;
 	GClipboardCopy = NULL;
 	GClipboardPaste = NULL;

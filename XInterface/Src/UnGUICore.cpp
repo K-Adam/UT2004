@@ -786,6 +786,13 @@ void  UGUIController::NativePostRender(UCanvas* Canvas)
 			ViewportOwner->SelectedCursor = ActiveControl->MouseCursorIndex;
 	}
 
+	// The HUD draws with some of the same fonts next frame, at their own size.
+	for( INT f=0; f<FontStack.Num(); f++ )
+		if( FontStack(f) && !FontStack(f)->bScaled )
+			for( INT j=0; j<FontStack(f)->FontArrayFonts.Num(); j++ )
+				if( FontStack(f)->FontArrayFonts(j) )
+					FontStack(f)->FontArrayFonts(j)->ScaleFactor = 1.f;
+
 	unguard;
 
 }
@@ -2311,6 +2318,12 @@ UBOOL UGUIController::HasMouseMoved( FLOAT ErrorMargin )
 // =======================================================================================================================================================
 // =======================================================================================================================================================
 
+static FLOAT GUIScale( UGUIController* Controller )
+{
+	UViewport* Viewport = Controller ? Cast<UViewport>(Controller->ViewportOwner) : NULL;
+	return Viewport ? Viewport->GUIFontScale() : 1.f;
+}
+
 void UGUIFont::execGetFont(FFrame& Stack, RESULT_DECL )
 {
 	guard(GUIFont::execGetFont);
@@ -2351,7 +2364,7 @@ void UGUIFont::execGetFont(FFrame& Stack, RESULT_DECL )
 		else
 			Index = 4;
 
-		ScaleFactor = 1.0f;
+		ScaleFactor = GUIScale( Controller );
 	}
 
 	Index = Min<INT>(Index,FontArrayNames.Num()-1);
@@ -2773,6 +2786,13 @@ void UGUIComponent::UpdateBounds()
 
 	if (Style!=NULL)
 	{
+		// FloatingWindow pins its close button at 24 pixels, it grows with the text from its top right corner.
+		if( Style->KeyName==TEXT("CloseButton") )
+		{
+			FLOAT Scale = GUIScale( Controller );
+			Bounds[0] = Bounds[2] - (Bounds[2] - Bounds[0]) * Scale;
+			Bounds[3] = Bounds[1] + (Bounds[3] - Bounds[1]) * Scale;
+		}
 		ClientBounds[0] = Bounds[0]+Style->BorderOffsets[0];
 		ClientBounds[1] = Bounds[1]+Style->BorderOffsets[1];
 		ClientBounds[2] = Bounds[2]-Style->BorderOffsets[2];

@@ -1,0 +1,37 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The CMake build dir of the android-arm64 preset, which holds the native libs and the packed assets.
+def utBuild = file(project.findProperty('utBuild') ?: "${rootDir}/../build/android-arm64")
+layout.buildDirectory = new File(utBuild, 'gradle')
+
+android {
+    namespace 'org.ut2004.game'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'org.ut2004.game'
+        // Bionic has aligned_alloc and getrandom from Android 9.
+        minSdk 28
+        targetSdk 36
+        versionCode 1
+        versionName '3369'
+    }
+    sourceSets.main {
+        jniLibs.srcDirs = [new File(utBuild, 'jniLibs')]
+        assets.srcDirs = [new File(utBuild, 'assets')]
+    }
+    androidResources {
+        // The assets are xz files already, deflate would only cost time.
+        noCompress 'xz', 'txt'
+    }
+    buildTypes {
+        release {
+            // Shared with friends by hand, not through a store, so the local debug key is enough.
+            signingConfig signingConfigs.debug
+        }
+    }
+    lint {
+        checkReleaseBuilds false
+    }
+}

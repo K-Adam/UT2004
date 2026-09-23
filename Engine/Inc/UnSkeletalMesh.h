@@ -1302,7 +1302,7 @@ class ENGINE_API USkeletalMesh : public ULodMesh
    
 
 	virtual UBOOL LineCheck(FCheckResult &Result,AActor* Owner,const FVector& End,const FVector& Start,const FVector& Extent,DWORD ExtraNodeFlags, DWORD TraceFlags);
-	virtual FBox USkeletalMesh::GetCollisionBoundingBox( const AActor* Owner ) const;
+	virtual FBox GetCollisionBoundingBox( const AActor* Owner ) const;
 	virtual UBOOL UseCylinderCollision( const AActor* Owner );	
 	virtual UBOOL PointCheck(FCheckResult&	Result, AActor*	Owner, const FVector& Location, const FVector& Extent, DWORD ExtraNodeFlags);
 

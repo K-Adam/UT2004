@@ -93,39 +93,60 @@ static void SmoothGyro( FLOAT& X, FLOAT& Y, FLOAT DeltaTime )
 }
 
 // Collects the turn in degrees until UpdateInput sends it. Every sample counts, pads report up to 1000 per second.
-static void ProcessGyro( const SDL_GamepadSensorEvent& Event )
+// Source is the pad, or 0 for the device's own sensors.
+static void ProcessGyro( SDL_JoystickID Source, SDL_SensorType Type, Uint64 SensorTime, Uint64 EventTime, const float* Data )
 {
-	if( Event.which != GyroPad )
+	Uint64 Time = SensorTime ? SensorTime : EventTime;
+	if( Source != GyroPad )
 	{
-		GyroPad = Event.which;
+		GyroPad = Source;
 		GyroTime = 0;
 		GyroAccel[0] = GyroAccel[1] = GyroAccel[2] = 0.f;
 		Motion.Reset();
 		Motion.ResetContinuousCalibration();
 		Motion.SetCalibrationMode( GamepadMotionHelpers::Stillness );
 	}
-	if( Event.sensor == SDL_SENSOR_ACCEL )
+	if( Type == SDL_SENSOR_ACCEL )
 	{
 		for( INT i=0; i<3; i++ )
-			GyroAccel[i] = Event.data[i] / SDL_STANDARD_GRAVITY;
+			GyroAccel[i] = Data[i] / SDL_STANDARD_GRAVITY;
 		return;
 	}
-	if( Event.sensor != SDL_SENSOR_GYRO )
+	if( Type != SDL_SENSOR_GYRO )
 		return;
-	Uint64 Time = Event.sensor_timestamp ? Event.sensor_timestamp : Event.timestamp;
 	FLOAT DeltaTime = GyroTime ? (FLOAT)(Time - GyroTime) * 1e-9f : 0.f;
+	// SDL's Android sensor thread stamps all samples of one wakeup alike, each still is one 60 Hz period.
+	if( !Source && Time == GyroTime )
+		DeltaTime = 1.f / 60.f;
 	GyroTime = Time;
 	// The first sample, and the first after the sensor was off, has no interval.
 	if( DeltaTime <= 0.f || DeltaTime > 0.1f || (!GyroAccel[0] && !GyroAccel[1] && !GyroAccel[2]) )
 		return;
 	const FLOAT ToDegrees = 180.f / PI;
-	Motion.ProcessMotion( Event.data[0] * ToDegrees, Event.data[1] * ToDegrees, Event.data[2] * ToDegrees, GyroAccel[0], GyroAccel[1], GyroAccel[2], DeltaTime );
+	Motion.ProcessMotion( Data[0] * ToDegrees, Data[1] * ToDegrees, Data[2] * ToDegrees, GyroAccel[0], GyroAccel[1], GyroAccel[2], DeltaTime );
 	FLOAT Pitch, Yaw;
 	Motion.GetPlayerSpaceGyro( Pitch, Yaw, 2.f );
 	SmoothGyro( Yaw, Pitch, DeltaTime );
 	// SDL rotations are counterclockwise, Unreal yaw turns right.
 	GyroYaw -= Yaw * DeltaTime;
 	GyroPitch += Pitch * DeltaTime;
+}
+
+// Device sensors report in the screen's natural orientation, pads in the landscape one they are held in.
+static void ProcessDeviceGyro( const SDL_SensorEvent& Event, SDL_Window* Window )
+{
+	// Counterclockwise quarter turns from portrait, indexed by SDL_DisplayOrientation.
+	static const INT Turns[] = { 0, 1, 3, 0, 2 };
+	SDL_DisplayID Display = SDL_GetDisplayForWindow( Window );
+	INT Turn = (Turns[SDL_GetCurrentDisplayOrientation( Display )] - Turns[SDL_GetNaturalDisplayOrientation( Display )]) & 3;
+	float Data[3] = { Event.data[0], Event.data[1], Event.data[2] };
+	for( INT i=0; i<Turn; i++ )
+	{
+		float X = Data[0];
+		Data[0] = -Data[1];
+		Data[1] = X;
+	}
+	ProcessGyro( 0, SDL_GetSensorTypeForID( Event.which ), Event.sensor_timestamp, Event.timestamp, Data );
 }
 
 
@@ -173,7 +194,8 @@ static EInputKey KeyFromSDL( SDL_Keycode Key, SDL_Scancode Scancode )
 		case SDL_SCANCODE_RETURN:
 		case SDL_SCANCODE_KP_ENTER:		return IK_Enter;
 		case SDL_SCANCODE_PAUSE:		return IK_Pause;
-		case SDL_SCANCODE_ESCAPE:		return IK_Escape;
+		case SDL_SCANCODE_ESCAPE:
+		case SDL_SCANCODE_AC_BACK:		return IK_Escape;
 		case SDL_SCANCODE_DELETE:		return IK_Delete;
 		case SDL_SCANCODE_INSERT:		return IK_Insert;
 		case SDL_SCANCODE_PRINTSCREEN:	return IK_PrintScrn;
@@ -239,6 +261,33 @@ USDLViewport::USDLViewport()
 	debugf( TEXT("Created and initialized a new SDL viewport.") );
 
 	unguard;
+}
+
+//
+// Whether the GUI's focused control is an editable GUIEditBox. Drivers don't link XInterface,
+// so its fields are looked up by name.
+//
+static UBOOL EditBoxFocused( UObject* GUIController )
+{
+	static UClass* EditBox = FindObject<UClass>( ANY_PACKAGE, TEXT("GUIEditBox") );
+	UObjectProperty* Focus = FindField<UObjectProperty>( GUIController->GetClass(), TEXT("FocusedControl") );
+	UObject* Control = Focus ? *(UObject**)((BYTE*)GUIController + Focus->Offset) : NULL;
+	if( !EditBox || !Control || !Control->IsA(EditBox) )
+		return 0;
+	UBoolProperty* ReadOnly = FindField<UBoolProperty>( EditBox, TEXT("bReadOnly") );
+	return !ReadOnly || !(*(BITFIELD*)((BYTE*)Control + ReadOnly->Offset) & ReadOnly->BitMask);
+}
+
+//
+// Phone and tablet screens are dense, the fonts grow towards their size on a 2000 point wide screen.
+//
+FLOAT USDLViewport::GUIFontScale()
+{
+	SDL_Window* Window = GetOuterUSDLClient()->Window;
+	if( !Window || !SDL_HasScreenKeyboardSupport() )
+		return 1.f;
+	FLOAT Points = SizeX / Max( SDL_GetDisplayContentScale( SDL_GetDisplayForWindow( Window ) ), 1.f );
+	return Clamp( 2000.f / Points, 1.f, 2.5f );
 }
 
 //
@@ -751,6 +800,8 @@ void USDLViewport::SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL OnlyFocus )
 //
 // Update input for this viewport.
 //
+enum { TAP_None, TAP_Wait, TAP_WaitRelease, TAP_Press, TAP_PressRelease, TAP_Release };
+
 void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 {
 	guard(USDLViewport::UpdateInput);
@@ -760,6 +811,30 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 		return;
 
 	USDLClient* Client = GetOuterUSDLClient();
+
+	// A tap moves the pointer and presses in the same frame, but the GUI picks the control under the
+	// pointer in the tick after it renders the move. So the press waits two frames and the release one more.
+	switch( TapState )
+	{
+		case TAP_Wait:
+			TapState = TAP_Press;
+			break;
+		case TAP_WaitRelease:
+			TapState = TAP_PressRelease;
+			break;
+		case TAP_Press:
+		case TAP_PressRelease:
+			// The player may have closed the keyboard while an edit box kept its focus.
+			if( TextWanted && !SDL_TextInputActive( Client->Window ) )
+				SDL_StartTextInput( Client->Window );
+			CauseInputEvent( IK_LeftMouse, IST_Press );
+			TapState = TapState==TAP_PressRelease ? TAP_Release : TAP_None;
+			break;
+		case TAP_Release:
+			CauseInputEvent( IK_LeftMouse, IST_Release );
+			TapState = TAP_None;
+			break;
+	}
 
 	UBOOL InMenu = GUIController && GUIController->bActive;
     if( USDLClient::Gamepad )
@@ -848,9 +923,19 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	}
 
 	// Text input only while a menu or the console reads it, so an IME does not take game keys.
-	bool WantText = (GUIController && GUIController->bActive) || (Console && Console->IsA(UConsole::StaticClass()) && ((UConsole*)Console)->bTyping);
-	if( WantText != SDL_TextInputActive( Client->Window ) )
+	// An on-screen keyboard would cover the menus, so there it waits for a focused edit box.
+	// ExtendedConsole's full console sets only its state, bVisible also flashes for demo speed changes.
+	static FName NAME_ConsoleVisible( TEXT("ConsoleVisible") );
+	FStateFrame* ConsoleState = Console ? Console->GetStateFrame() : NULL;
+	UBOOL ConsoleText = Console && Console->IsA(UConsole::StaticClass())
+		&& (((UConsole*)Console)->bTyping || (ConsoleState && ConsoleState->StateNode && ConsoleState->StateNode->GetFName() == NAME_ConsoleVisible));
+	UBOOL WantText = SDL_HasScreenKeyboardSupport()
+		? ConsoleText || (InMenu && EditBoxFocused( GUIController ))
+		: ConsoleText || InMenu;
+	// Only on a change, so a keyboard the player closed stays closed.
+	if( WantText != TextWanted )
 	{
+		TextWanted = WantText;
 		if( WantText )
 			SDL_StartTextInput( Client->Window );
 		else
@@ -935,6 +1020,27 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 					if( VJPointer( 0, 1, Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? SDL_EVENT_FINGER_DOWN : SDL_EVENT_FINGER_UP, Event.button.x * Density, Event.button.y * Density ) )
 						break;
 				}
+				if( Event.button.which == SDL_TOUCH_MOUSEID && Event.button.button == SDL_BUTTON_LEFT )
+				{
+					if( InMenu && Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN )
+					{
+						FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
+						WindowsMouseX = Event.button.x * Density;
+						WindowsMouseY = Event.button.y * Density;
+						// The motion before it is already in this position.
+						DX = DY = 0;
+						if( TapState == TAP_Release )
+							CauseInputEvent( IK_LeftMouse, IST_Release );
+						TapState = TAP_Wait;
+						break;
+					}
+					// Also when the menu closed meanwhile, so the press still comes before its release.
+					if( Event.type == SDL_EVENT_MOUSE_BUTTON_UP && (TapState == TAP_Wait || TapState == TAP_Press) )
+					{
+						TapState = TapState == TAP_Wait ? TAP_WaitRelease : TAP_PressRelease;
+						break;
+					}
+				}
 				if( Event.button.button < ARRAY_COUNT(MouseButtons) && MouseButtons[Event.button.button] != IK_None )
 					CauseInputEvent( MouseButtons[Event.button.button], Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? IST_Press : IST_Release );
 				break;
@@ -982,7 +1088,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 			case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
 				if( USDLClient::Gamepad && Event.gsensor.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
-					ProcessGyro( Event.gsensor );
+					ProcessGyro( Event.gsensor.which, (SDL_SensorType)Event.gsensor.sensor, Event.gsensor.sensor_timestamp, Event.gsensor.timestamp, Event.gsensor.data );
+				break;
+
+			case SDL_EVENT_SENSOR_UPDATE:
+				ProcessDeviceGyro( Event.sensor, Client->Window );
 				break;
 
 			case SDL_EVENT_GAMEPAD_REMOVED:
@@ -1271,6 +1381,19 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	// Set new info.
 	BlitFlags = NewBlitFlags & ~BLIT_ParameterFlags;
 
+#ifdef __ANDROID__
+	// The launcher's splash window becomes the game window, Android has only one.
+	if( !Client->Window )
+	{
+		SDL_Window** Windows = SDL_GetWindows( NULL );
+		if( Windows && Windows[0] )
+		{
+			Client->Window = Windows[0];
+			SDL_DestroyRenderer( SDL_GetRenderer( Windows[0] ) );
+		}
+		SDL_free( Windows );
+	}
+#endif
 	if( !Client->Window )
 	{
 		Client->Window = SDL_CreateWindow( "", NewX, NewY, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN );
@@ -1331,7 +1454,8 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 
 	SDL_HideCursor();
 	WindowsMouseShown = 0;
-	bWindowsMouseAvailable = !(NewBlitFlags & BLIT_Fullscreen);
+	// Phones and tablets are always fullscreen and touched, so menus follow the absolute touch position.
+	bWindowsMouseAvailable = !(NewBlitFlags & BLIT_Fullscreen) || SDL_HasScreenKeyboardSupport();
 
 	SetTitleBar();
 

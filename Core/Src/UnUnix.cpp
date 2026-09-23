@@ -44,8 +44,10 @@
 #include <dirent.h>
 #endif
 
-// Stack traces via C runtime...
+// Bionic has backtrace only from API 33.
+#ifndef __ANDROID__
 #include <execinfo.h>
+#endif
 
 // Core includes.
 #include "CorePrivate.h"
@@ -1097,7 +1099,14 @@ void* appGetDllHandle( const TCHAR* Filename )
 	dlerror();	// Clear any error condition.
 
 	// Check if the library was linked to the executable.
+#if __ANDROID__
+	// The engine is libmain.so, loaded RTLD_LOCAL by the Java side, so the global scope doesn't hold its symbols.
+	Dl_info Self;
+	dladdr( (void*)&appGetDllHandle, &Self );
+	Result = (void*)dlopen( Self.dli_fname, RTLD_NOW | RTLD_NOLOAD );
+#else
 	Result = (void*)dlopen( NULL, RTLD_NOW | RTLD_GLOBAL );
+#endif
 	Error = dlerror();
 	if( Error != NULL )
 		debugf( TEXT("dlerror(): %s"), Error );
@@ -1320,6 +1329,7 @@ static void HandleSignal( int Signal )
 			printf( "Aborting.\n\n" );
 			printf( "\nCrash information will be saved to your logfile.\n" );
 
+			#ifndef __ANDROID__
 				void *aTrace[64];
 				char **tString;
 				int size = backtrace(aTrace, ARRAY_COUNT(aTrace));
@@ -1327,6 +1337,7 @@ static void HandleSignal( int Signal )
 				debugf(TEXT("\nDeveloper Backtrace:"));
 				for (int i = 0; i < size; i++)
 					debugf(TEXT("[%2.i]  %s"), i+1, appFromAnsi(tString[i]));
+			#endif
 
 			#if DO_PORTABLE_GUARD_BLOCKS
 				FString GuardBackTrace;
@@ -1544,6 +1555,11 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 {
 	guard(appLaunchURL);
 
+#if __ANDROID__
+	// There is no xdg-open, and the spawn API below needs API 34.
+	if( Error )
+		*Error = LocalizeError(TEXT("UrlFailed"),TEXT("Core"));
+#else
 	// HandleChild reaps the process.
 	char Url[PATH_MAX];
 	appToAnsi( URL, Url, sizeof(Url) );
@@ -1560,6 +1576,7 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 		debugf( NAME_Warning, TEXT("Couldn't run xdg-open for %s"), URL );
 	if( Error )
 		*Error = Failed ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
+#endif
 
 	unguard;
 }
@@ -1722,7 +1739,11 @@ void appPlatformPreInit()
 #endif
 
 #if __LINUX_X86__
-    #ifdef __x86_64__
+    #if __ANDROID__
+        // No OS enum exists for it, and the 64-bit Linux one is the closest to what servers expect.
+        GRunningOS = OS_LINUX_X86_64;
+        appSprintf(GMachineOS, TEXT("arm64 Android"));
+    #elif defined __x86_64__
         GRunningOS = OS_LINUX_X86_64;
         appSprintf(GMachineOS, TEXT("x86-64 Linux"));
     #else

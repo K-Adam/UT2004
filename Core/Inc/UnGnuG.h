@@ -156,14 +156,14 @@ typedef size_t              SIZE_T;     // Corresponds to C SIZE_T.
 typedef unsigned int		BITFIELD;	// For bitfields.
 
 // Pointer sized, and one of the types Parse() and the serializers have overloads for.
-#if __x86_64__
+#if PLATFORM_64BITS
 typedef QWORD PTRINT;
 #else
 typedef DWORD PTRINT;
 #endif
 
 // This should really just include a header.
-#if !defined __x86_64__
+#if !PLATFORM_64BITS
 typedef unsigned int size_t;
 #endif
 
@@ -225,6 +225,24 @@ typedef unsigned int size_t;
 
 
 #if UNICODE_BY_HAND
+
+#if __ANDROID__
+// libc++ needs bionic's 4-byte wchar functions declared, so the 2-byte ones below take other names.
+#include <wchar.h>
+#include <wctype.h>
+#define wcscpy appUniWcscpy
+#define wcsncpy appUniWcsncpy
+#define wcscat appUniWcscat
+#define wcslen appUniWcslen
+#define wcscmp appUniWcscmp
+#define wcsncmp appUniWcsncmp
+#define wcschr appUniWcschr
+#define wcsstr appUniWcsstr
+#define wcstoul appUniWcstoul
+#define wprintf appUniWprintf
+#define swscanf appUniSwscanf
+#define iswspace appUniIswspace
+#endif
 
 CORE_API void unicode_str_to_stdout(const UNICHAR *str);
 

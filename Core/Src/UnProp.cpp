@@ -1393,8 +1393,8 @@ const TCHAR* UNameProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Por
 	guard(UNameProperty::ImportText);
 	TCHAR Temp[1024];
 
-#if ((defined __x86_64__) && (defined __GNUC__))
-    // Works around gcc on x86-64 Linux corrupting memory in ReadToken unless the input is copied first.
+#if PLATFORM_64BITS && (defined __GNUC__)
+    // Works around gcc on 64-bit Linux corrupting memory in ReadToken unless the input is copied first.
     TCHAR x[1024];
     appStrcpy(x, Buffer);
 	Buffer = ReadToken( x, Temp, ARRAY_COUNT(Temp) );

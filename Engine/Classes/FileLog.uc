@@ -18,7 +18,7 @@ class FileLog extends Info
 cpptext
 {
 	void FinishLog();
-	void AFileLog::Destroy();
+	void Destroy();
 }
 
 // Internal
