@@ -23,6 +23,7 @@ IMPLEMENT_CLASS(USDLClient);
 -----------------------------------------------------------------------------*/
 
 SDL_Gamepad *USDLClient::Gamepad = NULL;
+SDL_JoystickID USDLClient::VirtualPad = 0;
 
 
 //
@@ -149,6 +150,9 @@ void USDLClient::Init( UEngine* InEngine )
 	// Note configuration.
 	PostEditChange();
 
+	if( ParseParam(appCmdLine(),TEXT("VIRTUALJOYSTICK")) )
+		SetVirtualJoystick( 1 );
+
 	if( ParseParam(appCmdLine(),TEXT("defaultres")) )
 	{
 		WindowedViewportX = 640;
@@ -216,6 +220,45 @@ void USDLClient::CloseGamepad()
 }
 
 //
+// The on-screen controls drive an SDL virtual gamepad, so they share the pad's binds and response shaping.
+// It takes the place of a physical pad while attached.
+//
+void USDLClient::SetVirtualJoystick( UBOOL On )
+{
+	guard(USDLClient::SetVirtualJoystick);
+	CloseGamepad();
+	if( On )
+	{
+		SDL_VirtualJoystickDesc Desc;
+		SDL_INIT_INTERFACE( &Desc );
+		Desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+		Desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
+		Desc.nbuttons = 1;
+		Desc.name = "UT2004 Virtual Joystick";
+		VirtualPad = SDL_AttachVirtualJoystick( &Desc );
+		if( VirtualPad )
+			Gamepad = SDL_OpenGamepad( VirtualPad );
+		if( Gamepad )
+		{
+			// The opened joystick starts at raw 0, which reads as half pulled triggers.
+			SDL_Joystick* Joystick = SDL_GetGamepadJoystick( Gamepad );
+			SDL_SetJoystickVirtualAxis( Joystick, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
+			SDL_SetJoystickVirtualAxis( Joystick, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
+			debugf( NAME_Init, TEXT("Virtual joystick on") );
+			return;
+		}
+		// SDL builds without HIDAPI have no virtual joystick driver.
+		debugf( NAME_Init, TEXT("Couldn't attach virtual joystick: %s"), appFromAnsi(SDL_GetError()) );
+	}
+	if( VirtualPad )
+		SDL_DetachVirtualJoystick( VirtualPad );
+	VirtualPad = 0;
+	if( UseJoystick )
+		OpenGamepad();
+	unguard;
+}
+
+//
 // Shut down the platform-specific viewport manager subsystem.
 //
 void USDLClient::Destroy()
@@ -237,6 +280,7 @@ void USDLClient::Destroy()
 	Window = NULL;
 
 	CloseGamepad();
+	VirtualPad = 0;
 	GClipboardCopy = NULL;
 	GClipboardPaste = NULL;
 	GRumble = NULL;
@@ -338,7 +382,7 @@ void USDLClient::PostEditChange()
 	guard(USDLClient::PostEditChange);
 	Super::PostEditChange();
 	// The menu turns UseJoystick on and off with set ini, which ends up here.
-	if( !UseJoystick )
+	if( !UseJoystick && !VirtualPad )
 		CloseGamepad();
 	else if( !Gamepad )
 		OpenGamepad();

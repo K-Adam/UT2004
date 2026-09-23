@@ -350,6 +350,8 @@ class ENGINE_API UViewport : public UPlayer
 	virtual void* GetWindow()=0;
 	virtual void* GetServer();
 	virtual void UpdateMousePosition() {}
+	// Drawn on Canvas over the world and under the HUD.
+	virtual void RenderOverlay() {}
 	virtual void SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL FocusOnly=0 )=0;
 	virtual void Repaint( UBOOL Blit )=0;
 	virtual UBOOL Exec( const TCHAR* Cmd, FOutputDevice& Ar=*GLog );

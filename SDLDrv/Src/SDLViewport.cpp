@@ -272,12 +272,13 @@ void USDLViewport::ShutdownAfterError()
 
 
 //
-// Fullscreen and grabbed windows read raw relative motion, unless a windowed menu shows the OS cursor.
+// Fullscreen and grabbed windows read raw relative motion, unless a windowed menu shows the OS cursor
+// or the cursor works the on-screen controls.
 //
 void USDLViewport::UpdateMouseGrabState()
 {
 	SDL_Window* Window = GetOuterUSDLClient()->Window;
-	SDL_SetWindowRelativeMouseMode( Window, (IsFullscreen() || WantGrab) && !WindowsMouseShown );
+	SDL_SetWindowRelativeMouseMode( Window, (IsFullscreen() || WantGrab) && !WindowsMouseShown && !VJShown );
 	MouseIsGrabbed = SDL_GetWindowRelativeMouseMode( Window );
 }
 
@@ -325,6 +326,17 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	else if( ParseCommand(&Cmd,TEXT("TEMPSETRES")) )
 	{
 		SetResolution( Cmd, 0 );
+		return 1;
+	}
+	else if( ParseCommand(&Cmd,TEXT("VIRTUALJOYSTICK")) )
+	{
+		GetOuterUSDLClient()->SetVirtualJoystick( !USDLClient::VirtualPad );
+		// The pad block stops polling once no pad is open, so held pad keys would never release.
+		PadHeld = 0;
+		if( GUIController )
+			GUIController->ResetInput();
+		Input->ResetInput();
+		Ar.Logf( TEXT("Virtual joystick %s"), USDLClient::VirtualPad ? TEXT("on") : TEXT("off") );
 		return 1;
 	}
 
@@ -525,6 +537,174 @@ void USDLViewport::UpdateMousePosition()
 }
 
 //
+// Pixel layout of the on-screen controls: the move stick bottom left, the look stick bottom right
+// and the buttons in an arc above and inside the look stick, where the right thumb reaches.
+//
+void USDLViewport::VJLayout( INT i, FLOAT& X, FLOAT& Y, FLOAT& R )
+{
+	FLOAT StickR = SizeY * 0.11f, Margin = SizeY * 0.06f;
+	X = i == VJ_Move ? Margin + StickR : SizeX - Margin - StickR;
+	Y = SizeY - Margin - StickR;
+	R = StickR;
+	if( i >= VJ_Fire )
+	{
+		static const FLOAT Angles[] = { 165.f, 120.f, 75.f };
+		FLOAT A = Angles[i - VJ_Fire] * PI / 180.f;
+		X += appCos( A ) * StickR * 1.7f;
+		Y -= appSin( A ) * StickR * 1.7f;
+		R = StickR * 0.42f;
+	}
+}
+
+//
+// Writes one control to the virtual pad. SDL would write into a physical pad's driver data.
+//
+void USDLViewport::VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y )
+{
+	guard(USDLViewport::VJWrite);
+	if( !USDLClient::VirtualPad )
+		return;
+	SDL_Joystick* Joystick = SDL_GetGamepadJoystick( USDLClient::Gamepad );
+	if( i == VJ_Move || i == VJ_Look )
+	{
+		FLOAT CX, CY, R;
+		VJLayout( i, CX, CY, R );
+		FLOAT DX = Held ? (X - CX) / R : 0.f, DY = Held ? (Y - CY) / R : 0.f;
+		FLOAT Len = appSqrt( DX * DX + DY * DY );
+		if( Len > 1.f )
+		{
+			DX /= Len;
+			DY /= Len;
+		}
+		INT Axis = i == VJ_Move ? SDL_GAMEPAD_AXIS_LEFTX : SDL_GAMEPAD_AXIS_RIGHTX;
+		SDL_SetJoystickVirtualAxis( Joystick, Axis, (Sint16)(DX * 32767.f) );
+		SDL_SetJoystickVirtualAxis( Joystick, Axis + 1, (Sint16)(DY * 32767.f) );
+	}
+	else if( i == VJ_Jump )
+		SDL_SetJoystickVirtualButton( Joystick, 0, Held != 0 );
+	else
+		SDL_SetJoystickVirtualAxis( Joystick, i == VJ_Fire ? SDL_GAMEPAD_AXIS_RIGHT_TRIGGER : SDL_GAMEPAD_AXIS_LEFT_TRIGGER, Held ? SDL_JOYSTICK_AXIS_MAX : SDL_JOYSTICK_AXIS_MIN );
+	unguard;
+}
+
+//
+// A pointer going down, moving or going up, as finger event types. Returns whether a control took it.
+// Pen and touch can share finger ids, so the touch id is matched too.
+//
+UBOOL USDLViewport::VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Phase, FLOAT X, FLOAT Y )
+{
+	guard(USDLViewport::VJPointer);
+	INT i = 0;
+	while( i < VJ_Count && !(VJFinger[i] == Finger && VJTouch[i] == Touch) )
+		i++;
+	if( Phase == SDL_EVENT_FINGER_DOWN && i == VJ_Count )
+	{
+		// Buttons first, the generous stick grab area reaches over them.
+		for( i=VJ_Count-1; i>=0; i-- )
+		{
+			FLOAT CX, CY, R;
+			VJLayout( i, CX, CY, R );
+			FLOAT Grab = i <= VJ_Look ? R * 1.5f : R * 1.2f;
+			if( !VJFinger[i] && Square(X - CX) + Square(Y - CY) < Grab * Grab )
+				break;
+		}
+		if( i < 0 )
+			return 0;
+		VJTouch[i] = Touch;
+		VJFinger[i] = Finger;
+	}
+	else if( i == VJ_Count )
+		return 0;
+	UBOOL Held = Phase == SDL_EVENT_FINGER_DOWN || Phase == SDL_EVENT_FINGER_MOTION;
+	VJWrite( i, Held, X, Y );
+	if( !Held )
+		VJFinger[i] = 0;
+	return 1;
+	unguard;
+}
+
+void USDLViewport::VJRelease()
+{
+	guard(USDLViewport::VJRelease);
+	for( INT i=0; i<VJ_Count; i++ )
+		if( VJFinger[i] )
+		{
+			VJWrite( i, 0, 0.f, 0.f );
+			VJFinger[i] = 0;
+		}
+	unguard;
+}
+
+static void DrawDisc( FCanvasUtil* CU, UMaterial* Material, FLOAT X, FLOAT Y, FLOAT R, FColor Color )
+{
+	const INT Segments = 40;
+	Color = Color.RenderColor();
+	CU->BeginPrimitive( PT_TriangleList, Material );
+	for( INT i=0; i<Segments; i++ )
+	{
+		FLOAT A0 = 2.f * PI * i / Segments, A1 = 2.f * PI * (i + 1) / Segments;
+		new(CU->Vertices) FCanvasVertex( FVector(X, Y, 0), Color, 0.f, 0.f );
+		new(CU->Vertices) FCanvasVertex( FVector(X + appCos(A0) * R, Y + appSin(A0) * R, 0), Color, 0.f, 0.f );
+		new(CU->Vertices) FCanvasVertex( FVector(X + appCos(A1) * R, Y + appSin(A1) * R, 0), Color, 0.f, 0.f );
+	}
+	CU->NumPrimitives += Segments;
+}
+
+//
+// Draws the on-screen controls. Alpha blended 2D drawn before the view model stays out of the world's post processing.
+//
+void USDLViewport::RenderOverlay()
+{
+	guard(USDLViewport::RenderOverlay);
+	if( !VJShown || !Canvas->pCanvasUtil )
+		return;
+
+	static FSolidColorTexture WhiteTexture( FColor(255,255,255,255) );
+	DECLARE_STATIC_UOBJECT( UProxyBitmapMaterial, WhiteMaterial, { WhiteMaterial->SetTextureInterface(&WhiteTexture); } );
+	DECLARE_STATIC_UOBJECT( UFinalBlend, WhiteBlend, { WhiteBlend->FrameBufferBlending = FB_AlphaBlend; WhiteBlend->Material = WhiteMaterial; WhiteBlend->ZWrite = 0; WhiteBlend->ZTest = 0; } );
+
+	static const FColor Tints[] = { FColor(230,70,60,0), FColor(240,160,40,0), FColor(80,200,90,0) };
+	static const TCHAR* Captions[] = { TEXT("FIRE"), TEXT("ALT"), TEXT("JUMP") };
+	FCanvasUtil* CU = Canvas->pCanvasUtil;
+	for( INT i=0; i<VJ_Count; i++ )
+	{
+		FLOAT X, Y, R;
+		VJLayout( i, X, Y, R );
+		UBOOL Held = VJFinger[i] != 0;
+		if( i == VJ_Move || i == VJ_Look )
+		{
+			SDL_GamepadAxis Axis = i == VJ_Move ? SDL_GAMEPAD_AXIS_LEFTX : SDL_GAMEPAD_AXIS_RIGHTX;
+			FLOAT KX = SDL_GetGamepadAxis( USDLClient::Gamepad, Axis ) / 32767.f, KY = SDL_GetGamepadAxis( USDLClient::Gamepad, (SDL_GamepadAxis)(Axis + 1) ) / 32767.f;
+			DrawDisc( CU, WhiteBlend, X, Y, R, FColor(255,255,255,40) );
+			DrawDisc( CU, WhiteBlend, X, Y, R * 0.94f, FColor(0,0,0,70) );
+			DrawDisc( CU, WhiteBlend, X + KX * R, Y + KY * R, R * 0.45f, FColor(255,255,255,Held ? 170 : 100) );
+		}
+		else
+		{
+			FColor Tint = Tints[i - VJ_Fire];
+			Tint.A = Held ? 190 : 110;
+			DrawDisc( CU, WhiteBlend, X, Y, R, Tint );
+		}
+	}
+
+	Canvas->Style = STY_Alpha;
+	Canvas->Color = FColor(255,255,255,220);
+	for( INT i=VJ_Fire; i<VJ_Count; i++ )
+	{
+		FLOAT X, Y, R, XL, YL;
+		VJLayout( i, X, Y, R );
+		Canvas->ClippedStrLen( Canvas->SmallFont, 1.f, 1.f, XL, YL, Captions[i - VJ_Fire] );
+		Canvas->CurX = X - XL * 0.5f;
+		Canvas->CurY = Y - YL * 0.5f;
+		Canvas->ClippedPrint( Canvas->SmallFont, 1.f, 1.f, 0, Captions[i - VJ_Fire] );
+	}
+	CU->Flush();
+	// The HUD expects the canvas as Update left it.
+	Canvas->eventReset();
+	unguard;
+}
+
+//
 // Return the viewport's window.
 //
 void* USDLViewport::GetWindow()
@@ -582,7 +762,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	USDLClient* Client = GetOuterUSDLClient();
 
 	UBOOL InMenu = GUIController && GUIController->bActive;
-    if( Client->UseJoystick && USDLClient::Gamepad )
+    if( USDLClient::Gamepad )
     {
         // Guide and Misc1 belong to the system overlay and capture, so the triggers take their keys.
         // Menus get the same keys, the GUI maps them to its own navigation.
@@ -649,12 +829,16 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
     }
 	// Windowed menus use the OS cursor, so the menu cursor is where the mouse is.
 	// UGameEngine::Tick releases and restores the grab for them.
-	if( bShowWindowsMouse != WindowsMouseShown )
+	// The on-screen controls show in game only, opening a menu lets go of them.
+	UBOOL ShowVJ = USDLClient::VirtualPad && !InMenu;
+	if( bShowWindowsMouse != WindowsMouseShown || ShowVJ != VJShown )
 	{
 		WindowsMouseShown = bShowWindowsMouse;
+		VJRelease();
+		VJShown = ShowVJ;
 		UpdateMouseGrabState();
 	}
-	bool WantCursor = WindowsMouseShown && !bHideCursor;
+	bool WantCursor = (WindowsMouseShown && !bHideCursor) || VJShown;
 	if( WantCursor != SDL_CursorVisible() )
 	{
 		if( WantCursor )
@@ -732,8 +916,25 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				break;
 			}
 
+			case SDL_EVENT_FINGER_DOWN:
+			case SDL_EVENT_FINGER_MOTION:
+			case SDL_EVENT_FINGER_UP:
+			case SDL_EVENT_FINGER_CANCELED:
+				if( VJShown )
+					VJPointer( Event.tfinger.touchID, Event.tfinger.fingerID, Event.type, Event.tfinger.x * SizeX, Event.tfinger.y * SizeY );
+				break;
+
 			case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			case SDL_EVENT_MOUSE_BUTTON_UP:
+				if( VJShown && Event.button.button == SDL_BUTTON_LEFT )
+				{
+					// Touch and pen already arrived as fingers.
+					if( Event.button.which == SDL_TOUCH_MOUSEID || Event.button.which == SDL_PEN_MOUSEID )
+						break;
+					FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
+					if( VJPointer( 0, 1, Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? SDL_EVENT_FINGER_DOWN : SDL_EVENT_FINGER_UP, Event.button.x * Density, Event.button.y * Density ) )
+						break;
+				}
 				if( Event.button.button < ARRAY_COUNT(MouseButtons) && MouseButtons[Event.button.button] != IK_None )
 					CauseInputEvent( MouseButtons[Event.button.button], Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? IST_Press : IST_Release );
 				break;
@@ -756,6 +957,16 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 			}
 
 			case SDL_EVENT_MOUSE_MOTION:
+				// The cursor is absolute while it works the on-screen controls, so it does not turn the view.
+				if( VJShown )
+				{
+					if( Event.motion.which != SDL_TOUCH_MOUSEID && Event.motion.which != SDL_PEN_MOUSEID )
+					{
+						FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
+						VJPointer( 0, 1, SDL_EVENT_FINGER_MOTION, Event.motion.x * Density, Event.motion.y * Density );
+					}
+					break;
+				}
 				if ((!MouseIsGrabbed) && (Client->IgnoreUngrabbedMouse))
 					break;
 
@@ -793,6 +1004,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 				break;
 
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
+				VJRelease();
 				if( GUIController )
 					GUIController->ResetInput();
 				if( Input )

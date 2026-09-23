@@ -74,6 +74,8 @@ class USDLClient : public UClient, public FNotifyHook
 	SDL_GLContext		GLContext;
 
     static SDL_Gamepad *Gamepad;
+	// The attached SDL virtual joystick behind the on-screen controls.
+	static SDL_JoystickID VirtualPad;
 
 	// Constructors.
 	USDLClient();
@@ -101,11 +103,14 @@ class USDLClient : public UClient, public FNotifyHook
 	void OpenGamepad();
 	void CloseGamepad();
 	void EnableGyro();
+	void SetVirtualJoystick( UBOOL On );
 };
 
 /*-----------------------------------------------------------------------------
 	USDLViewport.
 -----------------------------------------------------------------------------*/
+
+enum { VJ_Move, VJ_Look, VJ_Fire, VJ_AltFire, VJ_Jump, VJ_Count };
 
 //
 // An SDL viewport.
@@ -122,6 +127,11 @@ class USDLViewport : public UViewport
 	DWORD				PadHeld;
 	// How long the look stick has been at full deflection, for PadTurnBoost.
 	FLOAT				PadEdgeTime;
+
+	// The touch and finger holding each on-screen control, a zero finger is free. The mouse is touch 0, finger 1.
+	SDL_TouchID			VJTouch[VJ_Count];
+	SDL_FingerID		VJFinger[VJ_Count];
+	UBOOL				VJShown;
 
 	UBOOL				WantGrab;
 	FLOAT				WheelRemainder;
@@ -151,6 +161,7 @@ class USDLViewport : public UViewport
 	void* GetWindow();
 	void SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL FocusOnly );
 	void UpdateMousePosition();
+	void RenderOverlay();
 
 	// USDLViewport interface.
 	void UpdateMouseGrabState();
@@ -161,6 +172,11 @@ class USDLViewport : public UViewport
 	DWORD GetViewportButtonFlags( DWORD wParam );
 
 	UBOOL CauseInputEvent( INT iKey, EInputAction Action, FLOAT Delta=0.0 );
+
+	void VJLayout( INT i, FLOAT& X, FLOAT& Y, FLOAT& R );
+	UBOOL VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Phase, FLOAT X, FLOAT Y );
+	void VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y );
+	void VJRelease();
 
 	virtual UBOOL TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY, UBOOL Fullscreen );
     void SetTitleBar();

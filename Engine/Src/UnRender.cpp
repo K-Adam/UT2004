@@ -1676,6 +1676,8 @@ void FPlayerSceneNode::Render(FRenderInterface* RI)
 			);
 	    }
 
+		Viewport->RenderOverlay();
+
 		// The HUD draws the first person weapon before anything 2D.
 		RI->BeginViewModel(WorldToCamera,CameraToScreen);
     } 
