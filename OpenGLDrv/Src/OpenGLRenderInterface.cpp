@@ -4,7 +4,7 @@
 #include "OpenGLDrv.h"
 
 FOpenGLRenderInterface::FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev)
-:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), ViewFog(0,0,0,0), FogUp(0,0,1), FogTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0), DynamicIndices(NULL), DynamicIndicesFirst(0)
+:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), ViewFog(0,0,0,0), FogUp(0,0,1), FogTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0), DynamicIndices(NULL), DynamicIndicesFirst(0), ProbeMap(NAME_None)
 {
 	CurrentState = &SavedStates[0];
 	FSavedState& S = *CurrentState;
@@ -481,6 +481,65 @@ static void SetCap(GLenum Cap,UBOOL Enable,UBOOL& Cached)
 	}
 }
 
+// The content keeps no capture point for its cubemaps, so the box is fitted by traces into the level
+// from the drawn object's origin. The median of five rays per side keeps one ray through a gap from
+// opening the side. Like the fog shadows they pass the skybox, so the sky counts as infinitely far
+// and the sky zone stays a scene of its own.
+FOpenGLRenderInterface::FProbe FOpenGLRenderInterface::FindProbe(const FMatrix& LocalToWorld)
+{
+	const FLOAT	Far = 1e8f;
+	FProbe		Probe = { FVector(0,0,0), FVector(-Far,-Far,-Far), FVector(Far,Far,Far) };
+	ULevel*		Level = Viewport->Actor ? Viewport->Actor->XLevel : NULL;
+	// BSP, terrain and world space particles have no object to centre on.
+	if( !Level || ViewModel || LocalToWorld == FMatrix::Identity )
+		return Probe;
+	// By map name, a new level can reuse the old one's address.
+	if( Level->GetOuter()->GetFName() != ProbeMap || Probes.Num() >= 256 )
+	{
+		Probes.Empty();
+		ProbeMap = Level->GetOuter()->GetFName();
+	}
+	FVector	C = LocalToWorld.TransformFVector(FVector(0,0,0));
+	QWORD	Key = 0;
+	for( INT Axis=0; Axis<3; Axis++ )
+		Key = (Key << 21) | (appRound(C.Component(Axis) / 16.f) & 0x1fffff);
+	if( FProbe* Found = Probes.Find(Key) )
+		return *Found;
+
+	Probe.Origin = C;
+	for( INT Axis=0; Axis<3; Axis++ )
+		for( INT Sign=-1; Sign<=1; Sign+=2 )
+		{
+			FVector	A(0,0,0), U(0,0,0), V(0,0,0);
+			A.Component(Axis) = Sign;
+			U.Component(Axis == 0 ? 1 : 0) = 0.5f;
+			V.Component(Axis == 2 ? 1 : 2) = 0.5f;
+			// Water and floors reflect what stands above them, so the sides are traced level and upward.
+			// Downward rays find the bed or the bank right at the waterline.
+			FVector	Dirs[5] = { A, A + U, A - U, A + V, Axis == 2 ? A - V : A + V * 2.f };
+			FLOAT	Distances[5];
+			for( INT i=0; i<5; i++ )
+			{
+				FVector			Dir = Dirs[i].SafeNormal();
+				FCheckResult	Hit(1.f);
+				Level->SingleLineCheck(Hit,NULL,C + Dir * WORLD_MAX,C,TRACE_ShadowCast | TRACE_Level | TRACE_LevelGeometry);
+				FLOAT D = Hit.Time * WORLD_MAX * Abs(Dir.Component(Axis));
+				INT j = i;
+				for( ; j>0 && Distances[j - 1] > D; j-- )
+					Distances[j] = Distances[j - 1];
+				Distances[j] = D;
+			}
+			(Sign < 0 ? Probe.Min : Probe.Max).Component(Axis) = C.Component(Axis) + Sign * Max(Distances[2],64.f);
+		}
+	// Cubemaps were captured from the middle of the space around them rather than from an object's
+	// pivot, which for a fluid surface is the centre of a grid that mostly runs under the terrain.
+	for( INT Axis=0; Axis<3; Axis++ )
+		if( Probe.Max.Component(Axis) - Probe.Min.Component(Axis) < WORLD_MAX * 0.5f )
+			Probe.Origin.Component(Axis) = (Probe.Min.Component(Axis) + Probe.Max.Component(Axis)) * 0.5f;
+	Probes.Set(Key,Probe);
+	return Probe;
+}
+
 void FOpenGLRenderInterface::Commit()
 {
 	UOpenGLRenderDevice::FGLState&	GL = RenDev->GL;
@@ -550,6 +609,11 @@ void FOpenGLRenderInterface::Commit()
 				NormalToWorld[Row * 3 + Column] = Inverse.M[Column][Row];
 		glUniformMatrix4fv(Program->LocalToWorld,1,GL_FALSE,&S->LocalToWorld.M[0][0]);
 		glUniformMatrix3fv(Program->NormalToWorld,1,GL_FALSE,NormalToWorld);
+		if( Program->Probe != -1 )
+		{
+			FProbe Probe = FindProbe(S->LocalToWorld);
+			glUniform3fv(Program->Probe,3,&Probe.Origin.X);
+		}
 	}
 	if( M.AlphaTest && Program->SentAlphaRef != M.AlphaRef )
 	{

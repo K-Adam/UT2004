@@ -137,6 +137,20 @@ static const ANSICHAR* OpenGLFragmentPrologue =
 	"	vec3 E = -normalize(vCameraPos);\n"
 	"	return 2.0 * dot(E, N) * N - E;\n"
 	"}\n"
+	// The cubemap holds the surroundings as seen from its capture point Probe[0], so the reflected ray
+	// is cut at the box Probe[1] to Probe[2] around that point and the cube looked up toward the hit.
+	"uniform vec3 Probe[3];\n"
+	"vec3 ProbeReflection()\n"
+	"{\n"
+	"	vec3 R = CameraReflection() * mat3(WorldToCamera);\n"
+	"	vec3 P = vWorldPos;\n"
+	// The faces keep their distance from pixels near or past them, a pixel on a face would see only that
+	// spot of it and the projection would smear there.
+	"	vec3 Side = step(0.0, R);\n"
+	"	vec3 Face = mix(min(Probe[1], P - 256.0), max(Probe[2], P + 256.0), Side);\n"
+	"	vec3 T = (Face - P) / ((Side * 2.0 - 1.0) * max(abs(R), vec3(1e-5)));\n"
+	"	return mat3(WorldToCamera) * (P + R * min(min(T.x, T.y), T.z) - Probe[0]);\n"
+	"}\n"
 	OGL_FOG_AMOUNT
 	"vec3 ApplyFog(vec3 Color, vec3 Target)\n"
 	"{\n"
@@ -394,9 +408,11 @@ public:
 		else
 		{
 			EnvSampled = 1;
-			Emit(TEXT("\tvec4 r%i = vec4(CameraReflection(), 1.0);\n"),T);
-			if( Source == TCS_WorldEnvMapCoords )
+			if( Source != TCS_WorldEnvMapCoords )
+				Emit(TEXT("\tvec4 r%i = vec4(CameraReflection(), 1.0);\n"),T);
+			else
 			{
+				Emit(TEXT("\tvec4 r%i = vec4(ProbeReflection(), 1.0);\n"),T);
 				// Same transform as D3D9Drv, which applies the transposed world to texture matrix.
 				Matrix = (S->WorldToCamera * Mod.Matrix).Transpose();
 				UseMatrix = 1;
@@ -1356,6 +1372,7 @@ UBOOL UOpenGLRenderDevice::ProgramReady(FOpenGLProgram* P,UBOOL Wait)
 	P->LocalToWorld		= glGetUniformLocation(P->Program,"LocalToWorld");
 	P->NormalToWorld	= glGetUniformLocation(P->Program,"NormalToWorld");
 	P->AlphaRef			= glGetUniformLocation(P->Program,"AlphaRef");
+	P->Probe			= glGetUniformLocation(P->Program,"Probe");
 	UseProgram(P->Program);
 	ANSICHAR Name[8];
 	// Samplers the program lacks have location -1, which glUniform ignores.

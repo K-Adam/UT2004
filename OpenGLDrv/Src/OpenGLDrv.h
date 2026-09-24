@@ -146,6 +146,7 @@ struct FOpenGLProgram
 	GLint			LocalToWorld,
 					NormalToWorld,
 					AlphaRef,
+					Probe,
 					Matrices[OGL_MAX_MATRICES],
 					Constants[OGL_MAX_CONSTANTS];
 	// Last values sent, uniforms belong to the program so unchanged ones are skipped.
@@ -322,6 +323,16 @@ public:
 	TArray<FDeferredDraw>	DeferredDraws;
 	TArray<BYTE>			DeferredIndices;
 
+	// A world env map's capture point and the box its surroundings are projected on, the Probe uniform.
+	struct FProbe
+	{
+		FVector	Origin,
+				Min,
+				Max;
+	};
+	TMap<QWORD,FProbe>	Probes;			// By quantised origin, so objects that stay put trace once.
+	FName				ProbeMap;
+
 	FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev);
 	void DrawDeferred();
 
@@ -370,6 +381,7 @@ private:
 	void Commit();
 	UBOOL CompileMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial);
 	FPlane PickShadowLight();
+	FProbe FindProbe(const FMatrix& LocalToWorld);
 	FLOAT PickFocus();
 	const FOpenGLFogLights* PickFogLights();
 	void TraceShadows(ULevel* Level,const FVector& Camera);
