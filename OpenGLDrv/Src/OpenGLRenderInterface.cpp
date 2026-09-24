@@ -220,11 +220,12 @@ void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FL
 	}
 	if( Mask )
 		glClear(Mask);
-	// Cleared pixels reflect nothing, whatever the colour.
-	if( UseColor && InWorld && !CurrentState->RenderTarget && RenDev->ScreenSpaceReflections )
+	// Cleared pixels reflect and bounce nothing, whatever the colour. Disabled draw buffers ignore the clear.
+	if( UseColor && InWorld && !CurrentState->RenderTarget )
 	{
 		GLfloat Zero[4] = { 0.f, 0.f, 0.f, 0.f };
 		glClearBufferfv(GL_COLOR,1,Zero);
+		glClearBufferfv(GL_COLOR,2,Zero);
 	}
 }
 

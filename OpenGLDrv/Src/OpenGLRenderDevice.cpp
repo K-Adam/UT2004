@@ -14,7 +14,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	LockedViewport	= NULL;
 	ContextReady	= 0;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
 	ShadowLight = NULL;
@@ -32,10 +32,11 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("ScreenSpaceReflections"),RF_Public)UBoolProperty(CPP_PROPERTY(ScreenSpaceReflections),TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("DepthOfField"),	RF_Public)UBoolProperty(CPP_PROPERTY(DepthOfField),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("VolumetricFog"),	RF_Public)UBoolProperty(CPP_PROPERTY(VolumetricFog),	TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("GlobalIllumination"),RF_Public)UBoolProperty(CPP_PROPERTY(GlobalIllumination),TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = 1;
 	ResolutionScale = 100;
 }
 
@@ -260,7 +261,7 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	return 1;
 }
 
-void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format,UBOOL HasDepth,UBOOL HasReflection)
+void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format,UBOOL HasDepth,INT Extra)
 {
 	if( F.Framebuffer && Width == F.Width && Height == F.Height && Samples == F.Samples )
 		return;
@@ -284,12 +285,12 @@ void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT 
 		glTexStorage2D(GL_TEXTURE_2D,1,GL_DEPTH24_STENCIL8,Width,Height);
 		glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_TEXTURE_2D,F.DepthTexture,0);
 	}
-	if( HasReflection )
+	for( INT i=0; i<Extra; i++ )
 	{
-		glGenTextures(1,&F.ReflectionTexture);
-		glBindTexture(GL_TEXTURE_2D,F.ReflectionTexture);
+		glGenTextures(1,&F.ExtraTextures[i]);
+		glBindTexture(GL_TEXTURE_2D,F.ExtraTextures[i]);
 		glTexStorage2D(GL_TEXTURE_2D,1,GL_RGBA8,Width,Height);
-		glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1,GL_TEXTURE_2D,F.ReflectionTexture,0);
+		glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1 + i,GL_TEXTURE_2D,F.ExtraTextures[i],0);
 	}
 	GL.Textures[0] = (GLuint)-1;
 
@@ -308,12 +309,12 @@ void UOpenGLRenderDevice::CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT 
 			glRenderbufferStorageMultisample(GL_RENDERBUFFER,Samples,GL_DEPTH24_STENCIL8,Width,Height);
 			glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_RENDERBUFFER,F.MultisampleDepth);
 		}
-		if( HasReflection )
+		for( INT i=0; i<Extra; i++ )
 		{
-			glGenRenderbuffers(1,&F.MultisampleReflection);
-			glBindRenderbuffer(GL_RENDERBUFFER,F.MultisampleReflection);
+			glGenRenderbuffers(1,&F.MultisampleExtra[i]);
+			glBindRenderbuffer(GL_RENDERBUFFER,F.MultisampleExtra[i]);
 			glRenderbufferStorageMultisample(GL_RENDERBUFFER,Samples,GL_RGBA8,Width,Height);
-			glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1,GL_RENDERBUFFER,F.MultisampleReflection);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT1 + i,GL_RENDERBUFFER,F.MultisampleExtra[i]);
 		}
 	}
 
@@ -328,8 +329,8 @@ void UOpenGLRenderDevice::DestroyFramebuffer(FOpenGLFramebuffer& F)
 		return;
 	// Zero names are ignored.
 	GLuint	Framebuffers[] = { F.Framebuffer, F.MultisampleFramebuffer },
-			Textures[] = { F.Texture, F.DepthTexture, F.ReflectionTexture },
-			Renderbuffers[] = { F.MultisampleColor, F.MultisampleDepth, F.MultisampleReflection };
+			Textures[] = { F.Texture, F.DepthTexture, F.ExtraTextures[0], F.ExtraTextures[1] },
+			Renderbuffers[] = { F.MultisampleColor, F.MultisampleDepth, F.MultisampleExtra[0], F.MultisampleExtra[1] };
 	glDeleteFramebuffers(ARRAY_COUNT(Framebuffers),Framebuffers);
 	glDeleteTextures(ARRAY_COUNT(Textures),Textures);
 	glDeleteRenderbuffers(ARRAY_COUNT(Renderbuffers),Renderbuffers);
@@ -399,6 +400,9 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	DestroyFramebuffer(Scattering);
 	DestroyFramebuffer(ScatterHistory[0]);
 	DestroyFramebuffer(ScatterHistory[1]);
+	DestroyFramebuffer(Indirect);
+	DestroyFramebuffer(IndirectHistory[0]);
+	DestroyFramebuffer(IndirectHistory[1]);
 	DestroyFramebuffer(Overlay);
 	DynamicVertexBuffer.Release();
 	DynamicIndexBuffer.Release();
@@ -406,7 +410,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	if( SceneBuffer )			glDeleteBuffers(1,&SceneBuffer);
 	if( VertexArray )			glDeleteVertexArrays(1,&VertexArray);
 	if( EmptyVertexArray )		glDeleteVertexArrays(1,&EmptyVertexArray);
-	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram };
+	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram };
 	for( INT i=0; i<ARRAY_COUNT(PostPrograms); i++ )
 		glDeleteProgram(PostPrograms[i]);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
@@ -416,7 +420,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	FlushShadows();
 	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
 }
 
 void UOpenGLRenderDevice::Exit(UViewport* Viewport)
@@ -490,10 +494,10 @@ FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,IN
 	INT Samples = Antialiasing ? Min<INT>(4,MaxSamples) : 0;
 	CreateFramebuffer(Scene,Viewport->SizeX,Viewport->SizeY,Samples);
 	INT Scale = Clamp(ResolutionScale,50,100);
-	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples,GL_RGBA8,1,1);
-	GLenum Buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples,GL_RGBA8,1,2);
+	GLenum Buffers[] = { GL_COLOR_ATTACHMENT0, ScreenSpaceReflections ? GL_COLOR_ATTACHMENT1 : GL_NONE, GlobalIllumination ? GL_COLOR_ATTACHMENT2 : GL_NONE };
 	glBindFramebuffer(GL_FRAMEBUFFER,World.DrawFramebuffer());
-	glDrawBuffers(ScreenSpaceReflections ? 2 : 1,Buffers);
+	glDrawBuffers(ARRAY_COUNT(Buffers),Buffers);
 	GL.Framebuffer = World.DrawFramebuffer();
 	LockedViewport = Viewport;
 	Scene.Resolved = World.Resolved = 0;
@@ -521,20 +525,22 @@ void UOpenGLRenderDevice::ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth)
 		glBindFramebuffer(GL_READ_FRAMEBUFFER,F.MultisampleFramebuffer);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER,F.Framebuffer);
 		glBlitFramebuffer(0,0,F.Width,F.Height,0,0,F.Width,F.Height,GL_COLOR_BUFFER_BIT | (Depth ? GL_DEPTH_BUFFER_BIT : 0),GL_NEAREST);
-		if( F.ReflectionTexture )
+		// A blit reads one colour attachment and writes every draw buffer.
+		INT i;
+		for( i=0; i<ARRAY_COUNT(F.ExtraTextures) && F.ExtraTextures[i]; i++ )
 		{
-			// A blit reads one colour attachment and writes every draw buffer.
-			GLenum Second[] = { GL_NONE, GL_COLOR_ATTACHMENT1 }, First = GL_COLOR_ATTACHMENT0;
-			glReadBuffer(GL_COLOR_ATTACHMENT1);
-			glDrawBuffers(2,Second);
+			GLenum Only[] = { GL_NONE, GL_NONE, GL_NONE }, First = GL_COLOR_ATTACHMENT0;
+			Only[i + 1] = GL_COLOR_ATTACHMENT1 + i;
+			glReadBuffer(GL_COLOR_ATTACHMENT1 + i);
+			glDrawBuffers(i + 2,Only);
 			glBlitFramebuffer(0,0,F.Width,F.Height,0,0,F.Width,F.Height,GL_COLOR_BUFFER_BIT,GL_NEAREST);
 			glReadBuffer(GL_COLOR_ATTACHMENT0);
 			glDrawBuffers(1,&First);
 		}
 		glEnable(GL_SCISSOR_TEST);
 		glBindFramebuffer(GL_FRAMEBUFFER,F.MultisampleFramebuffer);
-		GLenum Attachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT, GL_COLOR_ATTACHMENT1 };
-		glInvalidateFramebuffer(GL_FRAMEBUFFER,F.ReflectionTexture ? 3 : 2,Attachments);
+		GLenum Attachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+		glInvalidateFramebuffer(GL_FRAMEBUFFER,2 + i,Attachments);
 		GL.Framebuffer = F.MultisampleFramebuffer;
 	}
 	F.Resolved = 1;
@@ -550,7 +556,7 @@ void UOpenGLRenderDevice::UseProgram(GLuint Program)
 }
 
 // ES 3 cannot scale a blit into a multisampled target, a draw can.
-void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Depth,UBOOL Over,GLuint Texture3,GLuint Texture4)
+void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Depth,UBOOL Over,GLuint Texture3,GLuint Texture4,GLuint Texture5,GLuint Texture6)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 	glViewport(0,0,Width,Height);
@@ -567,7 +573,7 @@ void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT W
 	else
 		glDisable(GL_BLEND);
 	UseProgram(Program);
-	GLuint Textures[] = { Texture0, Texture1, Depth, Texture3, Texture4 };
+	GLuint Textures[] = { Texture0, Texture1, Depth, Texture3, Texture4, Texture5, Texture6 };
 	for( INT i=0; i<ARRAY_COUNT(Textures); i++ )
 	{
 		if( !Textures[i] )

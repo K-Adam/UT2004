@@ -388,8 +388,10 @@ private:
 	FLOAT TraceSunCell(ULevel* Level,INT I,INT J,FLOAT CameraS);
 };
 
-// A colour texture with optional depth and stencil and reflection textures. With multisampling the drawing goes to
-// separate buffers that Resolve copies into the textures.
+enum EOpenGLExtraTarget { EXTRA_Reflection, EXTRA_Albedo };
+
+// A colour texture with optional depth and stencil and extra colour textures, the world's reflection and albedo.
+// With multisampling the drawing goes to separate buffers that Resolve copies into the textures.
 struct FOpenGLFramebuffer
 {
 	GLuint	Framebuffer,
@@ -398,8 +400,8 @@ struct FOpenGLFramebuffer
 			MultisampleFramebuffer,
 			MultisampleColor,
 			MultisampleDepth,
-			ReflectionTexture,
-			MultisampleReflection;
+			ExtraTextures[2],	// Indexed by EOpenGLExtraTarget.
+			MultisampleExtra[2];
 	INT		Width,
 			Height,
 			Samples;
@@ -420,7 +422,8 @@ class UOpenGLRenderDevice : public URenderDevice
 			ContactShadows,
 			ScreenSpaceReflections,
 			DepthOfField,
-			VolumetricFog;
+			VolumetricFog,
+			GlobalIllumination;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
@@ -452,6 +455,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			VolumetricProgram,
 			ResolveProgram,
 			OverlayProgram,
+			IndirectProgram,
 			ShadowAtlas,		// Distance maps of static lights, as fractions of their radius.
 			SunShadow;			// Where the sun's shadow begins along its axis, world anchored and wrapping.
 	GLsync	FrameFence;
@@ -466,6 +470,8 @@ class UOpenGLRenderDevice : public URenderDevice
 						Focus,					// The lit world with its signed circle of confusion in alpha.
 						Scattering,				// Light scattered by the fog at half the world size.
 						ScatterHistory[2],		// Scattering averaged over frames, alternating.
+						Indirect,				// Light bounced off nearby surfaces at half the world size.
+						IndirectHistory[2],		// Indirect averaged over frames, alternating.
 						Overlay;				// Labels drawn within the world, laid over it after the post processing.
 	AActor*				ShadowLight;			// Only compared, never dereferenced, the actor may be gone.
 	DWORD				FrameCount;
@@ -488,7 +494,8 @@ class UOpenGLRenderDevice : public URenderDevice
 	FLOAT				SunTexels[FOG_SUN_SIZE * FOG_SUN_SIZE];
 	FMatrix				PrevWorldToCamera;
 	FPlane				PrevProj;
-	UBOOL				HistoryValid;
+	UBOOL				ScatterHistoryValid,
+						IndirectHistoryValid;
 
 	// Last state sent to GL, so Commit only changes what differs.
 	struct FGLState
@@ -549,12 +556,13 @@ class UOpenGLRenderDevice : public URenderDevice
 	UBOOL ProgramReady(FOpenGLProgram* Program,UBOOL Wait);
 	void ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth = 0);
 	void UseProgram(GLuint Program);
-	// Covers the framebuffer with Program. Units 0, 1, 3 and 4 sample linearly, unit 2 is the depth texture.
+	// Covers the framebuffer with Program. Unit 2 is the depth texture, the others sample linearly.
 	// Over lays premultiplied alpha over.
-	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Depth = 0,UBOOL Over = 0,GLuint Texture3 = 0,GLuint Texture4 = 0);
+	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Depth = 0,UBOOL Over = 0,GLuint Texture3 = 0,GLuint Texture4 = 0,GLuint Texture5 = 0,GLuint Texture6 = 0);
 	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog);
 	void FlushShadows();
-	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,UBOOL HasReflection = 0);
+	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,INT Extra = 0);
+	GLuint Accumulate(FOpenGLFramebuffer& Input,FOpenGLFramebuffer History[2],UBOOL& Valid,GLenum Format,const FPlane& Proj,const FMatrix& Reproject);
 
 private:
 	UBOOL InitContext();

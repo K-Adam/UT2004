@@ -73,6 +73,8 @@ static const ANSICHAR* OpenGLFragmentPrologue =
 	"layout(location = 0) out vec4 FragColor;\n"
 	// What the env map added and how reflective the surface is, the screen space reflections replace it.
 	"layout(location = 1) out vec4 Reflection;\n"
+	// The surface colour before lighting, which the global illumination tints the bounced light with.
+	"layout(location = 2) out vec4 Albedo;\n"
 	// FDynamicLight::SampleIntensity per pixel. Light types: 0 sunlight, 1 cylinder,
 	// 2 non incidence, 3 quadratic non incidence, 4 point, 5 spot.
 	"float SampleIntensity(int i, vec3 P, vec3 N)\n"
@@ -310,7 +312,8 @@ public:
 	UBOOL								EnvSampled;
 	INT									ReflE,
 										ReflMask,
-										Lit;		// The dynamic and static lighting, once applied.
+										Lit,		// The dynamic and static lighting, once applied.
+										Light;		// All lighting multiplied into the colour.
 	UBOOL								Beam;
 	UBOOL								Cube[OGL_MAX_TEXTURES];
 	FString*							ErrorString;
@@ -322,7 +325,7 @@ public:
 
 	FOpenGLCompiler(FOpenGLRenderInterface* InRI,FOpenGLMaterialState& InState,TArray<BYTE>& InKey,FString* InCode,FString* InErrorString,UMaterial** InErrorMaterial)
 	:	RI(InRI), S(InRI->CurrentState), State(InState), Key(InKey), Code(InCode), NumTemps(0)
-	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE), Beam(0)
+	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE), Light(INDEX_NONE), Beam(0)
 	,	ErrorString(InErrorString), ErrorMaterial(InErrorMaterial), FogMode(FOG_Normal)
 	{
 		Time = RI->Viewport->Actor ? RI->Viewport->Actor->Level->TimeSeconds : 0.f;
@@ -593,7 +596,9 @@ public:
 		{
 			Lit = NewTemp();
 			Emit(TEXT("\tvec4 r%i = Lighting();\n"),Lit);
-			Emit(TEXT("\tr%i = vec4(clamp(r%i.rgb * r%i.rgb * (1.0 + Options.z), 0.0, 1.0), r%i.a * r%i.a);\n"),C,C,Lit,C,Lit);
+			Light = NewTemp();
+			Emit(TEXT("\tvec3 r%i = r%i.rgb * (1.0 + Options.z);\n"),Light,Lit);
+			Emit(TEXT("\tr%i = vec4(clamp(r%i.rgb * r%i, 0.0, 1.0), r%i.a * r%i.a);\n"),C,C,Light,C,Lit);
 		}
 		if( Lightmap )
 		{
@@ -603,6 +608,12 @@ public:
 			if( LM == INDEX_NONE )
 				return INDEX_NONE;
 			Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb * r%i.rgb * (1.0 + Options.z), 0.0, 1.0);\n"),C,C,LM);
+			if( Light == INDEX_NONE )
+			{
+				Light = NewTemp();
+				Emit(TEXT("\tvec3 r%i = vec3(1.0);\n"),Light);
+			}
+			Emit(TEXT("\tr%i *= r%i.rgb * (1.0 + Options.z);\n"),Light,LM);
 		}
 		return C;
 	}
@@ -705,6 +716,16 @@ public:
 			Emit(TEXT("\tReflection = vec4(FragColor.rgb, dot(FragColor.rgb, vec3(0.299, 0.587, 0.114)));\n"));
 		else
 			Emit(TEXT("\tReflection = vec4(0.0);\n"));
+		// Dividing out the lighting in float keeps the albedo exact in the dark, where the bounce matters
+		// most, and keeps detail textures and tints. Lit layers blended over each other blend it alike.
+		UBOOL Layered = (State.SrcBlend == GL_SRC_ALPHA && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA) || (State.SrcBlend == GL_ONE && State.DstBlend == GL_ONE);
+		K(Opaque | Scales << 1 | Layered << 2);
+		if( Light != INDEX_NONE && (Opaque || Layered) )
+			Emit(TEXT("\tAlbedo = vec4(ApplyFog(min(r%i.rgb / max(r%i, vec3(0.004)), 1.0), vec3(0.0)), r%i.a);\n"),C,Light,C);
+		else if( Scales )
+			Emit(TEXT("\tAlbedo = FragColor;\n"));
+		else
+			Emit(TEXT("\tAlbedo = vec4(0.0);\n"));
 	}
 
 	UBOOL Shader(UShader* Shader,FOpenGLModifierInfo Mod)
@@ -870,6 +891,7 @@ public:
 			Emit(TEXT("\tReflection = vec4(ApplyFog(r%i.rgb * r%i, vec3(0.0)), FragColor.a * ApplyFog(vec3(1.0), vec3(0.0)).x);\n"),Spec,SpecMask);
 		else
 			Emit(TEXT("\tReflection = vec4(0.0);\n"));
+		Emit(TEXT("\tAlbedo = vec4(0.0);\n"));
 		return 1;
 	}
 
@@ -1029,7 +1051,11 @@ public:
 			if( C == INDEX_NONE || W == INDEX_NONE )
 				return 0;
 			if( Lit )
-				Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb * Lighting().rgb * 2.0, 0.0, 1.0);\n"),C,C);
+			{
+				Light = NewTemp();
+				Emit(TEXT("\tvec3 r%i = Lighting().rgb * 2.0;\n"),Light);
+				Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb * r%i, 0.0, 1.0);\n"),C,C,Light);
+			}
 			K(Bitmap->IsTransparent());
 			if( Bitmap->IsTransparent() )
 				Emit(TEXT("\tr%i.a *= r%i.a;\n"),C,W);
@@ -1046,7 +1072,7 @@ public:
 		}
 		INT C = NewTemp();
 		Emit(TEXT("\tvec4 r%i = vec4(0.0, 0.0, 0.0, 1.0);\n"),C);
-		INT L = NewTemp();
+		INT L = Light = NewTemp();
 		Emit(TEXT("\tvec3 r%i = Lighting().rgb * 2.0;\n"),L);
 
 		INT Combined = INDEX_NONE;

@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2], ReflectionsText[2];
 
@@ -27,6 +27,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Options.ManageComponent(ch_ContactShadows);
 	sb_Options.ManageComponent(ch_DepthOfField);
 	sb_Options.ManageComponent(ch_VolumetricFog);
+	sb_Options.ManageComponent(ch_GlobalIllumination);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -65,6 +66,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_VolumetricFog:
 		ch_VolumetricFog.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice VolumetricFog")), true);
+		break;
+	case ch_GlobalIllumination:
+		ch_GlobalIllumination.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice GlobalIllumination")), true);
 		break;
 	}
 }
@@ -109,6 +113,9 @@ function InternalOnChange(GUIComponent Sender)
 	case ch_VolumetricFog:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice VolumetricFog" @ ch_VolumetricFog.IsChecked());
 		break;
+	case ch_GlobalIllumination:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice GlobalIllumination" @ ch_GlobalIllumination.IsChecked());
+		break;
 	}
 }
 
@@ -144,6 +151,7 @@ function ResetClicked()
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ScreenSpaceReflections True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice DepthOfField True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice VolumetricFog True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice GlobalIllumination True");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 
@@ -172,7 +180,7 @@ defaultproperties
 
 	Begin Object class=GUISectionBackground Name=sbOptions
 		WinWidth=0.502751
-		WinHeight=0.400000
+		WinHeight=0.460000
 		WinLeft=0.495826
 		WinTop=0.012761
 		Caption="Options"
@@ -230,7 +238,7 @@ defaultproperties
 		bHeightFromComponent=false
 		OnLoadINI=InternalOnLoadINI
 		OnChange=InternalOnChange
-		TabOrder=9
+		TabOrder=10
 	End Object
 	co_Reflections=ReflectionsCombo
 
@@ -311,6 +319,19 @@ defaultproperties
 		TabOrder=8
 	End Object
 	ch_VolumetricFog=VolumetricFogCheck
+
+	Begin Object class=moCheckBox Name=GlobalIlluminationCheck
+		Caption="Global Illumination"
+		Hint="Light bounces off lit surfaces onto those nearby, tinted by their colour."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=9
+	End Object
+	ch_GlobalIllumination=GlobalIlluminationCheck
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"
