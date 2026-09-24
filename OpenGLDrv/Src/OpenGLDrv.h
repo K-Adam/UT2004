@@ -181,7 +181,8 @@ struct FOpenGLMaterialState
 	UBOOL			ZWrite,
 					ZTest,
 					TwoSided,
-					Beam;			// A fake light shaft, drawn after the rest of the level.
+					Beam,			// A fake light shaft, drawn after the rest of the level.
+					DepthPass;		// Blended without depth, drawn again into depth where mostly opaque, so the post process fog sees it.
 
 	void Reset();
 };

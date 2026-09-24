@@ -1220,15 +1220,18 @@ public:
 		if( S->LightingOnly )
 			return LightingOnly();
 		Beam = IsLightBeam(Material);
-		if( (Shader = CheckMaterial<UShader,MT_Shader>(Time,Material,&Mod)) != NULL )
-			return this->Shader(Shader,Mod);
-		UMaterial* Base = CheckMaterial<UCombiner,MT_Combiner>(Time,Material,&Mod);
-		if( !Base )
-			Base = CheckMaterial<UConstantMaterial,MT_ConstantMaterial>(Time,Material,&Mod);
-		if( !Base )
-			Base = CheckMaterial<UBitmapMaterial,MT_BitmapMaterial>(Time,Material,&Mod);
-		if( Base )
-			return Simple(Base,Mod);
+		UMaterial* Base = NULL;
+		if( (Shader = CheckMaterial<UShader,MT_Shader>(Time,Material,&Mod)) != NULL
+		||	(Base = CheckMaterial<UCombiner,MT_Combiner>(Time,Material,&Mod)) != NULL
+		||	(Base = CheckMaterial<UConstantMaterial,MT_ConstantMaterial>(Time,Material,&Mod)) != NULL
+		||	(Base = CheckMaterial<UBitmapMaterial,MT_BitmapMaterial>(Time,Material,&Mod)) != NULL )
+		{
+			if( !(Shader ? this->Shader(Shader,Mod) : Simple(Base,Mod)) )
+				return 0;
+			// Leaves and other cutouts, not particles, projectors or terrain layers.
+			State.DepthPass = !State.Beam && State.AlphaTest && !State.ZWrite && State.ZTest && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA;
+			return 1;
+		}
 		if( (Terrain = CheckMaterial<UTerrainMaterial,MT_TerrainMaterial>(Time,Material,&Mod)) != NULL )
 			return this->Terrain(Terrain);
 		if( (Particle = CheckMaterial<UParticleMaterial,MT_ParticleMaterial>(Time,Material,&Mod)) != NULL )
@@ -1268,6 +1271,7 @@ void FOpenGLMaterialState::Reset()
 	ZTest				= 1;
 	TwoSided			= 0;
 	Beam				= 0;
+	DepthPass			= 0;
 }
 
 static TArray<ANSICHAR> ToAnsi(const FString& Source)

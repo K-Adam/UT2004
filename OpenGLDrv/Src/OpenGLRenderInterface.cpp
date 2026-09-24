@@ -755,23 +755,39 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 		RenDev->GL.BlackDiffuse = BlackDiffuse;
 	}
 
-	if( Indexed )
+	if( Indexed && RenDev->GL.ElementBuffer != CurrentState->IndexBuffer )
 	{
-		if( RenDev->GL.ElementBuffer != CurrentState->IndexBuffer )
-		{
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,CurrentState->IndexBuffer);
-			RenDev->GL.ElementBuffer = CurrentState->IndexBuffer;
-		}
-		GLenum	Type = CurrentState->IndexSize == 4 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
-		// Not glDrawRangeElements, ANGLE rejects draws whose indices leave the range and D3D treats it as a hint.
-		void*	Indices = (void*)(PTRINT)(FirstIndex * CurrentState->IndexSize);
-		if( DrawBase )
-			RenDev->DrawElementsBaseVertex(Mode,Count,Type,Indices,DrawBase);
-		else
-			glDrawElements(Mode,Count,Type,Indices);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,CurrentState->IndexBuffer);
+		RenDev->GL.ElementBuffer = CurrentState->IndexBuffer;
 	}
-	else
-		glDrawArrays(Mode,FirstIndex,Count);
+	FOpenGLMaterialState& M = CurrentState->Material;
+	// Only the perspective world's depth feeds the post process, flat labels and the HUD go to the overlay.
+	UBOOL DepthPass = M.DepthPass && InWorld && !S->RenderTarget && S->CameraToScreen.M[2][3] == 1.f;
+	for( INT Pass=0; Pass<(DepthPass ? 2 : 1); Pass++ )
+	{
+		if( Pass == 1 )
+		{
+			// Only the mostly opaque part, the soft edges would hide what draws behind them later.
+			Program->SentAlphaRef = Max(M.AlphaRef,0.5f);
+			glUniform1f(Program->AlphaRef,Program->SentAlphaRef);
+			glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE);
+			glDepthMask(RenDev->GL.DepthMask = GL_TRUE);
+		}
+		if( Indexed )
+		{
+			GLenum	Type = CurrentState->IndexSize == 4 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+			// Not glDrawRangeElements, ANGLE rejects draws whose indices leave the range and D3D treats it as a hint.
+			void*	Indices = (void*)(PTRINT)(FirstIndex * CurrentState->IndexSize);
+			if( DrawBase )
+				RenDev->DrawElementsBaseVertex(Mode,Count,Type,Indices,DrawBase);
+			else
+				glDrawElements(Mode,Count,Type,Indices);
+		}
+		else
+			glDrawArrays(Mode,FirstIndex,Count);
+	}
+	if( DepthPass )
+		glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
 
 	unguard;
 }
