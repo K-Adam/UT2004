@@ -4,7 +4,9 @@ import android.content.Context;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Display;
 import android.view.KeyEvent;
+import android.view.WindowManager;
 import android.view.WindowInsets;
 import android.window.OnBackInvokedDispatcher;
 
@@ -34,6 +36,16 @@ public class UT2004Activity extends SDLActivity {
             lanLock = wifi.createMulticastLock("UT2004 LAN");
             lanLock.acquire();
         }
+        // Android keeps apps at 60 Hz unless they ask, and VSync caps the game at the panel's rate.
+        Display display = getWindowManager().getDefaultDisplay();
+        Display.Mode current = display.getMode(), best = current;
+        for (Display.Mode mode : display.getSupportedModes())
+            if (mode.getPhysicalWidth() == current.getPhysicalWidth() && mode.getPhysicalHeight() == current.getPhysicalHeight()
+                && mode.getRefreshRate() > best.getRefreshRate())
+                best = mode;
+        WindowManager.LayoutParams params = getWindow().getAttributes();
+        params.preferredDisplayModeId = best.getModeId();
+        getWindow().setAttributes(params);
         // Back and the back gesture work like Escape and open or close the menus. From Android 13 they
         // come through this callback, older versions send KEYCODE_BACK, which SDL maps the same way.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

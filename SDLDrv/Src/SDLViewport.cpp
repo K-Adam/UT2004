@@ -279,6 +279,35 @@ static UBOOL EditBoxFocused( UObject* GUIController )
 }
 
 //
+// The seat count of the vehicle the player is in, 0 on foot, and in Seat the one the player holds.
+// Onslaught isn't linked either. Clients fill WeaponPawns in replication order, so a passenger's seat
+// comes from the bone its gun sits on, which follows the server's PassengerWeapons numbering.
+//
+INT USDLViewport::VehicleSeats( INT& Seat )
+{
+	Seat = 1;
+	APawn* Pawn = Actor ? Actor->Pawn : NULL;
+	if( !Pawn || !Pawn->IsA(AVehicle::StaticClass()) )
+		return 0;
+	UObjectProperty* BaseProp = FindField<UObjectProperty>( Pawn->GetClass(), TEXT("VehicleBase") );
+	UObject* Base = BaseProp ? *(UObject**)((BYTE*)Pawn + BaseProp->Offset) : NULL;
+	UObject* Vehicle = Base ? Base : Pawn;
+	UArrayProperty* Seats = FindField<UArrayProperty>( Vehicle->GetClass(), TEXT("PassengerWeapons") );
+	UStructProperty* Inner = Seats ? Cast<UStructProperty>( Seats->Inner ) : NULL;
+	if( !Inner )
+		return 1;
+	FArray* Array = (FArray*)((BYTE*)Vehicle + Seats->Offset);
+	UObjectProperty* GunProp = Base ? FindField<UObjectProperty>( Pawn->GetClass(), TEXT("Gun") ) : NULL;
+	AActor* Gun = GunProp ? Cast<AActor>( *(UObject**)((BYTE*)Pawn + GunProp->Offset) ) : NULL;
+	UNameProperty* Bone = FindField<UNameProperty>( Inner->Struct, TEXT("WeaponBone") );
+	if( Gun && Bone )
+		for( INT i=0; i<Array->Num(); i++ )
+			if( *(FName*)((BYTE*)Array->GetData() + i * Inner->ElementSize + Bone->Offset) == Gun->AttachmentBone )
+				Seat = i + 2;
+	return Array->Num() + 1;
+}
+
+//
 // Phone and tablet screens are dense, the fonts grow towards their size on a 2000 point wide screen.
 //
 FLOAT USDLViewport::GUIFontScale()
@@ -355,6 +384,24 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	else if( ParseCommand(&Cmd,TEXT("TOGGLEFULLSCREEN")) )
 	{
 		ToggleFullscreen();
+		return 1;
+	}
+	else if( ParseCommand(&Cmd,TEXT("NEXTSEAT")) )
+	{
+		// Like the number keys in a vehicle. A taken seat refuses, so the next press moves on past it.
+		INT Seat, Seats = VehicleSeats( Seat );
+		if( Seats > 1 )
+		{
+			if( Actor->Pawn != LastSeatPawn )
+			{
+				LastSeatPawn = Actor->Pawn;
+				LastSeat = Seat;
+			}
+			LastSeat = LastSeat % Seats + 1;
+			if( LastSeat == Seat )
+				LastSeat = LastSeat % Seats + 1;
+			Exec( *FString::Printf( TEXT("SwitchWeapon %d"), LastSeat ), Ar );
+		}
 		return 1;
 	}
 	else if( ParseCommand(&Cmd,TEXT("GETCURRENTRES")) )
@@ -784,6 +831,21 @@ void USDLViewport::RenderOverlay()
 		Canvas->CurY = Y - YL * 0.5f;
 		Canvas->ClippedPrint( Canvas->SmallFont, 1.f, 1.f, 0, Captions[i - VJ_Fire] );
 	}
+
+	// Left thumb reach above Use, in vehicles with more than one seat.
+	INT Seat;
+	if( VehicleSeats( Seat ) > 1 )
+	{
+		FLOAT X, Y, R, XL, YL;
+		VJLayout( VJ_Use, X, Y, R );
+		Y -= R * 2.6f;
+		DrawDisc( CU, WhiteBlend, X, Y, R, FColor(170,90,220,110) );
+		Canvas->ClippedStrLen( Canvas->SmallFont, 1.f, 1.f, XL, YL, TEXT("SEAT") );
+		Canvas->CurX = X - XL * 0.5f;
+		Canvas->CurY = Y - YL * 0.5f;
+		Canvas->ClippedPrint( Canvas->SmallFont, 1.f, 1.f, 0, TEXT("SEAT") );
+		AddTouchTarget( X - R, Y - R, X + R, Y + R, TEXT("NEXTSEAT") );
+	}
 	CU->Flush();
 	// The HUD expects the canvas as Update left it.
 	Canvas->eventReset();
@@ -874,6 +936,9 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 	}
 
 	UBOOL InMenu = GUIController && GUIController->bActive;
+	// A vehicle outlives its driver, so NEXTSEAT starts over once the player has left it.
+	if( !Actor || Actor->Pawn != LastSeatPawn )
+		LastSeatPawn = NULL;
     if( USDLClient::Gamepad )
     {
         // Guide and Misc1 belong to the system overlay and capture, so the triggers take their keys.
@@ -912,7 +977,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
             if( Pressed && !(PadHeld & Bit) )
             {
                 PadHeld |= Bit;
-                if( Send )
+                // Y's best weapon has nothing to pick in a vehicle, there it changes seats.
+                INT Seat;
+                if( Send && Keys[i] == IK_Joy4 && !InMenu && VehicleSeats( Seat ) > 1 )
+                    Exec( TEXT("NEXTSEAT"), *GLog );
+                else if( Send )
                     CauseInputEvent( Keys[i], IST_Press );
             }
             else if( !Pressed && (PadHeld & Bit) )
@@ -1075,6 +1144,9 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 						break;
 					}
 				}
+				// Touch and pen drive the on-screen controls as fingers. VJWanted, as SDL sends this before the finger that brings them back.
+				if( !InMenu && Client->VJWanted && (Event.button.which == SDL_TOUCH_MOUSEID || Event.button.which == SDL_PEN_MOUSEID) )
+					break;
 				if( Event.button.button < ARRAY_COUNT(MouseButtons) && MouseButtons[Event.button.button] != IK_None )
 					CauseInputEvent( MouseButtons[Event.button.button], Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? IST_Press : IST_Release );
 				break;
@@ -1104,6 +1176,8 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 						SwitchVirtualJoystick( 0 );
 					break;
 				}
+				if( !InMenu && Client->VJWanted && (Event.motion.which == SDL_TOUCH_MOUSEID || Event.motion.which == SDL_PEN_MOUSEID) )
+					break;
 				if ((!MouseIsGrabbed) && (Client->IgnoreUngrabbedMouse))
 					break;
 

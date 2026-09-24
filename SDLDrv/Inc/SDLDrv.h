@@ -144,6 +144,9 @@ class USDLViewport : public UViewport
 	SDL_FingerID		VJFinger[VJ_Count];
 	UBOOL				VJShown;
 	TArray<FTouchTarget> TouchTargets;
+	// The seat NEXTSEAT last asked for, while the player keeps this pawn.
+	APawn*				LastSeatPawn;
+	INT					LastSeat;
 
 	UBOOL				WantGrab;
 	FLOAT				WheelRemainder;
@@ -195,6 +198,7 @@ class USDLViewport : public UViewport
 	void VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y );
 	void VJRelease();
 	void SwitchVirtualJoystick( UBOOL On );
+	INT VehicleSeats( INT& Seat );
 
 	virtual UBOOL TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY, UBOOL Fullscreen );
     void SetTitleBar();

@@ -495,7 +495,7 @@ FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,IN
 	CreateFramebuffer(Scene,Viewport->SizeX,Viewport->SizeY,Samples);
 	INT Scale = Clamp(ResolutionScale,50,100);
 	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples,GL_RGBA8,1,2);
-	GLenum Buffers[] = { GL_COLOR_ATTACHMENT0, ScreenSpaceReflections ? GL_COLOR_ATTACHMENT1 : GL_NONE, GlobalIllumination ? GL_COLOR_ATTACHMENT2 : GL_NONE };
+	GLenum Buffers[] = { GL_COLOR_ATTACHMENT0, ScreenSpaceReflections ? GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE, GlobalIllumination ? GL_COLOR_ATTACHMENT2 : (GLenum)GL_NONE };
 	glBindFramebuffer(GL_FRAMEBUFFER,World.DrawFramebuffer());
 	glDrawBuffers(ARRAY_COUNT(Buffers),Buffers);
 	GL.Framebuffer = World.DrawFramebuffer();

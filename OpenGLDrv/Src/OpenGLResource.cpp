@@ -295,6 +295,7 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 		Offset = 0;
 	}
 	Used = Offset + Bytes;
+#ifdef _WIN32
 	// Not mapped: ANGLE maps into a staging copy and then copies the whole buffer back before
 	// every draw that reads it. Uploading with glBufferSubData keeps its system memory copy current.
 	LockedOffset	= Offset;
@@ -302,13 +303,24 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 	if( Scratch.Num() < Bytes )
 		Scratch.Add(Bytes - Scratch.Num());
 	return Bytes > 0 ? &Scratch(0) : NULL;
+#else
+	// Unsynchronized, nothing has drawn from this range since the store was orphaned.
+	// Native drivers, phone ones above all, may copy or wait on glBufferSubData into a buffer the GPU still reads.
+	BYTE* Result = Bytes > 0 ? (BYTE*)glMapBufferRange(Target,Offset,Bytes,GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_UNSYNCHRONIZED_BIT) : NULL;
+	LockedBytes = Result ? Bytes : 0;
+	return Result;
+#endif
 }
 
 void FOpenGLDynamicBuffer::Unlock()
 {
 	// Lock left the buffer bound.
 	if( LockedBytes > 0 )
+#ifdef _WIN32
 		glBufferSubData(Target,LockedOffset,LockedBytes,&Scratch(0));
+#else
+		glUnmapBuffer(Target);
+#endif
 	LockedBytes = 0;
 }
 
