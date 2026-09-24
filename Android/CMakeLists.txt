@@ -1,5 +1,5 @@
 # Packs libmain.so, its shared libraries and the game data into build/android-arm64/UT2004.apk.
-set(UT_ANDROID_ASSETS "D:/Projects/ut2004-files" CACHE PATH "Folder with the Maps, Textures and other content folders the APK ships")
+set(UT_ANDROID_ASSETS "${CMAKE_SOURCE_DIR}/assets/src" CACHE PATH "Folder with the Maps, Textures and other content folders the APK ships")
 find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
 
 set(UT_JNILIBS ${CMAKE_BINARY_DIR}/jniLibs/${ANDROID_ABI})

@@ -1,3 +1,6 @@
 [submodule "metoolkit-karma"]
 	path = metoolkit-karma
 	url = https://github.com/K-Adam/metoolkit-karma
+[submodule "assets"]
+	path = assets
+	url = https://github.com/K-Adam/UT2004-assets.git
