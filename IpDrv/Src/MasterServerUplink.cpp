@@ -8,6 +8,14 @@
 #include "UnIpDrv.h"
 #include "UnTcpNetDriver.h"
 
+// Advertises the WebRTC port and fingerprint as a server detail. Script rebuilds ServerInfo on every refresh, so each sender adds it again.
+static void AddWebRtcDetails( AActor* Actor, TArray<FKeyValuePair>& ServerInfo )
+{
+	UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );
+	if( NetDriver && NetDriver->WebRtcDetails.Len() )
+		SetServerDetail( ServerInfo, TEXT("WebRTC"), NetDriver->WebRtcDetails );
+}
+
 /*-----------------------------------------------------------------------------
 	FNATHeartbeatLink
 -----------------------------------------------------------------------------*/
@@ -644,6 +652,7 @@ public:
 
 				unguard;
 
+				AddWebRtcDetails( Actor, Actor->ServerState.ServerInfo );
 				*ArSend << Command << Clients << Actor->ServerState;
 				ArSend->Flush();
 			}
@@ -839,6 +848,8 @@ void FServerQueryInterface::SendPing( FArchive& ArSend )
 	FServerResponseLine PingResponse = Uplink->Actor->ServerState;
 	PingResponse.PlayerInfo.Empty();
 	PingResponse.ServerInfo.Empty();
+	// Browsers learn web support and the join details from the ping, rules only come when a row is clicked
+	AddWebRtcDetails( Uplink->Actor, PingResponse.ServerInfo );
 	ArSend << PingResponse;
 	ArSend.Flush();
 }
@@ -848,6 +859,7 @@ void FServerQueryInterface::SendRules( FArchive& ArSend )
 	BYTE Command = QI_Rules;
 
 	TArray<FKeyValuePair>& ServerInfo = Uplink->Actor->ServerState.ServerInfo;
+	AddWebRtcDetails( Uplink->Actor, ServerInfo );
 	ArSend << Command;
 	for( INT i=0;i<ServerInfo.Num();i++ )
 	{

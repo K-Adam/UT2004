@@ -9,7 +9,12 @@
     { "name": "speex", "platform": "windows | android" },
     { "name": "speexdsp", "platform": "windows | android" },
     { "name": "liblzma", "platform": "android" },
-    { "name": "angle", "platform": "windows" }
+    { "name": "angle", "platform": "windows" },
+    { "name": "libdatachannel", "default-features": false, "platform": "windows" }
+  ],
+  "overrides": [
+    { "name": "libdatachannel", "version": "0.24.6" },
+    { "name": "libjuice", "version": "1.7.4" }
   ],
   "builtin-baseline": "300239058e33420acd153135b3f6e6b187828992"
 }

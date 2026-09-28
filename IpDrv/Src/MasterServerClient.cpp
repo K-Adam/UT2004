@@ -197,7 +197,13 @@ public:
 						NewState.Flags      = CurrentState->Flags;
 						NewState.SkillLevel = CurrentState->SkillLevel;
 						NewState.PlayerInfo = CurrentState->PlayerInfo;
+						// Servers put only their WebRTC details in the ping, so a restart replaces or drops the old ones
+						FString WebRtc;
+						for( INT pi=0; pi<NewState.ServerInfo.Num(); pi++ )
+							if( NewState.ServerInfo(pi).Key == TEXT("WebRTC") )
+								WebRtc = NewState.ServerInfo(pi).Value;
 						NewState.ServerInfo = CurrentState->ServerInfo;
+						SetServerDetail( NewState.ServerInfo, TEXT("WebRTC"), WebRtc );
 						Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, NewState );
 					}
 					else

@@ -1,0 +1,552 @@
+/*=============================================================================
+	WebRtc.cpp: WebRTC data channel peers for UTcpNetDriver.
+
+	Signaling-free like libp2p's WebRTC Direct (v1). The server advertises its
+	WebRTC port and certificate fingerprint. A client picks one random string as
+	its ICE ufrag and password, puts it in its own offer and writes the server's
+	answer itself. The server learns the string from the first STUN request on
+	its mux port and builds the matching description pair.
+=============================================================================*/
+
+#ifdef WITH_WEBRTC
+// The standard and libdatachannel headers go before the engine's, whose macros (check, clock, min, max) break them.
+// The engine builds with /Zp4, libdatachannel with the default packing its structs need here too.
+#define NOMINMAX
+#pragma pack(push, 8)
+#include <rtc/rtc.hpp>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <random>
+#include <string>
+#include <vector>
+#pragma pack(pop)
+#endif
+
+#include "UnIpDrv.h"
+#include "UnTcpNetDriver.h"
+
+#ifdef WITH_WEBRTC
+
+// IP, UDP, DTLS and SCTP headers per data channel message
+#define WEBRTC_PACKET_OVERHEAD 90
+#define WEBRTC_MAX_PACKET 512
+#define WEBRTC_MAX_PENDING 64
+#define WEBRTC_MAX_INBOX 256
+#define WEBRTC_PENDING_TIMEOUT 15.0
+
+// The mutexes inside need their natural alignment, which /Zp4 breaks on x64
+#pragma pack(push, 8)
+struct FWebRtcPeer
+{
+	std::shared_ptr<rtc::PeerConnection> Pc;
+	std::shared_ptr<rtc::DataChannel> Dc;
+	std::string Ufrag;
+	sockaddr_in Addr;
+	class UWebRtcConnection* Connection = nullptr;
+	DOUBLE CreatedTime = 0;
+
+	// Filled on libdatachannel threads
+	std::mutex Lock;
+	std::deque<rtc::binary> Inbox;
+	bool Closed = false;
+};
+
+struct FWebRtcHost
+{
+	std::unique_ptr<rtc::IceUdpMuxListener> Listener;
+	std::optional<std::string> BindAddress;
+	std::string CertPem, KeyPem;
+	uint16_t Port = 0;
+	std::vector<std::shared_ptr<FWebRtcPeer>> Peers;
+
+	std::mutex Lock;
+	std::vector<rtc::IceUdpMuxRequest> Requests;
+};
+#pragma pack(pop)
+
+class UWebRtcConnection : public UTcpipConnection
+{
+	DECLARE_CLASS(UWebRtcConnection,UTcpipConnection,CLASS_Config|CLASS_Transient,IpDrv)
+	NO_DEFAULT_CONSTRUCTOR(UWebRtcConnection)
+
+	FWebRtcPeer* Peer;
+
+	UWebRtcConnection( UNetDriver* InDriver, FWebRtcPeer* InPeer, EConnectionState InState, const FURL& InURL )
+	:	UTcpipConnection( INVALID_SOCKET, InDriver, InPeer->Addr, InState, 0, InURL )
+	,	Peer( InPeer )
+	{
+		MaxPacket = WEBRTC_MAX_PACKET;
+		PacketOverhead = WEBRTC_PACKET_OVERHEAD;
+		Peer->Connection = this;
+	}
+
+	void LowLevelSend( void* Data, INT Count );
+	void Destroy();
+};
+IMPLEMENT_CLASS(UWebRtcConnection);
+
+/*-----------------------------------------------------------------------------
+	Helpers.
+-----------------------------------------------------------------------------*/
+
+static const char* WebRtcSdpEnd = "a=sctp-port:5000\r\na=max-message-size:16384\r\n";
+
+static std::string Candidate( const std::string& Ip, INT Port )
+{
+	return "a=candidate:1467250027 1 UDP 1467250027 " + Ip + " " + std::to_string(Port) + " typ host\r\na=end-of-candidates\r\n";
+}
+
+// v1 sets the ICE password to the ufrag, so the ufrag also has to satisfy the password rules (RFC 8839)
+static bool ValidUfrag( const std::string& Ufrag )
+{
+	if( Ufrag.size()<22 || Ufrag.size()>256 )
+		return false;
+	for( char C : Ufrag )
+		if( !isalnum((unsigned char)C) && C!='+' && C!='/' )
+			return false;
+	return true;
+}
+
+// The fingerprint goes into an SDP line, so anything but hex pairs and colons is refused
+static bool ValidFingerprint( const FString& Fp )
+{
+	if( Fp.Len()!=95 )
+		return false;
+	for( INT i=0; i<Fp.Len(); i++ )
+		if( i%3==2 ? (*Fp)[i]!=':' : !appStrchr(TEXT("0123456789ABCDEFabcdef"), (*Fp)[i]) )
+			return false;
+	return true;
+}
+
+static std::string ToStd( const FString& S )
+{
+	return std::string( TCHAR_TO_ANSI(*S) );
+}
+
+// One certificate per process, so the advertised fingerprint survives map changes
+static bool MakeCertificate( std::string& CertPem, std::string& KeyPem, std::string& Fingerprint )
+{
+	static std::string Cert, Key, Fp;
+	if( Fp.empty() )
+	{
+		EVP_PKEY* PKey = EVP_EC_gen("P-256");
+		X509* X = X509_new();
+		bool Ok = PKey && X;
+		if( Ok )
+		{
+			std::random_device Random;
+			ASN1_INTEGER_set( X509_get_serialNumber(X), Random() & 0x7fffffff );
+			X509_gmtime_adj( X509_getm_notBefore(X), -3600 );
+			X509_gmtime_adj( X509_getm_notAfter(X), 365L*24*3600 );
+			X509_set_pubkey( X, PKey );
+			X509_NAME* Name = X509_get_subject_name( X );
+			X509_NAME_add_entry_by_txt( Name, "CN", MBSTRING_ASC, (const unsigned char*)"ut2004", -1, -1, 0 );
+			X509_set_issuer_name( X, Name );
+			Ok = X509_sign( X, PKey, EVP_sha256() ) > 0;
+		}
+		BIO* CertBio = BIO_new( BIO_s_mem() );
+		BIO* KeyBio = BIO_new( BIO_s_mem() );
+		unsigned char Md[EVP_MAX_MD_SIZE];
+		unsigned int MdLen = 0;
+		Ok = Ok && PEM_write_bio_X509( CertBio, X ) && PEM_write_bio_PrivateKey( KeyBio, PKey, NULL, NULL, 0, NULL, NULL )
+			&& X509_digest( X, EVP_sha256(), Md, &MdLen );
+		if( Ok )
+		{
+			char* P;
+			long Len = BIO_get_mem_data( CertBio, &P );
+			Cert.assign( P, Len );
+			Len = BIO_get_mem_data( KeyBio, &P );
+			Key.assign( P, Len );
+			static const char Hex[] = "0123456789ABCDEF";
+			for( unsigned int i=0; i<MdLen; i++ )
+			{
+				if( i )
+					Fp += ':';
+				Fp += Hex[Md[i]>>4];
+				Fp += Hex[Md[i]&15];
+			}
+		}
+		BIO_free( CertBio );
+		BIO_free( KeyBio );
+		X509_free( X );
+		EVP_PKEY_free( PKey );
+		if( !Ok )
+			return false;
+	}
+	CertPem = Cert;
+	KeyPem = Key;
+	Fingerprint = Fp;
+	return true;
+}
+
+static void WireCallbacks( const std::shared_ptr<FWebRtcPeer>& Peer )
+{
+	std::weak_ptr<FWebRtcPeer> Weak = Peer;
+	auto MarkClosed = [Weak]()
+	{
+		if( auto P = Weak.lock() )
+		{
+			std::lock_guard<std::mutex> Guard( P->Lock );
+			P->Closed = true;
+		}
+	};
+	Peer->Dc->onMessage(
+		[Weak]( rtc::binary Data )
+		{
+			if( auto P = Weak.lock() )
+			{
+				std::lock_guard<std::mutex> Guard( P->Lock );
+				if( P->Inbox.size() < WEBRTC_MAX_INBOX )
+					P->Inbox.push_back( std::move(Data) );
+			}
+		},
+		[]( std::string ) {} );
+	Peer->Dc->onClosed( MarkClosed );
+	Peer->Pc->onStateChange( [MarkClosed]( rtc::PeerConnection::State State )
+	{
+		if( State==rtc::PeerConnection::State::Failed || State==rtc::PeerConnection::State::Closed )
+			MarkClosed();
+	});
+}
+
+static rtc::DataChannelInit UnreliableChannel()
+{
+	rtc::DataChannelInit Init;
+	Init.negotiated = true;
+	Init.id = 0;
+	Init.reliability.unordered = true;
+	Init.reliability.maxRetransmits = 0;
+	return Init;
+}
+
+static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
+{
+	try
+	{
+		Peer->Dc->resetCallbacks();
+		Peer->Pc->resetCallbacks();
+		Peer->Pc->close();
+	}
+	catch( const std::exception& E )
+	{
+		debugf( NAME_DevNet, TEXT("WebRTC close: %s"), *FString(E.what()) );
+	}
+}
+
+/*-----------------------------------------------------------------------------
+	UWebRtcConnection.
+-----------------------------------------------------------------------------*/
+
+void UWebRtcConnection::LowLevelSend( void* Data, INT Count )
+{
+	guard(UWebRtcConnection::LowLevelSend);
+	// Dropped while the channel opens, the engine resends what needs to arrive
+	if( Peer && Peer->Dc->isOpen() )
+	{
+		clock(Driver->SendCycles);
+		try
+		{
+			Peer->Dc->send( (const rtc::byte*)Data, Count );
+		}
+		catch( const std::exception& )
+		{
+		}
+		unclock(Driver->SendCycles);
+	}
+	unguard;
+}
+
+void UWebRtcConnection::Destroy()
+{
+	guard(UWebRtcConnection::Destroy);
+	// Super flushes the last packets through the peer, so the peer goes after it
+	FWebRtcPeer* Closing = Peer;
+	Super::Destroy();
+	FWebRtcHost* Host = ((UTcpNetDriver*)Driver)->WebRtc;
+	if( Host && Closing )
+	{
+		auto It = std::find_if( Host->Peers.begin(), Host->Peers.end(), [Closing]( const std::shared_ptr<FWebRtcPeer>& P ) { return P.get()==Closing; } );
+		if( It!=Host->Peers.end() )
+		{
+			ClosePeer( *It );
+			Host->Peers.erase( It );
+		}
+	}
+	unguard;
+}
+
+/*-----------------------------------------------------------------------------
+	UTcpNetDriver WebRTC side.
+-----------------------------------------------------------------------------*/
+
+void UTcpNetDriver::WebRtcListen()
+{
+	guard(UTcpNetDriver::WebRtcListen);
+	FWebRtcHost* Host = new FWebRtcHost;
+	std::string Fingerprint;
+	if( !MakeCertificate( Host->CertPem, Host->KeyPem, Fingerprint ) )
+	{
+		debugf( TEXT("WebRTC: certificate generation failed, UDP only") );
+		delete Host;
+		return;
+	}
+	Host->Port = ntohs(LocalAddr.sin_port) + 2;
+	if( LocalAddr.sin_addr.s_addr != INADDR_ANY )
+		Host->BindAddress = ToStd( IpString(LocalAddr.sin_addr) );
+	try
+	{
+		Host->Listener = std::make_unique<rtc::IceUdpMuxListener>( Host->Port, Host->BindAddress );
+	}
+	catch( const std::exception& E )
+	{
+		debugf( TEXT("WebRTC: listening on port %i failed (%s), UDP only"), Host->Port, *FString(E.what()) );
+		delete Host;
+		return;
+	}
+	// Runs on the mux thread, the game thread picks the requests up in WebRtcTick
+	Host->Listener->OnUnhandledStunRequest( [Host]( rtc::IceUdpMuxRequest Request )
+	{
+		if( Request.localUfrag==Request.remoteUfrag && ValidUfrag(Request.localUfrag) )
+		{
+			std::lock_guard<std::mutex> Guard( Host->Lock );
+			if( Host->Requests.size() < WEBRTC_MAX_PENDING )
+				Host->Requests.push_back( std::move(Request) );
+		}
+	});
+	WebRtc = Host;
+	WebRtcDetails = FString::Printf( TEXT("%i,%s"), Host->Port, *FString(Fingerprint.c_str()) );
+	debugf( TEXT("WebRTC on port %i, fingerprint %s"), Host->Port, *FString(Fingerprint.c_str()) );
+	unguard;
+}
+
+UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
+{
+	guard(UTcpNetDriver::WebRtcConnect);
+	// The server browser adds the details the server advertises, a typed address needs ?WebRTC=<port>,<fingerprint>
+	FString Details = ConnectURL.GetOption( TEXT("WebRTC="), TEXT("") );
+	FString PortText, Fingerprint;
+	if( !Details.Split( TEXT(","), &PortText, &Fingerprint ) || appAtoi(*PortText)<=0 || appAtoi(*PortText)>65535 || !ValidFingerprint(Fingerprint) )
+	{
+		Error = TEXT("This server has no WebRTC details. Join it from the server browser or add ?WebRTC=<port>,<fingerprint>");
+		debugf( TEXT("WebRTC: %s"), *Error );
+		return 0;
+	}
+	INT Port = appAtoi( *PortText );
+
+	sockaddr_in Addr;
+	appMemzero( &Addr, sizeof(Addr) );
+	Addr.sin_family = AF_INET;
+	Addr.sin_port = htons(Port);
+	Addr.sin_addr.s_addr = inet_addr( TCHAR_TO_ANSI(*ConnectURL.Host) );
+	if( Addr.sin_addr.s_addr == INADDR_NONE )
+	{
+		hostent* HostEnt = gethostbyname( TCHAR_TO_ANSI(*ConnectURL.Host) );
+		if( !HostEnt || HostEnt->h_addrtype!=AF_INET )
+		{
+			Error = FString::Printf( TEXT("Could not resolve %s"), *ConnectURL.Host );
+			return 0;
+		}
+		Addr.sin_addr = *(in_addr*)HostEnt->h_addr_list[0];
+	}
+	std::string Ip = ToStd( IpString(Addr.sin_addr) );
+
+	static const char Chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	std::random_device Random;
+	std::string Ufrag;
+	for( INT i=0; i<24; i++ )
+		Ufrag += Chars[Random() % (sizeof(Chars)-1)];
+
+	FWebRtcHost* Host = new FWebRtcHost;
+	auto Peer = std::make_shared<FWebRtcPeer>();
+	Peer->Addr = Addr;
+	Peer->Ufrag = Ufrag;
+	try
+	{
+		rtc::Configuration Config;
+		Config.disableAutoNegotiation = true;
+		Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
+		// The channel has to exist before the offer, or the offer has no application section
+		Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
+		WireCallbacks( Peer );
+		Peer->Pc->setLocalDescription( rtc::Description::Type::Offer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
+		std::string Answer =
+			"v=0\r\no=- 0 0 IN IP4 " + Ip + "\r\ns=-\r\nt=0 0\r\na=ice-lite\r\n"
+			"m=application " + std::to_string(Port) + " UDP/DTLS/SCTP webrtc-datachannel\r\n"
+			"c=IN IP4 " + Ip + "\r\na=mid:0\r\na=ice-options:ice2\r\n"
+			"a=ice-ufrag:" + Ufrag + "\r\na=ice-pwd:" + Ufrag + "\r\n"
+			"a=fingerprint:sha-256 " + ToStd(Fingerprint) + "\r\na=setup:passive\r\n"
+			+ WebRtcSdpEnd + Candidate( Ip, Port );
+		Peer->Pc->setRemoteDescription( rtc::Description( Answer, rtc::Description::Type::Answer ) );
+	}
+	catch( const std::exception& E )
+	{
+		Error = FString::Printf( TEXT("WebRTC connect failed: %s"), *FString(E.what()) );
+		debugf( TEXT("%s"), *Error );
+		if( Peer->Pc )
+			ClosePeer( Peer );
+		delete Host;
+		return 0;
+	}
+	Host->Peers.push_back( Peer );
+	WebRtc = Host;
+
+	ServerConnection = new UWebRtcConnection( this, Peer.get(), USOCK_Pending, ConnectURL );
+	debugf( NAME_DevNet, TEXT("Game client over WebRTC to %s:%i"), *IpString(Addr.sin_addr), Port );
+	ServerConnection->CreateChannel( CHTYPE_Control, 1, 0 );
+	return 1;
+	unguard;
+}
+
+void UTcpNetDriver::WebRtcTick()
+{
+	guard(UTcpNetDriver::WebRtcTick);
+	FWebRtcHost* Host = WebRtc;
+	if( !Host )
+		return;
+
+	std::vector<rtc::IceUdpMuxRequest> Requests;
+	{
+		std::lock_guard<std::mutex> Guard( Host->Lock );
+		Requests.swap( Host->Requests );
+	}
+	for( auto& Request : Requests )
+	{
+		sockaddr_in Addr;
+		appMemzero( &Addr, sizeof(Addr) );
+		Addr.sin_family = AF_INET;
+		Addr.sin_port = htons( Request.remotePort );
+		Addr.sin_addr.s_addr = inet_addr( Request.remoteAddress.c_str() );
+		if( Addr.sin_addr.s_addr==INADDR_NONE )
+			continue;
+
+		// The same limits as new UDP connections, each peer costs a DTLS handshake and SCTP state
+		INT Pending = 0, SameIP = 0;
+		bool Known = false;
+		for( auto& Peer : Host->Peers )
+		{
+			Known |= Peer->Ufrag==Request.localUfrag;
+			if( !Peer->Connection )
+			{
+				Pending++;
+				SameIP += IpAddressMatches( Peer->Addr, Addr );
+			}
+		}
+		for( INT i=0; i<ClientConnections.Num(); i++ )
+			if( IpAddressMatches( ((UTcpipConnection*)ClientConnections(i))->RemoteAddr, Addr ) && ((UTcpipConnection*)ClientConnections(i))->OpenedTime > GCurrentTime-60.0 )
+				SameIP++;
+		if( Known || Pending>=WEBRTC_MAX_PENDING || SameIP>=(MaxConnPerIPPerMinute ? MaxConnPerIPPerMinute : 5) )
+			continue;
+		// A peer made while the level switches would die with this driver, the client's ICE checks retry against the next one
+		if( Notify->NotifyAcceptingConnection()!=ACCEPTC_Accept )
+			continue;
+
+		const std::string& Ufrag = Request.localUfrag;
+		const std::string& Ip = Request.remoteAddress;
+		std::string Offer =
+			"v=0\r\no=- 0 0 IN IP4 " + Ip + "\r\ns=-\r\nc=IN IP4 " + Ip + "\r\nt=0 0\r\na=ice-options:ice2,trickle\r\n"
+			"m=application " + std::to_string(Request.remotePort) + " UDP/DTLS/SCTP webrtc-datachannel\r\n"
+			"a=mid:0\r\na=setup:active\r\na=ice-ufrag:" + Ufrag + "\r\na=ice-pwd:" + Ufrag + "\r\n"
+			// The client's certificate is unknown and not checked, any sha-256 value passes the parser
+			"a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\n"
+			+ WebRtcSdpEnd + Candidate( Ip, Request.remotePort );
+
+		auto Peer = std::make_shared<FWebRtcPeer>();
+		Peer->Addr = Addr;
+		Peer->Ufrag = Ufrag;
+		try
+		{
+			rtc::Configuration Config;
+			Config.enableIceUdpMux = true;
+			Config.bindAddress = Host->BindAddress;
+			Config.portRangeBegin = Config.portRangeEnd = Host->Port;
+			Config.disableAutoNegotiation = true;
+			Config.disableFingerprintVerification = true;
+			Config.certificatePemFile = Host->CertPem;
+			Config.keyPemFile = Host->KeyPem;
+			Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
+			Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
+			WireCallbacks( Peer );
+			Peer->Pc->setRemoteDescription( rtc::Description( Offer, rtc::Description::Type::Offer ) );
+			Peer->Pc->setLocalDescription( rtc::Description::Type::Answer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
+		}
+		catch( const std::exception& E )
+		{
+			debugf( NAME_DevNet, TEXT("WebRTC peer %s failed: %s"), *IpString(Addr.sin_addr,Request.remotePort), *FString(E.what()) );
+			if( Peer->Pc )
+				ClosePeer( Peer );
+			continue;
+		}
+		Peer->CreatedTime = GCurrentTime;
+		Host->Peers.push_back( Peer );
+	}
+
+	// Backwards, because closing removes peers
+	for( INT i=(INT)Host->Peers.size()-1; i>=0 && WebRtc; i-- )
+	{
+		std::shared_ptr<FWebRtcPeer> Peer = Host->Peers[i];
+		std::deque<rtc::binary> Inbox;
+		bool Closed;
+		{
+			std::lock_guard<std::mutex> Guard( Peer->Lock );
+			Inbox.swap( Peer->Inbox );
+			Closed = Peer->Closed;
+		}
+
+		// Accept on the first packet like the UDP path, ignored while the level changes so later packets retry
+		if( !Peer->Connection && !Inbox.empty() && !ServerConnection )
+		{
+			EAcceptConnection Accept = Notify->NotifyAcceptingConnection();
+			if( Accept==ACCEPTC_Accept )
+			{
+				UWebRtcConnection* Connection = new UWebRtcConnection( this, Peer.get(), USOCK_Open, FURL() );
+				Connection->URL.Host = IpString( Peer->Addr.sin_addr );
+				Notify->NotifyAcceptedConnection( Connection );
+				ClientConnections.AddItem( Connection );
+				debugf( TEXT("WebRTC connection from %s"), *Connection->LowLevelGetRemoteAddress() );
+			}
+			else if( Accept==ACCEPTC_Reject )
+				Closed = true;
+		}
+
+		if( Peer->Connection )
+		{
+			for( auto& Data : Inbox )
+				if( Data.size() <= WEBRTC_MAX_PACKET && Peer->Connection->State!=USOCK_Closed )
+					Peer->Connection->ReceivedRawPacket( Data.data(), (INT)Data.size() );
+			if( Closed )
+				Peer->Connection->State = USOCK_Closed;
+		}
+		// A peer that finishes the handshake but never sends would hold its slot, the UDP path has no such state
+		else if( Closed || GCurrentTime - Peer->CreatedTime > WEBRTC_PENDING_TIMEOUT )
+		{
+			ClosePeer( Peer );
+			Host->Peers.erase( Host->Peers.begin()+i );
+		}
+	}
+	unguard;
+}
+
+void UTcpNetDriver::WebRtcDestroy()
+{
+	guard(UTcpNetDriver::WebRtcDestroy);
+	FWebRtcHost* Host = WebRtc;
+	if( !Host )
+		return;
+	WebRtc = NULL;
+	if( Host->Listener )
+		Host->Listener->stop();
+	for( auto& Peer : Host->Peers )
+	{
+		if( Peer->Connection )
+			Peer->Connection->Peer = NULL;
+		ClosePeer( Peer );
+	}
+	delete Host;
+	unguard;
+}
+
+#endif

@@ -147,7 +147,8 @@ FURL::FURL( FURL* Base, const TCHAR* TextURL, ETravelType Type )
 			&&	appStricmp(*Base->Op(i),TEXT("POP" ))!=0
 			&&	appStricmp(*Base->Op(i),TEXT("PEER"))!=0
 			&&	appStricmp(*Base->Op(i),TEXT("LOAD"))!=0
-			&&	appStricmp(*Base->Op(i),TEXT("QUIET"))!=0 )
+			&&	appStricmp(*Base->Op(i),TEXT("QUIET"))!=0
+			&&	appStrnicmp(*Base->Op(i),TEXT("WebRTC="),7)!=0 )
 				new(Op)FString(Base->Op(i));
 		}
 	}
@@ -262,6 +263,14 @@ FURL::FURL( FURL* Base, const TCHAR* TextURL, ETravelType Type )
 				Map = TEXT("");
 			FarHost = 1;
 		}
+	}
+
+	// A server's WebRTC details only apply to that server, so they follow travel to the same host only
+	if( (Type==TRAVEL_Relative || Type==TRAVEL_Partial) && Host==Base->Host && Port==Base->Port && !GetOption(TEXT("WebRTC="), NULL) )
+	{
+		const TCHAR* WebRtc = Base->GetOption(TEXT("WebRTC="), NULL);
+		if( WebRtc )
+			new(Op)FString(FString(TEXT("WebRTC=")) + WebRtc);
 	}
 
 	// Copy existing options which aren't in current URL

@@ -44,6 +44,11 @@ extern "C" {HINSTANCE hInstance;}
 #endif
 extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
 
+#if __STATIC_LINK && defined(_MSC_VER)
+// Statically linked third-party libraries allocate in their static constructors, and the engine's global operator new routes
+// that through GMalloc. This file's globals initialize in the library phase before theirs, EarlyMalloc sets GMalloc there.
+#pragma init_seg(lib)
+#endif
 // Memory allocator.
 #ifdef _DEBUG
 	#include "FMallocDebug.h"
@@ -51,6 +56,10 @@ extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
 #else
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
+#endif
+
+#if __STATIC_LINK && defined(_MSC_VER)
+static struct FEarlyMalloc { FEarlyMalloc() { GMalloc = &Malloc; } } EarlyMalloc;
 #endif
 
 // Log file.

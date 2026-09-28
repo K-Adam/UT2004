@@ -307,6 +307,23 @@ inline in_addr getlocalbindaddr( FOutputDevice& Out )
 
 	unguard;
 }
+
+// Replaces a server detail, adds it when missing and removes it when Value is empty
+inline void SetServerDetail( TArray<FKeyValuePair>& Info, const TCHAR* Key, const FString& Value )
+{
+	INT i;
+	for( i=0; i<Info.Num() && Info(i).Key!=Key; i++ );
+	if( !Value.Len() )
+	{
+		if( i<Info.Num() )
+			Info.Remove( i );
+		return;
+	}
+	if( i==Info.Num() )
+		Info(Info.AddZeroed()).Key = Key;
+	Info(i).Value = Value;
+}
+
 /*-----------------------------------------------------------------------------
 	Public includes.
 -----------------------------------------------------------------------------*/

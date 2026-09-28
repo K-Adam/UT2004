@@ -156,6 +156,10 @@ UBOOL UTcpNetDriver::InitConnect( FNetworkNotify* InNotify, FURL& ConnectURL, FS
 		return 0;
 	if( !InitBase( 1, InNotify, ConnectURL, Error ) )
 		return 0;
+#ifdef WITH_WEBRTC
+	if( ParseParam(appCmdLine(), TEXT("webrtc-client-only")) )
+		return WebRtcConnect( ConnectURL, Error );
+#endif
 
 	// Connect to remote.
 	sockaddr_in TempAddr;
@@ -186,6 +190,9 @@ UBOOL UTcpNetDriver::InitListen( FNetworkNotify* InNotify, FURL& LocalURL, FStri
 	LocalURL.Host = IpString(LocalAddr.sin_addr);
 	LocalURL.Port = ntohs( LocalAddr.sin_port );
 	debugf( NAME_DevNet, TEXT("TcpNetDriver on port %i"), LocalURL.Port );
+#ifdef WITH_WEBRTC
+	WebRtcListen();
+#endif
 
 	return 1;
 	unguard;
@@ -234,12 +241,12 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 				}
 			}
 		}
-		// Figure out which socket the received data came from.
+		// Figure out which socket the received data came from. WebRTC connections share the address fields but never the socket.
 		UTcpipConnection* Connection = NULL;
-		if( GetServerConnection() && IpMatches(GetServerConnection()->RemoteAddr,FromAddr) )
+		if( GetServerConnection() && GetServerConnection()->GetClass()==UTcpipConnection::StaticClass() && IpMatches(GetServerConnection()->RemoteAddr,FromAddr) )
 			Connection = GetServerConnection();
 		for( INT i=0; i<ClientConnections.Num() && !Connection; i++ )
-			if( IpMatches( ((UTcpipConnection*)ClientConnections(i))->RemoteAddr, FromAddr ) )
+			if( ClientConnections(i)->GetClass()==UTcpipConnection::StaticClass() && IpMatches( ((UTcpipConnection*)ClientConnections(i))->RemoteAddr, FromAddr ) )
 				Connection = (UTcpipConnection*)ClientConnections(i);
 
 		if( Size==SOCKET_ERROR )
@@ -323,6 +330,9 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 		}
 	}
 	unclock(TCPNetDriverTime);
+#ifdef WITH_WEBRTC
+	WebRtcTick();
+#endif
 
 	unguard;
 }
@@ -337,6 +347,9 @@ FString UTcpNetDriver::LowLevelGetNetworkNumber()
 void UTcpNetDriver::LowLevelDestroy()
 {
 	guard(UTcpNetDriver::LowLevelDestroy);
+#ifdef WITH_WEBRTC
+	WebRtcDestroy();
+#endif
 
 	// Close the socket.
 	if( Socket )
