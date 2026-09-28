@@ -1891,7 +1891,23 @@ void UGUIComboBox::PreDraw(UCanvas* Canvas)
 				top = ActualTop() - Wh - 1;
 
 
-			MyListBox->SetDims( ActualWidth(), Wh , ActualLeft(), top );
+			// Captions drawn larger than their font can squeeze the field to a sliver, the open list widens to its items, kept on screen.
+			FLOAT Width = ActualWidth(), Left = ActualLeft();
+			if ( MyListBox->bVisible && GUIScale(Controller) > 1.f )
+			{
+				FLOAT Widest = 0.f, XL, YL;
+				for ( INT i=0; i<List->Elements.Num(); i++ )
+				{
+					XL = YL = 0.f;
+					List->Style->TextSize( Canvas, List->MenuState, *List->Elements(i).Item, XL, YL, List->FontScale );
+					Widest = Max( Widest, XL );
+				}
+				Widest += List->Style->BorderOffsets[0] + List->Style->BorderOffsets[2] + MyShowListBtn->ActualWidth();
+				Width = Min( Max( Width, Widest ), Canvas->ClipX );
+				Left = Clamp( Left, 0.f, Canvas->ClipX - Width );
+			}
+
+			MyListBox->SetDims( Width, Wh , Left, top );
 			MyListBox->MyScrollBar->WinWidth = MyShowListBtn->ActualWidth();
 		}
 	}
