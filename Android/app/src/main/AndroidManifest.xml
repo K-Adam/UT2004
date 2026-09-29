@@ -3,7 +3,7 @@
 
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
 
-    <!-- Hosting, joining and the internet server list. -->
+    <!-- Hosting, joining, the internet server list and the content download, which may be plain http for local test servers. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The LAN server list finds games by UDP broadcast, which Wi-Fi drops without a multicast lock. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
@@ -13,6 +13,7 @@
     <application android:label="UT2004"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:isGame="true"
         android:appCategory="game"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"

@@ -1,4 +1,4 @@
-"""Packs the game data into APK assets as one .xz per file plus manifest.txt.
+"""Packs the System and script files into APK assets as one .xz per file plus manifest.txt.
 
 The APK zip only offers deflate, xz at its strongest preset makes the APK about a fifth smaller.
 SDLLaunch unpacks the files on first run, because the engine reads them with fopen.
@@ -61,14 +61,11 @@ def main():
     p.add_argument('--out', required=True)
     p.add_argument('--source', required=True, help='repository root')
     p.add_argument('--scripts', required=True, help='folder with the compiled .u and .ucl files')
-    p.add_argument('--assets', required=True, help='folder with Maps, Textures and the other content folders')
     a = p.parse_args()
 
-    # Laid out like build/: Default.ini finds the packages at ../Maps and the scripts at ../../Scripts.
+    # Laid out like build/: Default.ini finds the scripts at ../../Scripts, and SDLLaunch installs the content next to System.
     files = list(walk(os.path.join(a.source, 'System'), 'UT2004/System'))
     files += walk(a.scripts, 'Scripts', {'.u', '.ucl'})
-    for d in ('Animations', 'Maps', 'Music', 'Sounds', 'StaticMeshes', 'Textures'):
-        files += walk(os.path.join(a.assets, d), 'UT2004/' + d)
     files += walk(os.path.join(a.source, 'KarmaData'), 'UT2004/KarmaData')
     for f in ('ut2004logo.bmp', 'Unreal.bmp'):
         files.append((os.path.join(a.source, 'Help', f), 'UT2004/Help/' + f))

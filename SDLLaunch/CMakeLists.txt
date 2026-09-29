@@ -15,6 +15,14 @@ if(WIN32)
   target_link_options(SDLLaunch PRIVATE /ENTRY:mainCRTStartup)
 endif()
 if(ANDROID)
-  # The assets ship xz compressed inside the APK and are unpacked on first run.
+  # System and script files ship xz compressed inside the APK, the content comes as a .tar.xz on first run.
   target_link_libraries(SDLLaunch PRIVATE LibLZMA::LibLZMA)
+  # Read on every configure unless set with -D, so test builds can point at localhost.
+  set(UT_ASSETS_ENV ${CMAKE_SOURCE_DIR}/Android/assets.env)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${UT_ASSETS_ENV})
+  if(NOT UT_ASSETS_URL)
+    file(STRINGS ${UT_ASSETS_ENV} UT_ASSETS_URL REGEX "^UT_ASSETS_URL=")
+    string(REGEX REPLACE "^UT_ASSETS_URL=" "" UT_ASSETS_URL "${UT_ASSETS_URL}")
+  endif()
+  target_compile_definitions(SDLLaunch PRIVATE UT_ASSETS_URL="${UT_ASSETS_URL}")
 endif()
