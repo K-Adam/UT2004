@@ -10,7 +10,8 @@
     { "name": "speexdsp", "platform": "windows | android" },
     { "name": "liblzma", "platform": "android" },
     { "name": "angle", "platform": "windows" },
-    { "name": "libdatachannel", "default-features": false, "platform": "windows" }
+    { "name": "libdatachannel", "default-features": false, "platform": "windows" },
+    { "name": "nlohmann-json", "platform": "windows" }
   ],
   "overrides": [
     { "name": "libdatachannel", "version": "0.24.6" },

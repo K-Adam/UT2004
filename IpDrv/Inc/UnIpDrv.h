@@ -324,6 +324,14 @@ inline void SetServerDetail( TArray<FKeyValuePair>& Info, const TCHAR* Key, cons
 	Info(i).Value = Value;
 }
 
+#ifdef WITH_WEBRTC
+void WebMasterAdvertise( const FServerResponseLine& Server );
+struct FWebMasterListHandle* WebMasterList();
+// Returns false while the list is loading
+UBOOL WebMasterListDone( struct FWebMasterListHandle* Handle, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News );
+void WebMasterListFree( struct FWebMasterListHandle* Handle );
+#endif
+
 /*-----------------------------------------------------------------------------
 	Public includes.
 -----------------------------------------------------------------------------*/

@@ -9,11 +9,13 @@
 #include "UnTcpNetDriver.h"
 
 // Advertises the WebRTC port and fingerprint as a server detail. Script rebuilds ServerInfo on every refresh, so each sender adds it again.
-static void AddWebRtcDetails( AActor* Actor, TArray<FKeyValuePair>& ServerInfo )
+static UBOOL AddWebRtcDetails( AActor* Actor, TArray<FKeyValuePair>& ServerInfo )
 {
 	UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );
-	if( NetDriver && NetDriver->WebRtcDetails.Len() )
-		SetServerDetail( ServerInfo, TEXT("WebRTC"), NetDriver->WebRtcDetails );
+	if( !NetDriver || !NetDriver->WebRtcDetails.Len() )
+		return 0;
+	SetServerDetail( ServerInfo, TEXT("WebRTC"), NetDriver->WebRtcDetails );
+	return 1;
 }
 
 /*-----------------------------------------------------------------------------
@@ -609,6 +611,14 @@ public:
 
 			LastRefreshTime = GCurrentTime;
 			Actor->eventRefresh();
+
+#ifdef WITH_WEBRTC
+			// The script port is the URL port, the query interface follows the socket's actual port.
+			FServerResponseLine WebState = Actor->ServerState;
+			WebState.Port = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver )->GetSocketData().Port;
+			if( Actor->DoUplink && AddWebRtcDetails( Actor, WebState.ServerInfo ) )
+				WebMasterAdvertise( WebState );
+#endif
 
 			if( UplinkState==MSUS_ChannelOpen && (LinkState==LINK_Connected || LinkState==LINK_ClosePending) )
 			{

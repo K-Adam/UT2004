@@ -395,6 +395,9 @@ class FMasterServerClientLink : public FTcpLink
 
 	FString						MasterServerName;
 	INT							MasterServerPort;
+#ifdef WITH_WEBRTC
+	struct FWebMasterListHandle*	WebList;
+#endif
 public:
 	FMasterServerClientLink( AMasterServerClient* InActor )
 	:	FTcpLink()
@@ -402,16 +405,76 @@ public:
 	,	Actor(InActor)
 	,	ResultCount(-1)
 	,	ReceiveCount(0)
+#ifdef WITH_WEBRTC
+	,	WebList(NULL)
+#endif
 	{
 		SetLinkMode( TCPLINK_FArchive );
 	}
 
+#ifdef WITH_WEBRTC
+	virtual ~FMasterServerClientLink()
+	{
+		if( WebList )
+			WebMasterListFree( WebList );
+	}
+#endif
+
 	void StartQuery( BYTE InQueryType )
 	{
 		QueryType = InQueryType;
+#ifdef WITH_WEBRTC
+		// A WebRTC only client lists the web master, which holds only servers it can join.
+		if( ParseParam(appCmdLine(), TEXT("webrtc-client-only")) )
+		{
+			if( !WebList )
+				WebList = WebMasterList();
+			return;
+		}
+#endif
 		Actor->eventGetMasterServer( MasterServerName, MasterServerPort );
 		Resolve( *MasterServerName );
 	}
+
+#ifdef WITH_WEBRTC
+	virtual UBOOL Poll( INT WaitTime )
+	{
+		UBOOL Result = FTcpLink::Poll( WaitTime );
+		UBOOL Ok;
+		TArray<FServerResponseLine> Servers;
+		FString News;
+		if( !WebList || !WebMasterListDone( WebList, Ok, Servers, News ) )
+			return Result;
+		WebMasterListFree( WebList );
+		WebList = NULL;
+
+		// Script callbacks may stop the query and delete this link, so only locals are used from here.
+		AMasterServerClient* Client = Actor;
+		BYTE Type = QueryType;
+		if( !Ok )
+		{
+			Client->delegateOnQueryFinished( RI_ConnectionFailed, 0 );
+			return Result;
+		}
+		if( Type == CTM_Query )
+		{
+			FString GameType;
+			for( INT i=0; i<Client->Query.Num(); i++ )
+				if( Client->Query(i).Key == TEXT("gametype") && Client->Query(i).QueryType == QT_Equals )
+					GameType = Client->Query(i).Value;
+			for( INT i=0; i<Servers.Num(); i++ )
+				if( !GameType.Len() || Servers(i).GameType == GameType )
+				{
+					Client->ResultCount++;
+					Client->delegateOnReceivedServer( Servers(i) );
+				}
+		}
+		else if( Type == CTM_GetMOTD )
+			Client->delegateOnReceivedMOTDData( MR_MOTD, News );
+		Client->delegateOnQueryFinished( RI_Success, Type );
+		return Result;
+	}
+#endif
 
 	void OnResolved( FIpAddr a )
 	{
