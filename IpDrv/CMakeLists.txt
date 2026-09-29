@@ -6,11 +6,12 @@ ut_module(IpDrv SHARED
   NOPCH WebMaster.cpp WebRtc.cpp
   DEPS Engine $<$<PLATFORM_ID:Windows>:wsock32>)
 if(WIN32)
-  # libdatachannel, OpenSSL and nlohmann-json come from vcpkg only, other platforms build without WebRTC.
+  # libdatachannel, OpenSSL, nlohmann-json and curl come from vcpkg only, other platforms build without WebRTC.
   find_package(LibDataChannel CONFIG REQUIRED)
   find_package(OpenSSL REQUIRED)
   find_package(nlohmann_json CONFIG REQUIRED)
-  target_link_libraries(IpDrv PRIVATE LibDataChannel::LibDataChannel OpenSSL::Crypto nlohmann_json::nlohmann_json winhttp)
+  find_package(CURL REQUIRED)
+  target_link_libraries(IpDrv PRIVATE LibDataChannel::LibDataChannel OpenSSL::Crypto nlohmann_json::nlohmann_json CURL::libcurl)
   target_compile_definitions(IpDrv PRIVATE WITH_WEBRTC)
   set_target_properties(IpDrv PROPERTIES CXX_STANDARD 17)
 endif()

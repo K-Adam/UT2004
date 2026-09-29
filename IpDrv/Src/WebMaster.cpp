@@ -1,11 +1,11 @@
-// Client and uplink for the JSON master in WebMaster/.
+// Client and uplink for the JSON web master, a separate UT2004-web-master project.
 
 #ifdef WITH_WEBRTC
 // Standard headers go before the engine's, whose macros (check, min, max) break them.
 #define NOMINMAX
 #pragma pack(push, 8)
 #include <windows.h>
-#include <winhttp.h>
+#include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <memory>
 #include <mutex>
@@ -36,42 +36,39 @@ static FString FromUtf8( const std::string& S )
 	return FString( Out.c_str() );
 }
 
-// Runs on a worker thread, so it only touches standard types.
-static bool HttpRequest( const std::wstring& Url, const wchar_t* Method, const std::string& Body, std::string& Response )
+static size_t AppendResponse( char* Data, size_t Size, size_t Count, void* Response )
 {
-	URL_COMPONENTS Parts = { sizeof(Parts) };
-	wchar_t Host[256], Path[1024];
-	Parts.lpszHostName = Host;
-	Parts.dwHostNameLength = 256;
-	Parts.lpszUrlPath = Path;
-	Parts.dwUrlPathLength = 1024;
-	if( !WinHttpCrackUrl( Url.c_str(), 0, 0, &Parts ) )
-		return false;
+	((std::string*)Response)->append( Data, Size * Count );
+	return Size * Count;
+}
 
-	bool Ok = false;
-	HINTERNET Session = WinHttpOpen( L"UT2004", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0 );
-	HINTERNET Connection = Session ? WinHttpConnect( Session, Host, Parts.nPort, 0 ) : NULL;
-	HINTERNET Request = Connection ? WinHttpOpenRequest( Connection, Method, Path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
-		Parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0 ) : NULL;
-	if( Request )
+// Runs on a worker thread, so it only touches standard types.
+static bool HttpRequest( const std::string& Url, const std::string& Body, std::string& Response )
+{
+	CURL* Curl = curl_easy_init();
+	if( !Curl )
+		return false;
+	curl_slist* Headers = curl_slist_append( NULL, "Content-Type: application/json" );
+	curl_easy_setopt( Curl, CURLOPT_URL, Url.c_str() );
+	curl_easy_setopt( Curl, CURLOPT_HTTPHEADER, Headers );
+	// The master lists the address a post comes from, and the game is reachable over IPv4 only.
+	curl_easy_setopt( Curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
+	curl_easy_setopt( Curl, CURLOPT_TIMEOUT, 5L );
+	// Schannel otherwise fails when the CA's revocation server is unreachable, WinHTTP never checked it.
+	curl_easy_setopt( Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT );
+	curl_easy_setopt( Curl, CURLOPT_WRITEFUNCTION, AppendResponse );
+	curl_easy_setopt( Curl, CURLOPT_WRITEDATA, &Response );
+	if( !Body.empty() )
 	{
-		const INT Timeout = 5000;
-		WinHttpSetTimeouts( Request, Timeout, Timeout, Timeout, Timeout );
-		DWORD Status = 0, StatusSize = sizeof(Status);
-		if( WinHttpSendRequest( Request, L"Content-Type: application/json\r\n", (DWORD)-1L, (LPVOID)Body.data(), (DWORD)Body.size(), (DWORD)Body.size(), 0 )
-		&&	WinHttpReceiveResponse( Request, NULL )
-		&&	WinHttpQueryHeaders( Request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &Status, &StatusSize, WINHTTP_NO_HEADER_INDEX ) )
-		{
-			char Buffer[4096];
-			DWORD Read = 0;
-			while( WinHttpReadData( Request, Buffer, sizeof(Buffer), &Read ) && Read )
-				Response.append( Buffer, Read );
-			Ok = Status >= 200 && Status < 300;
-		}
+		curl_easy_setopt( Curl, CURLOPT_POSTFIELDS, Body.data() );
+		curl_easy_setopt( Curl, CURLOPT_POSTFIELDSIZE, (long)Body.size() );
 	}
-	WinHttpCloseHandle( Request );
-	WinHttpCloseHandle( Connection );
-	WinHttpCloseHandle( Session );
+	long Status = 0;
+	bool Ok = curl_easy_perform( Curl ) == CURLE_OK
+		&& curl_easy_getinfo( Curl, CURLINFO_RESPONSE_CODE, &Status ) == CURLE_OK
+		&& Status >= 200 && Status < 300;
+	curl_slist_free_all( Headers );
+	curl_easy_cleanup( Curl );
 	return Ok;
 }
 
@@ -106,11 +103,11 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 		{ "info", Info },
 	};
 
-	std::wstring Url = *(Base + TEXT("/advertise"));
+	std::string Url = ToUtf8( Base + TEXT("/advertise") );
 	std::thread( [Url, Payload = Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace)]()
 	{
 		std::string Response;
-		HttpRequest( Url, L"POST", Payload, Response );
+		HttpRequest( Url, Payload, Response );
 	} ).detach();
 }
 
@@ -141,11 +138,11 @@ FWebMasterListHandle* WebMasterList()
 		Handle->List->Done = true;
 		return Handle;
 	}
-	std::wstring Url = *(Base + TEXT("/"));
+	std::string Url = ToUtf8( Base + TEXT("/") );
 	std::thread( [Url, List = Handle->List]()
 	{
 		std::string Response;
-		bool Ok = HttpRequest( Url, L"GET", std::string(), Response );
+		bool Ok = HttpRequest( Url, std::string(), Response );
 		std::lock_guard<std::mutex> Guard( List->Lock );
 		List->Response.swap( Response );
 		List->Ok = Ok;
