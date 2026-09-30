@@ -29,6 +29,7 @@ Notes:
 #define SLIP_HEADER_SIZE   (UDP_HEADER_SIZE+4)
 #define WINSOCK_MAX_PACKET (512)
 #define NETWORK_MAX_PACKET (576)
+#define WEBRTC_FALLBACK_TIME 5.0
 
 // Variables.
 UBOOL GIpDrvInitialized;
@@ -154,11 +155,10 @@ UBOOL UTcpNetDriver::InitConnect( FNetworkNotify* InNotify, FURL& ConnectURL, FS
 	guard(UTcpNetDriver::InitConnect);
 	if( !Super::InitConnect( InNotify, ConnectURL, Error ) )
 		return 0;
-#ifdef WITH_WEBRTC
-	// Such a client never sends UDP, and a browser has no UDP socket to open.
-	if( ParseParam(appCmdLine(), TEXT("webrtc-client-only")) )
+	// Such a client never sends UDP, and a browser has no UDP socket to open. Web-only servers advertise signal:<id>.
+	if( WebRtcOnly() || !appStrnicmp( ConnectURL.GetOption(TEXT("WebRTC="), TEXT("")), TEXT("signal:"), 7 ) )
 		return InitSockets( Error ) && WebRtcConnect( ConnectURL, Error );
-#endif
+	ConnectTime = appSeconds();
 	if( !InitBase( 1, InNotify, ConnectURL, Error ) )
 		return 0;
 
@@ -184,6 +184,17 @@ UBOOL UTcpNetDriver::InitListen( FNetworkNotify* InNotify, FURL& LocalURL, FStri
 	guard(UTcpNetDriver::InitListen);
 	if( !Super::InitListen( InNotify, LocalURL, Error ) )
 		return 0;
+	// Only the WebRTC port is opened, players reach it from the listing's WebRTC details
+	if( WebRtcOnly() )
+	{
+		if( !InitSockets( Error ) )
+			return 0;
+		Parse( appCmdLine(), TEXT("PORT="), LocalURL.Port );
+		LocalAddr.sin_family = AF_INET;
+		LocalAddr.sin_addr = getlocalbindaddr( *GLog );
+		LocalAddr.sin_port = htons( LocalURL.Port );
+	}
+	else
 	if( !InitBase( 0, InNotify, LocalURL, Error ) )
 		return 0;
 
@@ -191,9 +202,12 @@ UBOOL UTcpNetDriver::InitListen( FNetworkNotify* InNotify, FURL& LocalURL, FStri
 	LocalURL.Host = IpString(LocalAddr.sin_addr);
 	LocalURL.Port = ntohs( LocalAddr.sin_port );
 	debugf( NAME_DevNet, TEXT("TcpNetDriver on port %i"), LocalURL.Port );
-#ifdef WITH_WEBRTC
 	WebRtcListen();
-#endif
+	if( WebRtcOnly() && !WebRtc )
+	{
+		Error = TEXT("WebRTC listening failed");
+		return 0;
+	}
 
 	return 1;
 	unguard;
@@ -332,9 +346,26 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 		}
 	}
 	unclock(TCPNetDriverTime);
-#ifdef WITH_WEBRTC
 	WebRtcTick();
-#endif
+
+	// A filtered game port never answers, the WebRTC port the server advertises may still get through
+	UTcpipConnection* Pending = GetServerConnection();
+	if( ConnectTime && Pending && Pending->Socket && Pending->State==USOCK_Pending && Pending->InPacketId==-1 && !Pending->ResolveInfo
+	&&	appSeconds()-ConnectTime > WEBRTC_FALLBACK_TIME && Pending->URL.GetOption(TEXT("WebRTC="), NULL) )
+	{
+		ConnectTime = 0;
+		debugf( TEXT("UDP got no answer, trying WebRTC") );
+		FURL URL = Pending->URL;
+		FString Error;
+		if( WebRtcConnect( URL, Error ) )
+		{
+			closesocket( Socket );
+			Socket = 0;
+			// Only the greeting went out before, and it is lost with the UDP connection
+			ServerConnection->Logf( TEXT("HELLO REVISION=0 MINVER=%i VER=%i"), ENGINE_MIN_NET_VERSION, ENGINE_VERSION );
+			ServerConnection->FlushNet();
+		}
+	}
 
 	unguard;
 }
@@ -349,9 +380,7 @@ FString UTcpNetDriver::LowLevelGetNetworkNumber()
 void UTcpNetDriver::LowLevelDestroy()
 {
 	guard(UTcpNetDriver::LowLevelDestroy);
-#ifdef WITH_WEBRTC
 	WebRtcDestroy();
-#endif
 
 	// Close the socket.
 	if( Socket )
@@ -446,7 +475,13 @@ FSocketData UTcpNetDriver::GetSocketData()
 {
 	FSocketData Result;
 	Result.Socket = Socket;
-	Result.UpdateFromSocket();
+	if( Socket )
+		Result.UpdateFromSocket();
+	else
+	{
+		Result.Addr = LocalAddr;
+		Result.Port = ntohs( LocalAddr.sin_port );
+	}
 	return Result;
 }
 

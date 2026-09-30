@@ -15,6 +15,9 @@ static UBOOL AddWebRtcDetails( AActor* Actor, TArray<FKeyValuePair>& ServerInfo 
 	if( !NetDriver || !NetDriver->WebRtcDetails.Len() )
 		return 0;
 	SetServerDetail( ServerInfo, TEXT("WebRTC"), NetDriver->WebRtcDetails );
+	// Regular clients take such servers from the web master, the main masters can't list them
+	if( WebRtcOnly() )
+		SetServerDetail( ServerInfo, TEXT("WebOnly"), TEXT("1") );
 	return 1;
 }
 
@@ -151,9 +154,13 @@ public:
 		LastRefreshTime = -REFRESH_TIME;
 		LastHeartbeatTime = GCurrentTime;
 
-		// Game protocol port NAT heartbeat.
 		UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );
 		check(NetDriver);
+		// Without a UDP game socket there is nothing to query, and the web master lists the server
+		if( WebRtcOnly() )
+			return;
+
+		// Game protocol port NAT heartbeat.
 		GameHeartbeat = new FNATHeartbeatLink( NetDriver->GetSocketData(), HB_GamePort );
 		// Gamespy query port NAT heartbeat.
 		if( Actor->GamespyQueryLink )
@@ -540,7 +547,7 @@ public:
 			CheckUDPHeartbeats();
 		}
 
-		if ( GameHeartbeat->bConnectionBroken )
+		if ( GameHeartbeat && GameHeartbeat->bConnectionBroken )
 		{
 			Actor->eventConnectionFailed(ShouldTryReconnect);
 			ConnectionFailed = 0;
@@ -612,13 +619,11 @@ public:
 			LastRefreshTime = GCurrentTime;
 			Actor->eventRefresh();
 
-#ifdef WITH_WEBRTC
 			// The script port is the URL port, the query interface follows the socket's actual port.
 			FServerResponseLine WebState = Actor->ServerState;
 			WebState.Port = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver )->GetSocketData().Port;
 			if( Actor->DoUplink && AddWebRtcDetails( Actor, WebState.ServerInfo ) )
 				WebMasterAdvertise( WebState );
-#endif
 
 			if( UplinkState==MSUS_ChannelOpen && (LinkState==LINK_Connected || LinkState==LINK_ClosePending) )
 			{
@@ -947,7 +952,9 @@ void AMasterServerUplink::execReconnect( FFrame& Stack, RESULT_DECL )
 	else
 		((FMasterServerUplinkLink*)LinkPtr)->Close();
 
-	if( DoUplink )
+	if( WebRtcOnly() )
+		GWarn->Logf(TEXT("MasterServerUplink: WebRTC only, listed on the web master alone"));
+	else if( DoUplink )
 		((FMasterServerUplinkLink*)LinkPtr)->TryConnect();
 	else
 		GWarn->Logf(TEXT("MasterServerUplink: DoUplink is False, not connecting to Epic master server"));

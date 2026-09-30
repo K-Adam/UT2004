@@ -395,9 +395,7 @@ class FMasterServerClientLink : public FTcpLink
 
 	FString						MasterServerName;
 	INT							MasterServerPort;
-#ifdef WITH_WEBRTC
-	struct FWebMasterListHandle*	WebList;
-#endif
+	struct FWebMasterRequest*	WebList;
 public:
 	FMasterServerClientLink( AMasterServerClient* InActor )
 	:	FTcpLink()
@@ -405,38 +403,37 @@ public:
 	,	Actor(InActor)
 	,	ResultCount(-1)
 	,	ReceiveCount(0)
-#ifdef WITH_WEBRTC
 	,	WebList(NULL)
-#endif
 	{
 		SetLinkMode( TCPLINK_FArchive );
 	}
 
-#ifdef WITH_WEBRTC
 	virtual ~FMasterServerClientLink()
 	{
 		if( WebList )
-			WebMasterListFree( WebList );
+			WebMasterRequestFree( WebList );
 	}
-#endif
 
 	void StartQuery( BYTE InQueryType )
 	{
 		QueryType = InQueryType;
-#ifdef WITH_WEBRTC
 		// A WebRTC only client lists the web master, which holds only servers it can join.
-		if( ParseParam(appCmdLine(), TEXT("webrtc-client-only")) )
+		// Others list the main masters after it, web-only servers are on the web master alone.
+		if( WebRtcOnly() || QueryType==CTM_Query )
 		{
 			if( !WebList )
 				WebList = WebMasterList();
 			return;
 		}
-#endif
+		StartMasterQuery();
+	}
+
+	void StartMasterQuery()
+	{
 		Actor->eventGetMasterServer( MasterServerName, MasterServerPort );
 		Resolve( *MasterServerName );
 	}
 
-#ifdef WITH_WEBRTC
 	virtual UBOOL Poll( INT WaitTime )
 	{
 		UBOOL Result = FTcpLink::Poll( WaitTime );
@@ -445,13 +442,14 @@ public:
 		FString News;
 		if( !WebList || !WebMasterListDone( WebList, Ok, Servers, News ) )
 			return Result;
-		WebMasterListFree( WebList );
+		WebMasterRequestFree( WebList );
 		WebList = NULL;
 
 		// Script callbacks may stop the query and delete this link, so only locals are used from here.
 		AMasterServerClient* Client = Actor;
 		BYTE Type = QueryType;
-		if( !Ok )
+		UBOOL WebOnly = WebRtcOnly();
+		if( !Ok && WebOnly )
 		{
 			Client->delegateOnQueryFinished( RI_ConnectionFailed, 0 );
 			return Result;
@@ -462,19 +460,26 @@ public:
 			for( INT i=0; i<Client->Query.Num(); i++ )
 				if( Client->Query(i).Key == TEXT("gametype") && Client->Query(i).QueryType == QT_Equals )
 					GameType = Client->Query(i).Value;
-			for( INT i=0; i<Servers.Num(); i++ )
-				if( !GameType.Len() || Servers(i).GameType == GameType )
+			PTRINT Link = Client->MSLinkPtr;
+			for( INT i=0; i<Servers.Num() && Client->MSLinkPtr==Link; i++ )
+				if( (!GameType.Len() || Servers(i).GameType == GameType) && (WebOnly || HasServerDetail( Servers(i).ServerInfo, TEXT("WebOnly") )) )
 				{
 					Client->ResultCount++;
 					Client->delegateOnReceivedServer( Servers(i) );
 				}
+			if( !WebOnly )
+			{
+				// A new link at the same address is still waiting for its own web list
+				if( Client->MSLinkPtr == Link && !WebList )
+					StartMasterQuery();
+				return Result;
+			}
 		}
 		else if( Type == CTM_GetMOTD )
 			Client->delegateOnReceivedMOTDData( MR_MOTD, News );
 		Client->delegateOnQueryFinished( RI_Success, Type );
 		return Result;
 	}
-#endif
 
 	void OnResolved( FIpAddr a )
 	{
@@ -505,7 +510,7 @@ public:
 		if (Actor->ActiveMasterServerList.Num()== 0)
 			Actor->delegateOnQueryFinished(RI_ConnectionFailed,0);
 		else
-			StartQuery(QueryType);
+			StartMasterQuery();
 	}
 
 	void OnResolveFailed()
@@ -641,7 +646,7 @@ public:
 								Actor->SaveConfig();
 
 								ClientState= MSCS_WaitingChallenge;
-								StartQuery(QueryType);
+								StartMasterQuery();
 								return;
 							}
 
@@ -704,7 +709,8 @@ public:
 					case CTM_Query:
 						{
 							*ArRecv << ResultCount << ResultsCompressed;
-							Actor->ResultCount = ResultCount;
+							// Web-only servers from the web master came first
+							Actor->ResultCount += ResultCount;
 							if( ResultCount > 0 )
 								ClientState = MSCS_WaitQueryData;
 							else

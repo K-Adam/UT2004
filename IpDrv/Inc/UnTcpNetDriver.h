@@ -54,9 +54,12 @@ class DLL_EXPORT_CLASS UTcpNetDriver : public UNetDriver
 	sockaddr_in	LocalAddr;
 	SOCKET		Socket;
 
-	// WebRTC peers next to the UDP socket, implemented in WebRtc.cpp (WebRtcBrowser.cpp on the web). Details are "<port>,<fingerprint>" while listening.
+	// WebRTC peers next to the UDP socket, implemented in WebRtc.cpp (WebRtcBrowser.cpp on the web).
+	// Details are "<port>,<fingerprint>" while listening, or "signal:<id>" for a browser host.
 	struct FWebRtcHost* WebRtc;
 	FString		WebRtcDetails;
+	// When a UDP connect started, it falls back to WebRTC after 5 seconds without an answer
+	DOUBLE		ConnectTime;
 
 	// Constructor.
 	void StaticConstructor();
@@ -75,6 +78,7 @@ class DLL_EXPORT_CLASS UTcpNetDriver : public UNetDriver
 	UTcpipConnection* GetServerConnection();
 	FSocketData GetSocketData();
 	void WebRtcListen();
+	// Replaces a pending UDP ServerConnection once the WebRTC peer is set up
 	UBOOL WebRtcConnect( FURL& ConnectURL, FString& Error );
 	void WebRtcTick();
 	void WebRtcDestroy();

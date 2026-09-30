@@ -321,6 +321,14 @@ inline in_addr getlocalbindaddr( FOutputDevice& Out )
 	unguard;
 }
 
+inline UBOOL HasServerDetail( const TArray<FKeyValuePair>& Info, const TCHAR* Key )
+{
+	for( INT i=0; i<Info.Num(); i++ )
+		if( Info(i).Key==Key )
+			return 1;
+	return 0;
+}
+
 // Replaces a server detail, adds it when missing and removes it when Value is empty
 inline void SetServerDetail( TArray<FKeyValuePair>& Info, const TCHAR* Key, const FString& Value )
 {
@@ -337,13 +345,21 @@ inline void SetServerDetail( TArray<FKeyValuePair>& Info, const TCHAR* Key, cons
 	Info(i).Value = Value;
 }
 
-#ifdef WITH_WEBRTC
+// Started with -webrtc-client-only: no UDP game socket and no main masters, it joins and hosts over WebRTC only
+inline UBOOL WebRtcOnly()
+{
+	return ParseParam( appCmdLine(), TEXT("webrtc-client-only") );
+}
+
+FString WebMasterURL();
 void WebMasterAdvertise( const FServerResponseLine& Server );
-struct FWebMasterListHandle* WebMasterList();
-// Returns false while the list is loading
-UBOOL WebMasterListDone( struct FWebMasterListHandle* Handle, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News );
-void WebMasterListFree( struct FWebMasterListHandle* Handle );
-#endif
+// The Done functions return false while the request is running
+struct FWebMasterRequest* WebMasterList();
+UBOOL WebMasterListDone( struct FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News );
+// Sends a client's offer to a browser host and gets its answer back
+struct FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp );
+UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp );
+void WebMasterRequestFree( struct FWebMasterRequest* Request );
 
 /*-----------------------------------------------------------------------------
 	Public includes.

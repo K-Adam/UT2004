@@ -230,15 +230,6 @@ else()
   target_link_libraries(speex PUBLIC PkgConfig::SPEEXDSP)
 endif()
 find_package(SDL3 CONFIG REQUIRED)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  # Core declares its own 16-bit wcs functions, which clash with glibc's <wchar.h> that SDL includes.
-  # SDL needs nothing from it, so its include guard is set up front. Bionic and musl get renames in UnGnuG.h.
-  get_target_property(SDL3_TARGET SDL3::SDL3 ALIASED_TARGET)
-  if(NOT SDL3_TARGET)
-    set(SDL3_TARGET SDL3::SDL3)
-  endif()
-  set_property(TARGET ${SDL3_TARGET} APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS _WCHAR_H=1)
-endif()
 add_subdirectory(Tools/NVTriStrip)
 # Static, but linked into Engine.so.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

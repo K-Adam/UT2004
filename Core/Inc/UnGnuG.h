@@ -226,8 +226,7 @@ typedef unsigned int size_t;
 
 #if UNICODE_BY_HAND
 
-#if __ANDROID__ || __EMSCRIPTEN__
-// libc++ needs the C library's wchar functions declared, so the 2-byte ones below take other names.
+// The C++ standard library needs the C library's wchar functions declared, so the 2-byte ones below take other names.
 #include <wchar.h>
 #include <wctype.h>
 #define wcscpy appUniWcscpy
@@ -242,7 +241,6 @@ typedef unsigned int size_t;
 #define wprintf appUniWprintf
 #define swscanf appUniSwscanf
 #define iswspace appUniIswspace
-#endif
 
 CORE_API void unicode_str_to_stdout(const UNICHAR *str);
 

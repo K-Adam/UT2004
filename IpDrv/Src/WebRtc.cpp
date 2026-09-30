@@ -2,7 +2,6 @@
 	WebRtc.cpp: WebRTC data channel peers for UTcpNetDriver, on libdatachannel.
 =============================================================================*/
 
-#ifdef WITH_WEBRTC
 // The standard and libdatachannel headers go before the engine's, whose macros (check, clock, min, max) break them.
 // The engine builds with /Zp4, libdatachannel with the default packing its structs need here too.
 #define NOMINMAX
@@ -18,16 +17,11 @@
 #include <string>
 #include <vector>
 #pragma pack(pop)
-#endif
 
 #include "UnIpDrv.h"
 #include "UnTcpNetDriver.h"
 
-#ifdef WITH_WEBRTC
 #include "WebRtc.h"
-
-#define WEBRTC_MAX_PENDING 64
-#define WEBRTC_PENDING_TIMEOUT 15.0
 
 // The mutexes inside need their natural alignment, which /Zp4 breaks on x64
 #pragma pack(push, 8)
@@ -39,6 +33,10 @@ struct FWebRtcPeer
 	sockaddr_in Addr;
 	UWebRtcConnection* Connection = nullptr;
 	DOUBLE CreatedTime = 0;
+
+	// A client of a browser host sends its offer once gathered and waits for the answer
+	FString SignalId;
+	FWebMasterRequest* Offer = nullptr;
 
 	// Filled on libdatachannel threads
 	std::mutex Lock;
@@ -172,8 +170,23 @@ static rtc::DataChannelInit UnreliableChannel()
 	return Init;
 }
 
+static std::shared_ptr<FWebRtcPeer> MakeClientPeer( const rtc::Configuration& Config )
+{
+	auto Peer = std::make_shared<FWebRtcPeer>();
+	Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
+	// The channel has to exist before the offer, or the offer has no application section
+	Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
+	WireCallbacks( Peer );
+	return Peer;
+}
+
 static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
 {
+	if( Peer->Offer )
+	{
+		WebMasterRequestFree( Peer->Offer );
+		Peer->Offer = nullptr;
+	}
 	try
 	{
 		Peer->Dc->resetCallbacks();
@@ -275,35 +288,47 @@ void UTcpNetDriver::WebRtcListen()
 UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 {
 	guard(UTcpNetDriver::WebRtcConnect);
+	std::shared_ptr<FWebRtcPeer> Peer;
 	sockaddr_in Addr;
-	std::string Ufrag, Answer;
-	if( !WebRtcClientSetup( ConnectURL, Error, Addr, Ufrag, Answer ) )
-		return 0;
-
-	FWebRtcHost* Host = new FWebRtcHost;
-	auto Peer = std::make_shared<FWebRtcPeer>();
-	Peer->Addr = Addr;
-	Peer->Ufrag = Ufrag;
+	FString SignalId;
 	try
 	{
 		rtc::Configuration Config;
 		Config.disableAutoNegotiation = true;
-		Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
-		// The channel has to exist before the offer, or the offer has no application section
-		Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
-		WireCallbacks( Peer );
-		Peer->Pc->setLocalDescription( rtc::Description::Type::Offer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
-		Peer->Pc->setRemoteDescription( rtc::Description( Answer, rtc::Description::Type::Answer ) );
+		if( WebRtcSignalSetup( ConnectURL, SignalId, Addr ) )
+		{
+			// The URL constructor parses with std::regex, which links only with the STL vcpkg built against
+			Config.iceServers.emplace_back( WEBRTC_STUN_HOST, WEBRTC_STUN_PORT );
+			Peer = MakeClientPeer( Config );
+			Peer->SignalId = SignalId;
+			Peer->Pc->setLocalDescription( rtc::Description::Type::Offer );
+		}
+		else
+		{
+			std::string Ufrag, Answer;
+			if( !WebRtcClientSetup( ConnectURL, Error, Addr, Ufrag, Answer ) )
+				return 0;
+			Peer = MakeClientPeer( Config );
+			Peer->Ufrag = Ufrag;
+			Peer->Pc->setLocalDescription( rtc::Description::Type::Offer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
+			Peer->Pc->setRemoteDescription( rtc::Description( Answer, rtc::Description::Type::Answer ) );
+		}
 	}
 	catch( const std::exception& E )
 	{
 		Error = FString::Printf( TEXT("WebRTC connect failed: %s"), *FString(E.what()) );
 		debugf( TEXT("%s"), *Error );
-		if( Peer->Pc )
+		if( Peer )
 			ClosePeer( Peer );
-		delete Host;
 		return 0;
 	}
+	Peer->Addr = Addr;
+	Peer->CreatedTime = appSeconds();
+
+	// A UDP connection that got no answer is replaced, it must still be the ServerConnection when it goes
+	if( ServerConnection )
+		delete ServerConnection;
+	FWebRtcHost* Host = new FWebRtcHost;
 	Host->Peers.push_back( Peer );
 	WebRtc = Host;
 
@@ -312,6 +337,41 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 	ServerConnection->CreateChannel( CHTYPE_Control, 1, 0 );
 	return 1;
 	unguard;
+}
+
+static void WebRtcSignal( FWebRtcPeer& Peer )
+{
+	try
+	{
+		if( !Peer.Offer )
+		{
+			auto Local = Peer.Pc->localDescription();
+			if( Local && (Peer.Pc->gatheringState()==rtc::PeerConnection::GatheringState::Complete || appSeconds()-Peer.CreatedTime > WEBRTC_GATHER_TIME) )
+				Peer.Offer = WebMasterOffer( Peer.SignalId, FString( std::string(*Local).c_str() ) );
+			return;
+		}
+		UBOOL Ok;
+		FString Answer;
+		if( !WebMasterOfferDone( Peer.Offer, Ok, Answer ) )
+			return;
+		WebMasterRequestFree( Peer.Offer );
+		Peer.Offer = nullptr;
+		Peer.SignalId = TEXT("");
+		if( Ok )
+			Peer.Pc->setRemoteDescription( rtc::Description( ToStd(Answer), rtc::Description::Type::Answer ) );
+		else
+		{
+			debugf( TEXT("WebRTC: the host did not answer through the web master") );
+			std::lock_guard<std::mutex> Guard( Peer.Lock );
+			Peer.Closed = true;
+		}
+	}
+	catch( const std::exception& E )
+	{
+		debugf( TEXT("WebRTC signaling failed: %s"), *FString(E.what()) );
+		std::lock_guard<std::mutex> Guard( Peer.Lock );
+		Peer.Closed = true;
+	}
 }
 
 void UTcpNetDriver::WebRtcTick()
@@ -348,10 +408,7 @@ void UTcpNetDriver::WebRtcTick()
 				SameIP += IpAddressMatches( Peer->Addr, Addr );
 			}
 		}
-		for( INT i=0; i<ClientConnections.Num(); i++ )
-			if( IpAddressMatches( ((UTcpipConnection*)ClientConnections(i))->RemoteAddr, Addr ) && ((UTcpipConnection*)ClientConnections(i))->OpenedTime > GCurrentTime-60.0 )
-				SameIP++;
-		if( Known || Pending>=WEBRTC_MAX_PENDING || SameIP>=(MaxConnPerIPPerMinute ? MaxConnPerIPPerMinute : 5) )
+		if( Known || Pending>=WEBRTC_MAX_PENDING || WebRtcIpLimited( this, Addr, SameIP ) )
 			continue;
 		// A peer made while the level switches would die with this driver, the client's ICE checks retry against the next one
 		if( Notify->NotifyAcceptingConnection()!=ACCEPTC_Accept )
@@ -401,6 +458,8 @@ void UTcpNetDriver::WebRtcTick()
 	for( INT i=(INT)Host->Peers.size()-1; i>=0 && WebRtc; i-- )
 	{
 		std::shared_ptr<FWebRtcPeer> Peer = Host->Peers[i];
+		if( Peer->SignalId.Len() )
+			WebRtcSignal( *Peer );
 		std::deque<rtc::binary> Inbox;
 		bool Closed;
 		{
@@ -409,21 +468,8 @@ void UTcpNetDriver::WebRtcTick()
 			Closed = Peer->Closed;
 		}
 
-		// Accept on the first packet like the UDP path, ignored while the level changes so later packets retry
-		if( !Peer->Connection && !Inbox.empty() && !ServerConnection )
-		{
-			EAcceptConnection Accept = Notify->NotifyAcceptingConnection();
-			if( Accept==ACCEPTC_Accept )
-			{
-				UWebRtcConnection* Connection = Peer->Connection = new UWebRtcConnection( this, Peer.get(), Peer->Addr, USOCK_Open, FURL() );
-				Connection->URL.Host = IpString( Peer->Addr.sin_addr );
-				Notify->NotifyAcceptedConnection( Connection );
-				ClientConnections.AddItem( Connection );
-				debugf( TEXT("WebRTC connection from %s"), *Connection->LowLevelGetRemoteAddress() );
-			}
-			else if( Accept==ACCEPTC_Reject )
-				Closed = true;
-		}
+		if( !Peer->Connection && !Inbox.empty() && !ServerConnection && WebRtcAccept( this, Peer.get(), Peer->Addr, Peer->Connection )==ACCEPTC_Reject )
+			Closed = true;
 
 		if( Peer->Connection )
 		{
@@ -462,4 +508,3 @@ void UTcpNetDriver::WebRtcDestroy()
 	unguard;
 }
 
-#endif
