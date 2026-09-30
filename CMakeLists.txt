@@ -9,8 +9,12 @@ elseif(ANDROID)
   endif()
   # The static modules end up in that shared library.
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+elseif(EMSCRIPTEN)
+  if(NOT UT_STATIC_LINK OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "The web build is a single wasm64 module: cmake --preset web")
+  endif()
 elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|i.86")
-  message(FATAL_ERROR "Only Windows, x86 or x64 Linux and arm64 Android are supported: cmake --preset win32|win64|linux|linux32|android-arm64")
+  message(FATAL_ERROR "Only Windows, x86 or x64 Linux, arm64 Android and the web are supported: cmake --preset win32|win64|linux|linux32|android-arm64|web")
 endif()
 
 # Each build runs from its own game folder, so architectures don't overwrite each other and runtime
@@ -27,7 +31,12 @@ if(NOT EXISTS ${UT_SCRIPTS_DIR}/CacheRecords.ucl)
   file(COPY ${CMAKE_SOURCE_DIR}/System/CacheRecords.ucl DESTINATION ${UT_SCRIPTS_DIR})
 endif()
 # Read-only data the engine reads from next to System/.
-foreach(dir Help Web KarmaData)
+set(UT_LINKED_DIRS Help Web KarmaData)
+if(EMSCRIPTEN)
+  # The page served from build/web finds the locally built content packages at ./assets/build/web.
+  list(APPEND UT_LINKED_DIRS assets)
+endif()
+foreach(dir ${UT_LINKED_DIRS})
   if(NOT EXISTS ${CMAKE_BINARY_DIR}/${dir})
     if(CMAKE_HOST_WIN32)
       # A junction, because symbolic links need administrator rights on Windows.
@@ -77,14 +86,20 @@ if(MSVC)
 else()
   # Modules are dlopen()ed by bare name, so they and the executables look next to themselves.
   set(CMAKE_BUILD_RPATH "$ORIGIN")
-  # Packages store UTF-16, TCHAR must be 2 bytes like on Windows. Core supplies the wcs* functions.
-  # The engine calls destructors explicitly and reuses the object (FArray in UArrayProperty::DestroyValue),
-  # so the stores a destructor makes must not be optimized away.
+  # Packages store UTF-16, TCHAR must be 2 bytes like on Windows. Core supplies the wcs* functions,
+  # and Clang would turn their loops back into calls to the C library's 4-byte wcslen.
   target_compile_options(ut_common INTERFACE
-    -fshort-wchar -fsigned-char -fno-strict-aliasing -fno-delete-null-pointer-checks -w
-    $<$<CXX_COMPILER_ID:GNU>:$<$<COMPILE_LANGUAGE:CXX>:-fpermissive -fno-lifetime-dse>>
+    -fshort-wchar -fno-builtin-wcslen -fsigned-char -fno-strict-aliasing -fno-delete-null-pointer-checks -w
+    $<$<CXX_COMPILER_ID:GNU>:$<$<COMPILE_LANGUAGE:CXX>:-fpermissive>>
     # Like MSVC, template bodies that use classes declared later in the header are checked at instantiation.
     $<$<CXX_COMPILER_ID:Clang>:$<$<COMPILE_LANGUAGE:CXX>:-fdelayed-template-parsing -Wno-register>>)
+  # The engine calls destructors explicitly and reuses the object (FArray in UArrayProperty::DestroyValue),
+  # so the stores a destructor makes must not be optimized away. Newer Clang does the same optimization and accepts the flag.
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag(-fno-lifetime-dse UT_HAS_NO_LIFETIME_DSE)
+  if(UT_HAS_NO_LIFETIME_DSE)
+    target_compile_options(ut_common INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-fno-lifetime-dse>)
+  endif()
   # 32-bit stat fails with EOVERFLOW on large inode numbers (WSL drives, XFS) without 64-bit file offsets.
   target_compile_definitions(ut_common INTERFACE __LINUX_X86__ LINUX=1 __FILE_NOCASE=1 _FILE_OFFSET_BITS=64)
   find_package(Threads REQUIRED)
@@ -105,6 +120,7 @@ function(ut_module name type)
     if(UT_STATIC_LINK)
       # Static IMPLEMENT_PACKAGE defines G<Package>Package, so each module's GPackage stays apart.
       add_library(${name} STATIC ${A_SOURCES})
+      set_property(GLOBAL APPEND PROPERTY UT_LINKED_PACKAGES ${name})
       target_compile_definitions(${name} PRIVATE ${up}_API= GPackage=G${name}Package)
     elseif(MSVC)
       add_library(${name} SHARED ${A_SOURCES})
@@ -160,15 +176,19 @@ function(ut_module name type)
 endfunction()
 
 find_package(ZLIB REQUIRED)
-if(WIN32 OR ANDROID)
+if(WIN32 OR ANDROID OR EMSCRIPTEN)
   find_package(Vorbis CONFIG REQUIRED)
-  find_package(OpenAL CONFIG REQUIRED)
   if(ANDROID)
+    find_package(OpenAL CONFIG REQUIRED)
     find_library(GLES_TARGET GLESv3 REQUIRED)
     find_package(LibLZMA REQUIRED)
-  else()
+  elseif(WIN32)
+    find_package(OpenAL CONFIG REQUIRED)
     find_package(unofficial-angle CONFIG REQUIRED)
     set(GLES_TARGET unofficial::angle::libGLESv2)
+  else()
+    # Emscripten links its own OpenAL on Web Audio (-lopenal), and WebGL sits behind the GLES3 headers.
+    set(GLES_TARGET "")
   endif()
   find_package(unofficial-libsquish CONFIG REQUIRED)
   set(SQUISH_TARGET unofficial::libsquish::squish)
@@ -210,9 +230,9 @@ else()
   target_link_libraries(speex PUBLIC PkgConfig::SPEEXDSP)
 endif()
 find_package(SDL3 CONFIG REQUIRED)
-if(NOT MSVC)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # Core declares its own 16-bit wcs functions, which clash with glibc's <wchar.h> that SDL includes.
-  # SDL needs nothing from it, so its include guard is set up front.
+  # SDL needs nothing from it, so its include guard is set up front. Bionic and musl get renames in UnGnuG.h.
   get_target_property(SDL3_TARGET SDL3::SDL3 ALIASED_TARGET)
   if(NOT SDL3_TARGET)
     set(SDL3_TARGET SDL3::SDL3)
@@ -229,8 +249,8 @@ endif()
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
     XGame XInterface Onslaught SDLDrv SDLLaunch)
-# Nothing built for Android runs on the host, so the script packages come from a desktop build.
-if(NOT ANDROID)
+# Nothing built for Android or the web runs on the host, so the script packages come from a desktop build.
+if(NOT ANDROID AND NOT EMSCRIPTEN)
   list(APPEND UT_MODULES UCC)
 endif()
 # UTV2004 has its own copies of IpDrv's net driver classes, so it only works as a loaded module.
@@ -245,6 +265,10 @@ foreach(m ${UT_MODULES})
 endforeach()
 if(ANDROID)
   add_subdirectory(Android)
+  return()
+endif()
+if(EMSCRIPTEN)
+  add_subdirectory(Emscripten)
   return()
 endif()
 

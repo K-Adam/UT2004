@@ -16,8 +16,11 @@ Revision history:
 
 #pragma pack (push,8)
 
+// Emscripten's OpenAL is linked in, FindProcs takes the addresses of its functions.
+#if !__EMSCRIPTEN__
 #define AL_NO_PROTOTYPES
 #define ALC_NO_PROTOTYPES
+#endif
 #include "AL/al.h"
 #include "AL/alc.h"
 

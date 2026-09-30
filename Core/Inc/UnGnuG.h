@@ -226,8 +226,8 @@ typedef unsigned int size_t;
 
 #if UNICODE_BY_HAND
 
-#if __ANDROID__
-// libc++ needs bionic's 4-byte wchar functions declared, so the 2-byte ones below take other names.
+#if __ANDROID__ || __EMSCRIPTEN__
+// libc++ needs the C library's wchar functions declared, so the 2-byte ones below take other names.
 #include <wchar.h>
 #include <wctype.h>
 #define wcscpy appUniWcscpy

@@ -231,6 +231,11 @@ FOpenGLVertexStream::~FOpenGLVertexStream()
 	glDeleteBuffers(1,&Buffer);
 }
 
+#ifdef __EMSCRIPTEN__
+// WebGL has no buffer mapping, the data goes through system memory and glBufferSubData.
+static TArray<BYTE> UploadScratch;
+#endif
+
 // Maps the whole store with invalidation, so a buffer refilled every frame, like a skinned mesh, never waits for the GPU.
 // NULL for an empty buffer.
 static BYTE* MapWholeBuffer(GLenum Target,GLuint Buffer,INT& Size,INT NewSize,GLenum Usage)
@@ -241,7 +246,22 @@ static BYTE* MapWholeBuffer(GLenum Target,GLuint Buffer,INT& Size,INT NewSize,GL
 		glBufferData(Target,NewSize,NULL,Usage);
 		Size = NewSize;
 	}
+#ifdef __EMSCRIPTEN__
+	if( UploadScratch.Num() < Size )
+		UploadScratch.Add(Size - UploadScratch.Num());
+	return Size ? &UploadScratch(0) : NULL;
+#else
 	return Size ? (BYTE*)glMapBufferRange(Target,0,Size,GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT) : NULL;
+#endif
+}
+
+static void UnmapWholeBuffer(GLenum Target,INT Size)
+{
+#ifdef __EMSCRIPTEN__
+	glBufferSubData(Target,0,Size,&UploadScratch(0));
+#else
+	glUnmapBuffer(Target);
+#endif
 }
 
 void FOpenGLVertexStream::Cache(FVertexStream* Source)
@@ -251,7 +271,7 @@ void FOpenGLVertexStream::Cache(FVertexStream* Source)
 	if( BYTE* Dest = MapWholeBuffer(GL_ARRAY_BUFFER,Buffer,Size,Source->GetSize(),Source->HintDynamic() ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW) )
 	{
 		Source->GetStreamData(Dest);
-		glUnmapBuffer(GL_ARRAY_BUFFER);
+		UnmapWholeBuffer(GL_ARRAY_BUFFER,Size);
 	}
 	CachedRevision = Source->GetRevision();
 }
@@ -275,7 +295,7 @@ void FOpenGLIndexBuffer::Cache(FIndexBuffer* Source)
 	if( BYTE* Dest = MapWholeBuffer(GL_ELEMENT_ARRAY_BUFFER,Buffer,Size,Source->GetSize(),GL_STATIC_DRAW) )
 	{
 		Source->GetContents(Dest);
-		glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+		UnmapWholeBuffer(GL_ELEMENT_ARRAY_BUFFER,Size);
 	}
 	RenDev->GL.ElementBuffer = Buffer;
 	CachedRevision = Source->GetRevision();
@@ -295,9 +315,10 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 		Offset = 0;
 	}
 	Used = Offset + Bytes;
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
 	// Not mapped: ANGLE maps into a staging copy and then copies the whole buffer back before
 	// every draw that reads it. Uploading with glBufferSubData keeps its system memory copy current.
+	// WebGL has no mapping at all.
 	LockedOffset	= Offset;
 	LockedBytes		= Bytes;
 	if( Scratch.Num() < Bytes )
@@ -316,7 +337,7 @@ void FOpenGLDynamicBuffer::Unlock()
 {
 	// Lock left the buffer bound.
 	if( LockedBytes > 0 )
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
 		glBufferSubData(Target,LockedOffset,LockedBytes,&Scratch(0));
 #else
 		glUnmapBuffer(Target);

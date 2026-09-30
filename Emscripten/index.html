@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UT2004</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #ddd; font: 16px system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #status { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; }
+  #status[hidden] { display: none; }
+  progress { width: min(480px, 80vw); }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1"></canvas>
+<div id="status"><span id="message">Loading</span><progress id="progress"></progress></div>
+<script>
+'use strict';
+const status = document.getElementById('status');
+const message = document.getElementById('message');
+const progress = document.getElementById('progress');
+const canvas = document.getElementById('canvas');
+
+function stop(text) {
+  message.textContent = text;
+  progress.hidden = true;
+  status.hidden = false;
+}
+
+// The smallest module with a 64-bit memory.
+const memory64 = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 0]));
+const webgl2 = !!document.createElement('canvas').getContext('webgl2');
+
+// Content comes from the asset host, or from the local assets/package.py output when testing.
+const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const assets = local ? 'assets/build/web/' : 'https://assets.ut2004.dev/web/';
+
+var Module = {
+  canvas,
+  // The game lists servers from the web master and joins them over WebRTC.
+  arguments: ['-webrtc-client-only'],
+  locateFile: (path, prefix) => path.endsWith('.data') && path != 'system.data' ? assets + path : prefix + path,
+  setStatus: (text) => {
+    const m = text.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
+    message.textContent = text.replace(/\(.*\)/, '').trim() || 'Starting';
+    if (m) {
+      progress.max = +m[2];
+      progress.value = Math.min(+m[1], +m[2]);
+    } else {
+      progress.removeAttribute('value');
+    }
+    status.hidden = !text;
+  },
+  preRun: [() => {
+    // FFileManagerUnix writes the inis, saves and logs below ~/.ut2004 and downloaded packages to ~/.cache.
+    const FS = Module.FS;
+    for (const dir of ['/home/web_user/.ut2004', '/home/web_user/.cache']) {
+      FS.mkdirTree(dir);
+      FS.mount(Module.IDBFS, { autoPersist: true }, dir);
+    }
+    Module.addRunDependency('idbfs');
+    FS.syncfs(true, (e) => {
+      if (e) console.error('IDBFS', e);
+      Module.removeRunDependency('idbfs');
+    });
+    // Without it the browser may evict the cached content when storage runs low.
+    navigator.storage?.persist?.();
+  }],
+  onAbort: (what) => stop(`The game stopped: ${what}`),
+};
+
+function load(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error(`Couldn't load ${src}`));
+    document.body.append(script);
+  });
+}
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('pointerdown', () => canvas.focus());
+
+if (!webgl2) {
+  stop('This browser has no WebGL 2.');
+} else if (!memory64) {
+  stop('This browser has no 64-bit WebAssembly memory. Use a current Chrome, Edge or Firefox.');
+} else {
+  // Each package loader registers itself with Module as it runs, so they go before the engine.
+  load('system.js')
+    .then(() => load(assets + 'assets.js'))
+    .then(() => load('UT2004.js'))
+    .then(() => canvas.focus())
+    .catch((e) => stop(e.message));
+}
+</script>
+</body>
+</html>

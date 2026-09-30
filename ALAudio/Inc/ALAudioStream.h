@@ -133,6 +133,8 @@ public:
 	// Interface.
 	void Init();
 	void Destroy();
+	// Reads the next chunk of every stream, on the streaming thread or once per frame where there is none.
+	void ReadChunks();
 	FALAudioStream* CreateStream( const TCHAR* Filename, INT InitialChunks, void* SharedData, EAudioStreamType Type, FLOAT InitialSeekTime );
 	void DestroyStream( FALAudioStream* AudioStream, UBOOL ReadQueuedChunks );
 

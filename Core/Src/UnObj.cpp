@@ -4813,6 +4813,7 @@ class FArchiveTagUsed : public FArchive
 public:
 	FArchiveTagUsed()
 	: Context( NULL )
+	, Draining( 0 )
 	, LevelName(TEXT("Level"))
 	, UdpGamespyQueryName(TEXT("UdpGamespyQuery"))
 	{
@@ -4854,20 +4855,28 @@ private:
 		}
 		else if( Obj && (Obj->GetFlags() & RF_Unreachable) )
 		{
-			// Only recurse the first time object is claimed.
+			// Only serialize the first time object is claimed.
 			guard(TestReach);
 			Obj->ClearFlags( RF_Unreachable | RF_DebugSerialize );
 
-			// Recurse.
 			if( Obj->GetFlags() & RF_TagGarbage )
 			{
-				// Recurse down the object graph.
-				UObject* OriginalContext = Context;
-				Context = Obj;
-				Obj->Serialize( *this );
-				if( !(Obj->GetFlags() & RF_DebugSerialize) )
-					appErrorf( TEXT("%s failed to route Serialize"), Obj->GetFullName() );
-				Context = OriginalContext;
+				// Serializing an object claims what it references, recursion would go as deep as the object graph.
+				// Browsers give wasm about 1 MB of stack, so the outermost call works through a list instead.
+				Pending.AddItem( Obj );
+				if( !Draining )
+				{
+					Draining = 1;
+					while( Pending.Num() )
+					{
+						Context = Pending.Pop();
+						Context->Serialize( *this );
+						if( !(Context->GetFlags() & RF_DebugSerialize) )
+							appErrorf( TEXT("%s failed to route Serialize"), Context->GetFullName() );
+					}
+					Context = NULL;
+					Draining = 0;
+				}
 			}
 			else
 			{
@@ -4893,6 +4902,8 @@ private:
 		unguardSlow;
 	}
 	UObject* Context;
+	TArray<UObject*> Pending;
+	UBOOL Draining;
 };
 
 //

@@ -4,13 +4,19 @@
 // Standard headers go before the engine's, whose macros (check, min, max) break them.
 #define NOMINMAX
 #pragma pack(push, 8)
-#include <windows.h>
+#if __EMSCRIPTEN__
+#include <emscripten/fetch.h>
+#else
 #include <curl/curl.h>
+#include <thread>
+#endif
 #include <nlohmann/json.hpp>
+#include <codecvt>
+#include <functional>
+#include <locale>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #pragma pack(pop)
 #endif
 
@@ -18,24 +24,63 @@
 
 #ifdef WITH_WEBRTC
 
+// TCHAR is UTF-16 on every platform. libc++ throws on invalid input unless the error strings are non-empty.
+typedef std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> FUtf8Convert;
+
 static std::string ToUtf8( const FString& S )
 {
-	INT Len = WideCharToMultiByte( CP_UTF8, 0, *S, -1, NULL, 0, NULL, NULL );
-	std::string Out( Len > 0 ? Len - 1 : 0, '\0' );
-	if( Len > 1 )
-		WideCharToMultiByte( CP_UTF8, 0, *S, -1, &Out[0], Len, NULL, NULL );
-	return Out;
+	return FUtf8Convert( "?", u"?" ).to_bytes( (const char16_t*)*S );
 }
 
 static FString FromUtf8( const std::string& S )
 {
-	INT Len = MultiByteToWideChar( CP_UTF8, 0, S.c_str(), -1, NULL, 0 );
-	std::wstring Out( Len > 0 ? Len - 1 : 0, L'\0' );
-	if( Len > 1 )
-		MultiByteToWideChar( CP_UTF8, 0, S.c_str(), -1, &Out[0], Len );
-	return FString( Out.c_str() );
+	std::u16string Out = FUtf8Convert( "?", u"?" ).from_bytes( S );
+	return FString( (const TCHAR*)Out.c_str() );
 }
 
+// Done gets whether the server answered 2xx, and the body.
+typedef std::function<void( bool, std::string )> FHttpDone;
+
+#if __EMSCRIPTEN__
+struct FHttpRequest
+{
+	FHttpDone Done;
+	std::string Body;
+};
+
+static void HttpFinished( emscripten_fetch_t* Fetch )
+{
+	FHttpRequest* Request = (FHttpRequest*)Fetch->userData;
+	Request->Done( Fetch->status >= 200 && Fetch->status < 300, std::string( Fetch->data, Fetch->numBytes ) );
+	delete Request;
+	emscripten_fetch_close( Fetch );
+}
+
+// The callbacks run on the main thread once the browser has the answer.
+static void HttpRequestAsync( const std::string& Url, const std::string& Body, FHttpDone Done )
+{
+	FHttpRequest* Request = new FHttpRequest{ Done, Body };
+	emscripten_fetch_attr_t Attr;
+	emscripten_fetch_attr_init( &Attr );
+	Attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+	Attr.timeoutMSecs = 5000;
+	Attr.userData = Request;
+	Attr.onsuccess = HttpFinished;
+	Attr.onerror = HttpFinished;
+	// A GET without headers needs no CORS preflight.
+	static const char* Headers[] = { "Content-Type", "application/json", NULL };
+	if( Body.empty() )
+		strcpy( Attr.requestMethod, "GET" );
+	else
+	{
+		strcpy( Attr.requestMethod, "POST" );
+		Attr.requestHeaders = Headers;
+		Attr.requestData = Request->Body.data();
+		Attr.requestDataSize = Request->Body.size();
+	}
+	emscripten_fetch( &Attr, Url.c_str() );
+}
+#else
 static size_t AppendResponse( char* Data, size_t Size, size_t Count, void* Response )
 {
 	((std::string*)Response)->append( Data, Size * Count );
@@ -72,6 +117,18 @@ static bool HttpRequest( const std::string& Url, const std::string& Body, std::s
 	return Ok;
 }
 
+// Done runs on the worker thread.
+static void HttpRequestAsync( const std::string& Url, const std::string& Body, FHttpDone Done )
+{
+	std::thread( [Url, Body, Done]()
+	{
+		std::string Response;
+		bool Ok = HttpRequest( Url, Body, Response );
+		Done( Ok, std::move(Response) );
+	} ).detach();
+}
+#endif
+
 static FString WebMasterURL()
 {
 	FString Url;
@@ -103,12 +160,7 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 		{ "info", Info },
 	};
 
-	std::string Url = ToUtf8( Base + TEXT("/advertise") );
-	std::thread( [Url, Payload = Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace)]()
-	{
-		std::string Response;
-		HttpRequest( Url, Payload, Response );
-	} ).detach();
+	HttpRequestAsync( ToUtf8( Base + TEXT("/advertise") ), Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace), []( bool, std::string ) {} );
 }
 
 #pragma pack(push, 8)
@@ -121,7 +173,7 @@ struct FWebMasterList
 };
 #pragma pack(pop)
 
-// The worker thread holds its own reference, so freeing a list that is still loading is safe.
+// The request holds its own reference, so freeing a list that is still loading is safe.
 struct FWebMasterListHandle
 {
 	std::shared_ptr<FWebMasterList> List;
@@ -138,16 +190,13 @@ FWebMasterListHandle* WebMasterList()
 		Handle->List->Done = true;
 		return Handle;
 	}
-	std::string Url = ToUtf8( Base + TEXT("/") );
-	std::thread( [Url, List = Handle->List]()
+	HttpRequestAsync( ToUtf8( Base + TEXT("/") ), std::string(), [List = Handle->List]( bool Ok, std::string Response )
 	{
-		std::string Response;
-		bool Ok = HttpRequest( Url, std::string(), Response );
 		std::lock_guard<std::mutex> Guard( List->Lock );
 		List->Response.swap( Response );
 		List->Ok = Ok;
 		List->Done = true;
-	} ).detach();
+	} );
 	return Handle;
 }
 

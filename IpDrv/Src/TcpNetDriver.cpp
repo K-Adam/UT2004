@@ -154,12 +154,13 @@ UBOOL UTcpNetDriver::InitConnect( FNetworkNotify* InNotify, FURL& ConnectURL, FS
 	guard(UTcpNetDriver::InitConnect);
 	if( !Super::InitConnect( InNotify, ConnectURL, Error ) )
 		return 0;
+#ifdef WITH_WEBRTC
+	// Such a client never sends UDP, and a browser has no UDP socket to open.
+	if( ParseParam(appCmdLine(), TEXT("webrtc-client-only")) )
+		return InitSockets( Error ) && WebRtcConnect( ConnectURL, Error );
+#endif
 	if( !InitBase( 1, InNotify, ConnectURL, Error ) )
 		return 0;
-#ifdef WITH_WEBRTC
-	if( ParseParam(appCmdLine(), TEXT("webrtc-client-only")) )
-		return WebRtcConnect( ConnectURL, Error );
-#endif
 
 	// Connect to remote.
 	sockaddr_in TempAddr;
@@ -208,7 +209,8 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 	// Process all incoming packets.
 	BYTE Data[NETWORK_MAX_PACKET];
 	sockaddr_in FromAddr;
-	for( ; ; )
+	// A WebRTC only client has no UDP socket.
+	while( Socket )
 	{
 		// Get data, if any.
 		clock(RecvCycles);

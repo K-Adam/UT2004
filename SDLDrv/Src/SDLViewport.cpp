@@ -1516,7 +1516,8 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 #endif
 	if( !Client->Window )
 	{
-		Client->Window = SDL_CreateWindow( "", NewX, NewY, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN );
+		// Resizable from the start, since in a browser SDL follows the page's canvas size only for such a window.
+		Client->Window = SDL_CreateWindow( "", NewX, NewY, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN | (GIsEditor ? 0 : SDL_WINDOW_RESIZABLE) );
 		if( !Client->Window )
 			appErrorf( TEXT("Couldn't create window: %s"), appFromAnsi(SDL_GetError()) );
 
@@ -1557,7 +1558,9 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 		else
 		{
 			SDL_SetWindowFullscreen( Window, false );
+#ifndef __EMSCRIPTEN__
 			SDL_SetWindowSize( Window, Align(NewX,2), NewY );
+#endif
 			SDL_SetWindowResizable( Window, !GIsEditor );
 		}
 		SDL_ShowWindow( Window );

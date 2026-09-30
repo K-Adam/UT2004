@@ -201,8 +201,9 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	debugf(TEXT("GL_RENDERER   : %s"),appFromAnsi((const ANSICHAR*)glGetString(GL_RENDERER)));
 	debugf(TEXT("GL_VERSION    : %s"),appFromAnsi((const ANSICHAR*)glGetString(GL_VERSION)));
 
-	SupportsDXT1		= HasExtension("GL_EXT_texture_compression_s3tc") || HasExtension("GL_EXT_texture_compression_dxt1");
-	SupportsDXT35		= HasExtension("GL_EXT_texture_compression_s3tc") || (HasExtension("GL_ANGLE_texture_compression_dxt3") && HasExtension("GL_ANGLE_texture_compression_dxt5"));
+	UBOOL S3TC			= HasExtension("GL_EXT_texture_compression_s3tc") || HasExtension("GL_WEBGL_compressed_texture_s3tc");
+	SupportsDXT1		= S3TC || HasExtension("GL_EXT_texture_compression_dxt1");
+	SupportsDXT35		= S3TC || (HasExtension("GL_ANGLE_texture_compression_dxt3") && HasExtension("GL_ANGLE_texture_compression_dxt5"));
 	SupportsFloatTargets = HasExtension("GL_EXT_color_buffer_float");
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE,&MaxTextureSize);
 	MaxAnisotropy = 1;
@@ -219,15 +220,13 @@ UBOOL UOpenGLRenderDevice::InitContext()
 		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexOES");
 	else if( HasExtension("GL_EXT_draw_elements_base_vertex") )
 		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexEXT");
-	ParallelCompile = 0;
-	if( HasExtension("GL_KHR_parallel_shader_compile") )
+	ParallelCompile = HasExtension("GL_KHR_parallel_shader_compile");
+	if( ParallelCompile )
 	{
+		// WebGL's version of the extension has no such function, its browsers compile in parallel on their own.
 		PFNGLMAXSHADERCOMPILERTHREADSKHRPROC MaxShaderCompilerThreads = (PFNGLMAXSHADERCOMPILERTHREADSKHRPROC)SDL_GL_GetProcAddress("glMaxShaderCompilerThreadsKHR");
 		if( MaxShaderCompilerThreads )
-		{
 			MaxShaderCompilerThreads(0xFFFFFFFF);
-			ParallelCompile = 1;
-		}
 	}
 	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile);
 
@@ -578,7 +577,10 @@ void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT W
 	{
 		if( !Textures[i] )
 			continue;
-		GLuint Sampler = GetSampler(GSF_ClampU | GSF_ClampV | (i == 2 ? GSF_Nearest : 0));
+		// R32F is incomplete with linear filtering unless OES_texture_float_linear is there, which many phones and browsers lack.
+		// The sun map is only read with texelFetch, so nearest costs nothing.
+		UBOOL Nearest = i == 2 || Textures[i] == SunShadow;
+		GLuint Sampler = GetSampler(GSF_ClampU | GSF_ClampV | (Nearest ? GSF_Nearest : 0));
 		glActiveTexture(GL_TEXTURE0 + i);
 		glBindTexture(GL_TEXTURE_2D,Textures[i]);
 		glBindSampler(i,Sampler);
@@ -627,8 +629,11 @@ void UOpenGLRenderDevice::Present(UViewport* Viewport)
 		glDeleteSync(FrameFence);
 		FrameFence = NULL;
 	}
+#ifndef __EMSCRIPTEN__
+	// WebGL caps the wait at MAX_CLIENT_WAIT_TIMEOUT_WEBGL, usually 0, and the browser only presents once the frame returns.
 	if( ReduceMouseLag )
 		FrameFence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);
+#endif
 
 	unguard;
 }

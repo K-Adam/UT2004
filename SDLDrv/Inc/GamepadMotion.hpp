@@ -6,6 +6,7 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <cmath> // std::abs for floats
 #include <algorithm> // std::min, std::max and std::clamp
 
 // You don't need to look at these. These will just be used internally by the GamepadMotion class declared below.

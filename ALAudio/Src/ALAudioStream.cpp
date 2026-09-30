@@ -28,6 +28,17 @@ static void *FileStreamingThread( void* Arg );
 static DWORD STDCALL FileStreamingThread( void* Arg );
 #endif
 
+static void FreeStreams( FALAudioStreamManager* StreamManager )
+{
+	FALAudioStream* Stream = StreamManager->First;
+	while( Stream )
+	{
+		FALAudioStream* Next = Stream->GetNext();
+		delete Stream;
+		Stream = Next;
+	}
+}
+
 #define VORBIS_BYTE_ORDER 0
 
 /*------------------------------------------------------------------------------------
@@ -511,7 +522,9 @@ void FALAudioStreamManager::Init()
 	ASI_startup();
 #endif
 
-#if __UNIX__
+#if __EMSCRIPTEN__
+	// No threads without SharedArrayBuffer, UALAudioSubsystem::Update reads the chunks instead.
+#elif __UNIX__
 	pthread_t FileStreamingThreadId = 0;
 	int rc = pthread_create(&FileStreamingThreadId, NULL,
 	                        FileStreamingThread, this);
@@ -535,15 +548,27 @@ void FALAudioStreamManager::Destroy()
 	guard(FALAudioStreamManager::Destroy);
 	if( Destroyed == 0 )
 	{
+#if __EMSCRIPTEN__
+		FreeStreams( this );
+		Destroyed = 2;
+#else
 		Destroyed = 1;
 		debugf(TEXT("Waiting for file streaming thread to finish..."));
 		while( Destroyed == 1 )
 			appSleep(0.1f);
+#endif
 #if WITH_MP3
 		ASI_shutdown();
 #endif
 	}
 	unguard;
+}
+
+void FALAudioStreamManager::ReadChunks()
+{
+	FScopeCriticalSection Lock( &CriticalSection );
+	for( FALAudioStream* Stream = First; Stream; Stream = Stream->GetNext() )
+		Stream->ReadChunks( 1 );
 }
 
 /*------------------------------------------------------------------------------------
@@ -560,30 +585,14 @@ static DWORD STDCALL FileStreamingThread( void* Arg )
 
 	while( StreamManager->Destroyed == 0)
 	{
-		// Critical section.
-		{
-			FScopeCriticalSection Lock( &StreamManager->CriticalSection );
-			FALAudioStream* Stream = StreamManager->First;
-
-			while( Stream )
-			{
-				Stream->ReadChunks( 1 );
-				Stream = Stream->GetNext();
-			}
-		}
+		StreamManager->ReadChunks();
 
 		// Don't eat up too much CPU time.
 		Sleep(50);
 	}
 
 	// No longer have to worry about syncronisation at this point.
-	FALAudioStream* Stream = StreamManager->First;
-	while( Stream )
-	{
-		FALAudioStream* Dummy = Stream->GetNext();
-		delete Stream;
-		Stream = Dummy;
-	}
+	FreeStreams( StreamManager );
 
 	StreamManager->Destroyed = 2;
 	

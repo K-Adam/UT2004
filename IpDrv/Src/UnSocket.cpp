@@ -249,9 +249,12 @@ TCHAR* SocketError( INT Code )
 		case EDQUOT:				return TEXT("EDQUOT");
 		case ESTALE:				return TEXT("ESTALE");
 		case EREMOTE:				return TEXT("EREMOTE");
+#if !__EMSCRIPTEN__
+		// Emscripten numbers errno like WASI, where these clash with EACCES and the like. It looks nothing up anyway.
 		case HOST_NOT_FOUND:		return TEXT("HOST_NOT_FOUND");
 		case TRY_AGAIN:				return TEXT("TRY_AGAIN");
 		case NO_RECOVERY:			return TEXT("NO_RECOVERY");
+#endif
 		case 0:						return TEXT("NO_ERROR");
 		default:					return TEXT("Unknown");
 	}

@@ -51,6 +51,11 @@ Revision history:
 	#ifndef MSG_NOSIGNAL
 	#define MSG_NOSIGNAL 0x4000
 	#endif
+
+	#if __EMSCRIPTEN__
+	// Emscripten emulates sockets over WebSockets, every ping, link and download would turn into a ws:// connection attempt.
+	#define socket( Domain, Type, Protocol ) INVALID_SOCKET
+	#endif
 #endif
 
 /*----------------------------------------------------------------------------
@@ -124,7 +129,11 @@ public:
 		*Error = 0;
 		Done = 0;
 
-#if _MSC_VER
+#if __EMSCRIPTEN__
+		// No threads, and Emscripten's resolver only makes up addresses for its WebSocket emulation.
+		appStrncpy( Error, TEXT("Browsers can't look up host names"), ARRAY_COUNT(Error) );
+		Done = 1;
+#elif _MSC_VER
 		HANDLE hThread = CreateThread( NULL, 0, ResolveThreadEntry, this, 0, NULL );
 		check(hThread);
 		CloseHandle( hThread );
@@ -238,6 +247,10 @@ inline int getlocalhostaddr( FOutputDevice& Out, in_addr &HostAddr )
 	guard(getlocalhostaddr);
 	int CanBindAll = 0;
 	IpSetInt( HostAddr, INADDR_ANY );
+#if __EMSCRIPTEN__
+	// A page has no address of its own, and Emscripten's resolver passes null to BigInt under wasm64.
+	return CanBindAll;
+#endif
 	TCHAR Home[256]=TEXT("");
 	TCHAR HostName[256]=TEXT("");
 	ANSICHAR AnsiHostName[256]="";

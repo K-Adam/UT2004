@@ -190,7 +190,9 @@ void UALAudioSubsystem::Shutdown()
 			StreamManager = NULL;
 		}
 
+#if !__EMSCRIPTEN__
 		appFreeDllHandle( DLLHandle );
+#endif
 
 		debugf(NAME_Exit,TEXT("OpenAL Audio subsystem shut down."));
 	}
@@ -255,6 +257,7 @@ UBOOL UALAudioSubsystem::Init()
 
 #if DYNAMIC_BIND
 	guard(DynamicBinding);
+#if !__EMSCRIPTEN__
 	// Find DLL's.
 	DLLHandle = appGetDllHandle( AL_DLL );
 	if( !DLLHandle )
@@ -262,6 +265,7 @@ UBOOL UALAudioSubsystem::Init()
 		debugf( NAME_Init, TEXT("Couldn't locate %s - giving up."), AL_DLL );
 		return 0;
 	}
+#endif
 	
 	// Find functions.
 	SUPPORTS_AL = 1;
@@ -617,6 +621,11 @@ UBOOL UALAudioSubsystem::Update( FSceneNode* SceneNode )
 	guard(UALAudioSubsystem::Update);
 
 	clock(GStats.DWORDStats(AudioStats.STATS_UpdateCycles));
+
+#if __EMSCRIPTEN__
+	// Before the early return, so music keeps playing while nothing is viewed.
+	StreamManager->ReadChunks();
+#endif
 
 	// Update.
 	if( !UAudioSubsystem::Update( SceneNode ) )
@@ -1214,8 +1223,14 @@ void UALAudioSubsystem::FindProcs( UBOOL AllowExt )
 	guard(UALAudioSubsystem::FindProcs);
 	#define AL_EXT(name) if( AllowExt ) SUPPORTS##name = FindExt( TEXT(#name)+1, 0 );
 	#define ALC_EXT(name) if( AllowExt ) SUPPORTS##name = FindExt( TEXT(#name)+1, 1 );
+#if __EMSCRIPTEN__
+	// alGetProcAddress there needs a current context, which needs these functions first.
+	#define AL_PROC(ext,ret,func,parms) *(void**)&func = (void*)&::func;
+	#define ALC_PROC(ext,ret,func,parms) *(void**)&func = (void*)&::func;
+#else
 	#define AL_PROC(ext,ret,func,parms) FindProc( *(void**)&func, #func, #ext, SUPPORTS##ext, AllowExt, 0);
 	#define ALC_PROC(ext,ret,func,parms) FindProc( *(void**)&func, #func, #ext, SUPPORTS##ext, AllowExt, 1);
+#endif
 	#include "ALFuncs.h"
 	#undef AL_EXT
 	#undef ALC_EXT

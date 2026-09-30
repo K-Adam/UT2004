@@ -60,6 +60,23 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
     {
+      "name": "web",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/web",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+        "VCPKG_TARGET_TRIPLET": "wasm64-emscripten",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
+        "CMAKE_C_FLAGS": "-m64 -fwasm-exceptions",
+        "CMAKE_CXX_FLAGS": "-m64 -fwasm-exceptions",
+        "CMAKE_EXE_LINKER_FLAGS": "-m64 -fwasm-exceptions",
+        "UT_STATIC_LINK": "ON"
+      }
+    },
+    {
       "name": "win32-static",
       "inherits": "win32",
       "binaryDir": "${sourceDir}/build/win32-static",
@@ -137,6 +154,11 @@
       "name": "android-arm64-release",
       "configurePreset": "android-arm64",
       "targets": ["ut_apk"]
+    },
+    {
+      "name": "web-release",
+      "configurePreset": "web",
+      "targets": ["ut_web"]
     },
     {
       "name": "win32-static-debug",
