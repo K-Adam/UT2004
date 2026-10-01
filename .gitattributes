@@ -1,1 +1,2 @@
 ports/**/*.patch -text
+DevIni/*.ini -text
