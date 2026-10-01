@@ -13,6 +13,7 @@
 <meta property="og:image:width" content="800">
 <meta property="og:image:height" content="420">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="ut2004.css">
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #ddd; font: 16px system-ui, sans-serif; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; outline: none; }
@@ -31,6 +32,22 @@
   <progress id="progress"></progress>
   <button id="action" hidden></button>
 </div>
+<dialog class="dialog" id="welcome">
+  <form method="dialog">
+    <h2>Welcome</h2>
+    <p>This web port of Unreal Tournament 2004 is a hobby project I maintain. It is not affiliated with or endorsed by Epic Games.</p>
+    <p>Found a problem or want to get in touch? <a href="https://github.com/K-Adam/UT2004_3369/issues" target="_blank" rel="noopener">Open an issue on GitHub</a>.</p>
+    <button autofocus>OK</button>
+  </form>
+</dialog>
+<dialog class="dialog" id="mobile">
+  <form method="dialog">
+    <h2>Made for desktop</h2>
+    <p>The browser version is intended for desktop users. On Android, download the APK from the releases page instead.</p>
+    <p>There is no iOS build yet.</p>
+    <button autofocus>Continue</button>
+  </form>
+</dialog>
 <script>
 'use strict';
 const status = document.getElementById('status');
@@ -275,13 +292,25 @@ function load(src) {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', () => canvas.focus());
 
-if (!document.createElement('canvas').getContext('webgl2')) {
+// Resolves when the dialog closes, from its button or Esc.
+const ask = (id) => new Promise((resolve) => {
+  const dialog = document.getElementById(id);
+  dialog.addEventListener('close', resolve, { once: true });
+  dialog.showModal();
+});
+
+// Phones skip everything below, so they never download the content.
+if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
+  status.hidden = true;
+  ask('mobile').then(() => location.replace('https://github.com/K-Adam/UT2004_3369/releases'));
+} else if (!document.createElement('canvas').getContext('webgl2')) {
   stop('This browser has no WebGL 2.');
 } else if (!('Suspending' in WebAssembly)) {
   stop('This browser cannot pause WebAssembly for storage reads (JSPI). Use Chrome 137, Firefox 153 or newer.');
 } else {
   // The system package loader registers itself with Module as it runs, so it goes before the engine.
-  sync()
+  ask('welcome')
+    .then(sync)
     .then(() => load('system.js'))
     .then(() => load('UT2004.js'))
     .then(() => canvas.focus())

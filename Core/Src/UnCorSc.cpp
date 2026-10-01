@@ -4628,6 +4628,15 @@ void UObject::execIterator( FFrame& Stack, RESULT_DECL )
 IMPLEMENT_FUNCTION( UObject, EX_Iterator, execIterator );
 
 // amb ---
+// Retail scripts must not see the fix package, they would treat its objects as foreign.
+static UBOOL IsInFixPackage( UObject* Obj )
+{
+	static FName FixPackage( TEXT("GUI2K4Fix") );
+	while( Obj->GetOuter() )
+		Obj = Obj->GetOuter();
+	return Obj->GetFName() == FixPackage;
+}
+
 void UObject::execAllObjects( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execAllObjects);
@@ -4645,7 +4654,7 @@ void UObject::execAllObjects( FFrame& Stack, RESULT_DECL )
 		*obj = NULL;
         while (It && *obj==NULL)
         {
-            if (It->IsA(objClass) && !It->IsPendingKill())
+            if (It->IsA(objClass) && !It->IsPendingKill() && !IsInFixPackage(*It) && !IsInFixPackage(It->GetClass()))
             {
                 *obj = *It;
             }
