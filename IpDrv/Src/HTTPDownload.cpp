@@ -303,8 +303,9 @@ void UHTTPDownload::Tick(void)
 						}
 						for( i=0; i<Headers.Num();i++ )
 						{
-							if( Headers(i).Caps().Left(16) == TEXT("CONTENT-LENGTH: ") )
-							{								
+							// A redirect's own body length would stay as the package size when the next download method takes over.
+							if( !bNeedRedir && Headers(i).Caps().Left(16) == TEXT("CONTENT-LENGTH: ") )
+							{
 								Info->DownloadSize = appAtoi( *Headers(i).Mid(16) );
 								if( Info->DownloadSize <= 0 )
 									Info->DownloadSize = Info->FileSize;
