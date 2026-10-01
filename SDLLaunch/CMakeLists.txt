@@ -40,15 +40,18 @@ if(EMSCRIPTEN)
   target_sources(SDLLaunch PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/LinkedPackages.cpp)
 
   set(webrtc ${CMAKE_SOURCE_DIR}/Emscripten/webrtc.js)
-  # Emscripten/index.html loads UT2004.js after the package loaders.
-  set_target_properties(SDLLaunch PROPERTIES SUFFIX .js RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR} LINK_DEPENDS ${webrtc})
+  set(content ${CMAKE_SOURCE_DIR}/Emscripten/content.js)
+  # Emscripten/index.html loads UT2004.js after the system package loader.
+  set_target_properties(SDLLaunch PROPERTIES SUFFIX .js RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR} LINK_DEPENDS "${webrtc};${content}")
   target_link_options(SDLLaunch PRIVATE
     # Garbage collection and script recursion need far more than the 64 KB default.
     -sSTACK_SIZE=8MB
-    -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=512MB -sMAXIMUM_MEMORY=16GB
+    -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=512MB -sMAXIMUM_MEMORY=4GB
     # Without FULL_ES3 only what WebGL 2 offers natively links.
     -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sGL_ENABLE_GET_PROC_ADDRESS
     -lopenal -lidbfs.js -sFETCH -sFORCE_FILESYSTEM -sEXIT_RUNTIME=0 -sENVIRONMENT=web
     -sEXPORTED_RUNTIME_METHODS=FS,IDBFS,addRunDependency,removeRunDependency
-    "SHELL:--js-library ${webrtc}")
+    # Lets the engine wait for content from IndexedDB and for the next animation frame.
+    -sJSPI
+    "SHELL:--js-library ${webrtc}" "SHELL:--js-library ${content}")
 endif()

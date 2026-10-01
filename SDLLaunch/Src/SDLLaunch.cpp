@@ -199,8 +199,9 @@ static void ExitSplash(void)
 
 
 #if __EMSCRIPTEN__
-#include <emscripten.h>
 #include <unistd.h>
+// Emscripten/content.js
+extern "C" void ut_next_frame();
 #endif
 
 #ifdef __ANDROID__
@@ -1063,9 +1064,12 @@ inline void	CMainLoop::RunLoop(void)
 	}
 	unguard;
 
-	// Enforce optional maximum tick rate. In a browser requestAnimationFrame paces the frames.
+	// Enforce optional maximum tick rate.
 	guard(EnforceTickRate);
-#ifndef __EMSCRIPTEN__
+#if __EMSCRIPTEN__
+	// The browser shows the frame and runs its events only while the game waits for the next one.
+	ut_next_frame();
+#else
 	if( !GUseFixedTimeStep && IncludeMessaging )
 	{		
 		FLOAT MaxTickRate = Engine->GetMaxTickRate();
@@ -1237,52 +1241,6 @@ static void MainLoop( UEngine* Engine )
 	unguard;
 }
 
-// Removes the is-running file and logs off before appExit.
-static void ShutdownEngine()
-{
-	GFileManager->Delete(TEXT("Running.ini"),0,0);
-	GLog->Log( NAME_Title, LocalizeGeneral(TEXT("Exit"),GPackage) );
-	appPreExit();
-	GIsGuarded = 0;
-}
-
-static void ReportCrash()
-{
-	Error.HandleError();
-	// The GUI build has no console, so the error would otherwise only be in the log.
-	if( GIsClient )
-	{
-		// The history is one line, which the message box would size to its full width.
-		FString Message = GErrorHist;
-		for( INT i; (i=Message.InStr(TEXT(" <- ")))!=-1; )
-			Message = Message.Left(i) + TEXT("\n") + Message.Mid(i+4);
-		SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(*Message), NULL );
-	}
-}
-
-#if __EMSCRIPTEN__
-// A browser draws a frame only after the page's code returns, so it calls one engine frame per animation frame.
-// The loop is not simulated as infinite, since the exception that would unwind main ends in guard's catch(...).
-static void WebFrame( void* Arg )
-{
-	CMainLoop* Loop = (CMainLoop*)Arg;
-	try
-	{
-		Loop->RunLoop();
-		if( !Loop->Finished() )
-			return;
-		delete Loop;
-		ShutdownEngine();
-	}
-	catch( ... )
-	{
-		ReportCrash();
-	}
-	emscripten_cancel_main_loop();
-	appExit();
-	GIsStarted = 0;
-}
-#endif
 
 
 static UEngine* InitEngine()
@@ -1441,10 +1399,12 @@ int main(int argc, char **argv)
 	if( chdir(SystemDir) != 0 )
 		return AndroidFail( "Couldn't open %s.", SystemDir ), 1;
 #elif __EMSCRIPTEN__
-	// The preload packages lay the files out like a build folder.
+	// The system package and Emscripten/index.html lay the files out like a build folder.
 	chdir( "/System" );
 	// Keys reach the game only while the canvas has focus, so typing elsewhere on the page still works.
 	SDL_SetHint( SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas" );
+	// SDL would yield on every swap under JSPI, the main loop already waits for each animation frame.
+	SDL_SetHint( SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0" );
 #endif
 	TCHAR CmdLine[1024] = TEXT("");
 #ifdef WIN32
@@ -1597,24 +1557,32 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 
 			// Start main engine loop, including the Windows message pump.
 			if( !GIsRequestingExit )
-			{
-#if __EMSCRIPTEN__
-				// main returns to the browser, WebFrame shuts down when the game exits.
-				emscripten_set_main_loop_arg( WebFrame, new CMainLoop(Engine), 0, 0 );
-				return 0;
-#else
 				MainLoop( Engine );
-#endif
-			}
 		}
 
-		ShutdownEngine();
+		// Clean shutdown.
+		GFileManager->Delete(TEXT("Running.ini"),0,0);
+
+		GLog->Log( NAME_Title, LocalizeGeneral(TEXT("Exit"),GPackage) );
+
+		appPreExit();
+		GIsGuarded = 0;
 #ifndef _DEBUG
 	}
 	catch( ... )
 	{
+		// Crashed.
 		ErrorLevel = 1;
-		ReportCrash();
+		Error.HandleError();
+		// The GUI build has no console, so the error would otherwise only be in the log.
+		if( GIsClient )
+		{
+			// The history is one line, which the message box would size to its full width.
+			FString Message = GErrorHist;
+			for( INT i; (i=Message.InStr(TEXT(" <- ")))!=-1; )
+				Message = Message.Left(i) + TEXT("\n") + Message.Mid(i+4);
+			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(*Message), NULL );
+		}
 	}
 #endif
 

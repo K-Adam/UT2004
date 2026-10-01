@@ -56,7 +56,7 @@
     #endif
 #endif
 
-#if (defined __x86_64__) || (defined __aarch64__) || (defined __wasm64__)
+#if (defined __x86_64__) || (defined __aarch64__)
     #define PLATFORM_64BITS 1
 #else
     #define PLATFORM_32BITS 1

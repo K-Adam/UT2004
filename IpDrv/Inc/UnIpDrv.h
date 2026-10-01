@@ -248,7 +248,7 @@ inline int getlocalhostaddr( FOutputDevice& Out, in_addr &HostAddr )
 	int CanBindAll = 0;
 	IpSetInt( HostAddr, INADDR_ANY );
 #if __EMSCRIPTEN__
-	// A page has no address of its own, and Emscripten's resolver passes null to BigInt under wasm64.
+	// A page has no address of its own.
 	return CanBindAll;
 #endif
 	TCHAR Home[256]=TEXT("");

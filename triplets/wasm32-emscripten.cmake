@@ -1,0 +1,15 @@
+set(VCPKG_ENV_PASSTHROUGH_UNTRACKED EMSDK PATH)
+if(NOT DEFINED ENV{EMSDK})
+  message(FATAL_ERROR "EMSDK is not set, activate emsdk first (emsdk_env)")
+endif()
+set(VCPKG_TARGET_ARCHITECTURE wasm32)
+set(VCPKG_CRT_LINKAGE dynamic)
+set(VCPKG_LIBRARY_LINKAGE static)
+set(VCPKG_CMAKE_SYSTEM_NAME Emscripten)
+set(VCPKG_BUILD_TYPE release)
+# The engine catches with wasm exceptions, so every C++ library uses the same model.
+set(VCPKG_C_FLAGS "-fwasm-exceptions")
+set(VCPKG_CXX_FLAGS "-fwasm-exceptions")
+set(VCPKG_LINKER_FLAGS "-fwasm-exceptions")
+# vcpkg's wrapper includes Emscripten.cmake and applies the flags above, which Emscripten.cmake alone would drop.
+set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${VCPKG_ROOT_DIR}/scripts/toolchains/emscripten.cmake")

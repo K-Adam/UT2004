@@ -2239,7 +2239,7 @@ DWORD appGetLocalIP( void )
 	static DWORD LocalIP = 0;
 
 #if !__EMSCRIPTEN__
-	// A page has no address of its own, and Emscripten's resolver passes null to BigInt under wasm64.
+	// A page has no address of its own.
 	if( !lookedUp )
 	{
 		lookedUp = true;

@@ -4,46 +4,178 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UT2004</title>
+<meta name="description" content="Unreal Tournament 2004 in the browser, joining WebRTC servers from the web master list.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="UT2004">
+<meta property="og:description" content="Unreal Tournament 2004 in the browser, joining WebRTC servers from the web master list.">
+<meta property="og:image" content="https://assets.ut2004.dev/web/og.jpg">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="420">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #ddd; font: 16px system-ui, sans-serif; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; outline: none; }
   #status { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; }
-  #status[hidden] { display: none; }
+  #status[hidden], #status [hidden] { display: none; }
+  #details { max-width: 560px; color: #999; font-size: 14px; line-height: 1.5; white-space: pre-line; }
   progress { width: min(480px, 80vw); }
+  button { font: inherit; padding: 8px 20px; }
 </style>
 </head>
 <body>
 <canvas id="canvas" tabindex="-1"></canvas>
-<div id="status"><span id="message">Loading</span><progress id="progress"></progress></div>
+<div id="status">
+  <span id="message">Loading</span>
+  <div id="details"></div>
+  <progress id="progress"></progress>
+  <button id="action" hidden></button>
+</div>
 <script>
 'use strict';
 const status = document.getElementById('status');
 const message = document.getElementById('message');
+const details = document.getElementById('details');
 const progress = document.getElementById('progress');
+const action = document.getElementById('action');
 const canvas = document.getElementById('canvas');
 
-function stop(text) {
+// The content comes from the asset host, or straight from the assets submodule when testing locally.
+const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const host = 'https://assets.ut2004.dev/web/';
+const manifestUrl = local ? 'assets/build/web/files.json' : host + 'files.json';
+const fileUrl = (path) => (local ? 'assets/src/' : host) + path;
+// Files this small are read into memory before the game starts, so reading them never waits.
+const RESIDENT = 2 << 20;
+const PARALLEL = 4;
+
+let db, files, warning = '';
+
+function show(text, info = '') {
   message.textContent = text;
-  progress.hidden = true;
+  details.textContent = info;
   status.hidden = false;
 }
 
-// The smallest module with a 64-bit memory.
-const memory64 = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 0]));
-const webgl2 = !!document.createElement('canvas').getContext('webgl2');
+function stop(text, retry) {
+  show(text);
+  progress.hidden = true;
+  action.textContent = 'Retry';
+  action.onclick = () => location.reload();
+  action.hidden = !retry;
+}
 
-// Content comes from the asset host, or from the local assets/package.py output when testing.
-const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-const assets = local ? 'assets/build/web/' : 'https://assets.ut2004.dev/web/';
+const gb = (n) => (n / 2 ** 30).toFixed(1) + ' GB';
+const mb = (n) => Math.round(n / 2 ** 20) + ' MB';
+const request = (r) => new Promise((resolve, reject) => {
+  r.onsuccess = () => resolve(r.result);
+  r.onerror = () => reject(r.error);
+});
+const store = (mode) => db.transaction('files', mode).objectStore('files');
+
+async function readContent(path) {
+  const entry = await request(store('readonly').get(path));
+  if (!entry) throw new Error(`${path} is missing from the browser storage, reload the page.`);
+  return entry.blob;
+}
+
+async function consent(missing) {
+  const bytes = missing.reduce((sum, f) => sum + f.size, 0);
+  const { quota = 0, usage = 0 } = (await navigator.storage?.estimate?.()) ?? {};
+  show('UT2004 keeps its game content in this browser',
+    `${missing.length} files (${gb(bytes)}) are downloaded once and stored by the browser, so later visits start without downloading them again.` +
+    (quota ? `\nFree space for this site: ${gb(quota - usage)}.` : ''));
+  progress.hidden = true;
+  action.textContent = 'Store and play';
+  action.hidden = false;
+  await new Promise((resolve) => (action.onclick = resolve));
+  action.hidden = true;
+  // Without it the browser may evict the content when storage runs low. Firefox asks the user, so the download doesn't wait.
+  navigator.storage?.persist?.()?.then((granted) => {
+    if (!granted) warning = '\nThe browser may clear the stored content when it runs low on space.';
+  });
+}
+
+async function download(missing) {
+  const total = missing.reduce((sum, f) => sum + f.size, 0);
+  const active = new Set();
+  const started = performance.now();
+  let received = 0, finished = 0, next = 0, drawing = false, storage = '';
+
+  const draw = () => {
+    drawing = false;
+    const seconds = (performance.now() - started) / 1000;
+    const speed = received / Math.max(seconds, 0.001);
+    const left = speed > 0 ? Math.ceil((total - received) / speed / 60) : 0;
+    show(`Downloading the game content, ${finished} of ${missing.length} files`,
+      `${mb(received)} of ${mb(total)}, ${mb(speed)}/s, about ${left} min left${storage}\n${[...active].join('\n')}${warning}`);
+    progress.hidden = false;
+    progress.max = total;
+    progress.value = received;
+  };
+  const update = () => {
+    if (!drawing) requestAnimationFrame(draw);
+    drawing = true;
+  };
+
+  async function worker() {
+    while (next < missing.length) {
+      const f = missing[next++];
+      active.add(f.path);
+      const response = await fetch(fileUrl(f.path), { cache: 'no-cache' });
+      if (!response.ok) throw new Error(`${f.path}: HTTP ${response.status}`);
+      // The body arrives decompressed, so it counts against the manifest's sizes.
+      const chunks = [];
+      let size = 0;
+      for (const reader = response.body.getReader(); ;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        size += value.length;
+        received += value.length;
+        update();
+      }
+      if (size != f.size) throw new Error(`${f.path} arrived incomplete.`);
+      await request(store('readwrite').put({ hash: f.hash, blob: new Blob(chunks) }, f.path));
+      active.delete(f.path);
+      finished++;
+      const { quota = 0, usage = 0 } = (await navigator.storage?.estimate?.()) ?? {};
+      if (quota) storage = `, ${gb(usage)} of ${gb(quota)} stored`;
+      update();
+    }
+  }
+  await Promise.all(Array.from({ length: PARALLEL }, worker));
+}
+
+async function sync() {
+  const opening = indexedDB.open('ut2004-content', 1);
+  opening.onupgradeneeded = () => opening.result.createObjectStore('files');
+  db = await request(opening);
+
+  const response = await fetch(manifestUrl, { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`The content list: HTTP ${response.status}`);
+  files = await response.json();
+  const paths = await request(store('readonly').getAllKeys());
+  const entries = await request(store('readonly').getAll());
+  const stored = new Map(paths.map((path, i) => [path, entries[i].hash]));
+  const wanted = new Set(files.map((f) => f.path));
+  for (const path of paths) if (!wanted.has(path)) store('readwrite').delete(path);
+
+  const missing = files.filter((f) => stored.get(f.path) !== f.hash);
+  if (missing.length) {
+    await consent(missing);
+    await download(missing);
+  }
+}
 
 var Module = {
   canvas,
   // The game lists servers from the web master and joins them over WebRTC.
   arguments: ['-webrtc-client-only'],
-  locateFile: (path, prefix) => path.endsWith('.data') && path != 'system.data' ? assets + path : prefix + path,
+  readContent,
   setStatus: (text) => {
     const m = text.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
-    message.textContent = text.replace(/\(.*\)/, '').trim() || 'Starting';
+    show(text.replace(/\(.*\)/, '').trim() || 'Starting');
+    progress.hidden = false;
     if (m) {
       progress.max = +m[2];
       progress.value = Math.min(+m[1], +m[2]);
@@ -64,8 +196,21 @@ var Module = {
       if (e) console.error('IDBFS', e);
       Module.removeRunDependency('idbfs');
     });
-    // Without it the browser may evict the cached content when storage runs low.
-    navigator.storage?.persist?.();
+
+    // Each content file starts as an empty node of its size, Emscripten/content.js reads it as the game needs it.
+    const resident = [];
+    for (const f of files) {
+      const path = '/' + f.path;
+      FS.mkdirTree(path.slice(0, path.lastIndexOf('/')));
+      const node = FS.create(path, 0o444);
+      node.contentPath = f.path;
+      node.usedBytes = f.size;
+      node.contents = null;
+      if (f.size <= RESIDENT) resident.push(node);
+    }
+    Module.addRunDependency('content');
+    Promise.all(resident.map(async (node) => (node.contents = new Uint8Array(await (await readContent(node.contentPath)).arrayBuffer()))))
+      .then(() => Module.removeRunDependency('content'), (e) => stop(e.message, true));
   }],
   onAbort: (what) => stop(`The game stopped: ${what}`),
 };
@@ -83,17 +228,17 @@ function load(src) {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', () => canvas.focus());
 
-if (!webgl2) {
+if (!document.createElement('canvas').getContext('webgl2')) {
   stop('This browser has no WebGL 2.');
-} else if (!memory64) {
-  stop('This browser has no 64-bit WebAssembly memory. Use a current Chrome, Edge or Firefox.');
+} else if (!('Suspending' in WebAssembly)) {
+  stop('This browser cannot pause WebAssembly for storage reads (JSPI). Use Chrome 137, Firefox 153 or newer.');
 } else {
-  // Each package loader registers itself with Module as it runs, so they go before the engine.
-  load('system.js')
-    .then(() => load(assets + 'assets.js'))
+  // The system package loader registers itself with Module as it runs, so it goes before the engine.
+  sync()
+    .then(() => load('system.js'))
     .then(() => load('UT2004.js'))
     .then(() => canvas.focus())
-    .catch((e) => stop(e.message));
+    .catch((e) => stop(e.message, true));
 }
 </script>
 </body>

@@ -162,10 +162,7 @@ typedef QWORD PTRINT;
 typedef DWORD PTRINT;
 #endif
 
-// This should really just include a header.
-#if !PLATFORM_64BITS
-typedef unsigned int size_t;
-#endif
+#include <stddef.h>
 
 // Make sure characters are signed.
 #ifdef __CHAR_UNSIGNED__

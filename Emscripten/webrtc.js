@@ -1,5 +1,4 @@
 // The browser side of IpDrv/Src/WebRtcBrowser.cpp, linked with --js-library.
-// The 'p' in each __sig makes Emscripten hand wasm64 pointers over as Numbers.
 
 addToLibrary({
   $UTWebRtc: {

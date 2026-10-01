@@ -32,6 +32,15 @@
 #include <sys/mman.h>
 #endif
 
+#if __EMSCRIPTEN__
+// Emscripten/content.js reads the content files from IndexedDB, suspending the engine while it waits.
+extern "C" int ut_content_read( int File, void* Data, int Count );
+extern "C" void ut_content_open( const char* Path );
+static inline ssize_t ReadFileData( int File, void* Data, INT Count ) { return ut_content_read( File, Data, Count ); }
+#else
+static inline ssize_t ReadFileData( int File, void* Data, INT Count ) { return read( File, Data, Count ); }
+#endif
+
 /*-----------------------------------------------------------------------------
 	File Manager.
 -----------------------------------------------------------------------------*/
@@ -168,7 +177,7 @@ public:
 		BufferBase = Pos;
 		BufferCount = Min( Min( Max( HintCount, 0 ), (INT)(ARRAY_COUNT(Buffer) - (Pos&(ARRAY_COUNT(Buffer)-1))) ), Size-Pos );
 		DOUBLE	StartTime	= appSeconds();
-		if( read( File, Buffer, BufferCount ) != BufferCount )
+		if( ReadFileData( File, Buffer, BufferCount ) != BufferCount )
 		{
 			ArIsError = 1;
 			Error->Logf( TEXT("read failed: BufferCount=%i errno=%d"), BufferCount, (int) errno );
@@ -221,7 +230,7 @@ public:
 			{
 				if( Length >= ARRAY_COUNT(Buffer) )
 				{
-					if( read( File, V, Length )!=Length )
+					if( ReadFileData( File, V, Length )!=Length )
 					{
 						ArIsError = 1;
 						Error->Logf( TEXT("read failed: Length=%i errno=%i"), Length, (int) errno );
@@ -379,7 +388,12 @@ public:
             unixToANSI( ansipath, FakeFilename );
             char *Filename = appUnixPath(ansipath);
             if (!isdir(Filename))
+            {
+#if __EMSCRIPTEN__
+                ut_content_open(Filename);
+#endif
                 File = fopen(Filename, "rb");
+            }
         }
 
         return(File);

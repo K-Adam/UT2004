@@ -67,12 +67,12 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
-        "VCPKG_TARGET_TRIPLET": "wasm64-emscripten",
+        "VCPKG_TARGET_TRIPLET": "wasm32-emscripten",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
         "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports",
-        "CMAKE_C_FLAGS": "-m64 -fwasm-exceptions",
-        "CMAKE_CXX_FLAGS": "-m64 -fwasm-exceptions",
-        "CMAKE_EXE_LINKER_FLAGS": "-m64 -fwasm-exceptions",
+        "CMAKE_C_FLAGS": "-fwasm-exceptions",
+        "CMAKE_CXX_FLAGS": "-fwasm-exceptions",
+        "CMAKE_EXE_LINKER_FLAGS": "-fwasm-exceptions",
         "UT_STATIC_LINK": "ON"
       }
     },
