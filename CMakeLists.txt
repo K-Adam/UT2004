@@ -13,8 +13,8 @@ elseif(EMSCRIPTEN)
   if(NOT UT_STATIC_LINK OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(FATAL_ERROR "The web build is a single wasm32 module: cmake --preset web")
   endif()
-elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|i.86")
-  message(FATAL_ERROR "Only Windows, x86 or x64 Linux, arm64 Android and the web are supported: cmake --preset win32|win64|linux|linux32|android-arm64|web")
+elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|i.86|aarch64")
+  message(FATAL_ERROR "Only Windows, x86, x64 or arm64 Linux, arm64 Android and the web are supported: cmake --preset win32|win64|linux64|linux32|android-arm64|web")
 endif()
 
 # Each build runs from its own game folder, so architectures don't overwrite each other and runtime

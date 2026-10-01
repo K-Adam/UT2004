@@ -1765,6 +1765,9 @@ void appPlatformPreInit()
     #elif __EMSCRIPTEN__
         GRunningOS = OS_LINUX_X86_64;
         appSprintf(GMachineOS, TEXT("Web"));
+    #elif defined __aarch64__
+        GRunningOS = OS_LINUX_X86_64;
+        appSprintf(GMachineOS, TEXT("arm64 Linux"));
     #elif defined __x86_64__
         GRunningOS = OS_LINUX_X86_64;
         appSprintf(GMachineOS, TEXT("x86-64 Linux"));

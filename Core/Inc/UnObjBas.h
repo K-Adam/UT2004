@@ -1241,7 +1241,7 @@ template< class T > T* ConstructObject( UClass* Class, UObject* Outer=(UObject*)
 {
 	check(Class->IsChildOf(T::StaticClass()));
 	if( Outer==(UObject*)-1 )
-		Outer = UObject::GetTransientPackage();
+		Outer = (UObject*)UObject::GetTransientPackage();
 	return (T*)UObject::StaticConstructObject( Class, Outer, Name, SetFlags );
 }
 

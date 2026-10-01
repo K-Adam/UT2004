@@ -10,6 +10,7 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <algorithm>
 #include <deque>
 #include <memory>
 #include <mutex>
