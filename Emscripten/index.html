@@ -47,6 +47,11 @@ const fileUrl = (path) => (local ? 'assets/src/' : host) + path;
 // Files this small are read into memory before the game starts, so reading them never waits.
 const RESIDENT = 2 << 20;
 const PARALLEL = 4;
+// A hung connection never fails by itself, so a download without data for this long is started over.
+const STALL = 30000;
+// The asset host turns requests away for ten seconds after a burst of them, so a failed file waits that out.
+const RETRIES = 5;
+const RETRY_WAIT = 12000;
 
 let db, files, warning = '';
 
@@ -71,6 +76,13 @@ const request = (r) => new Promise((resolve, reject) => {
   r.onerror = () => reject(r.error);
 });
 const store = (mode) => db.transaction('files', mode).objectStore('files');
+// A write only counts once its transaction commits, running out of quota aborts it there.
+const put = (path, value) => new Promise((resolve, reject) => {
+  const tx = db.transaction('files', 'readwrite');
+  tx.objectStore('files').put(value, path);
+  tx.oncomplete = resolve;
+  tx.onabort = () => reject(tx.error);
+});
 
 async function readContent(path) {
   const entry = await request(store('readonly').get(path));
@@ -99,10 +111,13 @@ async function download(missing) {
   const total = missing.reduce((sum, f) => sum + f.size, 0);
   const active = new Set();
   const started = performance.now();
+  // The first failure stops the other downloads and the progress display, so the error stays on screen.
+  const failure = new AbortController();
   let received = 0, finished = 0, next = 0, drawing = false, storage = '';
 
   const draw = () => {
     drawing = false;
+    if (failure.signal.aborted) return;
     const seconds = (performance.now() - started) / 1000;
     const speed = received / Math.max(seconds, 0.001);
     const left = speed > 0 ? Math.ceil((total - received) / speed / 60) : 0;
@@ -117,25 +132,56 @@ async function download(missing) {
     drawing = true;
   };
 
-  async function worker() {
-    while (next < missing.length) {
-      const f = missing[next++];
-      active.add(f.path);
-      const response = await fetch(fileUrl(f.path), { cache: 'no-cache' });
-      if (!response.ok) throw new Error(`${f.path}: HTTP ${response.status}`);
+  async function fetchBlob(f) {
+    const stall = new AbortController();
+    let timer, size = 0;
+    const alive = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => stall.abort(new Error('the download stopped')), STALL);
+    };
+    try {
+      alive();
+      // IndexedDB keeps the file, a copy in the HTTP cache would only take the space twice.
+      const response = await fetch(fileUrl(f.path), { cache: 'no-store', signal: AbortSignal.any([failure.signal, stall.signal]) });
+      // A missing file stays missing, a busy host recovers.
+      if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { final: response.status < 500 && response.status != 429 });
       // The body arrives decompressed, so it counts against the manifest's sizes.
       const chunks = [];
-      let size = 0;
       for (const reader = response.body.getReader(); ;) {
         const { done, value } = await reader.read();
         if (done) break;
+        alive();
         chunks.push(value);
         size += value.length;
         received += value.length;
         update();
       }
-      if (size != f.size) throw new Error(`${f.path} arrived incomplete.`);
-      await request(store('readwrite').put({ hash: f.hash, blob: new Blob(chunks) }, f.path));
+      if (size != f.size) throw Object.assign(new Error('its size does not match the content list'), { final: true });
+      return new Blob(chunks);
+    } catch (e) {
+      received -= size;
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function worker() {
+    while (next < missing.length) {
+      const f = missing[next++];
+      active.add(f.path);
+      try {
+        let blob;
+        for (let attempt = 0; !blob; attempt++) {
+          blob = await fetchBlob(f).catch((e) => {
+            if (failure.signal.aborted || attempt == RETRIES || e.final) throw e;
+          });
+          if (!blob) await new Promise((resolve) => setTimeout(resolve, RETRY_WAIT));
+        }
+        await put(f.path, { hash: f.hash, blob });
+      } catch (e) {
+        throw new Error(`${f.path}: ${e?.message ?? e}`);
+      }
       active.delete(f.path);
       finished++;
       const { quota = 0, usage = 0 } = (await navigator.storage?.estimate?.()) ?? {};
@@ -143,7 +189,7 @@ async function download(missing) {
       update();
     }
   }
-  await Promise.all(Array.from({ length: PARALLEL }, worker));
+  await Promise.all(Array.from({ length: PARALLEL }, worker)).finally(() => failure.abort());
 }
 
 async function sync() {
