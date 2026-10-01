@@ -1316,6 +1316,17 @@ const TCHAR* UClassProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Po
 	return Result;
 	unguard;
 }
+// The package map only checks for UClass, a forged class outside MetaClass makes script read past its defaults.
+UBOOL UClassProperty::NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const
+{
+	guardSlow(UClassProperty::NetSerializeItem);
+	UBOOL Result = UObjectProperty::NetSerializeItem( Ar, Map, Data );
+	UClass*& C = *(UClass**)Data;
+	if( Ar.IsLoading() && C && !C->IsChildOf(MetaClass) )
+		C = NULL;
+	return Result;
+	unguardobjSlow;
+}
 UBOOL UClassProperty::HasValue( const BYTE* Data ) const
 {
 	guard(UClassProperty::HasValue);

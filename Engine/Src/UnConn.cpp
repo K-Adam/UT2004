@@ -439,6 +439,10 @@ void UNetConnection::ReceivedPacket( FBitReader& Reader )
 				return;
 			}
 
+			// An ack for a packet not sent yet is forged, and its nak loop would stall the server.
+			if( AckPacketId>=OutPacketId )
+				continue;
+
 			// Resend any old reliable packets that the receiver hasn't acknowledged.
 			guard(ReceivedVirtualNak);
 			if( AckPacketId>OutAckPacketId )

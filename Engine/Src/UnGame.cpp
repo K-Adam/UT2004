@@ -475,6 +475,15 @@ UBOOL UGameEngine::GUIActive( const UClient* InClient ) const
 	Command line executor.
 -----------------------------------------------------------------------------*/
 
+// Relaunch arguments must not choose files the new process writes or takes its config from.
+static UBOOL RelaunchArgsSafe( const TCHAR* Args )
+{
+	if( appStrfind(Args,TEXT("ABSLOG=")) || appStrfind(Args,TEXT("INI=")) || appStrfind(Args,TEXT("USERINI=")) || appStrfind(Args,TEXT("COMMAND=")) )
+		return 0;
+	FString Log;
+	return !Parse(Args,TEXT("LOG="),Log) || !(appStrfind(*Log,TEXT("/")) || appStrfind(*Log,TEXT("\\")) || appStrfind(*Log,TEXT(":")) || appStrfind(*Log,TEXT("..")));
+}
+
 //
 // This always going to be the last exec handler in the chain. It
 // handles passing the command to all other global handlers.
@@ -482,6 +491,13 @@ UBOOL UGameEngine::GUIActive( const UClient* InClient ) const
 UBOOL UGameEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 {
 	guard(UGameEngine::Exec);
+	const TCHAR* Relaunch=Cmd;
+	// Servers send script to their clients, which must not use it to restart the game.
+	if( ParseCommand( &Relaunch, TEXT("RELAUNCH") ) && (GPendingLevel || (GLevel && GLevel->GetLevelInfo()->NetMode==NM_Client) || !RelaunchArgsSafe(Relaunch)) )
+	{
+		Ar.Logf( TEXT("RELAUNCH refused: %s"), Relaunch );
+		return 1;
+	}
 	const TCHAR* Str=Cmd;
 	if( ParseCommand( &Str, TEXT("OPEN") ) )
 	{

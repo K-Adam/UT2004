@@ -79,6 +79,7 @@ public:
 	INT GetNumBytes();
 	INT GetNumBits();
 	INT GetPosBits();
+	INT RemainingBytes() { return (Num-Pos+7)/8; }
 private:
 	TArray<BYTE> Buffer;
 	INT   Num;

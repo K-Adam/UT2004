@@ -191,6 +191,9 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 	}
 	else if( ParseCommand( &Text, TEXT("USES") ) )
 	{
+		// A running download points into the list, which growing would reallocate.
+		if( Connection->Download )
+			return;
 		// Dependency information.
 		FPackageInfo& Info = *new(Connection->PackageMap->List)FPackageInfo(NULL);
 		TCHAR PackageName[NAME_SIZE]=TEXT("");

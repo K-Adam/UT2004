@@ -606,11 +606,11 @@ APlayerController* ULevel::SpawnPlayActor( UPlayer* Player, ENetRole RemoteRole,
 		PackageMap = Conn->PackageMap;
 
 	// Make the option string.
-	TCHAR Options[1024]=TEXT("");
+	FString Options;
 	for( INT i=0; i<URL.Op.Num(); i++ )
 	{
-		appStrcat( Options, TEXT("?") );
-		appStrcat( Options, *URL.Op(i) );
+		Options += TEXT("?");
+		Options += URL.Op(i);
 	}
 
 	// Tell UnrealScript to log in.

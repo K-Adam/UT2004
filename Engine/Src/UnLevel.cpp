@@ -1075,6 +1075,14 @@ UBOOL ULevel::NotifyAcceptingChannel( UChannel* Channel )
 		}
 		else if( Channel->ChType==CHTYPE_File )
 		{
+			// Clients download one file at a time, and each send holds an open file.
+			UNetConnection* Connection = Channel->Connection;
+			for( INT i=0; i<Connection->OpenChannels.Num(); i++ )
+				if( Connection->OpenChannels(i)->ChType==CHTYPE_File && ((UFileChannel*)Connection->OpenChannels(i))->SendFileAr )
+				{
+					debugf( NAME_DevNet, TEXT("NotifyAcceptingChannel File %i server %s: Refused, already sending"), Channel->ChIndex, GetFullName() );
+					return 0;
+				}
 			// The client is going to request a file.
 			debugf( NAME_DevNet, TEXT("NotifyAcceptingChannel File %i server %s: Accepted"), Channel->ChIndex, GetFullName() );
 			return 1;
@@ -1332,10 +1340,11 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 		{
 			FGuid Guid(0,0,0,0);
 			Parse( Text, TEXT("GUID=" ), Guid );
-			if( Connection->PackageMap )
+			// Clients only skip optional packages before joining, removing others breaks the package map.
+			if( Connection->PackageMap && !Connection->Actor )
 			{
 				for( INT i=0;i<Connection->PackageMap->List.Num();i++ )
-					if( Connection->PackageMap->List(i).Guid == Guid )
+					if( Connection->PackageMap->List(i).Guid == Guid && (Connection->PackageMap->List(i).PackageFlags & PKG_ClientOptional) )
 					{
 						debugf( NAME_DevNet, TEXT("User skipped download of '%s'"), *Connection->PackageMap->List(i).URL );
 						Connection->PackageMap->List.Remove( i );
@@ -1393,7 +1402,7 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 			}
 			WelcomePlayer( Connection );
 		}
-		else if( ParseCommand(&Text,TEXT("JOIN")) && !Connection->Actor )
+		else if( ParseCommand(&Text,TEXT("JOIN")) && !Connection->Actor && Connection->PassedChallenge )
 		{
 
 			// Make sure Client is verified

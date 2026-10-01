@@ -375,7 +375,14 @@ INT UChannel::SendBunch( FOutBunch* Bunch, UBOOL Merge )
 	guard(UChannel::SendBunch);
 	check(!Closing);
 	check(Connection->Channels[ChIndex]==this);
-	check(!Bunch->IsError());
+
+	// A peer that stops acking fills the reliable buffer and overflows the next bunch.
+	if( Bunch->IsError() )
+	{
+		debugf( NAME_DevNet, TEXT("Bunch overflowed on channel %i, closing connection %s"), ChIndex, *Connection->LowLevelGetRemoteAddress() );
+		Connection->State = USOCK_Closed;
+		return INDEX_NONE;
+	}
 
 	// Set bunch flags.
 	if( OpenPacketId==INDEX_NONE && OpenedLocally )
@@ -750,12 +757,10 @@ void UActorChannel::SetChannelActor( AActor* InActor )
 		while ( Connection->PendingOutRec[ChIndex] <= RealOutReliable )
 		{
 			FOutBunch Bunch( this, 0 );
-			if( !Bunch.IsError() )
-			{
-				Bunch.bReliable = true;
-				SendBunch( &Bunch, 0 );
-				Connection->PendingOutRec[ChIndex]++;
-			}
+			Bunch.bReliable = true;
+			if( SendBunch( &Bunch, 0 )==INDEX_NONE )
+				break;
+			Connection->PendingOutRec[ChIndex]++;
 		}
 
 		Connection->OutReliable[ChIndex] = RealOutReliable;
@@ -853,6 +858,13 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 			if ( InActor->bDeleteMe )
 				debugf(TEXT("Client received and deleted instantly %s"),InActor->GetName());
 		}
+		// A second channel for a dynamic actor would keep a stale pointer once the first one destroys it.
+		if( !InActor->bStatic && !InActor->bNoDelete && Connection->ActorChannels.FindRef(InActor) )
+		{
+			GWarn->Logf( TEXT("Received second channel for actor '%s'"), InActor->GetName() );
+			Broken = 1;
+			return;
+		}
 		debugf( NAME_DevNetTraffic, TEXT("      Spawn %s:"), InActor->GetFullName() );
 		SetChannelActor( InActor );
 		unguard;
@@ -943,10 +955,13 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 			guard(ReceiveProperty);
 			FMemMark Mark(GMem);
 			INT   Offset = It->Offset + Element*It->ElementSize;
-			BYTE* Data   = DestActor ? (DestActor + Offset) : NewZeroed<BYTE>(GMem,It->ElementSize);
+			BYTE* Data   = DestActor ? (DestActor + Offset) : NewZeroed<BYTE>(GMem,It->GetSize());
 			It->NetSerializeItem( Bunch, Connection->PackageMap, Data );
 			if( DestRecent )
 				It->CopySingleValue( DestRecent + Offset, Data );
+			// A discarded value lives in GMem, sized for every element because DestroyValue walks them all, and its strings own heap memory.
+			if( !DestActor && (It->PropertyFlags & CPF_NeedCtorLink) )
+				It->DestroyValue( Data );
 			Mark.Pop();
 			unguard;
 
@@ -981,28 +996,22 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 
 			// See if UnrealScript replication condition is met.
 			UBOOL Ignore=0;
-			if ( !(Function->FunctionFlags & FUNC_NetServer) )
+			if( !Connection->Driver->ServerConnection )
 			{
-				if( !Connection->Driver->ServerConnection )
+				// Checked on every call, because bNetOwner depends on the actor and the calling connection.
+				guard(EvalRPCCondition);
+				UFunction* Test;
+				for( Test=Function; Test->GetSuperFunction(); Test=Test->GetSuperFunction() );
+				Exchange(Actor->Role,Actor->RemoteRole);
+				DWORD Val=0;
+				FFrame( Actor, Test->GetOwnerClass(), Test->RepOffset, NULL ).Step( Actor, &Val );
+				Exchange(Actor->Role,Actor->RemoteRole);
+				if( !Val || !Actor->bNetOwner )
 				{
-					guard(EvalRPCCondition);
-					UFunction* Test;
-					for( Test=Function; Test->GetSuperFunction(); Test=Test->GetSuperFunction() );
-					Exchange(Actor->Role,Actor->RemoteRole);
-					DWORD Val=0;
-					FFrame( Actor, Test->GetOwnerClass(), Test->RepOffset, NULL ).Step( Actor, &Val );
-					Exchange(Actor->Role,Actor->RemoteRole);
-					if( !Val || !Actor->bNetOwner )
-					{
-						debugf( NAME_DevNetTraffic, TEXT("Received unwanted function %s in %s"), *Message, Actor->GetFullName() );
-						Ignore = 1;
-					}
-					else
-						Function->FunctionFlags = Function->FunctionFlags | FUNC_NetServer; 
-					unguard;
+					debugf( NAME_DevNetTraffic, TEXT("Received unwanted function %s in %s"), *Message, Actor->GetFullName() );
+					Ignore = 1;
 				}
-				else
-					Function->FunctionFlags = Function->FunctionFlags | FUNC_NetServer; 
+				unguard;
 			}
 			debugf( NAME_DevNetTraffic, TEXT("      Received RPC: %s"), *Message );
 
@@ -1386,7 +1395,9 @@ void UFileChannel::ReceivedBunch( FInBunch& Bunch )
 				// User cancelled optional file download.
 				// Remove it from the package map
 				debugf( TEXT("User skipped download of '%s'"), SrcFilename );
-				Connection->PackageMap->List.Remove( PackageIndex );
+				// Same rule as the control channel SKIP, and another SKIP may already have shifted the list.
+				if( !Connection->Actor && PackageIndex<Connection->PackageMap->List.Num() && (Connection->PackageMap->List(PackageIndex).PackageFlags & PKG_ClientOptional) )
+					Connection->PackageMap->List.Remove( PackageIndex );
 				delete SendFileAr;
 				SendFileAr = NULL;
 				return;

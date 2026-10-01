@@ -67,6 +67,12 @@ void UDownload::ReceiveData( BYTE* Data, INT Count )
 		// Opening file failed.
 		DownloadError( LocalizeError(TEXT("NetOpen"),TEXT("Engine")) );
 	}
+	else if( (QWORD)Transfered+Count > (IsCompressed ? (QWORD)Info->FileSize+Info->FileSize/16+4096 : (QWORD)Info->FileSize) )
+	{
+		// The size check after the transfer comes too late to stop a server from filling the disk. Compressed
+		// data may grow a little over the package size.
+		DownloadError( LocalizeError(TEXT("NetSize"),TEXT("Engine")) );
+	}
 	else
 	{
 		if( Count > 0 )

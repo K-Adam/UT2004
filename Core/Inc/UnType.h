@@ -340,6 +340,7 @@ class CORE_API UClassProperty : public UObjectProperty
 
 	// UProperty interface.
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
+	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	BYTE GetID() const
 	{
 		return NAME_ObjectProperty;
