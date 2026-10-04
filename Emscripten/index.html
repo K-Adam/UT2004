@@ -292,6 +292,11 @@ function load(src) {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', () => canvas.focus());
 
+// Chrome's default pointer lock warps the cursor and now and then reports the warp as a huge movement.
+const lockPointer = canvas.requestPointerLock.bind(canvas);
+canvas.requestPointerLock = () =>
+  Promise.resolve(lockPointer({ unadjustedMovement: true })).catch(() => lockPointer());
+
 // Resolves when the dialog closes, from its button or Esc.
 const ask = (id) => new Promise((resolve) => {
   const dialog = document.getElementById(id);
