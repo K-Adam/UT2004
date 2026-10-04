@@ -38,26 +38,29 @@ if(NOT EMSCRIPTEN AND NOT ANDROID)
     endif()
   endforeach()
 endif()
-# Read-only data the engine reads from next to System/.
-set(UT_LINKED_DIRS Help Web KarmaData)
-if(EMSCRIPTEN)
-  # The page served from build/web finds the locally built content packages at ./assets/build/web.
-  list(APPEND UT_LINKED_DIRS assets)
-endif()
-foreach(dir ${UT_LINKED_DIRS})
-  if(NOT EXISTS ${CMAKE_BINARY_DIR}/${dir})
+function(ut_link name target)
+  if(NOT EXISTS ${CMAKE_BINARY_DIR}/${name})
     if(CMAKE_HOST_WIN32)
       # A junction, because symbolic links need administrator rights on Windows.
-      file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/${dir} link)
-      file(TO_NATIVE_PATH ${CMAKE_SOURCE_DIR}/${dir} target)
+      file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/${name} link)
+      file(TO_NATIVE_PATH ${target} target)
       # Drops a junction left dangling by a moved checkout.
       execute_process(COMMAND cmd /c rmdir ${link} OUTPUT_QUIET ERROR_QUIET)
       execute_process(COMMAND cmd /c mklink /J ${link} ${target} OUTPUT_QUIET COMMAND_ERROR_IS_FATAL ANY)
     else()
-      file(CREATE_LINK ${CMAKE_SOURCE_DIR}/${dir} ${CMAKE_BINARY_DIR}/${dir} SYMBOLIC)
+      file(CREATE_LINK ${target} ${CMAKE_BINARY_DIR}/${name} SYMBOLIC)
     endif()
   endif()
+endfunction()
+# Read-only data the engine reads from next to System/.
+foreach(dir Help Web KarmaData)
+  ut_link(${dir} ${CMAKE_SOURCE_DIR}/${dir})
 endforeach()
+# Dev.ini and the web page served from build/web read the content through this link.
+set(UT_ASSETS_DIR "$ENV{UT_ASSETS_DIR}" CACHE PATH "Content set for development runs, with the packages in src and the packed web files in build/web")
+if(UT_ASSETS_DIR AND NOT ANDROID)
+  ut_link(assets ${UT_ASSETS_DIR})
+endif()
 add_custom_target(ut_stage ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/System ${UT_SYSTEM_DIR}
   VERBATIM)

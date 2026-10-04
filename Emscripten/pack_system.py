@@ -1,7 +1,7 @@
 """Packs System, the script packages, KarmaData and the splash bitmaps into an Emscripten preload package.
 
 The files keep the layout of a build folder (/System, /Scripts, ...), so Default.ini's paths work unchanged.
-The content folders come from the separately hosted assets.js packages.
+The content folders are not packed, the page downloads them.
 """
 import argparse
 import os

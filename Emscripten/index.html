@@ -57,7 +57,7 @@ const progress = document.getElementById('progress');
 const action = document.getElementById('action');
 const canvas = document.getElementById('canvas');
 
-// The content comes from the asset host, or straight from the assets submodule when testing locally.
+// The content comes from the asset host, or straight from the linked local content set when testing locally.
 const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const host = 'https://assets.ut2004.dev/web/';
 const manifestUrl = local ? 'assets/build/web/files.json' : host + 'files.json';
