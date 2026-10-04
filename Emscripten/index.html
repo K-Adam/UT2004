@@ -297,6 +297,17 @@ const lockPointer = canvas.requestPointerLock.bind(canvas);
 canvas.requestPointerLock = () =>
   Promise.resolve(lockPointer({ unadjustedMovement: true })).catch(() => lockPointer());
 
+// The browser keeps the Esc that ends a pointer lock, so the game gets it here.
+let gameUnlocked = false;
+const exitLock = document.exitPointerLock.bind(document);
+document.exitPointerLock = () => { gameUnlocked = true; exitLock(); };
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement && !gameUnlocked && document.hasFocus())
+    for (const type of ['keydown', 'keyup'])
+      canvas.dispatchEvent(new KeyboardEvent(type, { key: 'Escape', code: 'Escape', bubbles: true }));
+  gameUnlocked = false;
+});
+
 // Resolves when the dialog closes, from its button or Esc.
 const ask = (id) => new Promise((resolve) => {
   const dialog = document.getElementById(id);
