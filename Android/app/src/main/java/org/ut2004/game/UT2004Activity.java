@@ -5,13 +5,17 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.os.ParcelFileDescriptor;
+import android.Manifest;
 import android.provider.DocumentsContract;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.Display;
 import android.view.KeyEvent;
@@ -32,10 +36,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.libsdl.app.SDLActivity;
 
 public class UT2004Activity extends SDLActivity {
-    private static final int PICK_ASSETS = 0x7504;
+    private static final int PICK_ASSETS = 0x7504, ASK_NOTIFY = 0x7505, ASK_BATTERY = 0x7506;
     // An empty string means the player backed out.
     private static final LinkedBlockingQueue<String> assetSource = new LinkedBlockingQueue<>();
     private static String assetError, assetUrl;
+    private static final LinkedBlockingQueue<Boolean> serverStarted = new LinkedBlockingQueue<>();
+    private static String serverCmd;
 
     private WifiManager.MulticastLock lanLock;
     private boolean imeVisible;
@@ -200,8 +206,56 @@ public class UT2004Activity extends SDLActivity {
         }
     }
 
+    // SDLLaunch calls this when DEDICATED closes the game. Declining still starts the server, it may just get stopped sooner.
+    static void startServer(String cmd) throws InterruptedException {
+        serverCmd = cmd;
+        UT2004Activity activity = (UT2004Activity) mSingleton;
+        activity.runOnUiThread(activity::askNotifications);
+        serverStarted.take();
+    }
+
+    // The notification carries the Stop button.
+    private void askNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, ASK_NOTIFY);
+        else
+            askBattery();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == ASK_NOTIFY)
+            askBattery();
+        else
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+    // Some vendors kill background services of apps that are not exempt, despite the foreground notification.
+    private void askBattery() {
+        if (!getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())) {
+            try {
+                startActivityForResult(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                                  Uri.parse("package:" + getPackageName())), ASK_BATTERY);
+                return;
+            } catch (ActivityNotFoundException ignored) {
+            }
+        }
+        launchServer();
+    }
+
+    private void launchServer() {
+        startForegroundService(new Intent(this, ServerService.class).putExtra(ServerService.EXTRA_CMD, serverCmd));
+        serverStarted.add(true);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == ASK_BATTERY) {
+            // After onResume, as only a visible app may start a foreground service.
+            getWindow().getDecorView().post(this::launchServer);
+            return;
+        }
         if (requestCode != PICK_ASSETS) {
             super.onActivityResult(requestCode, resultCode, data);
             return;
@@ -216,6 +270,7 @@ public class UT2004Activity extends SDLActivity {
     protected void onDestroy() {
         // Releases the launcher if it still waits on the dialog.
         assetSource.add("");
+        serverStarted.add(false);
         if (lanLock != null && lanLock.isHeld())
             lanLock.release();
         super.onDestroy();

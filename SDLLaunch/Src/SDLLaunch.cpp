@@ -58,8 +58,13 @@ extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
 	FMallocAnsi Malloc;
 #endif
 
-#if __STATIC_LINK && defined(_MSC_VER)
-static struct FEarlyMalloc { FEarlyMalloc() { GMalloc = &Malloc; } } EarlyMalloc;
+#if __STATIC_LINK
+static struct FEarlyMalloc { FEarlyMalloc() { GMalloc = &Malloc; } } EarlyMalloc
+#ifndef _MSC_VER
+	// Clang and GCC have no init_seg, the lowest priority runs before the other static constructors.
+	__attribute__((init_priority(101)))
+#endif
+	;
 #endif
 
 // Log file.
@@ -926,6 +931,23 @@ static bool InstallContent(const char* Root)
     Env->DeleteLocalRef(Activity);
     return Ok;
 }
+
+static void StartServerService(const TCHAR* Cmd)
+{
+    JNIEnv* Env = (JNIEnv*)SDL_GetAndroidJNIEnv();
+    jobject ActivityObj = (jobject)SDL_GetAndroidActivity();
+    jclass Activity = Env->GetObjectClass(ActivityObj);
+    Env->DeleteLocalRef(ActivityObj);
+    jchar Chars[1024];
+    jsize Len = 0;
+    while (Cmd[Len] && Len < (jsize)ARRAY_COUNT(Chars))
+        Chars[Len] = (jchar)Cmd[Len], Len++;
+    jstring JCmd = Env->NewString(Chars, Len);
+    Env->CallStaticVoidMethod(Activity, Env->GetStaticMethodID(Activity, "startServer", "(Ljava/lang/String;)V"), JCmd);
+    Env->ExceptionClear();
+    Env->DeleteLocalRef(JCmd);
+    Env->DeleteLocalRef(Activity);
+}
 #endif
 
 
@@ -1386,6 +1408,8 @@ static UEngine* InitEngine()
 
 
 
+static int RunEngine( TCHAR* CmdLine );
+
 //
 // Main entry point.
 // This is an example of how to initialize and launch the engine.
@@ -1435,7 +1459,11 @@ int main(int argc, char **argv)
     	}
     }
 #endif
+	return RunEngine( CmdLine );
+}
 
+static int RunEngine( TCHAR* CmdLine )
+{
 	// Remember instance.
 	INT ErrorLevel = 0;
 	GIsStarted     = 1;
@@ -1600,11 +1628,51 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 	}
 #endif
 
+#ifdef __ANDROID__
+	// appExit would fork for it. The server starts after appExit, as it reads the inis appExit writes.
+	TCHAR ServerCmd[1024] = TEXT("");
+	if( GUnixSpawnOnExit && GIsClient )
+		appStrncpy( ServerCmd, GUnixSpawnOnExit, ARRAY_COUNT(ServerCmd) );
+	GUnixSpawnOnExit = NULL;
+#endif
+
 	// Final shut down.
 	appExit();
 	GIsStarted = 0;
+#ifdef __ANDROID__
+	if( *ServerCmd )
+		StartServerService( ServerCmd );
+#endif
 	return((int) ErrorLevel);
 }
+
+#ifdef __ANDROID__
+// ServerService has no activity, so the folders SDL finds for the game come from Java.
+extern "C" JNIEXPORT jint JNICALL Java_org_ut2004_game_ServerService_runServer( JNIEnv* Env, jclass, jstring Dir, jstring Cache, jstring Cmd )
+{
+	const char* Chars = Env->GetStringUTFChars( Cache, NULL );
+	setenv( "XDG_CACHE_HOME", Chars, 1 );
+	Env->ReleaseStringUTFChars( Cache, Chars );
+	Chars = Env->GetStringUTFChars( Dir, NULL );
+	int Failed = chdir( Chars );
+	Env->ReleaseStringUTFChars( Dir, Chars );
+	if( Failed )
+		return 1;
+	TCHAR CmdLine[1024];
+	jchar Buf[ARRAY_COUNT(CmdLine)];
+	jsize Len = Min<jsize>( Env->GetStringLength( Cmd ), ARRAY_COUNT(CmdLine) - 1 );
+	Env->GetStringRegion( Cmd, 0, Len, Buf );
+	for( jsize i=0; i<Len; i++ )
+		CmdLine[i] = Buf[i];
+	CmdLine[Len] = 0;
+	return RunEngine( CmdLine );
+}
+
+extern "C" JNIEXPORT void JNICALL Java_org_ut2004_game_ServerService_stopServer( JNIEnv*, jclass )
+{
+	GIsRequestingExit = 1;
+}
+#endif
 
 /*-----------------------------------------------------------------------------
 	The End.

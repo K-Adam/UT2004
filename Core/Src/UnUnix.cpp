@@ -969,6 +969,16 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		debugf( TEXT("Relaunch: %s"), Cmd );
 		GConfig->Flush( 0 );
 
+#if __ANDROID__
+		// An app cannot start a copy of itself, SDLLaunch passes the arguments to its server service.
+		if( !ParseParam( Cmd, TEXT("SERVER") ) )
+		{
+			Ar.Logf( TEXT("Only a dedicated server can be relaunched on Android.") );
+			return 1;
+		}
+		GUnixSpawnOnExit = new TCHAR[appStrlen(Cmd) + 1];
+		appStrcpy( GUnixSpawnOnExit, Cmd );
+#else
         if ((GIsClient) && (appStrlen(Cmd) == 0))  // just restarting client?
         {
             GUnixSpawnOnExit = new TCHAR[128];
@@ -1007,6 +1017,7 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
             appStrcpy(GUnixSpawnOnExit, *xterm);
             appStrcat(GUnixSpawnOnExit, TEXT("./ucc-bin server "));
             appStrcat(GUnixSpawnOnExit, Arg0);
+#endif
 
         appRequestExit( 0 );
 		return 1;

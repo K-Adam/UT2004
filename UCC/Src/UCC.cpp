@@ -98,8 +98,13 @@ FFeedbackContextAnsi Warn;
 	FMallocAnsi Malloc;
 #endif
 
-#if __STATIC_LINK && defined(_MSC_VER)
-static struct FEarlyMalloc { FEarlyMalloc() { GMalloc = &Malloc; } } EarlyMalloc;
+#if __STATIC_LINK
+static struct FEarlyMalloc { FEarlyMalloc() { GMalloc = &Malloc; } } EarlyMalloc
+#ifndef _MSC_VER
+	// Clang and GCC have no init_seg, the lowest priority runs before the other static constructors.
+	__attribute__((init_priority(101)))
+#endif
+	;
 #endif
 
 // Config.

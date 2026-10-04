@@ -1646,7 +1646,8 @@ UBOOL UGUIController::NativeKeyEvent(BYTE& iKey, BYTE& State, FLOAT Delta )
 		if ( iKey == IK_MouseX || iKey == IK_MouseY )
 			return true;
 	}
-	else if ( !CursorHidden && (!FocusedControl || !FocusedControl->bFocusOnWatch) )
+	// A click acts on what is under the cursor even when it did not move there, as a tap jumps without motion events.
+	else if ( !CursorHidden && (MouseKey || !FocusedControl || !FocusedControl->bFocusOnWatch) )
 		LookUnderCursor(0.f,0.f);
 
 	if ( GIsEditor )
