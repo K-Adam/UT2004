@@ -12,6 +12,11 @@
 -----------------------------------------------------------------------------*/
 
 #define PINGTIMEOUT 2.0f
+// How long a query over WebRTC waits for its channel. A browser host is reached through the web master, which takes longer.
+#define QUERYOPENTIMEOUT 6.0f
+#define QUERYSIGNALTIMEOUT 12.0f
+// The list pings its selected row again every few seconds, and each query of a browser host costs an offer at the web master
+#define QUERYSIGNALPERIOD 30.0
 
 struct FOutstandingPingInfo
 {
@@ -23,12 +28,44 @@ struct FOutstandingPingInfo
 	FServerResponseLine CurrentState;
 	UBOOL GotReply;
 	INT PingCount;
+	// The peer of a query over WebRTC, and until when it waits for its channel before the command can go out
+	INT WebRtcId;
+	DOUBLE OpenDeadline;
+
+	~FOutstandingPingInfo()
+	{
+		if( WebRtcId )
+			WebRtcQueryClose( WebRtcId );
+	}
 };
 
 class FServerQueryLink : public FUdpLink
 {
 	AServerQueryClient* Actor;
 	TArray<FOutstandingPingInfo> OutstandingPings;
+	TMap<FString,DOUBLE> SignalQueryTimes;
+	struct FUnsentPing
+	{
+		INT ServerID;
+		BYTE PingCause;
+	};
+	TArray<FUnsentPing> UnsentPings;
+
+	void SendCommand( INT i )
+	{
+		BYTE Command = OutstandingPings(i).PingType;
+		FArchiveUdpWriter ArSend( this, OutstandingPings(i).QueryAddr );
+		ArSend << Command;
+		ArSend.Flush();
+
+		// HACK: also ping the server when we request rules.
+		if( Command == 3 )
+		{
+			Command = 0;
+			ArSend << Command;
+			ArSend.Flush();
+		}
+	}
 public:
 	FServerQueryLink( AServerQueryClient* InActor, INT InPort )
 	:	FUdpLink()
@@ -40,6 +77,42 @@ public:
 	}
 	void Poll()
 	{
+		while( UnsentPings.Num() )
+		{
+			FUnsentPing Ping = UnsentPings(0);
+			UnsentPings.Remove(0);
+			Actor->delegateOnPingTimeout( Ping.ServerID, Ping.PingCause );
+		}
+
+		BYTE Buffer[4096];
+		for( INT i=0;i<OutstandingPings.Num();i++ )
+		{
+			INT Id = OutstandingPings(i).WebRtcId;
+			if( !Id )
+				continue;
+			if( OutstandingPings(i).OpenDeadline )
+			{
+				// The ping is timed from the send, the channel's handshake is not part of it
+				OutstandingPings(i).PingSendTime = appSeconds();
+				if( OutstandingPings(i).PingSendTime > OutstandingPings(i).OpenDeadline )
+					Fail( i );
+				else
+					SendCommand( i );
+			}
+			// Script answers a reply with new pings or cancels them all, so the entry is checked again after each one
+			INT Count;
+			while( i<OutstandingPings.Num() && OutstandingPings(i).WebRtcId==Id && (Count = WebRtcQueryRecv( Id, Buffer, sizeof(Buffer) ))!=0 )
+			{
+				if( Count < 0 )
+				{
+					if( !OutstandingPings(i).GotReply )
+						Fail( i );
+					break;
+				}
+				OnReceivedData( OutstandingPings(i).QueryAddr, Buffer, Count );
+			}
+		}
+
 		// GCurrentTime is sometimes slightly behind appSeconds() at this point, so using GCurrentTime here 
 		// runs the risk of invalidating some (not many) server's ping results
 		DOUBLE CurrentTime = appSeconds();
@@ -79,9 +152,61 @@ public:
 
 		FUdpLink::Poll();
 	}
+	// Lets the timeout check below report the ping without another try
+	void Fail( INT i )
+	{
+		OutstandingPings(i).PingSendTime = 0;
+		OutstandingPings(i).PingCount = 2;
+		OutstandingPings(i).OpenDeadline = 0;
+	}
+	INT SendTo( FIpAddr DstAddr, BYTE* Data, INT Count )
+	{
+		for( INT i=0;i<OutstandingPings.Num();i++ )
+		{
+			FOutstandingPingInfo& Ping = OutstandingPings(i);
+			if( Ping.WebRtcId && Ping.QueryAddr==DstAddr )
+			{
+				// The server knows a query by its single byte, so the archive's version header stays behind
+				if( !WebRtcQuerySend( Ping.WebRtcId, Data+Count-1, 1 ) )
+					return 0;
+				Ping.OpenDeadline = 0;
+				return 1;
+			}
+		}
+		return FUdpLink::SendTo( DstAddr, Data, Count );
+	}
 	void PingServer( INT ServerID, BYTE PingCause, FIpAddr Addr, BYTE Command, FServerResponseLine& CurrentState )
 	{
 		guard(FServerQueryLink::PingServer);
+
+		// UDP reaches neither a web only server nor anything from a browser, those are asked over WebRTC
+		FString WebRtc;
+		if( HasServerDetail( CurrentState.ServerInfo, TEXT("WebQuery") ) && (NetworkError() || HasServerDetail( CurrentState.ServerInfo, TEXT("WebOnly") )) )
+			WebRtc = GetServerDetail( CurrentState.ServerInfo, TEXT("WebRTC") );
+		UBOOL Signal = !appStrnicmp( *WebRtc, TEXT("signal:"), 7 );
+		if( Signal && PingCause==PC_Clicked )
+		{
+			DOUBLE* Last = SignalQueryTimes.Find( WebRtc );
+			if( Last && appSeconds()-*Last < QUERYSIGNALPERIOD )
+				return;
+			SignalQueryTimes.Set( *WebRtc, appSeconds() );
+		}
+
+		INT WebRtcId = 0;
+		if( WebRtc.Len() )
+		{
+			if( !Signal || PingCause==PC_Clicked )
+				WebRtcId = WebRtcQueryOpen( Addr.GetString(0), WebRtc );
+			if( !WebRtcId )
+			{
+				// Reported from Poll, because script pings the next row from the timeout and would nest once per failing row.
+				// It takes no entry either, browser hosts often share an address and would take over each other's.
+				INT f = UnsentPings.Add();
+				UnsentPings(f).ServerID = ServerID;
+				UnsentPings(f).PingCause = PingCause;
+				return;
+			}
+		}
 
 		// find existing ping.
 		INT i;
@@ -100,24 +225,24 @@ public:
 		OutstandingPings(i).ServerID = ServerID;
 		OutstandingPings(i).PingCause = PingCause;
 		OutstandingPings(i).PingType  = Command;
+		OutstandingPings(i).GotReply = 0;
 
-		FArchiveUdpWriter ArSend( this, Addr );
-		ArSend << Command;
-		ArSend.Flush();
+		// A reused entry gets a new peer, the server stops answering one after a few queries
+		if( OutstandingPings(i).WebRtcId )
+			WebRtcQueryClose( OutstandingPings(i).WebRtcId );
+		OutstandingPings(i).WebRtcId = WebRtcId;
+		OutstandingPings(i).OpenDeadline = WebRtcId ? appSeconds() + (Signal ? QUERYSIGNALTIMEOUT : QUERYOPENTIMEOUT) : 0;
 
-		// HACK: also ping the server when we request rules.
-		if( Command == 3 )
-		{
-			Command = 0;
-			ArSend << Command;
-			ArSend.Flush();
-		}
+		SendCommand( i );
 		unguard;
 	}
 	void CancelPings()
 	{
 		guard(FServerQueryLink::CancelPings);
 		OutstandingPings.Empty();
+		UnsentPings.Empty();
+		// A cancelled query of a browser host got no answer, so the next click may ask again
+		SignalQueryTimes.Empty();
 		unguard;
 	}
 	void OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
@@ -178,7 +303,7 @@ public:
 						// HACK don't update the data if you clicked on the server while we're pinging!
 						if( OutstandingPings(i).PingType!=QI_Ping )
 						{
-							if( OutstandingPings.Num() > 5 )
+							if( OutstandingPings.Num() > 5 && CurrentState->Ping < 9999 )
 							{
 								NewState.CurrentPlayers = CurrentState->CurrentPlayers;
 								NewState.MaxPlayers = CurrentState->MaxPlayers;
@@ -198,12 +323,11 @@ public:
 						NewState.SkillLevel = CurrentState->SkillLevel;
 						NewState.PlayerInfo = CurrentState->PlayerInfo;
 						// Servers put only their WebRTC details in the ping, so a restart replaces or drops the old ones
-						FString WebRtc;
-						for( INT pi=0; pi<NewState.ServerInfo.Num(); pi++ )
-							if( NewState.ServerInfo(pi).Key == TEXT("WebRTC") )
-								WebRtc = NewState.ServerInfo(pi).Value;
+						FString WebRtc = GetServerDetail( NewState.ServerInfo, TEXT("WebRTC") );
 						NewState.ServerInfo = CurrentState->ServerInfo;
 						SetServerDetail( NewState.ServerInfo, TEXT("WebRTC"), WebRtc );
+						// The rules and players replies report this copy, which would bring back a ping that timed out earlier
+						CurrentState->Ping = NewState.Ping;
 						Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, NewState );
 					}
 					else

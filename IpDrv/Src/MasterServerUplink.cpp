@@ -15,6 +15,8 @@ static UBOOL AddWebRtcDetails( AActor* Actor, TArray<FKeyValuePair>& ServerInfo 
 	if( !NetDriver || !NetDriver->WebRtcDetails.Len() )
 		return 0;
 	SetServerDetail( ServerInfo, TEXT("WebRTC"), NetDriver->WebRtcDetails );
+	// Older servers take a query on the WebRTC port for a joining player, so clients only send one to servers that say this
+	SetServerDetail( ServerInfo, TEXT("WebQuery"), TEXT("1") );
 	// Regular clients take such servers from the web master, the main masters can't list them
 	if( WebRtcOnly() )
 		SetServerDetail( ServerInfo, TEXT("WebOnly"), TEXT("1") );
@@ -68,15 +70,26 @@ public:
 	:	FNATHeartbeatLink(HB_QueryInterface)
 	,	Uplink(InUplink)
 	{
-		BindPort(InPort);
+		// A web only server has no UDP port to answer on, its queries come in over WebRTC
+		if( !WebRtcOnly() )
+			BindPort(InPort);
 	}
 
 	virtual void OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count );
+	void Answer( BYTE Command, FArchive& Ar );
 	void SendPing( FArchive& Ar );
 	void SendSmallPing( FArchive& Ar );
 	void SendRules( FArchive& Ar );
 	void SendPlayers( FArchive& Ar );
 };
+
+static FServerQueryInterface* GServerQuery = NULL;
+
+void ServerQueryAnswer( BYTE Command, FArchive& ArSend )
+{
+	if( GServerQuery )
+		GServerQuery->Answer( Command, ArSend );
+}
 
 /*-----------------------------------------------------------------------------
 	FServerQueryInterface
@@ -156,7 +169,8 @@ public:
 
 		UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );
 		check(NetDriver);
-		// Without a UDP game socket there is nothing to query, and the web master lists the server
+		GServerQuery = QueryInterface = new FServerQueryInterface( NetDriver->GetSocketData().Port+1, this );
+		// Without a UDP game socket there is nothing to keep open, and the web master lists the server
 		if( WebRtcOnly() )
 			return;
 
@@ -166,8 +180,6 @@ public:
 		if( Actor->GamespyQueryLink )
 			GSQueryHeartbeat = new FNATHeartbeatLink( Actor->GamespyQueryLink->GetSocketData(), HB_GamespyQueryPort );
 
-		// Create the query interfaces
-		QueryInterface = new FServerQueryInterface( NetDriver->GetSocketData().Port+1, this );
         if (Actor->LANServerPort >= 0)
 		    LANInterface = new FServerLANInterface( Actor->LANServerPort, this, QueryInterface );
 
@@ -178,6 +190,8 @@ public:
 	{
 		guard(FMasterServerUplinkLink::~FMasterServerUplinkLink)
 		delete LANInterface;
+		if( GServerQuery==QueryInterface )
+			GServerQuery = NULL;
 		delete QueryInterface;
 		delete GameHeartbeat;
 		delete GSQueryHeartbeat;
@@ -821,31 +835,34 @@ void FServerQueryInterface::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Cou
 	BYTE Command;
 	ArRecv << Command;
 	if( !ArRecv.IsError() && ArRecv.AtEnd() )
-	{
-		switch( Command )
-		{
-		case QI_Ping:
-			SendPing( ArSend );
-			break;
-		case QI_Rules:
-			SendRules( ArSend );
-			break;
-		case QI_Players:
-			SendPlayers( ArSend );
-			break;
-		case QI_RulesAndPlayers:
-			SendRules( ArSend );
-			SendPlayers( ArSend );
-			break;
-		case QI_SmallPing:
-			SendSmallPing( ArSend );
-			break;
-		default:
-			GWarn->Logf(TEXT("Unknown ping request command: %d"), Command);
-			break;
-		}
-	}
+		Answer( Command, ArSend );
 	unguard;
+}
+
+void FServerQueryInterface::Answer( BYTE Command, FArchive& ArSend )
+{
+	switch( Command )
+	{
+	case QI_Ping:
+		SendPing( ArSend );
+		break;
+	case QI_Rules:
+		SendRules( ArSend );
+		break;
+	case QI_Players:
+		SendPlayers( ArSend );
+		break;
+	case QI_RulesAndPlayers:
+		SendRules( ArSend );
+		SendPlayers( ArSend );
+		break;
+	case QI_SmallPing:
+		SendSmallPing( ArSend );
+		break;
+	default:
+		GWarn->Logf(TEXT("Unknown ping request command: %d"), Command);
+		break;
+	}
 }
 
 void FServerQueryInterface::SendSmallPing( FArchive& ArSend )

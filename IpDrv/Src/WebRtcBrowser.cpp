@@ -24,7 +24,8 @@ extern "C"
 	int ut_webrtc_host_id( char* Id, int Max );
 	// The next answered peer and the client IP the web master saw, 0 when none is waiting.
 	int ut_webrtc_accept( char* Ip, int Max );
-	void ut_webrtc_send( int Id, const void* Data, int Count );
+	// 0 while the channel is not open.
+	int ut_webrtc_send( int Id, const void* Data, int Count );
 	// Bytes of the next message, 0 when none is waiting, -1 once the peer closed.
 	int ut_webrtc_recv( int Id, void* Data, int Max );
 	void ut_webrtc_close( int Id );
@@ -36,6 +37,7 @@ struct FWebRtcPeer
 	sockaddr_in Addr;
 	UWebRtcConnection* Connection;
 	DOUBLE CreatedTime;
+	INT Queries;
 };
 
 struct FWebRtcHost
@@ -55,6 +57,23 @@ static void RemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
 	}
 }
 
+static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
+{
+	return ut_webrtc_send( Peer->Id, Data, Count );
+}
+
+// The script's peer for the WebRTC details in the URL, 0 with Error set when they are unusable
+static INT ConnectPeer( FURL& ConnectURL, FString& Error, sockaddr_in& Addr )
+{
+	FString SignalId;
+	if( WebRtcSignalSetup( ConnectURL, SignalId, Addr ) )
+		return ut_webrtc_connect_signal( TCHAR_TO_ANSI(*WebMasterURL()), TCHAR_TO_ANSI(*SignalId), WEBRTC_MAX_INBOX );
+	std::string Ufrag, Answer;
+	if( !WebRtcClientSetup( ConnectURL, Error, Addr, Ufrag, Answer ) )
+		return 0;
+	return ut_webrtc_connect( Answer.c_str(), Ufrag.c_str(), WEBRTC_MAX_INBOX );
+}
+
 void UWebRtcConnection::LowLevelSend( void* Data, INT Count )
 {
 	guard(UWebRtcConnection::LowLevelSend);
@@ -62,7 +81,7 @@ void UWebRtcConnection::LowLevelSend( void* Data, INT Count )
 	if( Peer )
 	{
 		clock(Driver->SendCycles);
-		ut_webrtc_send( Peer->Id, Data, Count );
+		WebRtcPeerSend( Peer, Data, Count );
 		unclock(Driver->SendCycles);
 	}
 	unguard;
@@ -98,16 +117,9 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 {
 	guard(UTcpNetDriver::WebRtcConnect);
 	auto Peer = std::make_shared<FWebRtcPeer>();
-	FString SignalId;
-	if( WebRtcSignalSetup( ConnectURL, SignalId, Peer->Addr ) )
-		Peer->Id = ut_webrtc_connect_signal( TCHAR_TO_ANSI(*WebMasterURL()), TCHAR_TO_ANSI(*SignalId), WEBRTC_MAX_INBOX );
-	else
-	{
-		std::string Ufrag, Answer;
-		if( !WebRtcClientSetup( ConnectURL, Error, Peer->Addr, Ufrag, Answer ) )
-			return 0;
-		Peer->Id = ut_webrtc_connect( Answer.c_str(), Ufrag.c_str(), WEBRTC_MAX_INBOX );
-	}
+	Peer->Id = ConnectPeer( ConnectURL, Error, Peer->Addr );
+	if( !Peer->Id )
+		return 0;
 
 	FWebRtcHost* Host = new FWebRtcHost;
 	Host->Peers.push_back( Peer );
@@ -174,6 +186,8 @@ void UTcpNetDriver::WebRtcTick()
 					RemovePeer( Host, Peer.get() );
 				break;
 			}
+			if( !Peer->Connection && !ServerConnection && WebRtcAnswerQuery( Peer.get(), Peer->Queries, Data, Count ) )
+				continue;
 			if( !Peer->Connection && !ServerConnection && WebRtcAccept( this, Peer.get(), Peer->Addr, Peer->Connection )==ACCEPTC_Reject )
 			{
 				RemovePeer( Host, Peer.get() );
@@ -183,7 +197,7 @@ void UTcpNetDriver::WebRtcTick()
 				Peer->Connection->ReceivedRawPacket( Data, Count );
 		}
 		// A peer that connects but never sends would hold its slot
-		if( WebRtc==Host && !Peer->Connection && GCurrentTime - Peer->CreatedTime > WEBRTC_PENDING_TIMEOUT )
+		if( WebRtc==Host && !Peer->Connection && GCurrentTime - Peer->CreatedTime > (Peer->Queries ? WEBRTC_QUERY_TIMEOUT : WEBRTC_PENDING_TIMEOUT) )
 			RemovePeer( Host, Peer.get() );
 	}
 	unguard;
@@ -206,5 +220,32 @@ void UTcpNetDriver::WebRtcDestroy()
 	}
 	delete Host;
 	unguard;
+}
+
+/*-----------------------------------------------------------------------------
+	Server browser queries, the id is the script's peer.
+-----------------------------------------------------------------------------*/
+
+INT WebRtcQueryOpen( const FString& Host, const FString& Details )
+{
+	FURL URL = WebRtcQueryURL( Host, Details );
+	FString Error;
+	sockaddr_in Addr;
+	return ConnectPeer( URL, Error, Addr );
+}
+
+UBOOL WebRtcQuerySend( INT Id, const BYTE* Data, INT Count )
+{
+	return ut_webrtc_send( Id, Data, Count );
+}
+
+INT WebRtcQueryRecv( INT Id, BYTE* Data, INT Max )
+{
+	return ut_webrtc_recv( Id, Data, Max );
+}
+
+void WebRtcQueryClose( INT Id )
+{
+	ut_webrtc_close( Id );
 }
 

@@ -19,6 +19,9 @@
 #define WEBRTC_MAX_INBOX 256
 #define WEBRTC_MAX_PENDING 64
 #define WEBRTC_PENDING_TIMEOUT 15.0
+// A server browser's peer asks a few times within seconds of connecting and is done
+#define WEBRTC_MAX_QUERIES 8
+#define WEBRTC_QUERY_TIMEOUT 8.0
 #define WEBRTC_STUN_HOST "stun.cloudflare.com"
 #define WEBRTC_STUN_PORT 3478
 // Sending what was gathered so far beats waiting out slow interfaces, the host has to answer within 8 seconds
@@ -109,6 +112,49 @@ static EAcceptConnection WebRtcAccept( UTcpNetDriver* Driver, FWebRtcPeer* Peer,
 		debugf( TEXT("WebRTC connection from %s"), *Connection->LowLevelGetRemoteAddress() );
 	}
 	return Accept;
+}
+
+// A server browser row as the URL the setups below read
+static FURL WebRtcQueryURL( const FString& Host, const FString& Details )
+{
+	FURL URL;
+	URL.Host = Host;
+	URL.AddOption( *(FString(TEXT("WebRTC=")) + Details) );
+	return URL;
+}
+
+// False while the peer's channel is not open
+static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count );
+
+// The query replies as the UDP query port sends them, one message per packet
+struct FArchiveWebRtcWriter : public FArchiveUdpWriter
+{
+	FWebRtcPeer* Peer;
+
+	FArchiveWebRtcWriter( FWebRtcPeer* InPeer )
+	:	FArchiveUdpWriter( NULL, FIpAddr() )
+	,	Peer( InPeer )
+	{}
+	void Flush()
+	{
+		WebRtcPeerSend( Peer, &SendData(0), SendData.Num() );
+		// The version header stays for the next packet
+		SendData.Remove( sizeof(INT), SendData.Num()-sizeof(INT) );
+	}
+};
+
+// A game packet has at least two bytes, so a single byte from a peer without a connection is a server browser query.
+// Queries counts them per peer, they come from anyone and each costs a reply of several packets.
+static UBOOL WebRtcAnswerQuery( FWebRtcPeer* Peer, INT& Queries, const BYTE* Data, INT Count )
+{
+	if( Count!=1 )
+		return 0;
+	if( Queries++ < WEBRTC_MAX_QUERIES )
+	{
+		FArchiveWebRtcWriter ArSend( Peer );
+		ServerQueryAnswer( Data[0], ArSend );
+	}
+	return 1;
 }
 
 // Reads the server's details from the URL and makes up the client's ufrag and the server's answer.

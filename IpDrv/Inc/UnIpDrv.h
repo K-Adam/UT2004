@@ -329,6 +329,14 @@ inline UBOOL HasServerDetail( const TArray<FKeyValuePair>& Info, const TCHAR* Ke
 	return 0;
 }
 
+inline FString GetServerDetail( const TArray<FKeyValuePair>& Info, const TCHAR* Key )
+{
+	for( INT i=0; i<Info.Num(); i++ )
+		if( Info(i).Key==Key )
+			return Info(i).Value;
+	return FString();
+}
+
 // Replaces a server detail, adds it when missing and removes it when Value is empty
 inline void SetServerDetail( TArray<FKeyValuePair>& Info, const TCHAR* Key, const FString& Value )
 {
@@ -360,6 +368,15 @@ UBOOL WebMasterListDone( struct FWebMasterRequest* Request, UBOOL& Ok, TArray<FS
 struct FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp );
 UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp );
 void WebMasterRequestFree( struct FWebMasterRequest* Request );
+
+// Writes the server's reply packets to a server browser query, nothing while no server runs
+void ServerQueryAnswer( BYTE Command, FArchive& ArSend );
+// Server browser queries over a WebRTC data channel, for servers and clients that UDP can't serve.
+// Open gives 0 for unusable details, Send 0 while the channel opens, Recv 0 for nothing waiting and -1 once closed.
+INT WebRtcQueryOpen( const FString& Host, const FString& Details );
+UBOOL WebRtcQuerySend( INT Id, const BYTE* Data, INT Count );
+INT WebRtcQueryRecv( INT Id, BYTE* Data, INT Max );
+void WebRtcQueryClose( INT Id );
 
 /*-----------------------------------------------------------------------------
 	Public includes.

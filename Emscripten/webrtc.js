@@ -154,10 +154,12 @@ addToLibrary({
   },
 
   ut_webrtc_send__deps: ['$UTWebRtc'],
-  ut_webrtc_send__sig: 'vipi',
+  ut_webrtc_send__sig: 'iipi',
   ut_webrtc_send: (id, data, count) => {
     const peer = UTWebRtc.peers.get(id);
-    if (peer?.dc?.readyState == 'open') peer.dc.send(HEAPU8.slice(data, data + count));
+    if (peer?.dc?.readyState != 'open') return 0;
+    peer.dc.send(HEAPU8.slice(data, data + count));
+    return 1;
   },
 
   ut_webrtc_recv__deps: ['$UTWebRtc'],

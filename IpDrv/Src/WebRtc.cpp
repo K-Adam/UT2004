@@ -12,6 +12,7 @@
 #include <openssl/x509.h>
 #include <algorithm>
 #include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -34,6 +35,7 @@ struct FWebRtcPeer
 	sockaddr_in Addr;
 	UWebRtcConnection* Connection = nullptr;
 	DOUBLE CreatedTime = 0;
+	INT Queries = 0;
 
 	// A client of a browser host sends its offer once gathered and waits for the answer
 	FString SignalId;
@@ -204,20 +206,28 @@ static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
 	UWebRtcConnection.
 -----------------------------------------------------------------------------*/
 
+static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
+{
+	if( !Peer->Dc->isOpen() )
+		return 0;
+	try
+	{
+		Peer->Dc->send( (const rtc::byte*)Data, Count );
+	}
+	catch( const std::exception& )
+	{
+	}
+	return 1;
+}
+
 void UWebRtcConnection::LowLevelSend( void* Data, INT Count )
 {
 	guard(UWebRtcConnection::LowLevelSend);
 	// Dropped while the channel opens, the engine resends what needs to arrive
-	if( Peer && Peer->Dc->isOpen() )
+	if( Peer )
 	{
 		clock(Driver->SendCycles);
-		try
-		{
-			Peer->Dc->send( (const rtc::byte*)Data, Count );
-		}
-		catch( const std::exception& )
-		{
-		}
+		WebRtcPeerSend( Peer, Data, Count );
 		unclock(Driver->SendCycles);
 	}
 	unguard;
@@ -286,9 +296,9 @@ void UTcpNetDriver::WebRtcListen()
 	unguard;
 }
 
-UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
+// Starts a client peer for the WebRTC details in the URL, null with Error set when that fails
+static std::shared_ptr<FWebRtcPeer> ConnectPeer( FURL& ConnectURL, FString& Error )
 {
-	guard(UTcpNetDriver::WebRtcConnect);
 	std::shared_ptr<FWebRtcPeer> Peer;
 	sockaddr_in Addr;
 	FString SignalId;
@@ -308,7 +318,7 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 		{
 			std::string Ufrag, Answer;
 			if( !WebRtcClientSetup( ConnectURL, Error, Addr, Ufrag, Answer ) )
-				return 0;
+				return nullptr;
 			Peer = MakeClientPeer( Config );
 			Peer->Ufrag = Ufrag;
 			Peer->Pc->setLocalDescription( rtc::Description::Type::Offer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
@@ -321,10 +331,19 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 		debugf( TEXT("%s"), *Error );
 		if( Peer )
 			ClosePeer( Peer );
-		return 0;
+		return nullptr;
 	}
 	Peer->Addr = Addr;
 	Peer->CreatedTime = appSeconds();
+	return Peer;
+}
+
+UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
+{
+	guard(UTcpNetDriver::WebRtcConnect);
+	std::shared_ptr<FWebRtcPeer> Peer = ConnectPeer( ConnectURL, Error );
+	if( !Peer )
+		return 0;
 
 	// A UDP connection that got no answer is replaced, it must still be the ServerConnection when it goes
 	if( ServerConnection )
@@ -333,8 +352,8 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 	Host->Peers.push_back( Peer );
 	WebRtc = Host;
 
-	ServerConnection = Peer->Connection = new UWebRtcConnection( this, Peer.get(), Addr, USOCK_Pending, ConnectURL );
-	debugf( NAME_DevNet, TEXT("Game client over WebRTC to %s"), *IpString(Addr.sin_addr,ntohs(Addr.sin_port)) );
+	ServerConnection = Peer->Connection = new UWebRtcConnection( this, Peer.get(), Peer->Addr, USOCK_Pending, ConnectURL );
+	debugf( NAME_DevNet, TEXT("Game client over WebRTC to %s"), *IpString(Peer->Addr.sin_addr,ntohs(Peer->Addr.sin_port)) );
 	ServerConnection->CreateChannel( CHTYPE_Control, 1, 0 );
 	return 1;
 	unguard;
@@ -469,6 +488,9 @@ void UTcpNetDriver::WebRtcTick()
 			Closed = Peer->Closed;
 		}
 
+		while( !Peer->Connection && !ServerConnection && !Inbox.empty() && WebRtcAnswerQuery( Peer.get(), Peer->Queries, (const BYTE*)Inbox.front().data(), (INT)Inbox.front().size() ) )
+			Inbox.pop_front();
+
 		if( !Peer->Connection && !Inbox.empty() && !ServerConnection && WebRtcAccept( this, Peer.get(), Peer->Addr, Peer->Connection )==ACCEPTC_Reject )
 			Closed = true;
 
@@ -481,7 +503,7 @@ void UTcpNetDriver::WebRtcTick()
 				Peer->Connection->State = USOCK_Closed;
 		}
 		// A peer that finishes the handshake but never sends would hold its slot, the UDP path has no such state
-		else if( Closed || GCurrentTime - Peer->CreatedTime > WEBRTC_PENDING_TIMEOUT )
+		else if( Closed || GCurrentTime - Peer->CreatedTime > (Peer->Queries ? WEBRTC_QUERY_TIMEOUT : WEBRTC_PENDING_TIMEOUT) )
 		{
 			ClosePeer( Peer );
 			Host->Peers.erase( Host->Peers.begin()+i );
@@ -507,5 +529,66 @@ void UTcpNetDriver::WebRtcDestroy()
 	}
 	delete Host;
 	unguard;
+}
+
+/*-----------------------------------------------------------------------------
+	Server browser queries.
+-----------------------------------------------------------------------------*/
+
+// Never destroyed, libdatachannel's own globals may be gone by the time statics are
+static std::map<INT,std::shared_ptr<FWebRtcPeer>>& QueryPeers()
+{
+	static auto* Peers = new std::map<INT,std::shared_ptr<FWebRtcPeer>>;
+	return *Peers;
+}
+
+INT WebRtcQueryOpen( const FString& Host, const FString& Details )
+{
+	static INT LastId = 0;
+	FURL URL = WebRtcQueryURL( Host, Details );
+	FString Error;
+	std::shared_ptr<FWebRtcPeer> Peer = ConnectPeer( URL, Error );
+	if( !Peer )
+		return 0;
+	QueryPeers()[++LastId] = Peer;
+	return LastId;
+}
+
+UBOOL WebRtcQuerySend( INT Id, const BYTE* Data, INT Count )
+{
+	auto It = QueryPeers().find( Id );
+	return It!=QueryPeers().end() && WebRtcPeerSend( It->second.get(), Data, Count );
+}
+
+INT WebRtcQueryRecv( INT Id, BYTE* Data, INT Max )
+{
+	auto It = QueryPeers().find( Id );
+	if( It==QueryPeers().end() )
+		return -1;
+	FWebRtcPeer& Peer = *It->second;
+	if( Peer.SignalId.Len() )
+		WebRtcSignal( Peer );
+	std::lock_guard<std::mutex> Guard( Peer.Lock );
+	while( !Peer.Inbox.empty() )
+	{
+		rtc::binary Message = std::move( Peer.Inbox.front() );
+		Peer.Inbox.pop_front();
+		if( !Message.empty() && (INT)Message.size() <= Max )
+		{
+			appMemcpy( Data, Message.data(), Message.size() );
+			return (INT)Message.size();
+		}
+	}
+	return Peer.Closed ? -1 : 0;
+}
+
+void WebRtcQueryClose( INT Id )
+{
+	auto It = QueryPeers().find( Id );
+	if( It!=QueryPeers().end() )
+	{
+		ClosePeer( It->second );
+		QueryPeers().erase( It );
+	}
 }
 
