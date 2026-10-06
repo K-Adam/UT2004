@@ -242,7 +242,10 @@ static const ANSICHAR* IndirectFragmentShader =
 // reflections and dithers their stair steps. The half size occlusion, bounced light and fog
 // scattering are gathered 4x4 with depth weights, which also averages out their noise. With depth
 // of field the lit world goes to Focus with the signed circle of confusion of a thin lens, which
-// grows with depth.
+// grows with depth. The frame's alpha holds how hot each pixel looks. Heat rises, so the air shimmers
+// at and above it, less far away where the waves would be larger than what they bend. Haze holds the
+// strength and the time. Blasts holds the camera space centres of explosions with their age from 0 to
+// 1 in W, then their final radius in X. Each bends the view along the rim of its growing sphere.
 static const ANSICHAR* CompositeFragmentShader =
 	POST_COMMON
 	POST_FINISH
@@ -251,11 +254,42 @@ static const ANSICHAR* CompositeFragmentShader =
 	"uniform float Volumetric;\n"
 	"uniform vec3 Up, FogColor;\n"
 	"uniform vec4 Fog;\n"
+	"uniform vec2 Haze;\n"
+	"uniform vec4 Blasts[2 * " STRINGIFY(HEAT_BLASTS) "];\n"
 	"void main()\n"
 	"{\n"
-	"	vec3 Color = texture(Frame, UV).rgb;\n"
 	"	ivec2 P = ivec2(UV * vec2(textureSize(Depth, 0)));\n"
 	"	float D = DepthAt(P);\n"
+	"	vec2 Bent = UV;\n"
+	// The weapon stays sharp, its own flash would smear it.
+	"	if (Haze.x > 0.0 && D >= Split)\n"
+	"	{\n"
+	"		vec2 Size = vec2(textureSize(Depth, 0));\n"
+	"		float Heat = 0.0;\n"
+	"		for (int i = 0; i < 4; i++)\n"
+	"			Heat = max(Heat, texture(Frame, UV - vec2(0.0, 0.012 * float(i))).a * (1.0 - 0.25 * float(i)));\n"
+	"		vec2 Q = UV * Size / Size.y;\n"
+	"		vec2 Wave = vec2(sin(Q.y * 90.0 - Haze.y * 9.0 + 2.0 * sin(Q.x * 40.0 + Haze.y * 3.0)),\n"
+	"			sin(Q.x * 70.0 + Haze.y * 7.0 + 2.0 * sin(Q.y * 50.0 - Haze.y * 4.0)));\n"
+	// Slanted waves at unrelated rates keep the first pair from showing as a grid.
+	"		Wave += 0.6 * vec2(sin(dot(Q, vec2(57.0, 131.0)) + Haze.y * 13.0), sin(dot(Q, vec2(-143.0, 61.0)) - Haze.y * 11.0));\n"
+	"		float Z = D < 1.0 ? LinearZ(D) : 65536.0;\n"
+	"		Bent += Wave * vec2(Size.y / Size.x, 1.0) * Heat * Haze.x * 0.0025 * clamp(800.0 / Z, 0.3, 1.0);\n"
+	"		vec3 Ray = vec3((UV * 2.0 - 1.0) * Proj.xy, 1.0);\n"
+	"		float Reach = Z * length(Ray);\n"
+	"		Ray = normalize(Ray);\n"
+	"		for (int i = 0; i < " STRINGIFY(HEAT_BLASTS) "; i++)\n"
+	"		{\n"
+	"			vec4 B = Blasts[i];\n"
+	"			float Along = dot(B.xyz, Ray), R = Blasts[i + " STRINGIFY(HEAT_BLASTS) "].x * B.w;\n"
+	// Not behind the camera and not behind what the pixel shows.
+	"			if (B.w <= 0.0 || B.z < 1.0 || Along < 1.0 || Along - R > Reach)\n"
+	"				continue;\n"
+	"			float Rim = max(1.0 - abs(length(B.xyz - Ray * Along) - R) / (0.15 * R + 16.0), 0.0);\n"
+	"			Bent -= normalize(UV - ToUV(B.xyz) + 1e-6) * Rim * Rim * (1.0 - B.w) * min(0.027 * Blasts[i + " STRINGIFY(HEAT_BLASTS) "].x / (Along * Proj.y), 0.03) * Haze.x;\n"
+	"		}\n"
+	"	}\n"
+	"	vec3 Color = texture(Frame, Bent).rgb;\n"
 	"	vec4 Refl = texelFetch(Reflection, P, 0);\n"
 	"	if (Params.w > 0.0 && D >= Split && D < 1.0 && Refl.a > 0.004)\n"
 	"	{\n"
@@ -559,7 +593,7 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 	return 1;
 }
 
-void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog)
+void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog,const FPlane* Blasts)
 {
 	FPlane	Proj(1.f / CameraToScreen.M[0][0],1.f / CameraToScreen.M[1][1],CameraToScreen.M[2][2],CameraToScreen.M[3][2]);
 	UBOOL	DepthPasses = ViewValid && (AmbientOcclusion || ContactShadows),
@@ -644,6 +678,9 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	glUniform3fv(glGetUniformLocation(CompositeProgram,"Up"),1,&Up.X);
 	glUniform4fv(glGetUniformLocation(CompositeProgram,"Fog"),1,&ViewFog.X);
 	glUniform3fv(glGetUniformLocation(CompositeProgram,"FogColor"),1,&RenderInterface.ViewFogColor.X);
+	// The time wraps so the waves keep their precision, a jump every quarter hour goes unseen.
+	glUniform2f(glGetUniformLocation(CompositeProgram,"Haze"),ViewValid && HeatHaze ? 1.f : 0.f,(FLOAT)fmod(appSeconds(),1024.0));
+	glUniform4fv(glGetUniformLocation(CompositeProgram,"Blasts"),2 * HEAT_BLASTS,&Blasts[0].X);
 	if( Defocus )
 		CreateFramebuffer(Focus,World.Width,World.Height,0,GL_RGBA8,0);
 	FOpenGLFramebuffer& Target = Defocus ? Focus : Scene;
@@ -678,6 +715,77 @@ GLuint UOpenGLRenderDevice::Accumulate(FOpenGLFramebuffer& Input,FOpenGLFramebuf
 	DrawFullscreen(ResolveProgram,Resolved.Framebuffer,Resolved.Width,Resolved.Height,Input.Texture,Previous.Texture,World.DepthTexture);
 	Valid = 1;
 	return Resolved.Texture;
+}
+
+// Explosions are told by their class names, several effects of one explosion make one wave.
+void FOpenGLRenderInterface::PickBlasts(FPlane* Out)
+{
+	const FLOAT	Duration = 0.45f;
+	ULevel*		Level = Viewport->Actor ? Viewport->Actor->XLevel : NULL;
+	if( !Level )
+		return;
+	FLOAT Now = Viewport->Actor->Level->TimeSeconds;
+	UBOOL Seen[ARRAY_COUNT(Blasts)];
+	appMemzero(Seen,sizeof(Seen));
+	// Another level counts its time from zero again.
+	for( INT j=0; j<ARRAY_COUNT(Blasts); j++ )
+		if( Blasts[j].Start > Now )
+			appMemzero(&Blasts[j],sizeof(FBlast));
+
+	for( INT i=Level->iFirstDynamicActor; i<Level->Actors.Num(); i++ )
+	{
+		AActor* Actor = Level->Actors(i);
+		if( !Actor || Actor->bDeleteMe || Actor->bNoDelete )
+			continue;
+		FLOAT Radius = 0.f;
+		for( UClass* Class=Actor->GetClass(); Class && !Radius; Class=Class->GetSuperClass() )
+			if( appStrstr(Class->GetName(),TEXT("Explosion")) || appStrstr(Class->GetName(),TEXT("VehDeath")) || appStrstr(Class->GetName(),TEXT("ShockCombo")) )
+				Radius = 600.f;
+		// Minigun shells and the like only pop, and gibs and debris carry the word without any blast.
+		// Of the shock rifle only the combo blasts, its beam and ball hits are named explosions too.
+		const TCHAR* Name = Actor->GetClass()->GetName();
+		if( !Radius || appStrstr(Name,TEXT("Blood")) || appStrstr(Name,TEXT("Crap")) || (appStrstr(Name,TEXT("Shock")) && !appStrstr(Name,TEXT("ShockCombo"))) )
+			continue;
+		if( appStrstr(Name,TEXT("Small")) )
+			Radius = 50.f;
+		else if( appStrstr(Name,TEXT("Redeemer")) )
+			Radius = 2500.f;
+
+		INT Slot = INDEX_NONE, Oldest = 0;
+		for( INT j=0; j<ARRAY_COUNT(Blasts); j++ )
+		{
+			FBlast& B = Blasts[j];
+			if( B.Actor == Actor )
+				Slot = j;
+			// A slot whose actor lives must stay, or the actor would start another wave.
+			if( (B.Actor ? B.Start : B.Start - 1e6f) < (Blasts[Oldest].Actor ? Blasts[Oldest].Start : Blasts[Oldest].Start - 1e6f) )
+				Oldest = j;
+			if( B.Radius && Now - B.Start < 0.1f && (B.Location - Actor->Location).SizeSquared() < Square(128.f) )
+				Radius = 0.f;
+		}
+		if( Slot == INDEX_NONE )
+		{
+			Slot = Oldest;
+			Blasts[Slot].Actor		= Actor;
+			Blasts[Slot].Location	= Actor->Location;
+			Blasts[Slot].Radius		= Radius;
+			Blasts[Slot].Start		= Now;
+		}
+		Seen[Slot] = 1;
+	}
+
+	INT Count = 0;
+	for( INT j=0; j<ARRAY_COUNT(Blasts); j++ )
+	{
+		FBlast& B = Blasts[j];
+		if( !Seen[j] )
+			B.Actor = NULL;
+		if( B.Radius && Now - B.Start < Duration && Count < HEAT_BLASTS )
+		{
+			Out[Count]					= FPlane(ViewWorldToCamera.TransformFVector(B.Location),Max((Now - B.Start) / Duration,0.001f));
+			Out[HEAT_BLASTS + Count++]	= FPlane(B.Radius,0,0,0);
+		}
+	}
 }
 
 // The focus follows what the crosshair rests on, eased in diopters like an eye or a lens refocusing.

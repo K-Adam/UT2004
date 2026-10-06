@@ -392,6 +392,18 @@ UBOOL UViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		
 		return 1;
 	}
+	else if( ParseCommand(&Cmd,TEXT("LOGCAMERA")) )
+	{
+		if( Actor )
+		{
+			FString Camera = FString::Printf(TEXT("Camera %s Location=(X=%f,Y=%f,Z=%f) Rotation=(Pitch=%i,Yaw=%i,Roll=%i)"),Actor->XLevel->GetOuter()->GetName(),
+				Actor->CalcViewLocation.X,Actor->CalcViewLocation.Y,Actor->CalcViewLocation.Z,
+				Actor->CalcViewRotation.Pitch & 65535,Actor->CalcViewRotation.Yaw & 65535,Actor->CalcViewRotation.Roll & 65535);
+			debugf(TEXT("%s"),*Camera);
+			Ar.Log(*Camera);
+		}
+		return 1;
+	}
 	else if( ParseCommand(&Cmd,TEXT("SHOT")) )
 	{
 		FMemMark Mark(GMem);

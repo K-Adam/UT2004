@@ -231,6 +231,45 @@ template<class T,DWORD Type> static T* MaterialCast(UMaterial* Material)
 	return (Material->MaterialType & Type) ? (T*)Material : Material->MaterialType == 0 ? Cast<T>(Material) : NULL;
 }
 
+// Fire, muzzle flashes, explosions and lava can only be told by what their art is called. A cold word
+// in the name rules a material out, which keeps smoke, coronas and energy weapons still.
+static const TCHAR* ColdNames[]	= { TEXT("SMOKE"), TEXT("STEAM"), TEXT("COOL"), TEXT("SHOCK"), TEXT("LINK"), TEXT("BIO"), TEXT("PLASMA"), TEXT("FLARE"), TEXT("CORONA") };
+static const TCHAR* LavaNames[]	= { TEXT("LAVA"), TEXT("MAGMA"), TEXT("MOLTEN") };
+static const TCHAR* HotNames[]	= { TEXT("FLAME"), TEXT("FIRE"), TEXT("BURN"), TEXT("NAPALM"), TEXT("EXPLO"), TEXT("EXP1_"), TEXT("EXP2_"), TEXT("EXP7_"), TEXT("WE1_"), TEXT("BLAST"), TEXT("MUZZLE"), TEXT("FLASH"), TEXT("EXHAUST") };
+
+static UBOOL HasName(const FString& Name,const TCHAR** Names,INT Count)
+{
+	for( INT i=0; i<Count; i++ )
+		if( appStrstr(*Name,Names[i]) )
+			return 1;
+	return 0;
+}
+
+static INT HeatKind(UOpenGLRenderDevice* RenDev,UMaterial* Material)
+{
+	// Particles and xEmitters pass one wrapper for every texture, so only what it wraps can be remembered.
+	for( INT i=0; i<8 && Material; i++ )
+	{
+		if( UModifier* Modifier = MaterialCast<UModifier,MT_Modifier>(Material) )
+			Material = Modifier->Material;
+		else if( UParticleMaterial* Particle = MaterialCast<UParticleMaterial,MT_ParticleMaterial>(Material) )
+			Material = Particle->BitmapMaterial;
+		else
+			break;
+	}
+	if( !Material )
+		return HEAT_None;
+	if( BYTE* Known = RenDev->HeatKinds.Find(Material->GetFName()) )
+		return *Known;
+	// Only its own name, a group called Lava also holds the rock around it.
+	FString	Name = FString(Material->GetName()).Caps();
+	BYTE	Kind = HasName(Name,ColdNames,ARRAY_COUNT(ColdNames)) ? HEAT_None
+				: HasName(Name,LavaNames,ARRAY_COUNT(LavaNames)) ? HEAT_Lava
+				: HasName(Name,HotNames,ARRAY_COUNT(HotNames)) ? HEAT_Hot : HEAT_None;
+	RenDev->HeatKinds.Set(Material->GetFName(),Kind);
+	return Kind;
+}
+
 // Strips the modifiers off a chain ending in a T and folds them into Info.
 template<class T,DWORD Type> static T* CheckMaterial(FLOAT Time,UMaterial* InMaterial,FOpenGLModifierInfo* Info=NULL)
 {
@@ -315,6 +354,7 @@ public:
 										Lit,		// The dynamic and static lighting, once applied.
 										Light;		// All lighting multiplied into the colour.
 	UBOOL								Beam;
+	INT									Heat;
 	UBOOL								Cube[OGL_MAX_TEXTURES];
 	FString*							ErrorString;
 	UMaterial**							ErrorMaterial;
@@ -325,7 +365,7 @@ public:
 
 	FOpenGLCompiler(FOpenGLRenderInterface* InRI,FOpenGLMaterialState& InState,TArray<BYTE>& InKey,FString* InCode,FString* InErrorString,UMaterial** InErrorMaterial)
 	:	RI(InRI), S(InRI->CurrentState), State(InState), Key(InKey), Code(InCode), NumTemps(0)
-	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE), Light(INDEX_NONE), Beam(0)
+	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE), Light(INDEX_NONE), Beam(0), Heat(HEAT_None)
 	,	ErrorString(InErrorString), ErrorMaterial(InErrorMaterial), FogMode(FOG_Normal)
 	{
 		Time = RI->Viewport->Actor ? RI->Viewport->Actor->Level->TimeSeconds : 0.f;
@@ -726,6 +766,21 @@ public:
 			Emit(TEXT("\tAlbedo = FragColor;\n"));
 		else
 			Emit(TEXT("\tAlbedo = vec4(0.0);\n"));
+		// The heat haze reads how hot the world looks from its alpha, which is how much it glows. Hot
+		// names on solid surfaces are mostly scenery, only lava glows without blending, by how red it
+		// is, and half so a whole floor of it stays calm. Its translucent layers are crust and flow
+		// drawn over rock as much as over lava, their coverage says nothing about heat. Where the alpha
+		// weights the blend of the other hot draws it stays, it is the coverage already.
+		UBOOL	Blended = !(State.SrcBlend == GL_ONE && State.DstBlend == GL_ZERO);
+		INT		Hot = Beam || Scales ? HEAT_None : Heat == HEAT_Hot ? (Blended || State.AlphaTest ? HEAT_Hot : HEAT_None)
+					: Heat == HEAT_Lava && !Blended ? HEAT_Lava : HEAT_None;
+		K(Hot);
+		State.Heat = Hot != HEAT_None;
+		if( Hot && State.SrcBlend != GL_SRC_ALPHA && State.DstBlend != GL_ONE_MINUS_SRC_ALPHA )
+			Emit(Hot == HEAT_Lava ? TEXT("\tFragColor.a = mix(FragColor.a, 0.5 * smoothstep(0.4, 0.8, FragColor.r - FragColor.b), FogUp.w);\n") : TEXT("\tFragColor.a = mix(FragColor.a, max(FragColor.r, max(FragColor.g, FragColor.b)), FogUp.w);\n"));
+		// Whatever solid covers a hot surface hides its heat too.
+		else if( !Hot && !Blended )
+			Emit(TEXT("\tFragColor.a *= 1.0 - FogUp.w;\n"));
 	}
 
 	UBOOL Shader(UShader* Shader,FOpenGLModifierInfo Mod)
@@ -1262,6 +1317,7 @@ public:
 		if( S->LightingOnly )
 			return LightingOnly();
 		Beam = IsLightBeam(Material);
+		Heat = RI->RenDev->HeatHaze ? HeatKind(RI->RenDev,Material) : HEAT_None;
 		UMaterial* Base = NULL;
 		if( (Shader = CheckMaterial<UShader,MT_Shader>(Time,Material,&Mod)) != NULL
 		||	(Base = CheckMaterial<UCombiner,MT_Combiner>(Time,Material,&Mod)) != NULL
@@ -1313,6 +1369,7 @@ void FOpenGLMaterialState::Reset()
 	ZTest				= 1;
 	TwoSided			= 0;
 	Beam				= 0;
+	Heat				= 0;
 	DepthPass			= 0;
 }
 

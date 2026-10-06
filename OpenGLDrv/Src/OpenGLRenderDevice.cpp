@@ -33,10 +33,11 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("DepthOfField"),	RF_Public)UBoolProperty(CPP_PROPERTY(DepthOfField),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("VolumetricFog"),	RF_Public)UBoolProperty(CPP_PROPERTY(VolumetricFog),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("GlobalIllumination"),RF_Public)UBoolProperty(CPP_PROPERTY(GlobalIllumination),TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("HeatHaze"),		RF_Public)UBoolProperty(CPP_PROPERTY(HeatHaze),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = HeatHaze = 1;
 	ResolutionScale = 100;
 }
 
@@ -183,6 +184,7 @@ void UOpenGLRenderDevice::ResetStateCache()
 	GL.ElementBuffer= (GLuint)-1;
 	GL.DepthFunc	= GL_LESS;
 	GL.DepthMask	= GL_TRUE;
+	GL.AlphaMask	= GL_TRUE;
 	GL.DepthNear	= 0.f;
 	GL.DepthFar		= 1.f;
 	GL.CullFace		= GL_BACK;
@@ -462,6 +464,7 @@ void UOpenGLRenderDevice::Flush(UViewport* Viewport)
 	Base.RenderTarget			= NULL;
 	Base.Lightmap				= NULL;
 	Base.NumStreams				= 0;
+	Base.Source					= NULL;
 	Base.IndexBuffer			= 0;
 
 	PrecacheOnFlip = 1;
@@ -545,6 +548,15 @@ void UOpenGLRenderDevice::ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth)
 	F.Resolved = 1;
 }
 
+void UOpenGLRenderDevice::SetAlphaMask(GLboolean Alpha)
+{
+	if( GL.AlphaMask != Alpha )
+	{
+		glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,Alpha);
+		GL.AlphaMask = Alpha;
+	}
+}
+
 void UOpenGLRenderDevice::UseProgram(GLuint Program)
 {
 	if( GL.Program != Program )
@@ -559,6 +571,7 @@ void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT W
 {
 	glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 	glViewport(0,0,Width,Height);
+	SetAlphaMask(GL_TRUE);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);

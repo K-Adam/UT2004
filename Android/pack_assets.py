@@ -25,6 +25,7 @@ OVERRIDES = {'UT2004/System/Default.ini': [
         (b'DepthOfField', b'True', b'False'),
         (b'VolumetricFog', b'True', b'False'),
         (b'GlobalIllumination', b'True', b'False'),
+        (b'HeatHaze', b'True', b'False'),
         (b'ResolutionScale', b'100', b'70'))]}
 
 

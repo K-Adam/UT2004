@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2], ReflectionsText[2];
 
@@ -28,6 +28,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Options.ManageComponent(ch_DepthOfField);
 	sb_Options.ManageComponent(ch_VolumetricFog);
 	sb_Options.ManageComponent(ch_GlobalIllumination);
+	sb_Options.ManageComponent(ch_HeatHaze);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -69,6 +70,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_GlobalIllumination:
 		ch_GlobalIllumination.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice GlobalIllumination")), true);
+		break;
+	case ch_HeatHaze:
+		ch_HeatHaze.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice HeatHaze")), true);
 		break;
 	}
 }
@@ -116,6 +120,9 @@ function InternalOnChange(GUIComponent Sender)
 	case ch_GlobalIllumination:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice GlobalIllumination" @ ch_GlobalIllumination.IsChecked());
 		break;
+	case ch_HeatHaze:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice HeatHaze" @ ch_HeatHaze.IsChecked());
+		break;
 	}
 }
 
@@ -152,6 +159,7 @@ function ResetClicked()
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice DepthOfField True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice VolumetricFog True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice GlobalIllumination True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice HeatHaze True");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 
@@ -180,7 +188,7 @@ defaultproperties
 
 	Begin Object class=GUISectionBackground Name=sbOptions
 		WinWidth=0.502751
-		WinHeight=0.460000
+		WinHeight=0.520000
 		WinLeft=0.495826
 		WinTop=0.012761
 		Caption="Options"
@@ -238,7 +246,7 @@ defaultproperties
 		bHeightFromComponent=false
 		OnLoadINI=InternalOnLoadINI
 		OnChange=InternalOnChange
-		TabOrder=10
+		TabOrder=11
 	End Object
 	co_Reflections=ReflectionsCombo
 
@@ -332,6 +340,19 @@ defaultproperties
 		TabOrder=9
 	End Object
 	ch_GlobalIllumination=GlobalIlluminationCheck
+
+	Begin Object class=moCheckBox Name=HeatHazeCheck
+		Caption="Heat Haze"
+		Hint="The air shimmers over fire, lava and firing weapons, and explosions send out a blast wave."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=10
+	End Object
+	ch_HeatHaze=HeatHazeCheck
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"

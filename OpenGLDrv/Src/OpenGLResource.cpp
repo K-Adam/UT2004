@@ -276,6 +276,63 @@ void FOpenGLVertexStream::Cache(FVertexStream* Source)
 	CachedRevision = Source->GetRevision();
 }
 
+// A copy of the stream in which vertices at one position share the sum of their normals, kept beside
+// the original under an id no engine resource has.
+GLuint UOpenGLRenderDevice::SmoothStream(FVertexStream* Source)
+{
+	QWORD					Id = Source->GetCacheId() | ((QWORD)1 << 63);
+	FOpenGLVertexStream*	Stream = (FOpenGLVertexStream*)GetCachedResource(Id);
+	if( !Stream )
+		Stream = new FOpenGLVertexStream(this,Id);
+	if( Stream->Buffer && Stream->CachedRevision == Source->GetRevision() )
+		return Stream->Buffer;
+
+	FVertexComponent Components[MAX_VERTEX_COMPONENTS];
+	INT NumComponents = Source->GetComponents(Components), Stride = Source->GetStride(), Position = INDEX_NONE, Normal = INDEX_NONE, Offset = 0;
+	for( INT i=0; i<NumComponents; i++ )
+	{
+		if( Components[i].Function == FVF_Position )
+			Position = Offset;
+		if( Components[i].Function == FVF_Normal )
+			Normal = Offset;
+		Offset += Components[i].Type == CT_Color ? 4 : (4 - Components[i].Type) * sizeof(FLOAT);
+	}
+
+	TArray<BYTE> Data;
+	Data.Add(Source->GetSize());
+	if( Data.Num() )
+		Source->GetStreamData(&Data(0));
+	if( Position != INDEX_NONE && Normal != INDEX_NONE )
+	{
+		TMap<DWORD,FVector> Sums;
+		for( INT Pass=0; Pass<2; Pass++ )
+			for( INT i=0; i+Stride<=Data.Num(); i+=Stride )
+			{
+				FVector&	N = *(FVector*)&Data(i + Normal);
+				DWORD		Hash = appMemCrc(&Data(i + Position),sizeof(FVector));
+				FVector*	Sum = Sums.Find(Hash);
+				if( Pass == 0 )
+				{
+					if( Sum )
+						*Sum += N;
+					else
+						Sums.Set(Hash,N);
+				}
+				// Opposed normals cancel out and leave no direction.
+				else if( Sum && Sum->SizeSquared() > 0.01f )
+					N = Sum->SafeNormal();
+			}
+	}
+
+	if( !Stream->Buffer )
+		glGenBuffers(1,&Stream->Buffer);
+	glBindBuffer(GL_ARRAY_BUFFER,Stream->Buffer);
+	glBufferData(GL_ARRAY_BUFFER,Data.Num(),Data.Num() ? &Data(0) : NULL,GL_STATIC_DRAW);
+	Stream->Size			= Data.Num();
+	Stream->CachedRevision	= Source->GetRevision();
+	return Stream->Buffer;
+}
+
 FOpenGLIndexBuffer::FOpenGLIndexBuffer(UOpenGLRenderDevice* InRenDev,QWORD InCacheId)
 :	FOpenGLResource(InRenDev,InCacheId), Buffer(0), Size(-1)
 {}

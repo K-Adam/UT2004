@@ -9,6 +9,7 @@ FOpenGLRenderInterface::FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev)
 	CurrentState = &SavedStates[0];
 	FSavedState& S = *CurrentState;
 	appMemzero(&S,sizeof(S));
+	appMemzero(Blasts,sizeof(Blasts));
 	S.LocalToWorld		= FMatrix::Identity;
 	S.WorldToCamera		= FMatrix::Identity;
 	S.CameraToScreen	= FMatrix::Identity;
@@ -139,6 +140,8 @@ static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSav
 	if( ToOverlay && !RI->OverlayUsed )
 	{
 		glDisable(GL_SCISSOR_TEST);
+		// Clears obey the colour mask, and the world draw before this one may have left alpha off.
+		RenDev->SetAlphaMask(GL_TRUE);
 		glClearColor(0.f,0.f,0.f,0.f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glEnable(GL_SCISSOR_TEST);
@@ -181,9 +184,13 @@ void FOpenGLRenderInterface::EndWorld()
 	FPlane Light(0,0,0,0);
 	if( ViewValid && RenDev->ContactShadows )
 		Light = PickShadowLight();
+	FPlane BlastWaves[2 * HEAT_BLASTS];
+	appMemzero(BlastWaves,sizeof(BlastWaves));
+	if( ViewValid && RenDev->HeatHaze )
+		PickBlasts(BlastWaves);
 	FLOAT Gamma = ParseParam(appCmdLine(),TEXT("NOGAMMA")) ? 1.f : Viewport->GetOuterUClient()->Gamma;
 	RenDev->PostProcess(ViewValid,ViewCameraToScreen,Light,Gamma,ViewValid && RenDev->DepthOfField ? PickFocus() : 0.f,
-		ViewValid && RenDev->VolumetricFog ? PickFogLights() : NULL);
+		ViewValid && RenDev->VolumetricFog ? PickFogLights() : NULL,BlastWaves);
 	if( OverlayUsed )
 		RenDev->DrawFullscreen(RenDev->OverlayProgram,RenDev->Scene.DrawFramebuffer(),RenDev->Scene.Width,RenDev->Scene.Height,RenDev->Overlay.Texture,0,0,1);
 	OverlayUsed = 0;
@@ -207,7 +214,9 @@ void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FL
 	GLbitfield Mask = 0;
 	if( UseColor )
 	{
-		glClearColor(Color.R / 255.f,Color.G / 255.f,Color.B / 255.f,Color.A / 255.f);
+		// The world's alpha is the heat haze mask, nothing is hot yet.
+		RenDev->SetAlphaMask(GL_TRUE);
+		glClearColor(Color.R / 255.f,Color.G / 255.f,Color.B / 255.f,InWorld && !CurrentState->RenderTarget ? 0.f : Color.A / 255.f);
 		Mask |= GL_COLOR_BUFFER_BIT;
 	}
 	if( UseDepth )
@@ -339,6 +348,7 @@ INT FOpenGLRenderInterface::SetVertexStreams(EVertexShader Shader,FVertexStream*
 		Out.NumComponents	= Streams[i]->GetComponents(Out.Components);
 	}
 	CurrentState->NumStreams = NumStreams;
+	CurrentState->Source = NumStreams ? Streams[0] : NULL;
 	return Size;
 }
 
@@ -350,6 +360,7 @@ INT FOpenGLRenderInterface::UseDynamicVertices(INT Offset,INT Stride,const FVert
 	Out.NumComponents	= NumComponents;
 	appMemcpy(Out.Components,Components,NumComponents * sizeof(FVertexComponent));
 	CurrentState->NumStreams = 1;
+	CurrentState->Source = NULL;
 	return Offset / Stride;
 }
 
@@ -577,7 +588,9 @@ void FOpenGLRenderInterface::Commit()
 	// Particles pass camera space vertices with no view transform, they keep the up of the view before them.
 	if( S->WorldToCamera != FMatrix::Identity )
 		FogUp = S->WorldToCamera.TransformNormal(FVector(0,0,1)).SafeNormal();
-	Scene.FogUp				= FPlane(FogUp,0.f);
+	// W tells solid draws they are in the world, where they put out the heat of what they cover.
+	UBOOL WorldTarget = InWorld && !S->RenderTarget && !ToOverlay;
+	Scene.FogUp				= FPlane(FogUp,WorldTarget ? 1.f : 0.f);
 	INT NumLights = 0;
 	for( INT i=0; i<OGL_MAX_LIGHTS; i++ )
 	{
@@ -655,6 +668,12 @@ void FOpenGLRenderInterface::Commit()
 	}
 
 	UBOOL Blend = !(M.SrcBlend == GL_ONE && M.DstBlend == GL_ZERO);
+	// The world's alpha is the heat haze mask. Hot draws add to it and solid ones clear it, as the
+	// level's draw order may put the lava under a floor before the floor. Blended ones in front, like
+	// smoke, leave it. The mask covers every attachment, and of the blended draws only those that scale
+	// what is beneath them change the reflection's alpha, so they keep writing.
+	UBOOL Scales = M.DstBlend == GL_SRC_COLOR || (M.SrcBlend == GL_ZERO && M.DstBlend == GL_ONE_MINUS_SRC_COLOR);
+	RenDev->SetAlphaMask(!WorldTarget || !RenDev->HeatHaze || M.Heat || !Blend || Scales);
 	SetCap(GL_BLEND,Blend,GL.Blend);
 	if( Blend && ToOverlay )
 	{
@@ -779,6 +798,9 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 	{
 		FDeferredDraw& D	= DeferredDraws(DeferredDraws.Add());
 		D.State				= *S;
+		// Flat faces would each get one brightness, the soft edge needs normals that turn across them.
+		if( S->Source )
+			D.State.Streams[0].Buffer = RenDev->SmoothStream(S->Source);
 		D.Type				= PrimitiveType;
 		D.FirstIndex		= FirstIndex;
 		D.NumPrimitives		= NumPrimitives;
@@ -852,7 +874,7 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 			glDrawArrays(Mode,FirstIndex,Count);
 	}
 	if( DepthPass )
-		glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
+		glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,RenDev->GL.AlphaMask);
 
 	unguard;
 }

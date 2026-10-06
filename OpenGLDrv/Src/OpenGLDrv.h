@@ -183,6 +183,7 @@ struct FOpenGLMaterialState
 					ZTest,
 					TwoSided,
 					Beam,			// A fake light shaft, drawn after the rest of the level.
+					Heat,			// Writes how hot it looks into the world's alpha, for the heat haze.
 					DepthPass;		// Blended without depth, drawn again into depth where mostly opaque, so the post process fog sees it.
 
 	void Reset();
@@ -206,7 +207,7 @@ struct FOpenGLSceneBlock
 			FogColor,
 			Ambient,
 			Options,		// X dynamic lights, Y static lighting, Z 2x lighting, W mip bias.
-			FogUp;			// World up in camera space, for the volumetric fog's height.
+			FogUp;			// World up in camera space, for the volumetric fog's height. W is 1 in the world framebuffer.
 	FPlane	LightPosition[OGL_MAX_LIGHTS],
 			LightDirection[OGL_MAX_LIGHTS],
 			LightColor[OGL_MAX_LIGHTS],
@@ -255,6 +256,7 @@ public:
 
 		FOpenGLStream			Streams[OGL_MAX_STREAMS];
 		INT					NumStreams;
+		FVertexStream*		Source;			// What Streams[0] was cached from, NULL for dynamic vertices. Only valid until the draw.
 		GLuint				IndexBuffer;
 		INT					IndexSize,
 							IndexBufferBase;
@@ -331,6 +333,16 @@ public:
 				Max;
 	};
 	TMap<QWORD,FProbe>	Probes;			// By quantised origin, so objects that stay put trace once.
+
+	// Explosions seen lately. Actors carry no spawn time, so the first frame one shows up starts its blast wave.
+	struct FBlast
+	{
+		AActor*	Actor;		// Only compared, NULL once the actor is gone.
+		FVector	Location;
+		FLOAT	Radius,
+				Start;
+	};
+	FBlast				Blasts[16];
 	FName				ProbeMap;
 
 	FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev);
@@ -384,11 +396,14 @@ private:
 	FProbe FindProbe(const FMatrix& LocalToWorld);
 	FLOAT PickFocus();
 	const FOpenGLFogLights* PickFogLights();
+	void PickBlasts(FPlane* Out);
 	void TraceShadows(ULevel* Level,const FVector& Camera);
 	FLOAT TraceSunCell(ULevel* Level,INT I,INT J,FLOAT CameraS);
 };
 
 enum EOpenGLExtraTarget { EXTRA_Reflection, EXTRA_Albedo };
+enum EOpenGLHeat { HEAT_None, HEAT_Hot, HEAT_Lava };
+#define HEAT_BLASTS 4
 
 // A colour texture with optional depth and stencil and extra colour textures, the world's reflection and albedo.
 // With multisampling the drawing goes to separate buffers that Resolve copies into the textures.
@@ -423,7 +438,8 @@ class UOpenGLRenderDevice : public URenderDevice
 			ScreenSpaceReflections,
 			DepthOfField,
 			VolumetricFog,
-			GlobalIllumination;
+			GlobalIllumination,
+			HeatHaze;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
@@ -442,6 +458,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	TMap<QWORD,FOpenGLResource*>			Resources;
 	TMultiMap<DWORD,FOpenGLProgram*>		Programs;
 	TMap<DWORD,GLuint>					Samplers;
+	TMap<FName,BYTE>					HeatKinds;	// EOpenGLHeat by material name, the matching is too slow for every draw.
 
 	GLuint	VertexArray,
 			EmptyVertexArray,
@@ -515,7 +532,8 @@ class UOpenGLRenderDevice : public URenderDevice
 						DstBlend,
 						DepthFunc,
 						CullFace;
-		GLboolean		DepthMask;
+		GLboolean		DepthMask,
+						AlphaMask;
 		FLOAT			DepthNear,
 						DepthFar;
 		INT				ZBias;
@@ -547,6 +565,8 @@ class UOpenGLRenderDevice : public URenderDevice
 	virtual FRenderCaps* GetRenderCaps();
 
 	FOpenGLResource* GetCachedResource(QWORD CacheId);
+	GLuint SmoothStream(FVertexStream* Source);
+	void SetAlphaMask(GLboolean Alpha);
 	GLuint GetSampler(DWORD Flags);
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
 	// Links without waiting, FinishProgram blocks until the result is known.
@@ -559,7 +579,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	// Covers the framebuffer with Program. Unit 2 is the depth texture, the others sample linearly.
 	// Over lays premultiplied alpha over.
 	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Depth = 0,UBOOL Over = 0,GLuint Texture3 = 0,GLuint Texture4 = 0,GLuint Texture5 = 0,GLuint Texture6 = 0);
-	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog);
+	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog,const FPlane* Blasts);
 	void FlushShadows();
 	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,INT Extra = 0);
 	GLuint Accumulate(FOpenGLFramebuffer& Input,FOpenGLFramebuffer History[2],UBOOL& Valid,GLenum Format,const FPlane& Proj,const FMatrix& Reproject);
