@@ -209,7 +209,7 @@ static void ExitSplash(void)
 static void InitServerTray(void) {}
 static void PumpServerTray(void) {}
 static void ExitServerTray(void) {}
-static void FindContent(void) {}
+static bool FindContent(void) { return true; }
 #else
 // A dedicated server has no window, the tray icon is where it can be seen and stopped.
 static SDL_Tray* ServerTray = NULL;
@@ -264,27 +264,33 @@ static void ExitServerTray(void)
 struct FFolderPick
 {
     char Path[1024];
+    bool Failed;
     SDL_AtomicInt Done;
 };
 
 static void SDLCALL FolderPicked(void* UserData, const char* const* List, int)
 {
     FFolderPick* Pick = (FFolderPick*)UserData;
-    SDL_strlcpy(Pick->Path, List && List[0] ? List[0] : "", sizeof(Pick->Path));
+    // SDL keeps its error text per thread, so it is taken here.
+    Pick->Failed = List == NULL;
+    SDL_strlcpy(Pick->Path, Pick->Failed ? SDL_GetError() : List[0] ? List[0] : "", sizeof(Pick->Path));
     SDL_SetAtomicInt(&Pick->Done, 1);
 }
 
 // The build ships without the game content, so the player points it at a retail install, which is used in place.
-static void FindContent(void)
+// Returns false when the player gives up.
+static bool FindContent(void)
 {
     for (INT i = 0; i < GSys->Paths.Num(); i++)
         if (GSys->Paths(i).Right(4) == TEXT(".ut2") && GFileManager->FindFiles(*GSys->Paths(i), 1, 0).Num())
-            return;
+            return true;
 
     static const TCHAR* Wildcards[] = { TEXT("Maps/*.ut2"), TEXT("Textures/*.utx"), TEXT("Sounds/*.uax"), TEXT("Music/*.umx"), TEXT("StaticMeshes/*.usx"), TEXT("Animations/*.ukx") };
+    // Without video there is no dialog to ask with, and the engine reports that failure itself.
     if (!SDL_Init(SDL_INIT_VIDEO))
-        appErrorf(TEXT("The game content was not found."));
-    for (;;)
+        return true;
+    bool Found = false;
+    while (!Found)
     {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "UT2004",
             "The game content was not found.\nSelect the folder of a UT2004 install, the one that holds Maps and Textures.", NULL);
@@ -295,8 +301,11 @@ static void FindContent(void)
             SDL_PumpEvents();
             SDL_Delay(10);
         }
-        if (!Pick.Path[0])
-            appErrorf(TEXT("The game content was not found."));
+        // A system without a folder dialog would otherwise close the game without a word.
+        if (Pick.Failed)
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "UT2004 could not ask for the folder", Pick.Path, NULL);
+        if (Pick.Failed || !Pick.Path[0])
+            break;
 #ifdef WIN32
         TCHAR Dir[1024] = TEXT("");
         MultiByteToWideChar(CP_UTF8, 0, Pick.Path, -1, Dir, ARRAY_COUNT(Dir));
@@ -316,9 +325,10 @@ static void FindContent(void)
             new(GSys->Paths) FString(Folder * Wildcard);
         new(GSys->MusicPath) FString(Folder * TEXT("Music"));
         GSys->SaveConfig();
-        break;
+        Found = true;
     }
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    return Found;
 }
 #endif
 
@@ -1654,8 +1664,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 		GIsScriptable = 1;
 		GLazyLoad     = !GIsClient || ParseParam(appCmdLine(),TEXT("LAZY"));
 
-		if( GIsClient )
-			FindContent();
+		UBOOL HasContent = !GIsClient || FindContent();
 
 		// Figure out whether to show log or splash screen.
 		UBOOL ShowLog = ParseParam(CmdLine,TEXT("LOG"));
@@ -1669,7 +1678,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 			Filename = FString(GModPath) * FString(TEXT("Help")) * GModName + TEXT("Logo.bmp");
 		if( GFileManager->FileSize(*Filename)<0 )
 			Filename = FString(TEXT("../Help")) * GPackage + TEXT("Logo.bmp"); // gam
-		if( (!ShowLog) &&
+		if( HasContent && (!ShowLog) &&
             (!ParseParam(CmdLine,TEXT("server"))) &&
             (!ParseParam(CmdLine,TEXT("nosplash"))) &&
             !appStrfind(CmdLine,TEXT("TestRenDev")) )
@@ -1700,7 +1709,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 		}
 
 		// Init engine.
-		UEngine* Engine = InitEngine();
+		UEngine* Engine = HasContent ? InitEngine() : NULL;
 
 		if( Engine )
 		{
