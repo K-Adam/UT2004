@@ -209,6 +209,7 @@ static void ExitSplash(void)
 static void InitServerTray(void) {}
 static void PumpServerTray(void) {}
 static void ExitServerTray(void) {}
+static void FindContent(void) {}
 #else
 // A dedicated server has no window, the tray icon is where it can be seen and stopped.
 static SDL_Tray* ServerTray = NULL;
@@ -257,6 +258,67 @@ static void ExitServerTray(void)
 {
     if (ServerTray != NULL)
         SDL_DestroyTray(ServerTray);
+}
+
+// SDL may answer on another thread, so the result crosses over without the engine's allocator.
+struct FFolderPick
+{
+    char Path[1024];
+    SDL_AtomicInt Done;
+};
+
+static void SDLCALL FolderPicked(void* UserData, const char* const* List, int)
+{
+    FFolderPick* Pick = (FFolderPick*)UserData;
+    SDL_strlcpy(Pick->Path, List && List[0] ? List[0] : "", sizeof(Pick->Path));
+    SDL_SetAtomicInt(&Pick->Done, 1);
+}
+
+// The build ships without the game content, so the player points it at a retail install, which is used in place.
+static void FindContent(void)
+{
+    for (INT i = 0; i < GSys->Paths.Num(); i++)
+        if (GSys->Paths(i).Right(4) == TEXT(".ut2") && GFileManager->FindFiles(*GSys->Paths(i), 1, 0).Num())
+            return;
+
+    static const TCHAR* Wildcards[] = { TEXT("Maps/*.ut2"), TEXT("Textures/*.utx"), TEXT("Sounds/*.uax"), TEXT("Music/*.umx"), TEXT("StaticMeshes/*.usx"), TEXT("Animations/*.ukx") };
+    if (!SDL_Init(SDL_INIT_VIDEO))
+        appErrorf(TEXT("The game content was not found."));
+    for (;;)
+    {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "UT2004",
+            "The game content was not found.\nSelect the folder of a UT2004 install, the one that holds Maps and Textures.", NULL);
+        FFolderPick Pick = {};
+        SDL_ShowOpenFolderDialog(FolderPicked, &Pick, NULL, NULL, false);
+        while (!SDL_GetAtomicInt(&Pick.Done))
+        {
+            SDL_PumpEvents();
+            SDL_Delay(10);
+        }
+        if (!Pick.Path[0])
+            appErrorf(TEXT("The game content was not found."));
+#ifdef WIN32
+        TCHAR Dir[1024] = TEXT("");
+        MultiByteToWideChar(CP_UTF8, 0, Pick.Path, -1, Dir, ARRAY_COUNT(Dir));
+#else
+        const TCHAR* Dir = appFromAnsi(Pick.Path);
+#endif
+        FString Folder = Dir;
+        // The engine joins the base directory and each path in 256 character buffers.
+        if (appStrlen(appBaseDir()) + Folder.Len() + 24 > 255)
+        {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "UT2004", "The path of that folder is too long for the game.", NULL);
+            continue;
+        }
+        if (!GFileManager->FindFiles(*(Folder * Wildcards[0]), 1, 0).Num())
+            continue;
+        for (const TCHAR* Wildcard : Wildcards)
+            new(GSys->Paths) FString(Folder * Wildcard);
+        new(GSys->MusicPath) FString(Folder * TEXT("Music"));
+        GSys->SaveConfig();
+        break;
+    }
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 #endif
 
@@ -1591,6 +1653,9 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 		GIsEditor     = 0;
 		GIsScriptable = 1;
 		GLazyLoad     = !GIsClient || ParseParam(appCmdLine(),TEXT("LAZY"));
+
+		if( GIsClient )
+			FindContent();
 
 		// Figure out whether to show log or splash screen.
 		UBOOL ShowLog = ParseParam(CmdLine,TEXT("LOG"));

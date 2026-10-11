@@ -43,6 +43,8 @@
   <div id="details"></div>
   <progress id="progress"></progress>
   <button id="action" hidden></button>
+  <button id="pick" hidden>Use a retail zip</button>
+  <input id="zip" type="file" accept=".zip" hidden>
 </div>
 <dialog class="dialog" id="welcome">
   <form method="dialog">
@@ -67,6 +69,8 @@ const message = document.getElementById('message');
 const details = document.getElementById('details');
 const progress = document.getElementById('progress');
 const action = document.getElementById('action');
+const pick = document.getElementById('pick');
+const zipInput = document.getElementById('zip');
 const canvas = document.getElementById('canvas');
 
 // The content comes from the asset host, or straight from the linked local content set when testing locally.
@@ -82,6 +86,10 @@ const STALL = 30000;
 // The asset host turns requests away for ten seconds after a burst of them, so a failed file waits that out.
 const RETRIES = 5;
 const RETRY_WAIT = 12000;
+
+// Set once a zip was imported, from then on the page runs on the stored content and leaves the asset host alone.
+const ZIP_KEY = 'ut2004-content-zip';
+const CONTENT_DIRS = ['Animations', 'Maps', 'Music', 'Sounds', 'StaticMeshes', 'Textures'];
 
 let db, files, warning = '';
 
@@ -124,7 +132,7 @@ async function consent(missing) {
   const bytes = missing.reduce((sum, f) => sum + f.size, 0);
   const { quota = 0, usage = 0 } = (await navigator.storage?.estimate?.()) ?? {};
   show('UT2004 keeps its game content in this browser',
-    `${missing.length} files (${gb(bytes)}) are downloaded once and stored by the browser, so later visits start without downloading them again.` +
+    `${missing.length} files (${gb(bytes)}) are stored by the browser once, so later visits start right away.` +
     (quota ? `\nFree space for this site: ${gb(quota - usage)}.` : ''));
   progress.hidden = true;
   action.textContent = 'Store and play';
@@ -222,25 +230,141 @@ async function download(missing) {
   await Promise.all(Array.from({ length: PARALLEL }, worker)).finally(() => failure.abort());
 }
 
-async function sync() {
-  const opening = indexedDB.open('ut2004-content', 1);
-  opening.onupgradeneeded = () => opening.result.createObjectStore('files');
-  db = await request(opening);
+async function storedFiles() {
+  const paths = await request(store('readonly').getAllKeys());
+  const entries = await request(store('readonly').getAll());
+  return paths.map((path, i) => ({ path, size: entries[i].blob.size, hash: entries[i].hash }));
+}
 
+async function syncHosted() {
   const response = await fetch(manifestUrl, { cache: 'no-cache' });
   if (!response.ok) throw new Error(`The content list: HTTP ${response.status}`);
   files = await response.json();
-  const paths = await request(store('readonly').getAllKeys());
-  const entries = await request(store('readonly').getAll());
-  const stored = new Map(paths.map((path, i) => [path, entries[i].hash]));
+  const stored = new Map((await storedFiles()).map((f) => [f.path, f.hash]));
   const wanted = new Set(files.map((f) => f.path));
-  for (const path of paths) if (!wanted.has(path)) store('readwrite').delete(path);
+  for (const path of stored.keys()) if (!wanted.has(path)) store('readwrite').delete(path);
 
   const missing = files.filter((f) => stored.get(f.path) !== f.hash);
   if (missing.length) {
     await consent(missing);
     await download(missing);
   }
+}
+
+// The content folders may sit one level down, as in a zip of the whole game folder.
+function contentPath(name) {
+  const parts = name.replaceAll('\\', '/').split('/');
+  if (parts.includes('..') || !parts.at(-1)) return;
+  for (let level = 0; level < 2 && level < parts.length - 1; level++) {
+    // The engine looks the folders up by these names and the file system tells upper from lower case.
+    const dir = CONTENT_DIRS.find((d) => d.toLowerCase() == parts[level].toLowerCase());
+    if (dir) return [dir, ...parts.slice(level + 1)].join('/');
+  }
+}
+
+// Zip keeps its index at the end. Slices of the file are read as needed, so a zip of any size stays out of memory.
+async function zipIndex(file) {
+  const view = async (start, length) => new DataView(await file.slice(start, start + length).arrayBuffer());
+  const u64 = (v, at) => Number(v.getBigUint64(at, true));
+  const tailStart = Math.max(0, file.size - 22 - 65535);
+  const tail = await view(tailStart, file.size - tailStart);
+  let end = tail.byteLength - 22;
+  while (end >= 0 && tail.getUint32(end, true) != 0x06054b50) end--;
+  if (end < 0) throw new RangeError();
+  let count = tail.getUint16(end + 10, true), dirSize = tail.getUint32(end + 12, true), dirStart = tail.getUint32(end + 16, true);
+  if (end >= 20 && tail.getUint32(end - 20, true) == 0x07064b50) {
+    const z = await view(u64(tail, end - 12), 56);
+    if (z.getUint32(0, true) != 0x06064b50) throw new RangeError();
+    count = u64(z, 32);
+    dirSize = u64(z, 40);
+    dirStart = u64(z, 48);
+  }
+  const dir = await view(dirStart, dirSize);
+  const text = new TextDecoder();
+  const found = new Map();
+  for (let p = 0, i = 0; i < count; i++) {
+    if (dir.getUint32(p, true) != 0x02014b50) throw new RangeError();
+    const flags = dir.getUint16(p + 8, true), method = dir.getUint16(p + 10, true);
+    const nameLen = dir.getUint16(p + 28, true), extraEnd = p + 46 + nameLen + dir.getUint16(p + 30, true);
+    let packed = dir.getUint32(p + 20, true), size = dir.getUint32(p + 24, true), local = dir.getUint32(p + 42, true);
+    // Zip64 moves the fields that overflowed into an extra record, in this order.
+    for (let e = p + 46 + nameLen; e + 4 <= extraEnd; e += 4 + dir.getUint16(e + 2, true)) {
+      if (dir.getUint16(e, true) != 1) continue;
+      let f = e + 4;
+      if (size == 0xFFFFFFFF) { size = u64(dir, f); f += 8; }
+      if (packed == 0xFFFFFFFF) { packed = u64(dir, f); f += 8; }
+      if (local == 0xFFFFFFFF) local = u64(dir, f);
+    }
+    const path = contentPath(text.decode(new Uint8Array(dir.buffer, p + 46, nameLen)));
+    p = extraEnd + dir.getUint16(p + 32, true);
+    if (!path) continue;
+    if (flags & 1) throw new Error(`${file.name} is encrypted.`);
+    if (method != 0 && method != 8) throw new Error(`${file.name} uses a compression other than deflate.`);
+    const header = await view(local, 30);
+    if (header.getUint32(0, true) != 0x04034b50) throw new RangeError();
+    const start = local + 30 + header.getUint16(26, true) + header.getUint16(28, true);
+    found.set(path, { path, size, hash: 'zip', packed: file.slice(start, start + packed), method });
+  }
+  return [...found.values()];
+}
+
+async function importZip(file) {
+  // A read past the end of a view throws a RangeError, which only a broken index causes.
+  const list = await zipIndex(file).catch((e) => {
+    throw e instanceof RangeError ? new Error(`${file.name} is damaged or not a zip archive.`) : e;
+  });
+  if (!list.length) throw new Error(`No ${CONTENT_DIRS.join(', ')} folders were found in ${file.name}.`);
+  await consent(list);
+  // Hosted packages are cut down, so none of them may stay next to the retail ones.
+  await request(store('readwrite').clear());
+  const total = list.reduce((sum, f) => sum + f.packed.size, 0);
+  let done = 0;
+  progress.hidden = false;
+  progress.max = total;
+  for (const [i, f] of list.entries()) {
+    show(`Copying the game content, ${i} of ${list.length} files`, `${mb(done)} of ${mb(total)}\n${f.path}${warning}`);
+    progress.value = done;
+    const blob = f.method ? await new Response(f.packed.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob().catch(() => null) : f.packed;
+    if (blob?.size != f.size) throw new Error(`${f.path} in ${file.name} is damaged.`);
+    await put(f.path, { hash: f.hash, blob });
+    done += f.packed.size;
+  }
+  return list;
+}
+
+// Like the Android launcher, the page takes the content of a retail install when the asset host fails.
+async function zipFallback(error) {
+  for (;;) {
+    stop(error.message, true);
+    details.textContent = 'The game content could not be downloaded. The game also runs on the content of a retail UT2004 install: zip its folder and pick the zip here.';
+    pick.hidden = false;
+    pick.onclick = () => zipInput.click();
+    const file = await new Promise((resolve) => (zipInput.onchange = () => zipInput.files[0] && resolve(zipInput.files[0])));
+    zipInput.value = '';
+    pick.hidden = action.hidden = true;
+    try {
+      files = await importZip(file);
+      // Written last, so an interrupted import downloads or asks again on the next visit.
+      localStorage.setItem(ZIP_KEY, '1');
+      return;
+    } catch (e) {
+      error = e;
+    }
+  }
+}
+
+async function sync() {
+  const opening = indexedDB.open('ut2004-content', 1);
+  opening.onupgradeneeded = () => opening.result.createObjectStore('files');
+  db = await request(opening);
+
+  if (localStorage.getItem(ZIP_KEY)) {
+    files = await storedFiles();
+    if (files.length) return;
+    // The browser cleared the storage.
+    localStorage.removeItem(ZIP_KEY);
+  }
+  await syncHosted().catch(zipFallback);
 }
 
 var Module = {
