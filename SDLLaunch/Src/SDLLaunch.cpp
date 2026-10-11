@@ -77,6 +77,9 @@ static class FOutputDeviceConsole : public FOutputDevice
 {
 	void Serialize( const TCHAR* Data, EName Event )
 	{
+		// A server sends its window title every second, which would bury the log.
+		if( Event == NAME_Title )
+			return;
 		// appToAnsi returns a shared buffer, so one call per string.
 		printf( "%s: ", appToAnsi(FName::SafeString(Event)) );
 		puts( appToAnsi(Data) );
@@ -202,11 +205,67 @@ static void ExitSplash(void)
 #endif
 #endif
 
+#if defined(__ANDROID__) || __EMSCRIPTEN__
+static void InitServerTray(void) {}
+static void PumpServerTray(void) {}
+static void ExitServerTray(void) {}
+#else
+// A dedicated server has no window, the tray icon is where it can be seen and stopped.
+static SDL_Tray* ServerTray = NULL;
+
+static void SDLCALL ShowServerLog(void*, SDL_TrayEntry*)
+{
+    // The file writer holds back up to 4 KB, which can be the whole log of a quiet server.
+    Log.Flush();
+#ifdef WIN32
+    FString Path = Log.Filename;
+#else
+    FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + Log.Filename;
+#endif
+    SDL_OpenURL(appToAnsi(*Path));
+}
+
+static void SDLCALL StopServer(void*, SDL_TrayEntry*)
+{
+    appRequestExit(0);
+}
+
+static void InitServerTray(void)
+{
+    if (!SDL_Init(SDL_INIT_VIDEO))
+        return;
+    // SDL keeps the display awake for games, a server in the tray has no reason to.
+    SDL_EnableScreenSaver();
+    SDL_Surface *icon = SDL_LoadBMP("../Help/Unreal.bmp");
+    ServerTray = SDL_CreateTray(icon, "UT2004 Server");
+    SDL_DestroySurface(icon);
+    if (ServerTray == NULL)
+        return;
+    SDL_TrayMenu *menu = SDL_CreateTrayMenu(ServerTray);
+    SDL_SetTrayEntryCallback(SDL_InsertTrayEntryAt(menu, -1, "Show log", SDL_TRAYENTRY_BUTTON), ShowServerLog, NULL);
+    SDL_SetTrayEntryCallback(SDL_InsertTrayEntryAt(menu, -1, "Stop server", SDL_TRAYENTRY_BUTTON), StopServer, NULL);
+}
+
+// SDL runs the tray callbacks while it pumps events, the events themselves are of no use here.
+static void PumpServerTray(void)
+{
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {}
+}
+
+static void ExitServerTray(void)
+{
+    if (ServerTray != NULL)
+        SDL_DestroyTray(ServerTray);
+}
+#endif
+
 
 #if __EMSCRIPTEN__
 #include <unistd.h>
 // Emscripten/content.js
-extern "C" void ut_next_frame();
+extern "C" int ut_next_frame();
+extern "C" void ut_exit(const char* ServerCmd);
 #endif
 
 #ifdef __ANDROID__
@@ -1090,7 +1149,9 @@ inline void	CMainLoop::RunLoop(void)
 	guard(EnforceTickRate);
 #if __EMSCRIPTEN__
 	// The browser shows the frame and runs its events only while the game waits for the next one.
-	ut_next_frame();
+	// It also tells when the page's Stop server button was pressed.
+	if( ut_next_frame() )
+		appRequestExit( 0 );
 #else
 	if( !GUseFixedTimeStep && IncludeMessaging )
 	{		
@@ -1117,6 +1178,8 @@ inline void	CMainLoop::RunLoop(void)
 		Engine->Client->Viewports(0)->UpdateInput(0, 0);
 		unguard;
 	}
+	else if( !Engine->Client )
+		PumpServerTray();
 
 	if( RecordingMovie && Engine->Client )
 		Engine->Client->Viewports(0)->Exec(TEXT("shot"));
@@ -1451,8 +1514,8 @@ int main(int argc, char **argv)
 #else
     if (argc >= 2)
     {
-	    appStrcpy(CmdLine, appFromAnsi(argv[1]));
-	    for (INT i = 2; i < argc; i++)
+	    appStrncpy(CmdLine, appFromAnsi(argv[1]), ARRAY_COUNT(CmdLine));
+	    for (INT i = 2; i < argc && appStrlen(CmdLine) + strlen(argv[i]) + 1 < ARRAY_COUNT(CmdLine); i++)
     	{
        		appStrcat(CmdLine, TEXT(" "));
     		appStrcat(CmdLine, appFromAnsi(argv[i]));
@@ -1597,9 +1660,13 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 			}
 #endif
 
+			if( !GIsClient )
+				InitServerTray();
+
 			// Start main engine loop, including the Windows message pump.
 			if( !GIsRequestingExit )
 				MainLoop( Engine );
+			ExitServerTray();
 		}
 
 		// Clean shutdown.
@@ -1628,12 +1695,16 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 	}
 #endif
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || __EMSCRIPTEN__
 	// appExit would fork for it. The server starts after appExit, as it reads the inis appExit writes.
 	TCHAR ServerCmd[1024] = TEXT("");
 	if( GUnixSpawnOnExit && GIsClient )
 		appStrncpy( ServerCmd, GUnixSpawnOnExit, ARRAY_COUNT(ServerCmd) );
 	GUnixSpawnOnExit = NULL;
+#endif
+#if __EMSCRIPTEN__
+	ANSICHAR PageServerCmd[1024];
+	appToAnsi( ServerCmd, PageServerCmd, ARRAY_COUNT(PageServerCmd) );
 #endif
 
 	// Final shut down.
@@ -1642,6 +1713,10 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 #ifdef __ANDROID__
 	if( *ServerCmd )
 		StartServerService( ServerCmd );
+#elif __EMSCRIPTEN__
+	// A crash stays on screen with its log instead.
+	if( !ErrorLevel )
+		ut_exit( PageServerCmd );
 #endif
 	return((int) ErrorLevel);
 }

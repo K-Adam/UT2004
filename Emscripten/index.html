@@ -22,10 +22,22 @@
   #details { max-width: 560px; color: #999; font-size: 14px; line-height: 1.5; white-space: pre-line; }
   progress { width: min(480px, 80vw); }
   button { font: inherit; padding: 8px 20px; }
+  canvas[hidden], #server[hidden] { display: none; }
+  #server { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; box-sizing: border-box; }
+  #server header { display: flex; align-items: center; gap: 16px; }
+  #log { flex: 1; margin: 0; overflow: auto; color: #999; font: 13px ui-monospace, monospace; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 <canvas id="canvas" tabindex="-1"></canvas>
+<div id="server" hidden>
+  <header>
+    <strong>UT2004 dedicated server</strong>
+    <button id="stopServer">Stop server</button>
+  </header>
+  <div>Keep this page in the foreground. In a background tab or a minimised window the browser pauses the server.</div>
+  <pre id="log"></pre>
+</div>
 <div id="status">
   <span id="message">Loading</span>
   <div id="details"></div>
@@ -277,7 +289,44 @@ var Module = {
       .then(() => Module.removeRunDependency('content'), (e) => stop(e.message, true));
   }],
   onAbort: (what) => stop(`The game stopped: ${what}`),
+  // The engine has shut down, and passes the arguments when it did so to start a server.
+  gameExit: (server) => {
+    if (server) sessionStorage.setItem(SERVER_KEY, server);
+    else sessionStorage.removeItem(SERVER_KEY);
+    if (server || serverCmd) return location.reload();
+    // A script can only close a tab that a script opened, the message is for every other tab.
+    window.close();
+    stop('The game has exited, you can close this tab.', true);
+    action.textContent = 'Start again';
+  },
 };
+
+// A page cannot start a second process, so a dedicated server takes the place of the game in this tab.
+// The session storage keeps its arguments, so a reload starts the server again and a link cannot pass any.
+const SERVER_KEY = 'ut2004-server';
+const serverCmd = sessionStorage.getItem(SERVER_KEY);
+if (serverCmd) {
+  const log = document.getElementById('log');
+  const stopServer = document.getElementById('stopServer');
+  canvas.hidden = true;
+  document.getElementById('server').hidden = false;
+  // The engine takes its map from the first argument.
+  Module.arguments.unshift(...serverCmd.split(' ').filter(Boolean));
+  Module.print = (line) => {
+    console.log(line);
+    const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.append(line + '\n');
+    while (log.childNodes.length > 1000) log.firstChild.remove();
+    if (atEnd) log.scrollTop = log.scrollHeight;
+  };
+  stopServer.onclick = () => {
+    Module.stopRequested = true;
+    stopServer.disabled = true;
+    // A crashed or hung engine never reaches gameExit, and the tab must not stay a server.
+    sessionStorage.removeItem(SERVER_KEY);
+    setTimeout(() => location.reload(), 10000);
+  };
+}
 
 function load(src) {
   return new Promise((resolve, reject) => {
@@ -325,7 +374,7 @@ if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
   stop('This browser cannot pause WebAssembly for storage reads (JSPI). Use Chrome 137, Firefox 153 or newer.');
 } else {
   // The system package loader registers itself with Module as it runs, so it goes before the engine.
-  ask('welcome')
+  (serverCmd ? Promise.resolve() : ask('welcome'))
     .then(sync)
     .then(() => load('system.js'))
     .then(() => load('UT2004.js'))

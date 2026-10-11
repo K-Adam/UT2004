@@ -79,7 +79,15 @@ addToLibrary({
     })();
   },
 
-  ut_next_frame__sig: 'v',
+  ut_next_frame__sig: 'i',
   ut_next_frame__async: true,
-  ut_next_frame: () => new Promise((resolve) => requestAnimationFrame(resolve)),
+  ut_next_frame: () => new Promise((resolve) => requestAnimationFrame(() => resolve(Module.stopRequested ? 1 : 0))),
+
+  // The page reloads or closes after this, which must wait until the inis appExit wrote are in IndexedDB.
+  ut_exit__deps: ['$FS', '$UTF8ToString'],
+  ut_exit__sig: 'vp',
+  ut_exit: (cmd) => {
+    const server = UTF8ToString(cmd);
+    FS.syncfs(false, () => Module.gameExit(server));
+  },
 });

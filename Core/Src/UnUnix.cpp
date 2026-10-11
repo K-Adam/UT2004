@@ -969,11 +969,11 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		debugf( TEXT("Relaunch: %s"), Cmd );
 		GConfig->Flush( 0 );
 
-#if __ANDROID__
-		// An app cannot start a copy of itself, SDLLaunch passes the arguments to its server service.
+#if __ANDROID__ || __EMSCRIPTEN__
+		// Neither an app nor a page can start a copy of itself. SDLLaunch passes the arguments to its server service, or to the reloaded page.
 		if( !ParseParam( Cmd, TEXT("SERVER") ) )
 		{
-			Ar.Logf( TEXT("Only a dedicated server can be relaunched on Android.") );
+			Ar.Logf( TEXT("Only a dedicated server can be relaunched here.") );
 			return 1;
 		}
 		GUnixSpawnOnExit = new TCHAR[appStrlen(Cmd) + 1];
@@ -1013,10 +1013,20 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
                 xterm = TEXT("");
             }
 
-            GUnixSpawnOnExit = new TCHAR[arraylen];
-            appStrcpy(GUnixSpawnOnExit, *xterm);
-            appStrcat(GUnixSpawnOnExit, TEXT("./ucc-bin server "));
-            appStrcat(GUnixSpawnOnExit, Arg0);
+            if (xterm.Len())
+            {
+                GUnixSpawnOnExit = new TCHAR[arraylen];
+                appStrcpy(GUnixSpawnOnExit, *xterm);
+                appStrcat(GUnixSpawnOnExit, TEXT("./ucc-bin server "));
+                appStrcat(GUnixSpawnOnExit, Arg0);
+            }
+            else
+            {
+                // Without a terminal ucc-bin would run unseen, the launcher shows a tray icon for its server.
+                GUnixSpawnOnExit = new TCHAR[CmdLen + 32];
+                appStrcpy(GUnixSpawnOnExit, TEXT("./ut2004-bin "));
+                appStrcat(GUnixSpawnOnExit, Cmd);
+            }
 #endif
 
         appRequestExit( 0 );
