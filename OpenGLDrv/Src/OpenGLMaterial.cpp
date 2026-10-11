@@ -92,10 +92,13 @@ static const ANSICHAR* OpenGLFragmentPrologue =
 	"	if (Type < 1.5)\n"
 	"		return D < R ? max(0.0, 1.0 - dot(V.xy, V.xy) / (R * R)) * 2.0 : 0.0;\n"
 	"	float VN = dot(V, N);\n"
+	// Per vertex these lights blend out between vertices. Per pixel they would end in a hard line
+	// where the surface turns away and at the radius, so both ends fade.
+	"	float Soft = smoothstep(0.0, 0.1, VN / max(D, 0.0001)) * (1.0 - smoothstep(0.8, 1.0, D / R));\n"
 	"	if (Type < 2.5)\n"
-	"		return VN > 0.0 && D < R ? sqrt(1.02 - D / R) * 2.0 : 0.0;\n"
+	"		return sqrt(max(1.02 - D / R, 0.0)) * 2.0 * Soft;\n"
 	"	if (Type < 3.5)\n"
-	"		return VN > 0.0 && D2 < R * R ? (1.02 - D2 / (R * R)) * 2.0 : 0.0;\n"
+	"		return max(1.02 - D2 / (R * R), 0.0) * 2.0 * Soft;\n"
 	"	if (VN <= 0.0 || D > R)\n"
 	"		return 0.0;\n"
 	"	float A = D / R;\n"
