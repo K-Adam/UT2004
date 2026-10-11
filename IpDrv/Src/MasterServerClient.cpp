@@ -520,14 +520,25 @@ class FMasterServerClientLink : public FTcpLink
 	FString						MasterServerName;
 	INT							MasterServerPort;
 	struct FWebMasterRequest*	WebList;
+
+	// A server list query asks every master at once through one child link each. A child keeps its servers
+	// and its result for the owner, which hands them to script from its own Poll, never from a socket callback.
+	UBOOL								IsChild;
+	TArray<FMasterServerClientLink*>	Children;
+	DOUBLE								ChildrenStarted;
+	TArray<FServerResponseLine>			Pending;
+	INT									FinishCode;	// -1 while running
+	TMap<FString,UBOOL>					Listed;		// IP:port of every server script got, so each shows once
 public:
-	FMasterServerClientLink( AMasterServerClient* InActor )
+	FMasterServerClientLink( AMasterServerClient* InActor, UBOOL InIsChild=0 )
 	:	FTcpLink()
 	,	ClientState(MSCS_WaitingChallenge)
 	,	Actor(InActor)
 	,	ResultCount(-1)
 	,	ReceiveCount(0)
 	,	WebList(NULL)
+	,	IsChild(InIsChild)
+	,	FinishCode(-1)
 	{
 		SetLinkMode( TCPLINK_FArchive );
 	}
@@ -536,6 +547,95 @@ public:
 	{
 		if( WebList )
 			WebMasterRequestFree( WebList );
+		DeleteChildren();
+	}
+
+	void DeleteChildren()
+	{
+		for( INT i=0; i<Children.Num(); i++ )
+			delete Children(i);
+		Children.Empty();
+	}
+
+	void Finish( BYTE Code, INT Info )
+	{
+		if( !IsChild )
+			Actor->delegateOnQueryFinished( Code, Info );
+		else if( FinishCode < 0 )
+			FinishCode = Code;
+	}
+
+	// Hands script the servers it has not seen yet. Script callbacks may stop the query and delete this link,
+	// so it returns whether the link still runs this query, and the caller only touches members when it does.
+	UBOOL Deliver( TArray<FServerResponseLine>& Servers )
+	{
+		TArray<FServerResponseLine> New;
+		for( INT i=0; i<Servers.Num(); i++ )
+		{
+			FString Key = FString::Printf( TEXT("%s:%i"), *Servers(i).IP, Servers(i).Port );
+			if( !Listed.Find( *Key ) )
+			{
+				Listed.Set( *Key, 1 );
+				new(New) FServerResponseLine( Servers(i) );
+			}
+		}
+		AMasterServerClient* Client = Actor;
+		PTRINT Link = Client->MSLinkPtr;
+		for( INT i=0; i<New.Num() && Client->MSLinkPtr==Link; i++ )
+		{
+			Client->ResultCount++;
+			Client->delegateOnReceivedServer( New(i) );
+		}
+		return Client->MSLinkPtr==Link;
+	}
+
+	void StartChildren()
+	{
+		for( INT i=0; i<Actor->MasterServerList.Num(); i++ )
+		{
+			FMasterServerClientLink* Child = new FMasterServerClientLink( Actor, 1 );
+			Child->QueryType = CTM_Query;
+			Child->MasterServerName = Actor->MasterServerList(i).Address;
+			Child->MasterServerPort = Actor->MasterServerList(i).Port;
+			Children.AddItem( Child );
+			Child->Resolve( *Child->MasterServerName );
+		}
+		ChildrenStarted = GCurrentTime;
+		if( !Children.Num() )
+			Actor->delegateOnQueryFinished( RI_ConnectionFailed, 0 );
+	}
+
+	UBOOL PollChildren( INT WaitTime )
+	{
+		UBOOL Result = 0;
+		UBOOL Done = 1, Ok = 0;
+		// A master's own answer, such as a ban, tells the player more than a failed connection
+		BYTE Failure = RI_ConnectionFailed;
+		TArray<FServerResponseLine> Servers;
+		for( INT i=0; i<Children.Num(); i++ )
+		{
+			FMasterServerClientLink* Child = Children(i);
+			Result |= Child->Poll( WaitTime );
+			// A master that accepts the connection and then goes quiet would hold up the whole list
+			if( GCurrentTime - ChildrenStarted > 20.0 )
+				Child->Finish( RI_ConnectionTimeout, 0 );
+			for( INT j=0; j<Child->Pending.Num(); j++ )
+				new(Servers) FServerResponseLine( Child->Pending(j) );
+			Child->Pending.Empty();
+			if( Child->FinishCode < 0 )
+				Done = 0;
+			else if( Child->FinishCode == RI_Success )
+				Ok = 1;
+			else if( Failure == RI_ConnectionFailed )
+				Failure = Child->FinishCode;
+		}
+		if( Done )
+			DeleteChildren();
+
+		AMasterServerClient* Client = Actor;
+		if( Deliver( Servers ) && Done )
+			Client->delegateOnQueryFinished( Ok ? RI_Success : Failure, Ok ? CTM_Query : 0 );
+		return Result;
 	}
 
 	void StartQuery( BYTE InQueryType )
@@ -561,6 +661,8 @@ public:
 	virtual UBOOL Poll( INT WaitTime )
 	{
 		UBOOL Result = FTcpLink::Poll( WaitTime );
+		if( Children.Num() )
+			return PollChildren( WaitTime ) | Result;
 		UBOOL Ok;
 		TArray<FServerResponseLine> Servers;
 		FString News;
@@ -584,18 +686,16 @@ public:
 			for( INT i=0; i<Client->Query.Num(); i++ )
 				if( Client->Query(i).Key == TEXT("gametype") && Client->Query(i).QueryType == QT_Equals )
 					GameType = Client->Query(i).Value;
-			PTRINT Link = Client->MSLinkPtr;
-			for( INT i=0; i<Servers.Num() && Client->MSLinkPtr==Link; i++ )
+			TArray<FServerResponseLine> Listable;
+			for( INT i=0; i<Servers.Num(); i++ )
 				if( (!GameType.Len() || Servers(i).GameType == GameType) && (WebOnly || HasServerDetail( Servers(i).ServerInfo, TEXT("WebOnly") )) )
-				{
-					Client->ResultCount++;
-					Client->delegateOnReceivedServer( Servers(i) );
-				}
+					new(Listable) FServerResponseLine( Servers(i) );
+			UBOOL Running = Deliver( Listable );
 			if( !WebOnly )
 			{
 				// A new link at the same address is still waiting for its own web list
-				if( Client->MSLinkPtr == Link && !WebList )
-					StartMasterQuery();
+				if( Running && !WebList )
+					StartChildren();
 				return Result;
 			}
 		}
@@ -614,7 +714,7 @@ public:
 
 	void OnConnectionSucceeded()
 	{
-		GWarn->Logf(TEXT("Connection established."));
+		GWarn->Logf(TEXT("Connection to %s established."), *MasterServerName);
 	}
 
 	void OnConnectionFailed()
@@ -622,6 +722,12 @@ public:
 
 		if (!Actor)
 			return;
+		if( IsChild )
+		{
+			GWarn->Logf(TEXT("Master server %s connection failed"), *MasterServerName);
+			Finish(RI_ConnectionFailed,0);
+			return;
+		}
 
 		// Kind of hacky to put this here, but it saves having to setup a communication system
 		// for the restart.
@@ -632,7 +738,7 @@ public:
 			Actor->ActiveMasterServerList.Remove(Actor->LastMSIndex,1);
 
 		if (Actor->ActiveMasterServerList.Num()== 0)
-			Actor->delegateOnQueryFinished(RI_ConnectionFailed,0);
+			Finish(RI_ConnectionFailed,0);
 		else
 			StartMasterQuery();
 	}
@@ -640,14 +746,14 @@ public:
 	void OnResolveFailed()
 	{
 		GWarn->Logf(TEXT("Failed to resolve '%s'"), *MasterServerName);
-		Actor->delegateOnQueryFinished(RI_ConnectionFailed,0);
+		Finish(RI_ConnectionFailed,0);
 	}
 
 	void OnClosed()
 	{
 		GWarn->Logf(TEXT("Connection closed!! %i %i"), ResultCount, ReceiveCount);
 		if( ResultCount < 0 || ReceiveCount != ResultCount )
-			Actor->delegateOnQueryFinished(RI_ConnectionTimeout,0);
+			Finish(RI_ConnectionTimeout,0);
 	}
 
 	void SaveDownloadSites( TArray<FString>& DownloadSites )
@@ -700,28 +806,28 @@ public:
 					{
 							if ( Results == TEXT("UNKNOWN_CDKEY") )	
 							{
-								Actor->delegateOnQueryFinished(RI_AuthenticationFailed,0);
+								Finish(RI_AuthenticationFailed,0);
 								Close();
 							}
 							else if( Results == TEXT("MODIFIED_CLIENT") )
 							{
-								Actor->delegateOnQueryFinished(RI_BadClient,0);
+								Finish(RI_BadClient,0);
 								Close();
 							}
 							else if( Results == TEXT("DEV_CLIENT") )
 							{
-								Actor->delegateOnQueryFinished(RI_DevClient,0);
+								Finish(RI_DevClient,0);
 								Close();
 							}
 							else if( Results == TEXT("UTAN_BAN") )
 							{
-								Actor->delegateOnQueryFinished(RI_UTANBan,0);
+								Finish(RI_UTANBan,0);
 								Close();
 							}
 							else if( Results == TEXT("BANNED_CLIENT" ) )
 							{
 								*ArRecv << Actor->OptionalResult;
-								Actor->delegateOnQueryFinished(RI_BannedClient,0);
+								Finish(RI_BannedClient,0);
 								Close();
 							}
 							else if( Results == TEXT("NEED_UPGRADE") )
@@ -739,36 +845,21 @@ public:
 								{
 									MSClient->delegateOnReceivedMOTDData( MR_MandatoryUpgrade, FString::Printf(TEXT("%d"), UpgradeVersion) );
 									MSClient->delegateOnReceivedMOTDData( MR_MOTD, MOTD );
-									MSClient->delegateOnQueryFinished(RI_MustUpgrade, UpgradeVersion);
+									Finish(RI_MustUpgrade, UpgradeVersion);
 									Close();
 								}
 							}
 							else if( Results == TEXT("MSUPDATE") )
 							{
-								Actor->ActiveMasterServerList.Empty();
-								Actor->LastMSIndex=-1;
+								AddMasterServers( Actor, *ArRecv );
 
-
-								Actor->MasterServerList.Empty();
-								INT ListCnt;
-								FString Addr;
-								INT Port;
-
-								*ArRecv << ListCnt;
-
-								GWarn->Logf(TEXT("Updating Master Server List %i"),ListCnt);
-
-
-								for (int i=0;i<ListCnt;i++)
+								// A merged query lists the new masters on the next refresh
+								if( IsChild )
 								{
-									*ArRecv << Addr << Port;
-									INT Index = Actor->MasterServerList.AddZeroed();
-									Actor->MasterServerList(Index).Address = Addr;
-									Actor->MasterServerList(Index).Port = Port;
-									GWarn->Logf(TEXT("    Added: %s [%i]"),*Addr,Port);
+									Finish(RI_ConnectionFailed,0);
+									Close();
+									return;
 								}
-								Actor->SaveConfig();
-
 								ClientState= MSCS_WaitingChallenge;
 								StartMasterQuery();
 								return;
@@ -778,7 +869,7 @@ public:
 						else
 						{
 							// master server busy, or i didn't understand its response
-							Actor->delegateOnQueryFinished(RI_ConnectionFailed,0);
+							Finish(RI_ConnectionFailed,0);
 							Close();
 						}
 					}
@@ -821,7 +912,7 @@ public:
 					}
 					else
 					{
-						Actor->delegateOnQueryFinished(RI_BadClient,0);
+						Finish(RI_BadClient,0);
 						Close();
 					}
 				}
@@ -833,13 +924,11 @@ public:
 					case CTM_Query:
 						{
 							*ArRecv << ResultCount << ResultsCompressed;
-							// Web-only servers from the web master came first
-							Actor->ResultCount += ResultCount;
 							if( ResultCount > 0 )
 								ClientState = MSCS_WaitQueryData;
 							else
 							{
-								Actor->delegateOnQueryFinished(RI_Success,QueryType);
+								Finish(RI_Success,QueryType);
 								Close();
 							}
 						}
@@ -857,7 +946,7 @@ public:
 								SaveDownloadSites(DownloadSites);
 								Actor->delegateOnReceivedMOTDData( MR_OptionalUpgrade, FString::Printf(TEXT("%d"), UpgradeVersion) );
 							}
-							Actor->delegateOnQueryFinished(RI_Success,QueryType);
+							Finish(RI_Success,QueryType);
 							Close();
 						}
 						break;
@@ -912,7 +1001,7 @@ public:
 							}
 							else	// End of Packet Sends
 							{
-								Actor->delegateOnQueryFinished(RI_Success,QueryType);
+								Finish(RI_Success,QueryType);
 								Close();
 							}
 					}
@@ -940,6 +1029,7 @@ public:
 							*ArRecv << IP << Port << QueryPort;
 							if( ArRecv->IsError() )
 							{
+								Finish(RI_ConnectionFailed,0);
 								Close();
 								return;
 							}
@@ -951,6 +1041,7 @@ public:
 
 							if( ArRecv->IsError() )
 							{
+								Finish(RI_ConnectionFailed,0);
 								Close();
 								return;
 							}
@@ -958,6 +1049,7 @@ public:
 
 							if( ArRecv->IsError() )
 							{
+								Finish(RI_ConnectionFailed,0);
 								Close();
 								return;
 							}
@@ -1018,12 +1110,12 @@ public:
 						else
 							*ArRecv << Server;
 
-						Actor->delegateOnReceivedServer(Server);
+						new(Pending) FServerResponseLine( Server );
 					}
 
 					if( ReceiveCount == ResultCount )
 					{
-						Actor->delegateOnQueryFinished(RI_Success,QueryType);
+						Finish(RI_Success,QueryType);
 						Close();
 					}
 					break;
@@ -1044,6 +1136,31 @@ void AMasterServerLink::execPoll( FFrame& Stack, RESULT_DECL )
 	P_FINISH;
 	*(DWORD*)Result = Poll(WaitTime);
 	unguard;
+}
+
+// Masters missing from the list are added and the others stay, so no master can take the rest off the list.
+void AddMasterServers( AMasterServerLink* Link, FArchive& Ar )
+{
+	INT ListCnt, Port;
+	FString Addr;
+	Ar << ListCnt;
+	GWarn->Logf(TEXT("Updating Master Server List %i"),ListCnt);
+	for( INT i=0; i<ListCnt; i++ )
+	{
+		Ar << Addr << Port;
+		UBOOL Found = 0;
+		for( INT j=0; j<Link->MasterServerList.Num() && !Found; j++ )
+			Found = Link->MasterServerList(j).Address == Addr && Link->MasterServerList(j).Port == Port;
+		if( Found )
+			continue;
+		INT Index = Link->MasterServerList.AddZeroed();
+		Link->MasterServerList(Index).Address = Addr;
+		Link->MasterServerList(Index).Port = Port;
+		GWarn->Logf(TEXT("    Added: %s [%i]"),*Addr,Port);
+	}
+	Link->ActiveMasterServerList.Empty();
+	Link->LastMSIndex = -1;
+	Link->SaveConfig();
 }
 
 IMPLEMENT_CLASS(AMasterServerLink);

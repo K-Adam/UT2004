@@ -118,54 +118,34 @@ enum EMastserServerUplinkState
 	MSUS_ChannelOpen			= 3,
 };
 
-class FMasterServerUplinkLink : public FTcpLink
+class FMasterConnection;
+
+// Registers the server with every master in MasterServerList, through one FMasterConnection each.
+class FMasterServerUplinkLink
 {
 	FServerQueryInterface*		QueryInterface;			// Native query interface / NAT heartbeat.
 	FServerLANInterface*		LANInterface;			// LAN query interface
 	FNATHeartbeatLink*			GameHeartbeat;			// NAT heartbeat for game protocol port
 	FNATHeartbeatLink*			GSQueryHeartbeat;		// NAT heartbeat for gamespy query port.
 
-	EMastserServerUplinkState	UplinkState;
 	AMasterServerUplink*		Actor;
-	TArray<FString>				OutstandingChallenges;	// CD Key challenge clients we're waiting for
-	TArray<FString>				StatsBuffer;
+	TArray<FMasterConnection*>	Connections;
 	DOUBLE						LastRefreshTime;
-	UBOOL						ConnectionFailed;
-	UBOOL						ShouldTryReconnect;
-	INT							HeartbeatPeriod;
-	DOUBLE						LastHeartbeatTime;
-	FIpAddr						RemoteHost;
-	DWORD						QueryNatPort;
-	DWORD						GameNatPort;
-	DWORD						GamespyNatPort;
-
-	FString						MasterServerName;
-	INT							MasterServerPort;
 
 	friend class FServerQueryInterface;
 	friend class FServerLANInterface;
+	friend class FMasterConnection;
 public:
 	FMasterServerUplinkLink( AMasterServerUplink* InActor )
-	:	FTcpLink()
-	,	UplinkState(MSUS_WaitingChallenge)
-	,	Actor(InActor)
-	,	ConnectionFailed(0)
-	,	ShouldTryReconnect(1)
-	,	QueryInterface(NULL)
+	:	QueryInterface(NULL)
 	,	LANInterface(NULL)
 	,	GameHeartbeat(NULL)
 	,	GSQueryHeartbeat(NULL)
-	,	HeartbeatPeriod(0)
-	,	QueryNatPort(0)
-	,	GameNatPort(0)
-	,	GamespyNatPort(0)
-	,	MasterServerPort(0)
+	,	Actor(InActor)
 	{
 		guard(FMasterServerUplinkLink::FMasterServerUplinkLink)
 
-		SetLinkMode( TCPLINK_FArchive );
 		LastRefreshTime = -REFRESH_TIME;
-		LastHeartbeatTime = GCurrentTime;
 
 		UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );
 		check(NetDriver);
@@ -186,16 +166,52 @@ public:
 		unguard;
 	}
 
-	virtual ~FMasterServerUplinkLink()
+	~FMasterServerUplinkLink() noexcept(false);
+	void Connect();
+	UBOOL Poll( INT WaitTime );
+	void ForceStateRefresh( INT When );
+	void CheckRefresh();
+	UBOOL SendStatLine( const TCHAR* StatLine );
+};
+
+class FMasterConnection : public FTcpLink
+{
+	FMasterServerUplinkLink*	Owner;
+	AMasterServerUplink*		Actor;
+	EMastserServerUplinkState	UplinkState;
+	TArray<FString>				OutstandingChallenges;	// CD Key challenge clients we're waiting for
+	TArray<FString>				StatsBuffer;
+	INT							HeartbeatPeriod;
+	DOUBLE						LastHeartbeatTime;
+	FIpAddr						RemoteHost;
+	DWORD						QueryNatPort;
+	DWORD						GameNatPort;
+	DWORD						GamespyNatPort;
+
+public:
+	FString						MasterServerName;
+	INT							MasterServerPort;
+	UBOOL						Active;				// Connecting or connected, until a failure is reported
+	UBOOL						ConnectionFailed;
+	UBOOL						ShouldTryReconnect;
+
+	FMasterConnection( FMasterServerUplinkLink* InOwner, const FString& InName, INT InPort )
+	:	FTcpLink()
+	,	Owner(InOwner)
+	,	Actor(InOwner->Actor)
+	,	UplinkState(MSUS_WaitingChallenge)
+	,	HeartbeatPeriod(0)
+	,	QueryNatPort(0)
+	,	GameNatPort(0)
+	,	GamespyNatPort(0)
+	,	MasterServerName(InName)
+	,	MasterServerPort(InPort)
+	,	Active(0)
+	,	ConnectionFailed(0)
+	,	ShouldTryReconnect(1)
 	{
-		guard(FMasterServerUplinkLink::~FMasterServerUplinkLink)
-		delete LANInterface;
-		if( GServerQuery==QueryInterface )
-			GServerQuery = NULL;
-		delete QueryInterface;
-		delete GameHeartbeat;
-		delete GSQueryHeartbeat;
-		unguard;
+		SetLinkMode( TCPLINK_FArchive );
+		LastHeartbeatTime = GCurrentTime;
 	}
 
 	void TryConnect()
@@ -204,8 +220,8 @@ public:
 		UplinkState = MSUS_WaitingChallenge;
 		ConnectionFailed = 0;
 		ShouldTryReconnect = 1;
+		Active = 1;
 
-		Actor->eventGetMasterServer( MasterServerName, MasterServerPort );
 		Resolve( *MasterServerName );
 	}
 
@@ -221,7 +237,6 @@ public:
 	{
 		GWarn->Logf(TEXT("MasterServerUplink: Failed to resolve master server %s."), *MasterServerName );
 		ConnectionFailed = 1;
-		Actor->SaveConfig();
 	}
 
 	void OnConnectionSucceeded()
@@ -233,7 +248,6 @@ public:
 	{
 		GWarn->Logf(TEXT("MasterServerUplink: Uplink failed to connect to master server %s."), *MasterServerName);
 		ConnectionFailed = 1;
-		Actor->SaveConfig();
 	}
 
 	void OnClosed()
@@ -246,8 +260,8 @@ public:
 		// Send our master MD5 revision
 		SendMD5Revision();
 
-		// Refresh MS's server state
-		CheckRefresh();
+		// This master may connect long after the others, it gets the game state on the next poll
+		Owner->ForceStateRefresh(0);
 
 		// Send any pending stats.
 		if( StatsBuffer.Num() )
@@ -262,7 +276,7 @@ public:
 	{
 		guard(FMasterServerUplink::SendMD5Revision);
 		BYTE Command = STM_MD5Version;
-		
+
 		INT MaxRevision = -1;
 		UGameEngine* GE = Cast<UGameEngine>(Actor->XLevel->Engine);
 
@@ -277,7 +291,7 @@ public:
 
 	void OnDataReceived()
 	{
-		guard(FMasterServerUplinkLink::OnDataReceived);
+		guard(FMasterConnection::OnDataReceived);
 		while( DataAvailable() )
 		{
 			switch( UplinkState )
@@ -313,7 +327,7 @@ public:
 					FString Approval;
 					*ArRecv << Approval;
 
-					GWarn->Logf(TEXT("Approval %s"),*Approval);
+					GWarn->Logf(TEXT("Approval %s from %s"),*Approval,*MasterServerName);
 
 					if( Approval == TEXT("APPROVED") )
 					{
@@ -327,27 +341,9 @@ public:
 
 					else if( Approval == TEXT("MSUPDATE") )
 					{
-						Actor->ActiveMasterServerList.Empty();
-						Actor->LastMSIndex=-1;
-
-						Actor->MasterServerList.Empty();
-						INT ListCnt,Port;
-						FString Addr;
-
-						*ArRecv << ListCnt;
-
-						GWarn->Logf(TEXT("Updating Master Server List %i"),ListCnt);
-
-						for (int i=0;i<ListCnt;i++)
-						{
-							*ArRecv << Addr << Port;
-							INT Index = Actor->MasterServerList.AddZeroed();
-							Actor->MasterServerList(Index).Address = Addr;
-							Actor->MasterServerList(Index).Port = Port;
-							GWarn->Logf(TEXT("    Added: %s [%i]"),*Addr,Port);
-						}
-						Actor->SaveConfig();
-						ShouldTryReconnect = 1;
+						// The master sends the server elsewhere, so it is not asked again and the new entries connect instead
+						AddMasterServers( Actor, *ArRecv );
+						ShouldTryReconnect = 0;
 						ConnectionFailed = 1;
 					}
 					else if( Approval == TEXT("UPGRADE") )
@@ -400,14 +396,14 @@ public:
 						switch( HeartbeatType )
 						{
 						case HB_QueryInterface:
-							QueryInterface->SendHeartbeat(RemoteHost, HeartbeatCode);
+							Owner->QueryInterface->SendHeartbeat(RemoteHost, HeartbeatCode);
 							break;
 						case HB_GamePort:
-							GameHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
+							Owner->GameHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
 							break;
 						case HB_GamespyQueryPort:
-							if( GSQueryHeartbeat )
-								GSQueryHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
+							if( Owner->GSQueryHeartbeat )
+								Owner->GSQueryHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
 							break;
 						}
 					}
@@ -468,6 +464,9 @@ public:
 							INT MatchID;
 							*ArRecv << MatchID;
 							GWarn->Logf(TEXT("Master server assigned our MatchID: %d"), MatchID);
+							// A master without stats must not turn them off for one that assigned a match
+							if( !MatchID && Actor->MatchID )
+								break;
 							// save in the GRI.
 							Actor->MatchID = MatchID;
 							if( Actor->Level->Game && Actor->Level->Game->GameReplicationInfo )
@@ -480,7 +479,7 @@ public:
 								Actor->GameStats = NULL;
 							}
 
-							LastRefreshTime = GCurrentTime - REFRESH_TIME;	// Force the initial update of the database.
+							Owner->ForceStateRefresh(0);	// Force the initial update of the database.
 						}
 						break;
 					case MTS_MD5Update:
@@ -532,49 +531,14 @@ public:
 		unguard;
 	}
 
-	virtual UBOOL Poll( INT WaitTime )
+	UBOOL IsOpen()
 	{
-		guard(FMasterServerUplinkLink::Poll);
-
-		UBOOL Result = FTcpLink::Poll( WaitTime );
-
-		// answer queries
-		if( LANInterface )
-			LANInterface->Poll();
-		if( QueryInterface )
-			QueryInterface->Poll();
-
-		if( ConnectionFailed )
-		{
-			Actor->eventConnectionFailed(ShouldTryReconnect);
-			ConnectionFailed = 0;
-		}
-		else
-		{
-			// See if any CD key challenges have been answered.
-			CheckOutstandingChallenges();
-
-			// See if we need to update the masterserver's copy of our server state.
-			CheckRefresh();
-
-			// See if we need to send any heartbeats;
-			CheckUDPHeartbeats();
-		}
-
-		if ( GameHeartbeat && GameHeartbeat->bConnectionBroken )
-		{
-			Actor->eventConnectionFailed(ShouldTryReconnect);
-			ConnectionFailed = 0;
-		}
-
-
-		return Result;
-		unguard;
+		return UplinkState==MSUS_ChannelOpen && (LinkState==LINK_Connected || LinkState==LINK_ClosePending);
 	}
 
 	void CheckOutstandingChallenges()
 	{
-		guard(FMasterServerUplinkLink::CheckOutstandingChallenges);
+		guard(FMasterConnection::CheckOutstandingChallenges);
 		if( OutstandingChallenges.Num() )
 		{
 			UNetDriver* NetDriver = Actor->XLevel->NetDriver;
@@ -596,11 +560,11 @@ public:
 							FString GlobalMD5;
 
 							for (INT i=0; i<16; i++)
-								GlobalMD5 += FString::Printf(TEXT("%02x"), NetConn->GMD5[i]);	
+								GlobalMD5 += FString::Printf(TEXT("%02x"), NetConn->GMD5[i]);
 
 							FString PlayerName=TEXT("");
 							if (NetConn->Actor && NetConn->Actor->PlayerReplicationInfo)
-								PlayerName = NetConn->Actor->PlayerReplicationInfo->PlayerName; 
+								PlayerName = NetConn->Actor->PlayerReplicationInfo->PlayerName;
 
 							*ArSend << Command << Client << CDKeyHash << Response << GlobalMD5 << PlayerName;
 							ArSend->Flush();
@@ -612,90 +576,31 @@ public:
 		unguard;
 	}
 
-	void ForceStateRefresh(INT When)
+	// Sends the clients and the game state that the owner's refresh just gathered.
+	void SendGameState()
 	{
-		guard(FMasterServerUplinkLink::ForceStateRefresh);
+		guard(FMasterConnection::SendGameState);
+		if( !IsOpen() )
+			return;
 
-		if (GCurrentTime < LastRefreshTime + REFRESH_TIME - When)
-			LastRefreshTime = GCurrentTime + When - REFRESH_TIME;
+		TArray<FString> Clients;
+		UNetDriver* NetDriver = Actor->XLevel->NetDriver;
+		if( NetDriver )
+			for( INT conn=0;conn<NetDriver->ClientConnections.Num(); conn++ )
+				if( NetDriver->ClientConnections(conn)->Actor )
+					Clients(Clients.AddZeroed()) = NetDriver->ClientConnections(conn)->LowLevelGetRemoteAddress();
 
-		unguard;
-	}
-
-
-	void CheckRefresh()
-	{
-		guard(FMasterServerUplinkLink::CheckRefresh);
-
-		if( GCurrentTime - LastRefreshTime > REFRESH_TIME )
-		{
-
-			LastRefreshTime = GCurrentTime;
-			Actor->eventRefresh();
-
-			// The script port is the URL port, the query interface follows the socket's actual port.
-			FServerResponseLine WebState = Actor->ServerState;
-			WebState.Port = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver )->GetSocketData().Port;
-			if( Actor->DoUplink && AddWebRtcDetails( Actor, WebState.ServerInfo ) )
-				WebMasterAdvertise( WebState );
-
-			if( UplinkState==MSUS_ChannelOpen && (LinkState==LINK_Connected || LinkState==LINK_ClosePending) )
-			{
-				TArray<FString> Clients;
-				UNetDriver* NetDriver = Actor->XLevel->NetDriver;
-				if( NetDriver )
-					for( INT conn=0;conn<NetDriver->ClientConnections.Num(); conn++ )
-						if( NetDriver->ClientConnections(conn)->Actor )
-							Clients(Clients.AddZeroed()) = NetDriver->ClientConnections(conn)->LowLevelGetRemoteAddress();
-
-				// Send the clients and game state to the master server.
-				BYTE Command = STM_GameState;
-
-				// Insure the proper mutator count
-
-				check(Actor);
-				check(Actor->Level);
-				check(Actor->GameGroup);
-
-				guard(CheckingServerList);
-
-				for (AMutator* Mut = Actor->Level->Game->BaseMutator; Mut; Mut = Mut->NextMutator)
-				{
-					FString MutName = FString::Printf(TEXT("%s"),Mut->GetName());
-					UBOOL bFound=false;
-					for (INT i=0;i<Actor->ServerState.ServerInfo.Num();i++)
-						if ( Actor->ServerState.ServerInfo(i).Key.Caps() == TEXT("MUTATOR") && 
-							 Actor->ServerState.ServerInfo(i).Value.Caps() == MutName.Caps() )
-							bFound = true;
-
-					if (!bFound)
-					{
-						guard(AddingHiddenServer);
-						
-						FKeyValuePair* Data= new(Actor->ServerState.ServerInfo) FKeyValuePair();
-						Data->Key = TEXT("mutator");
-						Data->Value = MutName;
-						unguard;
-					}
-				}
-
-				unguard;
-
-				AddWebRtcDetails( Actor, Actor->ServerState.ServerInfo );
-				*ArSend << Command << Clients << Actor->ServerState;
-				ArSend->Flush();
-			}
-		}
+		BYTE Command = STM_GameState;
+		*ArSend << Command << Clients << Actor->ServerState;
+		ArSend->Flush();
 		unguard;
 	}
 
 	void CheckUDPHeartbeats()
 	{
-		guard(FMasterServerUplinkLink::CheckUDPHeartbeats);
+		guard(FMasterConnection::CheckUDPHeartbeats);
 
-		if( UplinkState != MSUS_ChannelOpen )
-			return;
-		if( LinkState != LINK_Connected && LinkState != LINK_ClosePending )
+		if( !IsOpen() )
 			return;
 
 		if( Actor->ServerBehindNAT && HeartbeatPeriod && (GCurrentTime - LastHeartbeatTime > HeartbeatPeriod) )
@@ -703,10 +608,10 @@ public:
 			LastHeartbeatTime = GCurrentTime;
 
 			// send UDP heartbeats.
-			QueryInterface->SendHeartbeat(RemoteHost, 0);
-			GameHeartbeat->SendHeartbeat(RemoteHost, 0);
-			if( GSQueryHeartbeat )
-				GSQueryHeartbeat->SendHeartbeat(RemoteHost, 0);
+			Owner->QueryInterface->SendHeartbeat(RemoteHost, 0);
+			Owner->GameHeartbeat->SendHeartbeat(RemoteHost, 0);
+			if( Owner->GSQueryHeartbeat )
+				Owner->GSQueryHeartbeat->SendHeartbeat(RemoteHost, 0);
 		}
 
 		unguard;
@@ -715,14 +620,15 @@ public:
 	UBOOL SendStatLine( const TCHAR* StatLine )
 	{
 		guard(SendStatLine);
-		if( UplinkState == MSUS_ChannelOpen )
+		if( IsOpen() )
 		{
 			BYTE Command = STM_Stats;
 			FString StatLineStr = StatLine;
 			*ArSend << Command << StatLineStr;
 			ArSend->Flush();
 		}
-		else
+		// A master that never opens would otherwise keep every line for the life of the server
+		else if( StatsBuffer.Num() < 1000 )
 		{
 			StatsBuffer(StatsBuffer.AddZeroed()) = StatLine;
 		}
@@ -733,7 +639,7 @@ public:
 
 	UNetConnection* FindClient( const TCHAR* ClientIP )
 	{
-		guard(FMasterServerUplinkLink::FindClient);
+		guard(FMasterConnection::FindClient);
 		UNetDriver* NetDriver = Actor->XLevel->NetDriver;
         if( NetDriver )
 		{
@@ -745,23 +651,9 @@ public:
 		unguard;
 	}
 
-	APlayerController* FindClientActor( const TCHAR* ClientIP )
-	{
-		guard(FMasterServerUplinkLink::FindClientActor);
-		UNetDriver* NetDriver = Actor->XLevel->NetDriver;
-        if( NetDriver )
-		{
-			for( INT i=0;i<NetDriver->ClientConnections.Num(); i++ )
-				if( !appStrcmp( *NetDriver->ClientConnections(i)->LowLevelGetRemoteAddress(), ClientIP ) )
-					return Cast<APlayerController>(NetDriver->ClientConnections(i)->Actor);
-		}
-		return NULL;
-		unguard;
-	}
-
 	void ChallengeClient( const TCHAR* ClientIP, const TCHAR* Challenge )
 	{
-		guard(FMasterServerUplinkLink::ChallengeClient);
+		guard(FMasterConnection::ChallengeClient);
 		UNetConnection* Conn = FindClient(ClientIP);
 		if( Conn )
 		{
@@ -773,7 +665,7 @@ public:
 
 	void ClientAuthFailed( const TCHAR* ClientIP, const TCHAR* FailCode, const TCHAR* Why )
 	{
-		guard(FMasterServerUplinkLink::ClientAuthFailed);
+		guard(FMasterConnection::ClientAuthFailed);
 
 		OutstandingChallenges.RemoveItem(FString(ClientIP));
 
@@ -809,7 +701,7 @@ public:
 	void SendServerConfig()
 	{
 		UBOOL NAT = Actor->ServerBehindNAT;
-		UBOOL Gamespy = GSQueryHeartbeat != NULL;
+		UBOOL Gamespy = Owner->GSQueryHeartbeat != NULL;
 		*ArSend << NAT << Gamespy;
 		ArSend->Flush();
 	}
@@ -819,6 +711,161 @@ public:
     void *operator new(size_t x) { return ::operator new(x); }
 #endif
 };
+
+FMasterServerUplinkLink::~FMasterServerUplinkLink() noexcept(false)
+{
+	guard(FMasterServerUplinkLink::~FMasterServerUplinkLink)
+	for( INT i=0; i<Connections.Num(); i++ )
+		delete Connections(i);
+	delete LANInterface;
+	if( GServerQuery==QueryInterface )
+		GServerQuery = NULL;
+	delete QueryInterface;
+	delete GameHeartbeat;
+	delete GSQueryHeartbeat;
+	unguard;
+}
+
+// Script calls this at start and after a failure, so only masters without a live connection connect again.
+void FMasterServerUplinkLink::Connect()
+{
+	guard(FMasterServerUplinkLink::Connect);
+	for( INT i=0; i<Actor->MasterServerList.Num(); i++ )
+	{
+		const FtMasterServerEntry& Entry = Actor->MasterServerList(i);
+		FMasterConnection* Connection = NULL;
+		for( INT j=0; j<Connections.Num() && !Connection; j++ )
+			if( Connections(j)->MasterServerName == Entry.Address && Connections(j)->MasterServerPort == Entry.Port )
+				Connection = Connections(j);
+		if( !Connection )
+			Connection = Connections( Connections.AddItem( new FMasterConnection( this, Entry.Address, Entry.Port ) ) );
+		// Connect closes the old socket once the name resolves
+		if( !Connection->Active && Connection->ShouldTryReconnect )
+			Connection->TryConnect();
+	}
+	unguard;
+}
+
+UBOOL FMasterServerUplinkLink::Poll( INT WaitTime )
+{
+	guard(FMasterServerUplinkLink::Poll);
+
+	UBOOL Result = 0;
+	for( INT i=0; i<Connections.Num(); i++ )
+		Result |= Connections(i)->Poll( WaitTime );
+
+	// answer queries
+	if( LANInterface )
+		LANInterface->Poll();
+	if( QueryInterface )
+		QueryInterface->Poll();
+
+	UBOOL Failed = 0;
+	for( INT i=0; i<Connections.Num(); i++ )
+	{
+		FMasterConnection* Connection = Connections(i);
+		if( Connection->ConnectionFailed )
+		{
+			Failed = 1;
+			Connection->ConnectionFailed = 0;
+			Connection->Active = 0;
+		}
+		else if( Connection->Active )
+		{
+			// See if any CD key challenges have been answered.
+			Connection->CheckOutstandingChallenges();
+
+			// See if we need to send any heartbeats;
+			Connection->CheckUDPHeartbeats();
+		}
+	}
+	if( Failed )
+	{
+		// Script keeps a single retry timer, so it is asked to retry while any master still waits for one
+		UBOOL Retry = Actor->MasterServerList.Num() > Connections.Num();
+		for( INT i=0; i<Connections.Num(); i++ )
+			Retry |= !Connections(i)->Active && Connections(i)->ShouldTryReconnect;
+		Actor->eventConnectionFailed(Retry);
+	}
+
+	// See if we need to update the masterservers' copy of our server state.
+	CheckRefresh();
+
+	return Result;
+	unguard;
+}
+
+void FMasterServerUplinkLink::ForceStateRefresh(INT When)
+{
+	guard(FMasterServerUplinkLink::ForceStateRefresh);
+
+	if (GCurrentTime < LastRefreshTime + REFRESH_TIME - When)
+		LastRefreshTime = GCurrentTime + When - REFRESH_TIME;
+
+	unguard;
+}
+
+void FMasterServerUplinkLink::CheckRefresh()
+{
+	guard(FMasterServerUplinkLink::CheckRefresh);
+
+	if( GCurrentTime - LastRefreshTime > REFRESH_TIME )
+	{
+
+		LastRefreshTime = GCurrentTime;
+		Actor->eventRefresh();
+
+		// The script port is the URL port, the query interface follows the socket's actual port.
+		FServerResponseLine WebState = Actor->ServerState;
+		WebState.Port = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver )->GetSocketData().Port;
+		if( Actor->DoUplink && AddWebRtcDetails( Actor, WebState.ServerInfo ) )
+			WebMasterAdvertise( WebState );
+
+		{
+			// Insure the proper mutator count
+
+			check(Actor);
+			check(Actor->Level);
+			check(Actor->GameGroup);
+
+			guard(CheckingServerList);
+
+			for (AMutator* Mut = Actor->Level->Game->BaseMutator; Mut; Mut = Mut->NextMutator)
+			{
+				FString MutName = FString::Printf(TEXT("%s"),Mut->GetName());
+				UBOOL bFound=false;
+				for (INT i=0;i<Actor->ServerState.ServerInfo.Num();i++)
+					if ( Actor->ServerState.ServerInfo(i).Key.Caps() == TEXT("MUTATOR") &&
+						 Actor->ServerState.ServerInfo(i).Value.Caps() == MutName.Caps() )
+						bFound = true;
+
+				if (!bFound)
+				{
+					guard(AddingHiddenServer);
+
+					FKeyValuePair* Data= new(Actor->ServerState.ServerInfo) FKeyValuePair();
+					Data->Key = TEXT("mutator");
+					Data->Value = MutName;
+					unguard;
+				}
+			}
+
+			unguard;
+
+			AddWebRtcDetails( Actor, Actor->ServerState.ServerInfo );
+			for( INT i=0; i<Connections.Num(); i++ )
+				Connections(i)->SendGameState();
+		}
+	}
+	unguard;
+}
+
+UBOOL FMasterServerUplinkLink::SendStatLine( const TCHAR* StatLine )
+{
+	for( INT i=0; i<Connections.Num(); i++ )
+		Connections(i)->SendStatLine( StatLine );
+	return 1;
+}
 
 /*-----------------------------------------------------------------------------
 	FServerQueryInterface implementaion
@@ -966,13 +1013,11 @@ void AMasterServerUplink::execReconnect( FFrame& Stack, RESULT_DECL )
 	P_FINISH;
 	if( !LinkPtr )
 		LinkPtr = (PTRINT)(new FMasterServerUplinkLink(this));
-	else
-		((FMasterServerUplinkLink*)LinkPtr)->Close();
 
 	if( WebRtcOnly() )
 		GWarn->Logf(TEXT("MasterServerUplink: WebRTC only, listed on the web master alone"));
 	else if( DoUplink )
-		((FMasterServerUplinkLink*)LinkPtr)->TryConnect();
+		((FMasterServerUplinkLink*)LinkPtr)->Connect();
 	else
 		GWarn->Logf(TEXT("MasterServerUplink: DoUplink is False, not connecting to Epic master server"));
 }

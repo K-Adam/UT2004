@@ -377,6 +377,7 @@ INT WebRtcQueryOpen( const FString& Host, const FString& Details );
 UBOOL WebRtcQuerySend( INT Id, const BYTE* Data, INT Count );
 INT WebRtcQueryRecv( INT Id, BYTE* Data, INT Max );
 void WebRtcQueryClose( INT Id );
+void AddMasterServers( class AMasterServerLink* Link, FArchive& Ar );
 
 /*-----------------------------------------------------------------------------
 	Public includes.
