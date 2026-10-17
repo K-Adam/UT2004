@@ -212,52 +212,69 @@ static void ExitServerTray(void) {}
 static bool FindContent(void) { return true; }
 #else
 // A dedicated server has no window, the tray icon is where it can be seen and stopped.
-static SDL_Tray* ServerTray = NULL;
+// It lives on its own thread, because Windows blocks the thread that pumps the tray for as long as its menu is open.
+static SDL_Thread* TrayThread = NULL;
+static SDL_AtomicInt TrayShowLog, TrayStop, TrayQuit;
 
-static void SDLCALL ShowServerLog(void*, SDL_TrayEntry*)
+// The menu entries only raise a flag, the engine is not safe to touch from the tray thread.
+static void SDLCALL RaiseTrayFlag(void* Flag, SDL_TrayEntry*)
 {
-    // The file writer holds back up to 4 KB, which can be the whole log of a quiet server.
-    Log.Flush();
-#ifdef WIN32
-    FString Path = Log.Filename;
-#else
-    FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + Log.Filename;
-#endif
-    SDL_OpenURL(appToAnsi(*Path));
+    SDL_SetAtomicInt((SDL_AtomicInt*)Flag, 1);
 }
 
-static void SDLCALL StopServer(void*, SDL_TrayEntry*)
+static int SDLCALL RunServerTray(void*)
 {
-    appRequestExit(0);
+    if (!SDL_Init(SDL_INIT_VIDEO))
+        return 0;
+    // SDL keeps the display awake for games, a server in the tray has no reason to.
+    SDL_EnableScreenSaver();
+    SDL_Surface *icon = SDL_LoadBMP("../Help/Unreal.bmp");
+    if (icon != NULL)
+        SDL_SetSurfaceColorKey(icon, true, SDL_MapSurfaceRGB(icon, 255, 0, 255));
+    SDL_Tray *tray = SDL_CreateTray(icon, "UT2004 Server");
+    SDL_DestroySurface(icon);
+    if (tray == NULL)
+        return 0;
+    SDL_TrayMenu *menu = SDL_CreateTrayMenu(tray);
+    SDL_SetTrayEntryCallback(SDL_InsertTrayEntryAt(menu, -1, "Show log", SDL_TRAYENTRY_BUTTON), RaiseTrayFlag, &TrayShowLog);
+    SDL_SetTrayEntryCallback(SDL_InsertTrayEntryAt(menu, -1, "Stop server", SDL_TRAYENTRY_BUTTON), RaiseTrayFlag, &TrayStop);
+    // SDL runs the tray callbacks while it pumps events, the events themselves are of no use here.
+    while (!SDL_GetAtomicInt(&TrayQuit))
+    {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {}
+        SDL_Delay(50);
+    }
+    SDL_DestroyTray(tray);
+    return 0;
 }
 
 static void InitServerTray(void)
 {
-    if (!SDL_Init(SDL_INIT_VIDEO))
-        return;
-    // SDL keeps the display awake for games, a server in the tray has no reason to.
-    SDL_EnableScreenSaver();
-    SDL_Surface *icon = SDL_LoadBMP("../Help/Unreal.bmp");
-    ServerTray = SDL_CreateTray(icon, "UT2004 Server");
-    SDL_DestroySurface(icon);
-    if (ServerTray == NULL)
-        return;
-    SDL_TrayMenu *menu = SDL_CreateTrayMenu(ServerTray);
-    SDL_SetTrayEntryCallback(SDL_InsertTrayEntryAt(menu, -1, "Show log", SDL_TRAYENTRY_BUTTON), ShowServerLog, NULL);
-    SDL_SetTrayEntryCallback(SDL_InsertTrayEntryAt(menu, -1, "Stop server", SDL_TRAYENTRY_BUTTON), StopServer, NULL);
+    TrayThread = SDL_CreateThread(RunServerTray, "ServerTray", NULL);
 }
 
-// SDL runs the tray callbacks while it pumps events, the events themselves are of no use here.
 static void PumpServerTray(void)
 {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {}
+    if (SDL_CompareAndSwapAtomicInt(&TrayShowLog, 1, 0))
+    {
+        // The file writer holds back up to 4 KB, which can be the whole log of a quiet server.
+        Log.Flush();
+#ifdef WIN32
+        FString Path = Log.Filename;
+#else
+        FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + Log.Filename;
+#endif
+        SDL_OpenURL(appToAnsi(*Path));
+    }
+    if (SDL_GetAtomicInt(&TrayStop))
+        appRequestExit(0);
 }
 
 static void ExitServerTray(void)
 {
-    if (ServerTray != NULL)
-        SDL_DestroyTray(ServerTray);
+    SDL_SetAtomicInt(&TrayQuit, 1);
+    SDL_WaitThread(TrayThread, NULL);
 }
 
 // SDL may answer on another thread, so the result crosses over without the engine's allocator.
