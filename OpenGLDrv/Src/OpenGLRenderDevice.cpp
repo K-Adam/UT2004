@@ -19,6 +19,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	DrawElementsBaseVertex = NULL;
 	ShadowLight = NULL;
 	FrameCount = 0;
+	PrevViewValid = FrameViewValid = 0;
 	FlushShadows();
 }
 
@@ -34,6 +35,7 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("VolumetricFog"),	RF_Public)UBoolProperty(CPP_PROPERTY(VolumetricFog),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("GlobalIllumination"),RF_Public)UBoolProperty(CPP_PROPERTY(GlobalIllumination),TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("HeatHaze"),		RF_Public)UBoolProperty(CPP_PROPERTY(HeatHaze),			TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("MotionBlur"),		RF_Public)UBoolProperty(CPP_PROPERTY(MotionBlur),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
@@ -491,6 +493,10 @@ UBOOL UOpenGLRenderDevice::ResourceCached(QWORD CacheId)
 FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,INT* HitSize)
 {
 	guard(UOpenGLRenderDevice::Lock);
+
+	// A frame that draws no world, like a loading screen, leaves the previous view outdated.
+	PrevViewValid	= FrameViewValid;
+	FrameViewValid	= 0;
 
 	// Window resizes and the menu's set ini reach the device without SetRes.
 	INT Samples = Antialiasing ? Min<INT>(4,MaxSamples) : 0;

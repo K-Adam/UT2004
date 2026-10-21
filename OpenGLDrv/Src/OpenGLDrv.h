@@ -439,7 +439,8 @@ class UOpenGLRenderDevice : public URenderDevice
 			DepthOfField,
 			VolumetricFog,
 			GlobalIllumination,
-			HeatHaze;
+			HeatHaze,
+			MotionBlur;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
@@ -511,7 +512,9 @@ class UOpenGLRenderDevice : public URenderDevice
 	FLOAT				SunTexels[FOG_SUN_SIZE * FOG_SUN_SIZE];
 	FMatrix				PrevWorldToCamera;
 	FPlane				PrevProj;
-	UBOOL				ScatterHistoryValid,
+	UBOOL				PrevViewValid,
+						FrameViewValid,
+						ScatterHistoryValid,
 						IndirectHistoryValid;
 
 	// Last state sent to GL, so Commit only changes what differs.

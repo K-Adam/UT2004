@@ -247,6 +247,9 @@ static const ANSICHAR* IndirectFragmentShader =
 // at and above it, less far away where the waves would be larger than what they bend. Haze holds the
 // strength and the time. Blasts holds the camera space centres of explosions with their age from 0 to
 // 1 in W, then their final radius in X. Each bends the view along the rim of its growing sphere.
+// Motion is the part of the frame the shutter stays open, zero turns the blur off. Each pixel is
+// smeared along the way it moved on screen since last frame, which follows the camera only. The
+// length is limited so a teleport does not streak the whole view.
 static const ANSICHAR* CompositeFragmentShader =
 	POST_COMMON
 	POST_FINISH
@@ -257,6 +260,9 @@ static const ANSICHAR* CompositeFragmentShader =
 	"uniform vec4 Fog;\n"
 	"uniform vec2 Haze;\n"
 	"uniform vec4 Blasts[2 * " STRINGIFY(HEAT_BLASTS) "];\n"
+	"uniform mat4 Reproject;\n"
+	"uniform vec4 PrevProj;\n"
+	"uniform float Motion;\n"
 	"void main()\n"
 	"{\n"
 	"	ivec2 P = ivec2(UV * vec2(textureSize(Depth, 0)));\n"
@@ -291,6 +297,30 @@ static const ANSICHAR* CompositeFragmentShader =
 	"		}\n"
 	"	}\n"
 	"	vec3 Color = texture(Frame, Bent).rgb;\n"
+	"	if (Motion > 0.0 && D >= Split)\n"
+	"	{\n"
+	"		vec2 Size = vec2(textureSize(Depth, 0)), NDC = UV * 2.0 - 1.0;\n"
+	"		float Z = LinearZ(D);\n"
+	// The sky has no distance, only a direction.
+	"		vec4 Prev = Reproject * (D < 1.0 ? vec4(NDC * Proj.xy * Z, Z, 1.0) : vec4(NDC * Proj.xy, 1.0, 0.0));\n"
+	"		if (Prev.z > 0.0)\n"
+	"		{\n"
+	"			vec2 Move = (UV - (Prev.xy / (Prev.z * PrevProj.xy) * 0.5 + 0.5)) * Motion;\n"
+	"			Move *= min(1.0, 0.015 / max(length(Move * vec2(Size.x / Size.y, 1.0)), 1e-6));\n"
+	"			float Sum = 1.0;\n"
+	"			for (int i = 0; i < 6; i++)\n"
+	"			{\n"
+	"				vec2 T = Bent + Move * ((float(i) + Jitter()) / 6.0 - 0.5);\n"
+	// The weapon does not move with the world and would smear into it.
+	"				if (DepthAt(ivec2(T * Size)) >= Split)\n"
+	"				{\n"
+	"					Color += texture(Frame, T).rgb;\n"
+	"					Sum += 1.0;\n"
+	"				}\n"
+	"			}\n"
+	"			Color /= Sum;\n"
+	"		}\n"
+	"	}\n"
 	"	vec4 Refl = texelFetch(Reflection, P, 0);\n"
 	"	if (Params.w > 0.0 && D >= Split && D < 1.0 && Refl.a > 0.004)\n"
 	"	{\n"
@@ -653,11 +683,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	else
 		ScatterHistoryValid = 0;
 	GLuint ScatterTexture = Fog ? Accumulate(Scattering,ScatterHistory,ScatterHistoryValid,HalfFormat,Proj,Reproject) : World.Texture;
-	if( ViewValid )
-	{
-		PrevWorldToCamera	= WorldToCamera;
-		PrevProj			= Proj;
-	}
+	FrameViewValid = ViewValid;
 
 	// A thin lens in front of a 24 mm high frame at f/1.4, which at this wide view blurs only gently.
 	// The circle of confusion is limited to 1% of the height. A unit is 1.905 cm. Focusing closer than
@@ -682,12 +708,20 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	// The time wraps so the waves keep their precision, a jump every quarter hour goes unseen.
 	glUniform2f(glGetUniformLocation(CompositeProgram,"Haze"),ViewValid && HeatHaze ? 1.f : 0.f,(FLOAT)fmod(appSeconds(),1024.0));
 	glUniform4fv(glGetUniformLocation(CompositeProgram,"Blasts"),2 * HEAT_BLASTS,&Blasts[0].X);
+	glUniformMatrix4fv(glGetUniformLocation(CompositeProgram,"Reproject"),1,GL_FALSE,&Reproject.M[0][0]);
+	glUniform4fv(glGetUniformLocation(CompositeProgram,"PrevProj"),1,&PrevProj.X);
+	glUniform1f(glGetUniformLocation(CompositeProgram,"Motion"),MotionBlur && ViewValid && PrevViewValid ? 0.5f : 0.f);
 	if( Defocus )
 		CreateFramebuffer(Focus,World.Width,World.Height,0,GL_RGBA8,0);
 	FOpenGLFramebuffer& Target = Defocus ? Focus : Scene;
 	DrawFullscreen(CompositeProgram,Target.DrawFramebuffer(),Target.Width,Target.Height,World.Texture,
 		DepthPasses ? Occlusion.Texture : World.Texture,World.DepthTexture,0,World.ExtraTextures[EXTRA_Reflection],ScatterTexture,
 		IndirectTexture,World.ExtraTextures[EXTRA_Albedo]);
+	if( ViewValid )
+	{
+		PrevWorldToCamera	= WorldToCamera;
+		PrevProj			= Proj;
+	}
 
 	if( Defocus )
 	{

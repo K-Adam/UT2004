@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze, ch_MotionBlur;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2], ReflectionsText[2];
 
@@ -29,6 +29,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Options.ManageComponent(ch_VolumetricFog);
 	sb_Options.ManageComponent(ch_GlobalIllumination);
 	sb_Options.ManageComponent(ch_HeatHaze);
+	sb_Options.ManageComponent(ch_MotionBlur);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -73,6 +74,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_HeatHaze:
 		ch_HeatHaze.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice HeatHaze")), true);
+		break;
+	case ch_MotionBlur:
+		ch_MotionBlur.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice MotionBlur")), true);
 		break;
 	}
 }
@@ -123,6 +127,9 @@ function InternalOnChange(GUIComponent Sender)
 	case ch_HeatHaze:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice HeatHaze" @ ch_HeatHaze.IsChecked());
 		break;
+	case ch_MotionBlur:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice MotionBlur" @ ch_MotionBlur.IsChecked());
+		break;
 	}
 }
 
@@ -160,6 +167,7 @@ function ResetClicked()
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice VolumetricFog True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice GlobalIllumination True");
 	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice HeatHaze True");
+	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice MotionBlur False");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 
@@ -188,7 +196,7 @@ defaultproperties
 
 	Begin Object class=GUISectionBackground Name=sbOptions
 		WinWidth=0.502751
-		WinHeight=0.520000
+		WinHeight=0.580000
 		WinLeft=0.495826
 		WinTop=0.012761
 		Caption="Options"
@@ -353,6 +361,19 @@ defaultproperties
 		TabOrder=10
 	End Object
 	ch_HeatHaze=HeatHazeCheck
+
+	Begin Object class=moCheckBox Name=MotionBlurCheck
+		Caption="Motion Blur"
+		Hint="Blurs the view slightly while the camera turns or moves."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=12
+	End Object
+	ch_MotionBlur=MotionBlurCheck
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"
