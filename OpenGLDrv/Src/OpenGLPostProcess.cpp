@@ -240,7 +240,8 @@ static const ANSICHAR* IndirectFragmentShader =
 // depth of the ground beneath them, so nearly level normals are taken as level, Up is world up in
 // camera space. The hit is spread by how far the reflection travelled, which softens distant
 // reflections and dithers their stair steps. The half size occlusion, bounced light and fog
-// scattering are gathered 4x4 with depth weights, which also averages out their noise. With depth
+// scattering are gathered 4x4 with depth weights, which also averages out their noise. The sky gathers
+// only sky, the fog in front of a branch is thin and would darken the sky around it. With depth
 // of field the lit world goes to Focus with the signed circle of confusion of a thin lens, which
 // grows with depth. The frame's alpha holds how hot each pixel looks. Heat rises, so the air shimmers
 // at and above it, less far away where the waves would be larger than what they bend. Haze holds the
@@ -341,9 +342,9 @@ static const ANSICHAR* CompositeFragmentShader =
 	"			Color = max(Color + W * (Hit * Refl.a - Refl.rgb), 0.0);\n"
 	"		}\n"
 	"	}\n"
-	"	if ((Params.y > 0.0 || Params.z > 0.0 || Volumetric > 0.0) && D < 1.0)\n"
+	"	if (Params.y > 0.0 || Params.z > 0.0 || Volumetric > 0.0)\n"
 	"	{\n"
-	"		bool Weapon = D < Split;\n"
+	"		bool Weapon = D < Split, Sky = D >= 1.0;\n"
 	"		float Z = LinearZ(D);\n"
 	"		ivec2 Size = (textureSize(Depth, 0) + 1) / 2;\n"
 	"		vec2 Sum = vec2(0.0);\n"
@@ -354,15 +355,15 @@ static const ANSICHAR* CompositeFragmentShader =
 	"			{\n"
 	"				ivec2 Q = clamp(P / 2 + ivec2(X, Y), ivec2(0), Size - 1);\n"
 	"				float QD = DepthAt(Q * 2);\n"
-	"				if ((QD < Split) != Weapon || QD >= 1.0)\n"
+	"				if ((QD < Split) != Weapon || (QD >= 1.0) != Sky)\n"
 	"					continue;\n"
-	"				float W = max(1.0 - abs(LinearZ(QD) - Z) / (0.05 * Z + 1.0), 0.0) + 0.001;\n"
+	"				float W = Sky ? 1.0 : max(1.0 - abs(LinearZ(QD) - Z) / (0.05 * Z + 1.0), 0.0) + 0.001;\n"
 	"				Sum += texelFetch(Occlusion, Q, 0).rg * W;\n"
 	"				Scatter += texelFetch(Scattering, Q, 0).rgb * W;\n"
 	"				Bounce += texelFetch(Indirect, Q, 0).rgb * W;\n"
 	"				Weights += W;\n"
 	"			}\n"
-	"		if (Params.y > 0.0 || Params.z > 0.0)\n"
+	"		if (!Sky && (Params.y > 0.0 || Params.z > 0.0))\n"
 	"		{\n"
 	"			vec2 O = Params.y > 0.0 && Weights > 0.0 ? Sum / Weights : vec2(1.0);\n"
 	// Occlusion darkens and bounced light brightens the surface under the fog, not the fog in front of it.
@@ -378,9 +379,9 @@ static const ANSICHAR* CompositeFragmentShader =
 	"		}\n"
 	"		if (Weights > 0.0)\n"
 	"			Color += Scatter / Weights * Volumetric;\n"
+	"		else if (Sky)\n"
+	"			Color += texture(Scattering, UV).rgb * Volumetric;\n"
 	"	}\n"
-	"	else if (D >= 1.0)\n"
-	"		Color += texture(Scattering, UV).rgb * Volumetric;\n"
 	"	if (Focus.x > 0.0)\n"
 	"	{\n"
 	"		float CoC = D < Split ? 0.0 : D >= 1.0 ? Focus.x : Focus.x * (1.0 - Focus.y / LinearZ(D));\n"
