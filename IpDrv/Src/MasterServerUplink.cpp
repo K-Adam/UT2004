@@ -502,19 +502,17 @@ public:
 						break;
 					case MTS_UpdateOption:
 						{
-							// Set INI entry
+							// A master is a third party, so it gets no write access to the server's ini
 							FString Section, Key, Value;
 							UBOOL Unique;
-                            *ArRecv << Section << Key << Value << Unique;
-							GConfig->SetString( *Section, *Key, *Value, NULL, Unique );
+							*ArRecv << Section << Key << Value << Unique;
 						}
 						break;
 					case MTS_CheckOption:
 						{
-							// Get INI entry
+							// The reply stays empty, since the ini holds the admin and game passwords
 							FString Section, Key, Result;
 							*ArRecv << Section << Key;
-							GConfig->GetString( *Section, *Key, Result );
 							BYTE Command = STM_CheckOptionReply;
 							*ArSend << Command << Section << Key << Result;
 							ArSend->Flush();

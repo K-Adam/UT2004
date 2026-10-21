@@ -1139,15 +1139,21 @@ void AMasterServerLink::execPoll( FFrame& Stack, RESULT_DECL )
 }
 
 // Masters missing from the list are added and the others stay, so no master can take the rest off the list.
+// The additions are capped and last for this run only, so a hostile master cannot plant itself in the ini.
+#define MAX_MASTER_SERVERS 16
 void AddMasterServers( AMasterServerLink* Link, FArchive& Ar )
 {
 	INT ListCnt, Port;
 	FString Addr;
 	Ar << ListCnt;
 	GWarn->Logf(TEXT("Updating Master Server List %i"),ListCnt);
-	for( INT i=0; i<ListCnt; i++ )
+	for( INT i=0; i<ListCnt && Link->MasterServerList.Num()<MAX_MASTER_SERVERS; i++ )
 	{
 		Ar << Addr << Port;
+		if( Ar.IsError() )
+			break;
+		if( !Addr.Len() || Port<1 || Port>65535 )
+			continue;
 		UBOOL Found = 0;
 		for( INT j=0; j<Link->MasterServerList.Num() && !Found; j++ )
 			Found = Link->MasterServerList(j).Address == Addr && Link->MasterServerList(j).Port == Port;
@@ -1160,7 +1166,6 @@ void AddMasterServers( AMasterServerLink* Link, FArchive& Ar )
 	}
 	Link->ActiveMasterServerList.Empty();
 	Link->LastMSIndex = -1;
-	Link->SaveConfig();
 }
 
 IMPLEMENT_CLASS(AMasterServerLink);
