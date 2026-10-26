@@ -62,6 +62,19 @@ static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
 	return ut_webrtc_send( Peer->Id, Data, Count );
 }
 
+// The engine limits, bans and throttles by IPv4 address. An IPv6 client gets one made from its /64, which is what one
+// subscriber holds, in 240.0.0.0/4 where no real client is. Text that is no address shares 240.0.0.0.
+static DWORD WebRtcPeerIp( const char* Text )
+{
+	DWORD Ip = inet_addr( Text );
+	if( Ip!=INADDR_NONE )
+		return Ip;
+	BYTE V6[16];
+	if( inet_pton( AF_INET6, Text, V6 )!=1 )
+		return htonl( 0xF0000000 );
+	return htonl( 0xF0000000 | (appMemCrc( V6, 8 ) % 0x0FFFFFFE + 1) );
+}
+
 // The script's peer for the WebRTC details in the URL, 0 with Error set when they are unusable
 static INT ConnectPeer( FURL& ConnectURL, FString& Error, sockaddr_in& Addr )
 {
@@ -108,6 +121,9 @@ void UTcpNetDriver::WebRtcListen()
 		debugf( TEXT("WebRTC: a browser hosts through the web master, set WebMasterServer in [IpDrv.MasterServerLink]") );
 		return;
 	}
+	checkSlow(WebRtcPeerIp("2001:db8:1:2::1")==WebRtcPeerIp("2001:db8:1:2:ffff::9"));
+	checkSlow(WebRtcPeerIp("2001:db8:1:2::1")!=WebRtcPeerIp("2001:db8:1:3::1"));
+	checkSlow((ntohl(WebRtcPeerIp("2001:db8:1:2::1"))>>28)==15 && WebRtcPeerIp("")==htonl(0xF0000000) && WebRtcPeerIp("1.2.3.4")==inet_addr("1.2.3.4"));
 	ut_webrtc_host( TCHAR_TO_ANSI(*Url), WEBRTC_MAX_INBOX );
 	WebRtc = new FWebRtcHost;
 	unguard;
@@ -143,7 +159,6 @@ void UTcpNetDriver::WebRtcTick()
 		char Text[64];
 		WebRtcDetails = ut_webrtc_host_id( Text, sizeof(Text) ) > 0 ? FString(TEXT("signal:")) + FString(Text) : FString();
 
-		// IPv6 clients have no address here and skip the per IP limit
 		INT Id;
 		while( (Id = ut_webrtc_accept( Text, sizeof(Text) )) > 0 )
 		{
@@ -151,22 +166,28 @@ void UTcpNetDriver::WebRtcTick()
 			Peer->Id = Id;
 			Peer->CreatedTime = GCurrentTime;
 			Peer->Addr.sin_family = AF_INET;
-			Peer->Addr.sin_addr.s_addr = inet_addr( Text );
-			if( Peer->Addr.sin_addr.s_addr==INADDR_NONE )
-				Peer->Addr.sin_addr.s_addr = 0;
+			Peer->Addr.sin_addr.s_addr = WebRtcPeerIp( Text );
 
 			INT Pending = 0, SameIP = 0;
+			FWebRtcPeer* Oldest = NULL;
 			for( auto& Other : Host->Peers )
 				if( !Other->Connection )
 				{
+					if( !Oldest )
+						Oldest = Other.get();
 					Pending++;
 					SameIP += IpAddressMatches( Other->Addr, Peer->Addr );
 				}
 			// Signaling is one-shot, so during a level change the peer waits for the accept on its first packet
-			if( Pending>=WEBRTC_MAX_PENDING || (Peer->Addr.sin_addr.s_addr && WebRtcIpLimited( this, Peer->Addr, SameIP )) || Notify->NotifyAcceptingConnection()==ACCEPTC_Reject )
+			if( WebRtcIpLimited( this, Peer->Addr, SameIP ) || Notify->NotifyAcceptingConnection()==ACCEPTC_Reject )
+			{
 				ut_webrtc_close( Id );
-			else
-				Host->Peers.push_back( Peer );
+				continue;
+			}
+			// Peers are in creation order. The oldest idle one makes room, refusing the new one would let idle peers lock everyone out.
+			if( Pending>=WEBRTC_MAX_PENDING )
+				RemovePeer( Host, Oldest );
+			Host->Peers.push_back( Peer );
 		}
 	}
 

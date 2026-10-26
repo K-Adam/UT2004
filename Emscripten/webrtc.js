@@ -58,7 +58,9 @@ addToLibrary({
         const m = JSON.parse(e.data);
         if (m.type == 'id') {
           host.id = m.id;
-        } else if (m.type == 'offer' && host.active) {
+        } else if (m.type == 'offer' && host.active && host.setup < 16) {
+          // Each offer costs a peer connection for the seconds it gathers, so a burst of them goes unanswered.
+          host.setup++;
           const [id, peer] = UTWebRtc.add(UTWebRtc.signaled, host.maxInbox);
           try {
             await peer.pc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
@@ -69,6 +71,8 @@ addToLibrary({
           } catch (e) {
             peer.fail(e);
             UTWebRtc.close(id);
+          } finally {
+            host.setup--;
           }
         }
       };
@@ -117,7 +121,7 @@ addToLibrary({
   ut_webrtc_host__sig: 'vpi',
   ut_webrtc_host: (url, maxInbox) => {
     if (!UTWebRtc.host) {
-      UTWebRtc.host = { id: '', maxInbox };
+      UTWebRtc.host = { id: '', maxInbox, setup: 0 };
       UTWebRtc.openHost(UTF8ToString(url));
     }
     UTWebRtc.host.active = true;
