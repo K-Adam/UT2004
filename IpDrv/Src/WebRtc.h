@@ -18,6 +18,7 @@
 #define WEBRTC_MAX_PACKET 512
 #define WEBRTC_MAX_INBOX 256
 #define WEBRTC_MAX_PENDING 64
+#define WEBRTC_MIN_PENDING_TIME 2.0
 #define WEBRTC_PENDING_TIMEOUT 15.0
 // A server browser's peer asks a few times within seconds of connecting and is done
 #define WEBRTC_MAX_QUERIES 8

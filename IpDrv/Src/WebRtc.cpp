@@ -417,18 +417,29 @@ void UTcpNetDriver::WebRtcTick()
 			continue;
 
 		// The same limits as new UDP connections, each peer costs a DTLS handshake and SCTP state
-		INT Pending = 0, SameIP = 0;
-		bool Known = false;
-		for( auto& Peer : Host->Peers )
+		INT Pending = 0, SameIP = 0, Evict = -1;
+		bool Known = false, EvictUnproven = false;
+		for( INT i=0; i<(INT)Host->Peers.size(); i++ )
 		{
-			Known |= Peer->Ufrag==Request.localUfrag;
-			if( !Peer->Connection )
+			FWebRtcPeer& Other = *Host->Peers[i];
+			Known |= Other.Ufrag==Request.localUfrag;
+			if( !Other.Connection )
 			{
 				Pending++;
-				SameIP += IpAddressMatches( Peer->Addr, Addr );
+				SameIP += IpAddressMatches( Other.Addr, Addr );
+				// Peers are in creation order. The oldest whose address ICE has not proven goes first, spoofed requests never get further.
+				bool Unproven = Other.Pc->state()!=rtc::PeerConnection::State::Connected;
+				if( Evict<0 || (Unproven && !EvictUnproven) )
+				{
+					Evict = i;
+					EvictUnproven = Unproven;
+				}
 			}
 		}
-		if( Known || Pending>=WEBRTC_MAX_PENDING || WebRtcIpLimited( this, Addr, SameIP ) )
+		if( Known || WebRtcIpLimited( this, Addr, SameIP ) )
+			continue;
+		// A peer gets time for its handshake before it can be pushed out, which also bounds what a flood of requests costs
+		if( Pending>=WEBRTC_MAX_PENDING && GCurrentTime-Host->Peers[Evict]->CreatedTime<WEBRTC_MIN_PENDING_TIME )
 			continue;
 		// A peer made while the level switches would die with this driver, the client's ICE checks retry against the next one
 		if( Notify->NotifyAcceptingConnection()!=ACCEPTC_Accept )
@@ -469,6 +480,12 @@ void UTcpNetDriver::WebRtcTick()
 			if( Peer->Pc )
 				ClosePeer( Peer );
 			continue;
+		}
+		// Refusing the new peer instead would let requests from made up addresses hold every slot against real clients
+		if( Pending>=WEBRTC_MAX_PENDING )
+		{
+			ClosePeer( Host->Peers[Evict] );
+			Host->Peers.erase( Host->Peers.begin()+Evict );
 		}
 		Peer->CreatedTime = GCurrentTime;
 		Host->Peers.push_back( Peer );
