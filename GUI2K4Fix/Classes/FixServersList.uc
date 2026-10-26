@@ -27,7 +27,8 @@ function Connect( bool Spectator )
 	if ( tp_MyPage.ConnectLAN )
 		URL $= "?LAN";
 	WebRtc = WebRtcDetails(Servers[CurrentListId()]);
-	if ( WebRtc != "" )
+	// The details come from the server or a master, so they must not carry further URL options
+	if ( WebRtc != "" && InStr(WebRtc, "?") < 0 && InStr(WebRtc, "#") < 0 )
 		URL $= "?WebRTC="$WebRtc;
 
 	Controller.CloseAll(false, True);

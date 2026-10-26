@@ -43,15 +43,38 @@ static FString FromUtf8( const std::string& S )
 // Done gets whether the server answered 2xx, and the body.
 typedef std::function<void( bool, std::string )> FHttpDone;
 
+// The reply comes from the network, so its size and row counts are bounded.
+enum
+{
+	MAX_RESPONSE_SIZE	= 8 * 1024 * 1024,
+	MAX_WEB_SERVERS		= 2048,
+	MAX_WEB_SERVER_INFO	= 64,
+	MAX_WEB_NEWS		= 32,
+};
+
 #if __EMSCRIPTEN__
 extern "C" void ut_webrtc_host_state( const char* Json );
 
 static void HttpFinished( emscripten_fetch_t* Fetch )
 {
+	// Closing a fetch that is still running calls its error handler again
 	FHttpDone* Done = (FHttpDone*)Fetch->userData;
-	(*Done)( Fetch->status >= 200 && Fetch->status < 300, std::string( Fetch->data, Fetch->numBytes ) );
+	if( !Done )
+		return;
+	Fetch->userData = NULL;
+	bool Ok = Fetch->status >= 200 && Fetch->status < 300 && Fetch->numBytes <= MAX_RESPONSE_SIZE;
+	(*Done)( Ok, Ok ? std::string( Fetch->data, Fetch->numBytes ) : std::string() );
 	delete Done;
 	emscripten_fetch_close( Fetch );
+}
+
+static void HttpProgress( emscripten_fetch_t* Fetch )
+{
+	if( Fetch->dataOffset + Fetch->numBytes > MAX_RESPONSE_SIZE )
+	{
+		Fetch->status = 0;
+		HttpFinished( Fetch );
+	}
 }
 
 // GET only, because a GET without headers needs no CORS preflight. The callbacks run on the main thread once the browser has the answer.
@@ -65,12 +88,17 @@ static void HttpGetAsync( const std::string& Url, FHttpDone Done )
 	Attr.userData = new FHttpDone( Done );
 	Attr.onsuccess = HttpFinished;
 	Attr.onerror = HttpFinished;
+	Attr.onprogress = HttpProgress;
 	emscripten_fetch( &Attr, Url.c_str() );
 }
 #else
 static size_t AppendResponse( char* Data, size_t Size, size_t Count, void* Response )
 {
-	((std::string*)Response)->append( Data, Size * Count );
+	std::string* Out = (std::string*)Response;
+	// A short count makes curl abort the transfer with an error
+	if( Out->size() + Size * Count > MAX_RESPONSE_SIZE )
+		return 0;
+	Out->append( Data, Size * Count );
 	return Size * Count;
 }
 
@@ -265,6 +293,20 @@ UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp )
 }
 #endif
 
+// The server browser builds the join URL from these, so nothing that could start another URL part may pass.
+static UBOOL IsDottedQuad( const TCHAR* S )
+{
+	for( INT Part=0; Part<4; Part++ )
+	{
+		INT Value = 0, Digits = 0;
+		for( ; *S>='0' && *S<='9' && Digits<3; S++, Digits++ )
+			Value = Value*10 + (*S-'0');
+		if( !Digits || Value>255 || (Digits>1 && S[-Digits]=='0') || *S++ != (Part<3 ? '.' : 0) )
+			return 0;
+	}
+	return 1;
+}
+
 UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News )
 {
 	std::string Response;
@@ -283,11 +325,15 @@ UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerRe
 	if( Root.contains("servers") && Root["servers"].is_array() )
 		for( const nlohmann::json& S : Root["servers"] )
 		{
-			if( !S.is_object() )
+			if( Servers.Num() >= MAX_WEB_SERVERS )
+				break;
+			FString IP = Str( S, "ip" );
+			INT Port = Int( S, "port" );
+			if( !S.is_object() || !IsDottedQuad(*IP) || Port<1 || Port>65535 )
 				continue;
 			FServerResponseLine* Server = &Servers(Servers.AddZeroed());
-			Server->IP = Str( S, "ip" );
-			Server->Port = Int( S, "port" );
+			Server->IP = IP;
+			Server->Port = Port;
 			Server->QueryPort = Server->Port + 1;
 			Server->ServerName = Str( S, "name" );
 			Server->MapName = Str( S, "map" );
@@ -298,16 +344,17 @@ UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerRe
 			Server->SkillLevel = Str( S, "skill" );
 			if( S.contains("info") && S["info"].is_array() )
 				for( const nlohmann::json& P : S["info"] )
-					if( P.is_object() )
+					if( P.is_object() && Server->ServerInfo.Num() < MAX_WEB_SERVER_INFO )
 					{
 						FKeyValuePair& Pair = Server->ServerInfo(Server->ServerInfo.AddZeroed());
 						Pair.Key = Str( P, "key" );
 						Pair.Value = Str( P, "value" );
 					}
 		}
+	INT NewsCount = 0;
 	if( Root.contains("news") && Root["news"].is_array() )
 		for( const nlohmann::json& N : Root["news"] )
-			if( N.is_object() )
+			if( N.is_object() && NewsCount++ < MAX_WEB_NEWS )
 				News += Str( N, "title" ) + TEXT("\r") + Str( N, "body" ) + TEXT("\r\r");
 	return 1;
 }
