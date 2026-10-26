@@ -195,7 +195,15 @@ async function download(missing) {
         update();
       }
       if (size != f.size) throw Object.assign(new Error('its size does not match the content list'), { final: true });
-      return new Blob(chunks);
+      const blob = new Blob(chunks);
+      // crypto.subtle only exists on https and localhost, and a page that came over plain http could be altered itself.
+      if (crypto.subtle) {
+        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
+        // The content list keeps the leading hex digits of each file's SHA-256.
+        const hex = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+        if (!f.hash || !hex.startsWith(f.hash)) throw Object.assign(new Error('its content does not match the content list'), { final: true });
+      }
+      return blob;
     } catch (e) {
       received -= size;
       throw e;

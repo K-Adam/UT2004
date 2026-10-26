@@ -23,8 +23,11 @@ if(ANDROID)
   if(NOT UT_ASSETS_URL)
     file(STRINGS ${UT_ASSETS_ENV} UT_ASSETS_URL REGEX "^UT_ASSETS_URL=")
     string(REGEX REPLACE "^UT_ASSETS_URL=" "" UT_ASSETS_URL "${UT_ASSETS_URL}")
+    # The digest belongs to the hosted archive, so a URL set with -D only gets one set with -D.
+    file(STRINGS ${UT_ASSETS_ENV} UT_ASSETS_SHA256 REGEX "^UT_ASSETS_SHA256=")
+    string(REGEX REPLACE "^UT_ASSETS_SHA256=" "" UT_ASSETS_SHA256 "${UT_ASSETS_SHA256}")
   endif()
-  target_compile_definitions(SDLLaunch PRIVATE UT_ASSETS_URL="${UT_ASSETS_URL}")
+  target_compile_definitions(SDLLaunch PRIVATE UT_ASSETS_URL="${UT_ASSETS_URL}" UT_ASSETS_SHA256="${UT_ASSETS_SHA256}")
 endif()
 if(EMSCRIPTEN)
   # appGetDllHandle can't dlsym in a browser, so it looks the linked packages up in this table.

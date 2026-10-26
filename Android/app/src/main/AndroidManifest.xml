@@ -19,7 +19,7 @@
     <application android:label="UT2004"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:isGame="true"
         android:appCategory="game"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"

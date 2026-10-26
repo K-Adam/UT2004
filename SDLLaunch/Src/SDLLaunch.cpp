@@ -363,6 +363,8 @@ extern "C" void ut_exit(const char* ServerCmd);
 #include <lzma.h>
 #include <zlib.h>
 #include <jni.h>
+#include <string>
+#include <vector>
 #pragma pack(pop)
 #include <errno.h>
 #include <sys/stat.h>
@@ -569,8 +571,13 @@ static bool ContentPath(const FInstall& I, const char* Rel, char* Dest, size_t D
     return false;
 }
 
+// Set while a download with a known digest unpacks, so a wrong one can be taken out again.
+static std::vector<std::string>* CreatedFiles;
+
 static SDL_IOStream* CreateContentFile(const char* Dest)
 {
+    if (CreatedFiles)
+        CreatedFiles->push_back(Dest);
     char Dir[1024];
     SDL_strlcpy(Dir, Dest, sizeof(Dir));
     *SDL_strrchr(Dir, '/') = 0;
@@ -996,6 +1003,22 @@ static bool CopyTree(JNIEnv* Env, jobjectArray Tree, FInstall& I)
     return Ok;
 }
 
+// The download is unpacked while it arrives, as the device may not have room for the archive too.
+static bool DigestMatches(JNIEnv* Env, jclass Activity, int Fd)
+{
+    static uint8_t Buf[1 << 16];
+    // The digest covers every byte of the download, which may go on past the end of the archive.
+    for (errno = 0; !SetupQuit && (read(Fd, Buf, sizeof(Buf)) > 0 || errno == EINTR); )
+        errno = 0;
+    jstring JDigest = (jstring)Env->GetStaticObjectField(Activity, Env->GetStaticFieldID(Activity, "assetDigest", "Ljava/lang/String;"));
+    const char* Digest = JDigest ? Env->GetStringUTFChars(JDigest, NULL) : NULL;
+    bool Ok = !SetupQuit && Digest && SDL_strcasecmp(Digest, UT_ASSETS_SHA256) == 0;
+    if (Digest)
+        Env->ReleaseStringUTFChars(JDigest, Digest);
+    Env->DeleteLocalRef(JDigest);
+    return Ok;
+}
+
 static bool TryInstall(JNIEnv* Env, jclass Activity, FInstall& I)
 {
     jstring JSrc = Env->NewStringUTF(I.Src);
@@ -1017,7 +1040,20 @@ static bool TryInstall(JNIEnv* Env, jclass Activity, FInstall& I)
             Env->GetLongArrayRegion(Stream, 0, 2, FdSize);
             Env->DeleteLocalRef(Stream);
             I.Size = FdSize[1];
+            // Only the built-in download has a known digest, anything else is the player's own choice.
+            bool Checked = UT_ASSETS_SHA256[0] && SDL_strcmp(I.Src, UT_ASSETS_URL) == 0;
+            std::vector<std::string> Created;
+            CreatedFiles = Checked ? &Created : NULL;
             Ok = Unpack((int)FdSize[0], I);
+            CreatedFiles = NULL;
+            if (Checked && !(Ok && DigestMatches(Env, Activity, (int)FdSize[0])))
+            {
+                // Only what this download wrote goes, the folders may hold files the player put there.
+                for (const std::string& Path : Created)
+                    SDL_RemovePath(Path.c_str());
+                if (Ok && !SetupQuit)
+                    Ok = I.Fail("%s is not the published game content, its SHA-256 does not match.");
+            }
             close((int)FdSize[0]);
         }
     }

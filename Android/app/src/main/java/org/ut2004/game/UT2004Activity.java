@@ -27,8 +27,11 @@ import android.window.OnBackInvokedDispatcher;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -40,6 +43,8 @@ public class UT2004Activity extends SDLActivity {
     // An empty string means the player backed out.
     private static final LinkedBlockingQueue<String> assetSource = new LinkedBlockingQueue<>();
     private static String assetError, assetUrl;
+    // The SHA-256 of the last download as hex, null until it has arrived completely. SDLLaunch reads it.
+    private static volatile String assetDigest;
     private static final LinkedBlockingQueue<Boolean> serverStarted = new LinkedBlockingQueue<>();
     private static String serverCmd;
 
@@ -100,7 +105,7 @@ public class UT2004Activity extends SDLActivity {
     // SDLLaunch calls the methods below on its own thread while it installs the game content on first launch.
 
     // Returns {file descriptor, size or -1}. Downloads come through a pipe, so they unpack while they arrive.
-    static long[] openAssetStream(String uri) throws IOException {
+    static long[] openAssetStream(String uri) throws IOException, NoSuchAlgorithmException {
         if (uri.startsWith("content:")) {
             ParcelFileDescriptor file = mSingleton.getContentResolver().openFileDescriptor(Uri.parse(uri), "r");
             if (file == null)
@@ -108,6 +113,8 @@ public class UT2004Activity extends SDLActivity {
             long size = file.getStatSize();
             return new long[] { file.detachFd(), size };
         }
+        assetDigest = null;
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
         HttpURLConnection http = (HttpURLConnection) new URL(uri).openConnection();
         // A stalled transfer would otherwise block the launcher forever, the timeout ends it like a dropped connection.
         http.setConnectTimeout(15000);
@@ -128,8 +135,12 @@ public class UT2004Activity extends SDLActivity {
             try (InputStream in = http.getInputStream();
                  OutputStream out = new ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])) {
                 byte[] buf = new byte[1 << 16];
-                for (int n; (n = in.read(buf)) > 0; )
+                for (int n; (n = in.read(buf)) > 0; ) {
+                    sha.update(buf, 0, n);
                     out.write(buf, 0, n);
+                }
+                // Set before the pipe closes, as the launcher reads it once the stream has ended.
+                assetDigest = String.format("%064x", new BigInteger(1, sha.digest()));
             } catch (IOException ignored) {
             } finally {
                 http.disconnect();
