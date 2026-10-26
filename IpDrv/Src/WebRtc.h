@@ -16,6 +16,8 @@
 // IP, UDP, DTLS and SCTP headers per data channel message
 #define WEBRTC_PACKET_OVERHEAD 90
 #define WEBRTC_MAX_PACKET 512
+// The max-message-size of WebRtcSdpEnd, larger messages are refused instead of buffered
+#define WEBRTC_MAX_MESSAGE 16384
 #define WEBRTC_MAX_INBOX 256
 #define WEBRTC_MAX_PENDING 64
 #define WEBRTC_MIN_PENDING_TIME 2.0

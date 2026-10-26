@@ -306,6 +306,7 @@ static std::shared_ptr<FWebRtcPeer> ConnectPeer( FURL& ConnectURL, FString& Erro
 	{
 		rtc::Configuration Config;
 		Config.disableAutoNegotiation = true;
+		Config.maxMessageSize = WEBRTC_MAX_MESSAGE;
 		if( WebRtcSignalSetup( ConnectURL, SignalId, Addr ) )
 		{
 			// The URL constructor parses with std::regex, which links only with the STL vcpkg built against
@@ -466,6 +467,7 @@ void UTcpNetDriver::WebRtcTick()
 			Config.portRangeBegin = Config.portRangeEnd = Host->Port;
 			Config.disableAutoNegotiation = true;
 			Config.disableFingerprintVerification = true;
+			Config.maxMessageSize = WEBRTC_MAX_MESSAGE;
 			Config.certificatePemFile = Host->CertPem;
 			Config.keyPemFile = Host->KeyPem;
 			Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
