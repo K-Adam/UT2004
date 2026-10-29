@@ -15,7 +15,6 @@ archive into a directory on your server.
 The program you run is in the "System" directory:
   - Windows admins use "ucc.exe"
   - Linux/x86 admins use "ucc-bin"
-  - Linux/amd64 admins use "ucc-bin-linux-amd64"
 
 For your server to appear in the global server list and participate in UT2004
 stats, your server needs to be allocated a CD Key. Please visit this website

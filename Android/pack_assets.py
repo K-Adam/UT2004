@@ -10,8 +10,6 @@ import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
 
-SKIP_EXT = {'.bat', '.sh', '.pl', '.cpp', '.linux'}
-SKIP_DIRS = {'EditorRes', 'UDE'}
 # Phone defaults: gyro aim on, effects phone GPUs can't afford off, VSync instead of the per-frame GPU wait.
 OVERRIDES = {'UT2004/System/Default.ini': [
     (b'%s=%s' % (k, old), b'%s=%s' % (k, new)) for k, old, new in (
@@ -31,10 +29,9 @@ OVERRIDES = {'UT2004/System/Default.ini': [
 
 def walk(src, dest, exts=None):
     for root, dirs, files in os.walk(src):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for f in files:
             ext = os.path.splitext(f)[1].lower()
-            if ext in SKIP_EXT or (exts and ext not in exts):
+            if exts and ext not in exts:
                 continue
             path = os.path.join(root, f)
             yield path, dest + '/' + os.path.relpath(path, src).replace(os.sep, '/')
