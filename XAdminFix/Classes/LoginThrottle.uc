@@ -6,9 +6,31 @@ struct Attempt
 {
 	var string Key;
 	var int Failures;
-	var float Until;
+	var int Until;
 };
+// Only the class defaults are used. Every level creates a new AccessControl and a table in the instance would
+// be empty after each map change. Ordered by last failure, oldest first.
 var array<Attempt> Attempts;
+
+const MaxAttempts = 256;
+const MaxLockout = 600;
+
+// Level.TimeSeconds restarts with every map, so the lockouts run on the wall clock. Counted from the year 2000
+// to fit an int, a float can't tell seconds apart at this size.
+static function int Now( LevelInfo L )
+{
+	local int Y, M;
+
+	Y = L.Year;
+	M = L.Month;
+	if ( M <= 2 )
+	{
+		Y--;
+		M += 12;
+	}
+	return (365 * Y + Y / 4 - Y / 100 + Y / 400 + (153 * (M - 3) + 2) / 5 + L.Day - 730426) * 86400
+		+ L.Hour * 3600 + L.Minute * 60 + L.Second;
+}
 
 static function string StripPort( string Address )
 {
@@ -40,7 +62,7 @@ function bool AdminBlocked( Actor A, PlayerController P, string Username, string
 	local string Key;
 
 	Key = AdminKey(A, P, Username, Password);
-	return Password != "" && Key != "" && Blocked(Key, A.Level.TimeSeconds);
+	return Password != "" && Key != "" && Blocked(Key, Now(A.Level));
 }
 
 function AdminDone( Actor A, PlayerController P, string Username, string Password, bool bOk )
@@ -49,12 +71,12 @@ function AdminDone( Actor A, PlayerController P, string Username, string Passwor
 
 	Key = AdminKey(A, P, Username, Password);
 	if ( Password != "" && Key != "" )
-		Record(Key, bOk, A.Level.TimeSeconds);
+		Record(Key, bOk, Now(A.Level));
 }
 
 function bool PreLoginBlocked( Actor A, string Options, string Address, out string Error, out string FailCode )
 {
-	if ( A.Level.Game.ParseOption(Options, "Password") == "" || !Blocked(StripPort(Address), A.Level.TimeSeconds) )
+	if ( A.Level.Game.ParseOption(Options, "Password") == "" || !Blocked(StripPort(Address), Now(A.Level)) )
 		return false;
 	Error = "";
 	FailCode = "WRONGPW";
@@ -69,40 +91,44 @@ function PreLoginDone( AccessControl AC, string Options, string Address )
 
 	Password = AC.Level.Game.ParseOption(Options, "Password");
 	if ( Password != "" && !AC.CheckOptionsAdmin(Options) && !(Password ~= AC.ConsoleCommand("get Engine.AccessControl GamePassword")) )
-		Record(StripPort(Address), false, AC.Level.TimeSeconds);
+		Record(StripPort(Address), false, Now(AC.Level));
 }
 
-function bool Blocked( string Key, float Now )
+// The local clock can step back, which must not stretch a lockout beyond the longest one.
+function bool Blocked( string Key, int T )
 {
 	local int i;
 
-	for ( i = 0; i < Attempts.Length; i++ )
-		if ( Attempts[i].Key == Key )
-			return Now < Attempts[i].Until;
+	for ( i = 0; i < default.Attempts.Length; i++ )
+		if ( default.Attempts[i].Key == Key )
+			return T < default.Attempts[i].Until && default.Attempts[i].Until - T <= MaxLockout;
 	return false;
 }
 
-function Record( string Key, bool bOk, float Now )
+function Record( string Key, bool bOk, int T )
 {
 	local int i, Failures;
 
-	for ( i = Attempts.Length - 1; i >= 0; i-- )
+	for ( i = default.Attempts.Length - 1; i >= 0; i-- )
 	{
-		if ( Attempts[i].Key == Key )
+		if ( default.Attempts[i].Key == Key )
 		{
-			Failures = Attempts[i].Failures;
-			Attempts.Remove(i, 1);
+			Failures = default.Attempts[i].Failures;
+			default.Attempts.Remove(i, 1);
 		}
-		else if ( Attempts[i].Until < Now - 3600 )
-			Attempts.Remove(i, 1);
+		else if ( default.Attempts[i].Until < T - 3600 )
+			default.Attempts.Remove(i, 1);
 	}
 	if ( bOk )
 		return;
 
+	if ( default.Attempts.Length >= MaxAttempts )
+		default.Attempts.Remove(0, default.Attempts.Length - MaxAttempts + 1);
+
 	Failures++;
-	i = Attempts.Length;
-	Attempts.Length = i + 1;
-	Attempts[i].Key = Key;
-	Attempts[i].Failures = Failures;
-	Attempts[i].Until = Now + FMin(2.0 ** Failures, 600);
+	i = default.Attempts.Length;
+	default.Attempts.Length = i + 1;
+	default.Attempts[i].Key = Key;
+	default.Attempts[i].Failures = Failures;
+	default.Attempts[i].Until = T + int(FMin(2.0 ** Failures, MaxLockout));
 }
