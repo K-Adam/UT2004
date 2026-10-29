@@ -83,7 +83,7 @@ if(MSVC)
   # Flags that reproduce the VS2003 semantics the code relies on.
   target_compile_options(ut_common INTERFACE
     $<$<COMPILE_LANGUAGE:CXX>:/Zc:wchar_t- /Zc:forScope /permissive /Zc:strictStrings- /EHa>
-    /Zp4 /W3 /MP
+    /Zp4 /W3 /MP /guard:cf
     /wd4005 /wd4244 /wd4267 /wd4305 /wd4996 /wd4595 /wd4291 /wd4838 /wd4311 /wd4312 /wd4302)
   target_compile_definitions(ut_common INTERFACE
     _WIN32_IE=0x0200 _WIN32_WINNT=0x0601
@@ -91,7 +91,7 @@ if(MSVC)
     WINDOWS_IGNORE_PACKING_MISMATCH)  # original code includes windows.h under /Zp4 too
   target_link_libraries(ut_common INTERFACE legacy_stdio_definitions)
   # Old prebuilt libs request VC6/7 CRT variants by name.
-  target_link_options(ut_common INTERFACE $<$<EQUAL:${CMAKE_SIZEOF_VOID_P},4>:/SAFESEH:NO>
+  target_link_options(ut_common INTERFACE /guard:cf $<$<EQUAL:${CMAKE_SIZEOF_VOID_P},4>:/SAFESEH:NO>
     /NODEFAULTLIB:libc.lib /NODEFAULTLIB:libcp.lib /NODEFAULTLIB:libcmt.lib
     /NODEFAULTLIB:libci.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:libcmtd.lib /NODEFAULTLIB:msvcrtd.lib)
 else()
@@ -118,6 +118,12 @@ else()
   if(CMAKE_SIZEOF_VOID_P EQUAL 4 AND NOT EMSCRIPTEN)
     # x87 math loads maps three times slower. MSVC uses SSE2 for Win32 too.
     target_compile_options(ut_common INTERFACE -msse2 -mfpmath=sse)
+  endif()
+  if(NOT ANDROID AND NOT EMSCRIPTEN)
+    # Ubuntu's GCC turns these on by itself, other distributions do not. The NDK always does.
+    target_compile_options(ut_common INTERFACE -fstack-protector-strong)
+    target_compile_options(ut_common INTERFACE $<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=2>)
+    target_link_options(ut_common INTERFACE -Wl,-z,relro,-z,now)
   endif()
 endif()
 
@@ -245,8 +251,12 @@ add_subdirectory(Tools/NVTriStrip)
 # Static, but linked into Engine.so.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(metoolkit-karma)
-if(NOT ANDROID)
+if(WIN32 OR EMSCRIPTEN)
   unset(CMAKE_POSITION_INDEPENDENT_CODE)
+else()
+  # Kept on so the Linux executables are position independent on every distribution.
+  include(CheckPIESupported)
+  check_pie_supported()
 endif()
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
