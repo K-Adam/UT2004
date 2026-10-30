@@ -1,8 +1,6 @@
-/*=============================================================================
-	WebRtcBrowser.cpp: WebRTC peers for UTcpNetDriver on the browser's own
-	RTCPeerConnection (Emscripten/webrtc.js). A browser hosts through the web
-	master's signaling, it can't take unknown peers like WebRtc.cpp does.
-=============================================================================*/
+// WebRTC peers for UTcpNetDriver on the browser's own RTCPeerConnection
+// (Emscripten/webrtc.js). A browser hosts through the web master's signaling,
+// it can't take unknown peers like WebRtc.cpp does.
 
 #include <algorithm>
 #include <memory>
@@ -243,9 +241,7 @@ void UTcpNetDriver::WebRtcDestroy()
 	unguard;
 }
 
-/*-----------------------------------------------------------------------------
-	Server browser queries, the id is the script's peer.
------------------------------------------------------------------------------*/
+// Server browser queries, the id is the script's peer.
 
 INT WebRtcQueryOpen( const FString& Host, const FString& Details )
 {

@@ -3,10 +3,6 @@
 	Copyright 2002 Epic Games, Inc. All Rights Reserved.
 
         SDL website: http://www.libsdl.org/
-
-Revision history:
-	* Created by Ryan C. Gordon, based on WinDrv.
-      This is an updated rewrite of the original SDLDrv.
 =============================================================================*/
 
 #include <stdlib.h>
@@ -406,7 +402,7 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	}
 	else if( ParseCommand(&Cmd,TEXT("GETCURRENTRES")) )
 	{
-		Ar.Logf( TEXT("%ix%i"), SizeX, SizeY ); // gam
+		Ar.Logf( TEXT("%ix%i"), SizeX, SizeY );
 		return 1;
 	}
 	else if( ParseCommand(&Cmd,TEXT("GETCURRENTRENDERDEVICE")) )
@@ -433,7 +429,6 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		return 1;
 	}
 
-	// gam ---
 	else if( ParseCommand(&Cmd,TEXT("SETMOUSE")) )
 	{
 	    const TCHAR* CmdTemp = Cmd;
@@ -467,7 +462,6 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
         return 1;
     }
 
-	// --- gam
 	else return 0;
 	unguard;
 }
@@ -1300,9 +1294,7 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 //
 // Lock the viewport window and set the approprite Screen and RealScreen fields
-// of Viewport.  Returns 1 if locked successfully, 0 if failed.  Note that a
-// lock failing is not a critical error; it's a sign that a DirectDraw mode
-// has ended or the user has closed a viewport window.
+// of Viewport.  Returns 1 if locked successfully, 0 if failed.
 //
 UBOOL USDLViewport::Lock( BYTE* HitData, INT* HitSize )
 {
@@ -1396,7 +1388,7 @@ UBOOL USDLViewport::TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY,
 
 
 //
-// If in fullscreen mode, end it and return to Windows.
+// If in fullscreen mode, end it.
 //
 void USDLViewport::EndFullscreen()
 {
@@ -1478,8 +1470,7 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	guard(USDLViewport::ResizeViewport);
 	USDLClient* Client = GetOuterUSDLClient();
 
-	// Andrew says: I made this keep the BLIT_Temporary flag so the temporary screen buffer doesn't get leaked
-	// during light rebuilds.
+	// BLIT_Temporary is kept so the temporary screen buffer doesn't leak during light rebuilds.
 
 	// Remember viewport.
 	UViewport* SavedViewport = NULL;

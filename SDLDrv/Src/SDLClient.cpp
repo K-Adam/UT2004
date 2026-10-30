@@ -3,10 +3,6 @@
 	Copyright 2002 Epic Games, Inc. All Rights Reserved.
 
         SDL website: http://www.libsdl.org/
-
-Revision history:
-	* Created by Ryan C. Gordon, based on WinDrv.
-      This is an updated rewrite of the original SDLDrv.
 =============================================================================*/
 
 #include "SDLDrv.h"

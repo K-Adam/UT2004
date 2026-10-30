@@ -1,17 +1,15 @@
-/*=============================================================================
-	WebRtc.h: What the libdatachannel and the browser WebRTC peers share.
-	Included after <string>, <random> and the engine headers.
-
-	Signaling-free like libp2p's WebRTC Direct (v1). The server advertises its
-	WebRTC port and certificate fingerprint. A client picks one random string as
-	its ICE ufrag and password, puts it in its own offer and writes the server's
-	answer itself. The server learns the string from the first STUN request on
-	its mux port and builds the matching description pair.
-
-	Browsers can't take unknown peers, so a browser host advertises signal:<id>
-	instead. Clients send their offer to it through the web master and both
-	ends gather candidates over STUN.
-=============================================================================*/
+// What the libdatachannel and the browser WebRTC peers share.
+// Included after <string>, <random> and the engine headers.
+//
+// Signaling-free like libp2p's WebRTC Direct (v1). The server advertises its
+// WebRTC port and certificate fingerprint. A client picks one random string as
+// its ICE ufrag and password, puts it in its own offer and writes the server's
+// answer itself. The server learns the string from the first STUN request on
+// its mux port and builds the matching description pair.
+//
+// Browsers can't take unknown peers, so a browser host advertises signal:<id>
+// instead. Clients send their offer to it through the web master and both
+// ends gather candidates over STUN.
 
 // IP, UDP, DTLS and SCTP headers per data channel message
 #define WEBRTC_PACKET_OVERHEAD 90

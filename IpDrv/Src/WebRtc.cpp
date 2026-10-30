@@ -1,6 +1,4 @@
-/*=============================================================================
-	WebRtc.cpp: WebRTC data channel peers for UTcpNetDriver, on libdatachannel.
-=============================================================================*/
+// WebRTC data channel peers for UTcpNetDriver, on libdatachannel.
 
 // The standard and libdatachannel headers go before the engine's, whose macros (check, clock, min, max) break them.
 // The engine builds with /Zp4, libdatachannel with the default packing its structs need here too.
@@ -61,10 +59,6 @@ struct FWebRtcHost
 #pragma pack(pop)
 
 IMPLEMENT_CLASS(UWebRtcConnection);
-
-/*-----------------------------------------------------------------------------
-	Helpers.
------------------------------------------------------------------------------*/
 
 // v1 sets the ICE password to the ufrag, so the ufrag also has to satisfy the password rules (RFC 8839)
 static bool ValidUfrag( const std::string& Ufrag )
@@ -202,10 +196,6 @@ static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
 	}
 }
 
-/*-----------------------------------------------------------------------------
-	UWebRtcConnection.
------------------------------------------------------------------------------*/
-
 static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
 {
 	if( !Peer->Dc->isOpen() )
@@ -251,10 +241,6 @@ void UWebRtcConnection::Destroy()
 	}
 	unguard;
 }
-
-/*-----------------------------------------------------------------------------
-	UTcpNetDriver WebRTC side.
------------------------------------------------------------------------------*/
 
 void UTcpNetDriver::WebRtcListen()
 {
@@ -549,10 +535,6 @@ void UTcpNetDriver::WebRtcDestroy()
 	delete Host;
 	unguard;
 }
-
-/*-----------------------------------------------------------------------------
-	Server browser queries.
------------------------------------------------------------------------------*/
 
 // Never destroyed, libdatachannel's own globals may be gone by the time statics are
 static std::map<INT,std::shared_ptr<FWebRtcPeer>>& QueryPeers()
