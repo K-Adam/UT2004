@@ -10,7 +10,7 @@
 		* Obfuscated by Daniel Vogel
 		* Peed on by Ryan C. Gordon
 =============================================================================*/
-#if __GNUC__ || (__INTEL_COMPILER && linux)
+#if __GNUC__
 
 // Standard includes.
 #include <stdio.h>
@@ -2045,7 +2045,6 @@ void appPlatformPreExit()
 
 
 
-#define DEBUG_HACKY_CMDLINE_PARSER 0
 void appPlatformExit()
 {
     if (GUnixSpawnOnExit != NULL)
@@ -2055,10 +2054,6 @@ void appPlatformExit()
 
         int startstr = 0;
         int max = fstrcmd.Len();
-
-        #if DEBUG_HACKY_CMDLINE_PARSER
-            fprintf(stderr, "\nOriginal cmdline:\n[%s].\n\n", appToAnsi(*fstrcmd));
-        #endif
 
         for (int i = 0; i < max; i++)
         {
@@ -2129,13 +2124,6 @@ void appPlatformExit()
         {
             _exit(0);
         }
-
-        #if DEBUG_HACKY_CMDLINE_PARSER
-            for (int x = 0; ansiargs[x]; x++)
-                fprintf(stderr, "[%s]\n", ansiargs[x]);
-            fprintf(stderr, "\n\n");
-            fflush(stderr);
-        #endif
 
         appSleep(1);
         execv(cmd, ansiargs);  // hail mary.

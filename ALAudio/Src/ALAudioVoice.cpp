@@ -243,17 +243,6 @@ INT FALVoiceModule::Encode()
 			{	
 				FLOAT* Src = CaptureData + PacketIndex * FrameSize;
 
-#if SAVE_SOUNDS
-				INT Index1 = AudioSubsystem->RawSoundBeforeDenoiser.Add( FrameSize * sizeof(SHORT) ),
-					Index2 = AudioSubsystem->RawSoundAfterDenoiser.Add( FrameSize * sizeof(SHORT) );
-				check(Index1==Index2);
-				
-				SHORT	*Before	= (SHORT*) &AudioSubsystem->RawSoundBeforeDenoiser(Index1),
-						*After	= (SHORT*) &AudioSubsystem->RawSoundAfterDenoiser(Index2);
-
-				for(INT i=0; i<FrameSize; i++)
-					*(Before++) = Src[i];
-#endif
 				// Denoise. The preprocessor takes 16-bit samples, the encoder floats.
 				UBOOL IsSpeech = 0;
 
@@ -265,11 +254,6 @@ INT FALVoiceModule::Encode()
 					speex_preprocess_estimate_update( SpeexPreprocessor, Frame );
 				for( INT i=0; i<FrameSize; i++ )
 					Src[i] = Frame[i];
-
-#if SAVE_SOUNDS
-				for(INT i=0; i<FrameSize; i++)
-					*(After++) = Src[i];
-#endif
 
 				// Server has option to disallow VAD.
 				if( (VoiceInfo->ServerOptions & VOICE_AllowVAD) && AudioSubsystem->UseVAD )

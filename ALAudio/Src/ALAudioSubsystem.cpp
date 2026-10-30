@@ -514,11 +514,6 @@ void UALAudioSubsystem::PlaySound( FSoundSource* InSource )
 	InSource->Pitch  = Clamp<FLOAT>(InSource->Pitch,0.5f,2.0f);
 	InSource->Volume = Clamp<FLOAT>(InSource->Volume,0.0f,1.0f);
 
-#ifdef WITH_LIPSINC
-	InSource->PauseStartTime = 0;
-	InSource->TotalPauseTime = 0;
-#endif
-
 	if( InSource->Volume == 0.f )
 		return;
 
@@ -750,22 +745,11 @@ UBOOL UALAudioSubsystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		}
 		return 0;
 	}
-#if SAVE_SOUNDS
-	else if(ParseCommand(&Cmd,TEXT("SAVESOUNDS")))
-	{
-		appSaveArrayToFile( RawSoundBeforeDenoiser, TEXT("BeforeDenoiser.raw") );
-		appSaveArrayToFile( RawSoundAfterDenoiser, TEXT("AfterDenoiser.raw") );
-		return 1;
-	}
-#endif
 	else if(ParseCommand(&Cmd,TEXT("UNPAUSESOUNDS")))
 	{
 		for(INT i=0; i<Sources.Num(); i++)
 		{
 			Sources(i)->Play();
-#ifdef WITH_LIPSINC
-			Sources(i)->TotalPauseTime += appSeconds() - Sources(i)->PauseStartTime;
-#endif
 		}
 		return 1;
 	}
@@ -841,243 +825,6 @@ UBOOL UALAudioSubsystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	return 0;	
 	unguard;
 }
-
-#ifdef WITH_LIPSINC
-
-DOUBLE UALAudioSubsystem::OffsetInSound( AActor* Actor, USound* Sound )
-{
-	guard(UALAudioSubsystem::OffsetInSound);
-
-	if ( Actor )
-	{
-		if ( Sound )
-		{
-			for (INT i=0; i<Sources.Num(); i++)
-			{
-				if ( (Sources(i)->Actor == Actor) && (Sources(i)->Sound == Sound) )
-				{
-					if( !Sources(i)->Playing )
-					{
-						return 0;
-					}
-					if ( Sources(i)->Paused )
-					{
-						return (Abs((((Sources(i)->PauseStartTime - Sources(i)->StartTime - Sources(i)->TotalPauseTime) * 1000.0) + 30.0)) * Sources(i)->Pitch);
-					}
-					else
-					{
-						return (Abs((((appSeconds() - Sources(i)->StartTime - Sources(i)->TotalPauseTime) * 1000.0) + 30.0)) * Sources(i)->Pitch);
-					}
-				}
-			}
-		}
-		else
-		{
-			debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: WARNING: Sound is NULL!"));			
-		}
-	}
-	else
-	{
-		debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: WARNING: Actor is NULL!"));
-	}
-
-	debugf(NAME_DevLIPSinc,TEXT("[LIPSinc]: WARNING: OffsetInSound returning -1.0"));
-
-	return -1.0;
-
-	unguard;
-}
-
-void UALAudioSubsystem::PauseSound( INT Index )
-{
-	guard(UALAudioSubsystem::PauseSound);
-
-	if( Sources(Index)->Id != 0 )
-	{
-		Sources(Index)->Pause();
-	}
-
-	unguard;
-}
-
-void UALAudioSubsystem::ResumeSound( INT Index )
-{
-	guard(UALAudioSubsystem::ResumeSound);
-
-	if( Sources(Index)->Id != 0 )
-	{
-		Sources(Index)->Play();
-	}
-
-	unguard;
-}
-
-void UALAudioSubsystem::StopSound( INT Index )
-{
-	guard(UALAudioSubsystem::StopSound);
-
-	if( Sources(Index)->Id != 0 )
-	{
-		Sources(Index)->Stop();
-	}
-
-	unguard;
-}
-
-UBOOL UALAudioSubsystem::PauseSound( AActor* Actor, USound* Sound )
-{
-	guard(UALAudioSubsystem::PauseSound);
-
-	UBOOL Paused = false;
-
-	// Pause all sounds.
-	if ( !Actor && !Sound )
-	{
-		for (INT i=0; i<Sources.Num(); i++)	
-		{
-			PauseSound(i);
-		}
-		return true;
-	}
-
-	// Pause selected sound.
-	for (INT i=0; i<Sources.Num(); i++)	
-	{
-		if ( Sound )
-		{
-			if ( Actor )
-			{
-				if ( (Actor == Sources(i)->Actor) && (Sound == Sources(i)->Sound) )
-				{
-					PauseSound(i);
-					Paused = true;
-				}
-			}
-			else
-			{
-				if ( Sound == Sources(i)->Sound )
-				{
-					PauseSound(i);
-					Paused = true;
-				}
-			}
-		}
-		else if ( Actor )
-		{
-			if ( Actor == Sources(i)->Actor )
-			{
-				PauseSound(i);
-				Paused = true;
-			}
-		}
-	}
-	return Paused;
-
-	unguard;
-}
-
-UBOOL UALAudioSubsystem::ResumeSound( AActor* Actor, USound* Sound )
-{
-	guard(UALAudioSubsystem::ResumeSound);
-
-	UBOOL Resumed = false;
-
-	// Resume all sounds.
-	if ( !Actor && !Sound )
-	{
-		for (INT i=0; i<Sources.Num(); i++)	
-		{
-			ResumeSound(i);
-		}
-		return true;
-	}
-
-	// Resume selected sound.
-	for (INT i=0; i<Sources.Num(); i++)	
-	{
-		if ( Sound )
-		{
-			if ( Actor )
-			{
-				if ( (Actor == Sources(i)->Actor) && (Sound == Sources(i)->Sound) )
-				{
-					ResumeSound(i);
-					Resumed = true;
-				}
-			}
-			else
-			{
-				if ( Sound == Sources(i)->Sound )
-				{
-					ResumeSound(i);
-					Resumed = true;
-				}
-			}
-		}
-		else if ( Actor )
-		{
-			if ( Actor == Sources(i)->Actor )
-			{
-				ResumeSound(i);
-				Resumed = true;
-			}
-		}
-	}
-	return Resumed;
-
-	unguard;
-}
-
-UBOOL UALAudioSubsystem::StopSound( AActor* Actor, USound* Sound )
-{
-	UBOOL Stopped = false;
-
-	// Stop all sounds.
-	if ( !Actor && !Sound )
-	{
-		for (INT i=0; i<Sources.Num(); i++)	
-		{
-			if( !(Sources(i)->Flags & SF_Music) )
-				StopSound(i);
-		}
-		return true;
-	}
-
-	// Stop selected sound.
-	for (INT i=0; i<Sources.Num(); i++)	
-	{
-		if ( Sound )
-		{
-			if ( Actor )
-			{
-				if ( (Actor == Sources(i)->Actor) && (Sound == Sources(i)->Sound) )
-				{
-					StopSound(i);
-					Stopped = true;
-				}
-			}
-			else
-			{
-				if ( Sound == Sources(i)->Sound )
-				{
-					StopSound(i);
-					Stopped = true;
-				}
-			}
-		}
-		else if ( Actor )
-		{
-			if ( Actor == Sources(i)->Actor )
-			{
-				StopSound(i);
-				Stopped = true;
-			}
-		}
-	}
-	return Stopped;
-}
-
-#endif	
 
 //
 //	UALAudioSubsystem::NoteDestroy
@@ -1610,11 +1357,6 @@ void FALSoundSource::Play()
 		UALAudioSubsystem::alSourcePlay( SourceId );
 		Paused	= 0;
 		Playing = 1;
-
-#ifdef WITH_LIPSINC		
-		StartTime = appSeconds();
-#endif
-
 	}
 	unguard;
 }
@@ -1637,13 +1379,6 @@ void FALSoundSource::Stop()
 		Priority	= 0;	
 		Sound		= NULL;
 		Flags		= 0;
-
-#ifdef WITH_LIPSINC
-		StartTime      = 0;
-		PauseStartTime = 0;
-		TotalPauseTime = 0;
-#endif
-
 	}
 	unguard;
 }
@@ -1658,11 +1393,6 @@ void FALSoundSource::Pause()
 	{
 		UALAudioSubsystem::alSourcePause( SourceId );
 		Paused = 1;
-
-#ifdef WITH_LIPSINC
-		PauseStartTime = appSeconds();
-#endif
-
 	}
 	unguard;
 }

@@ -144,13 +144,6 @@ class ALAUDIO_API UALAudioSubsystem : public UAudioSubsystem
 	// VoIP handling.
 	virtual UBOOL PlayVoicePacket( FVoiceInfo* VoiceInfo );
 
-#ifdef WITH_LIPSINC	
-	DOUBLE OffsetInSound( AActor* Actor, USound* Sound );
-	UBOOL PauseSound( AActor* Actor, USound* Sound );
-	UBOOL ResumeSound( AActor* Actor, USound* Sound );
-	UBOOL StopSound( AActor* Actor, USound* Sound );
-#endif
-
 	// Notifications.
 	virtual void NoteDestroy( AActor* Actor );
 	virtual void NoteDestroy( USound* Sound );
@@ -158,12 +151,6 @@ class ALAUDIO_API UALAudioSubsystem : public UAudioSubsystem
 	// Helper functions.
 	virtual void SetTransientSource( FSoundSource* Source );
 	virtual void SetEAXEffect();
-
-#ifdef WITH_LIPSINC
-	void PauseSound( INT Index );
-	void ResumeSound( INT Index );
-	void StopSound( INT Index );
-#endif
 
 	// Query functions.
 	virtual FSoundSource* GetSource( INT SourceIndex ) { return Sources(SourceIndex); }
@@ -211,11 +198,6 @@ protected:
 	ALCcontext*					SoundContext;
 	void*						DLLHandle;
 	INT							EAXVersion;
-
-#if SAVE_SOUNDS
-	TArray<BYTE>				RawSoundBeforeDenoiser,
-								RawSoundAfterDenoiser;
-#endif
 
 #if WITH_SPEEX
 	// Voice encoding/ decoding.

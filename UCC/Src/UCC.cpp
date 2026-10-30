@@ -18,10 +18,6 @@ Revision history:
 
 #include <stdio.h>
 
-#if CATCH_SIGSEGV
-#include <signal.h>
-#endif
-
 // Core and Engine
 #include "Engine.h"
 
@@ -86,14 +82,9 @@ FFeedbackContextAnsi Warn;
 	FFileManagerWindows FileManager;
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
-#elif __LINUX_X86__
+#else
 	#include "FFileManagerUnix.h"
 	FFileManagerUnix FileManager;
-	#include "FMallocAnsi.h"
-	FMallocAnsi Malloc;
-#else
-	#include "FFileManagerAnsi.h"
-	FFileManagerAnsi FileManager;
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
 #endif
@@ -136,31 +127,12 @@ void ShowBanner( FOutputDevice& Warn )
 }
 
 
-#if CATCH_SIGSEGV
-void sigcatch(int sig)
-{
-    printf("SIGSEGV caught.\n");
-    #if DO_PORTABLE_GUARD_BLOCKS
-	FString GuardBackTrace;
-    UnGuardBlock::GetBackTrace(GuardBackTrace);
-    char *bt = (char *) appAlloca(GuardBackTrace.Len() + 1);
-	printf("Unreal Call Stack: %s\n\n", appToAnsi(*GuardBackTrace, bt));
-	#endif
-    _exit(0);
-}
-#endif
-
-
 int main( int argc, char* argv[] )
 {
     #if ((__UNIX__) && (defined _DEBUG))
         setbuf(stdout, NULL);
         setbuf(stderr, NULL);
     #endif
-
-#if CATCH_SIGSEGV
-    signal(SIGSEGV, sigcatch);
-#endif
 
 	INT ErrorLevel = 0;
 	GIsStarted     = 1;

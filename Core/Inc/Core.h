@@ -25,26 +25,6 @@
   #define __GNUG__ 1
 #endif
 
-// Unwanted Intel C++ level 4 warnings/ remarks.
-#if __ICL
-#pragma warning(disable : 873)
-#pragma warning(disable : 981)
-#pragma warning(disable : 522)
-#pragma warning(disable : 271)
-#pragma warning(disable : 424)
-#pragma warning(disable : 193)
-#pragma warning(disable : 444)
-#pragma warning(disable : 440)
-#pragma warning(disable : 171)
-#pragma warning(disable : 1125)
-#pragma warning(disable : 488)
-#pragma warning(disable : 858)
-#pragma warning(disable : 82)
-#pragma warning(disable : 1)
-#pragma warning(disable : 177)
-#pragma warning(disable : 279)
-#endif
-
 // Build options.
 #include "UnBuild.h"
 
@@ -68,13 +48,6 @@
 #elif __GNUG__
 	#include <string.h>
 	#include "UnGnuG.h"
-#elif __ICC
-	#if __LINUX_X86__
-		#include <string.h>
-		#include "UnGnuG.h"
-	#else
-		#error Not yet supported
-	#endif
 #else
 	#error Unknown Compiler
 #endif
@@ -496,7 +469,6 @@ CORE_API extern UProperty*				GProperty;
 CORE_API extern BYTE*					GPropAddr;
 CORE_API extern UObject*				GPropObject;
 CORE_API extern DWORD					GRuntimeUCFlags;
-CORE_API extern USubsystem*				GWindowManager;
 CORE_API extern TCHAR				    GErrorHist[4096];
 CORE_API extern TCHAR                   GTrue[64], GFalse[64], GYes[64], GNo[64], GNone[64];
 CORE_API extern TCHAR					GCdPath[];

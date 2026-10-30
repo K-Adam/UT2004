@@ -95,30 +95,6 @@ protected:
 };
 
 
-#if WITH_MP3
-/*------------------------------------------------------------------------------------
-	FALAudioStreamMP3.
-------------------------------------------------------------------------------------*/
-class ALAUDIO_API FALAudioStreamMP3 : public FALAudioStream
-{
-public:
-	// Constructor/ Destructor.
-	FALAudioStreamMP3( FALAudioStream* Previous, FCriticalSection* CriticalSection );
-	virtual ~FALAudioStreamMP3();
-
-	// Streaming thread functions.
-	UBOOL Init( const TCHAR* Filename, void* InSharedData, EAudioStreamType InType );
-	UBOOL ReadChunks( INT NumChunks );
-
-	// Main thread functions.
-	INT Seek( FLOAT Seconds );
-
-protected:	
-	// Decoder
-	signed int			DecoderHandle; // make sure HASISTREAM == S32 == signed int in mss.h
-};
-#endif
-
 /*------------------------------------------------------------------------------------
 	FALAudioStreamManager.
 ------------------------------------------------------------------------------------*/

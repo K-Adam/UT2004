@@ -12,9 +12,6 @@ Revision history:
 #pragma pack (push,8)
 #include "vorbis/codec.h"
 #include "vorbis/vorbisfile.h"
-#if WITH_MP3
-#include "../MP3/mp3dec.h"
-#endif
 #pragma pack (pop)
 
 #if __UNIX__
@@ -281,126 +278,6 @@ INT FALAudioStreamOgg::Seek( FLOAT Seconds )
 }
 
 
-#if WITH_MP3
-/*------------------------------------------------------------------------------------
-	FALAudioStreamMP3.
-------------------------------------------------------------------------------------*/
-
-//
-//	FALAudioStreamMP3::FALAudioStreamMP3
-//
-FALAudioStreamMP3::FALAudioStreamMP3( FALAudioStream* InPrevious, FCriticalSection* InCriticalSection )
-: FALAudioStream( InPrevious, InCriticalSection )
-{
-	DecoderHandle = 0;
-}
-
-//
-//	FALAudioStreamMP3::~FALAudioStreamMP3
-//
-FALAudioStreamMP3::~FALAudioStreamMP3()
-{
-	if( DecoderHandle )
-		ASI_stream_close( DecoderHandle );
-	DecoderHandle = 0;
-}
-
-//
-//	FALAudioStreamMP3::Init
-//
-UBOOL FALAudioStreamMP3::Init( const TCHAR* Filename, void* InSharedData, EAudioStreamType InType )
-{
-	if( !this->FALAudioStream::Init( Filename, InSharedData, InType ) )
-		return 0;
-	
-	INT	FileSize;
-
-	fseek( FileHandle, 0, SEEK_END );
-	FileSize = ftell( FileHandle );
-	fseek( FileHandle, 0, SEEK_SET );
-
-	DecoderHandle = ASI_stream_open( FileHandle, FileSize );
-
-	if( !DecoderHandle )
-		return 0;
-	
-	Duration				= 0.f; // Miles doesn't support querying for duation.
-	Rate					= ASI_stream_attribute( DecoderHandle, OUTPUT_SAMPLE_RATE );
-	ChunkSize				= MAX_STREAM_CHUNKSIZE;
-
-	INT NumChannels			= ASI_stream_attribute( DecoderHandle, OUTPUT_CHANNELS );
-
-	switch( NumChannels )
-	{
-	case 1:
-		Format = AL_FORMAT_MONO16;
-		break;
-	case 2:
-		Format = AL_FORMAT_STEREO16;				
-		break;
-	default:
-		Format = 0;	
-		return 0;
-		break;
-	}
-
-	return 1;
-}
-
-//
-//	FALAudioStreamMP3::ReadChunks
-//
-UBOOL FALAudioStreamMP3::ReadChunks( INT NumChunks )
-{
-	if( !ChunksRequested )
-		return 0;
-
-	DWORD	Bytes	= NumChunks * ChunkSize,
-			Count	= 0;
-	BYTE*	Data	= (BYTE*)SharedData;
-
-	ChunksRequested = Max( 0, ChunksRequested - NumChunks );
-	SharedData		= (BYTE*)SharedData + NumChunks * ChunkSize;
-
-	if( !Data || !Bytes )
-		return 0;
-
-	UBOOL Error = 0;
-	while( Count < Bytes )
-	{
-		INT DecodedBytes = ASI_stream_process( DecoderHandle, Data + Count, Bytes - Count );
-		Count += DecodedBytes;
-	
-		if( DecodedBytes == 0 )
-		{
-			if( Type == ST_MP3Looping && !Error )
-			{
-				ASI_stream_seek( DecoderHandle, 0 );
-				Error = 1;
-				LoopCount++;
-			}
-			else
-			{
-				EndOfFile = 1;
-				return 0;
-			}
-		}
-	}
-
-	return 1;
-}
-
-//
-//	FALAudioStreamMP3::Seek
-//
-INT FALAudioStreamMP3::Seek( FLOAT Seconds )
-{
-	FScopeCriticalSection Lock( CriticalSection );
-	// Miles doesn't support seeking by time.
-	return 0;
-}
-#endif
-
 /*------------------------------------------------------------------------------------
 	FALAudioStreamManager.
 ------------------------------------------------------------------------------------*/
@@ -422,13 +299,6 @@ FALAudioStream* FALAudioStreamManager::CreateStream( const TCHAR* Filename, INT 
 	case ST_OggLooping:
 		Stream = new FALAudioStreamOgg( Last, &CriticalSection );
 		break;
-
-#if WITH_MP3
-	case ST_MP3:
-	case ST_MP3Looping:
-		Stream = new FALAudioStreamMP3( Last, &CriticalSection );
-		break;
-#endif
 
 	default:
 		break;
@@ -518,10 +388,6 @@ void FALAudioStreamManager::Init()
 {
 	guard(FALAudioStreamManager::Init);
 
-#if WITH_MP3
-	ASI_startup();
-#endif
-
 #if __EMSCRIPTEN__
 	// No threads without SharedArrayBuffer, UALAudioSubsystem::Update reads the chunks instead.
 #elif __UNIX__
@@ -556,9 +422,6 @@ void FALAudioStreamManager::Destroy()
 		debugf(TEXT("Waiting for file streaming thread to finish..."));
 		while( Destroyed == 1 )
 			appSleep(0.1f);
-#endif
-#if WITH_MP3
-		ASI_shutdown();
 #endif
 	}
 	unguard;

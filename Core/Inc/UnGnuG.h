@@ -13,11 +13,7 @@
 	#define __UNIX__  1
 	#define __LINUX__ 1
 	#define __INTEL__ 1
-	#if __ICC
-		#define COMPILER "Compiled with Intel C++"
-	#else
-		#define COMPILER "Compiled with GNU g++ ("__VERSION__")"
-	#endif
+	#define COMPILER "Compiled with GNU g++ ("__VERSION__")"
 #else
 	#error Unsupported platform.
 #endif

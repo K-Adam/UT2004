@@ -133,7 +133,6 @@ CORE_API UProperty*				GProperty;						/* Property for UnrealScript interpretter
 CORE_API BYTE*					GPropAddr;						/* Property address for UnrealScript interpreter */
 CORE_API UObject*				GPropObject;					/* Object with Property for UnrealScript interpreter */
 CORE_API DWORD					GRuntimeUCFlags=0;				/* Property for storing flags between calls to bytecode functions */
-CORE_API USubsystem*			GWindowManager=NULL;			/* Window update routine called once per tick */
 CORE_API TCHAR					GErrorHist[4096]=TEXT("");		/* For building call stack text dump in guard/unguard mechanism */
 CORE_API TCHAR					GYes[64]=TEXT("Yes");			/* Localized "yes" text */
 CORE_API TCHAR					GNo[64]=TEXT("No");				/* Localized "no" text */

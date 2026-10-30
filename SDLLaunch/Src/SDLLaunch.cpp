@@ -111,16 +111,6 @@ FFileManagerUnix FileManager;
 	mainline
 -----------------------------------------------------------------------------*/
 
-// Not really SDL specific apart from the splash screen.
-#define USE_SDL_SPLASH
-
-#if (!defined USE_SDL_SPLASH)
-
-static void InitSplash(const TCHAR *filename) {}
-static void ExitSplash(void) {}
-
-#else
-
 // SDL3.dll uses default packing, the engine builds with /Zp4.
 #pragma pack(push,8)
 #include <SDL3/SDL.h>
@@ -202,7 +192,6 @@ static void ExitSplash(void)
     SplashWindow = NULL;
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
-#endif
 #endif
 
 #if defined(__ANDROID__) || __EMSCRIPTEN__
@@ -1253,8 +1242,6 @@ inline void	CMainLoop::RunLoop(void)
 	if( appSeconds() < NewTime )
            SecondStartTime = NewTime = GCurrentTime = appSeconds();
 	// --- sjs
-	if( GWindowManager )
-		GWindowManager->Tick( GDeltaTime );
 
 	TickCount++;
 	OldTime = NewTime;
@@ -1493,22 +1480,6 @@ static UEngine* InitEngine()
 		}
 	}
 
-	if( ParseParam(appCmdLine(),TEXT("FirstRun")) )
-		FirstRun=0;
-	if( FirstRun<220 )
-	{
-		// Migrate savegames.
-		TArray<FString> Saves = GFileManager->FindFiles( TEXT("../Save/*.usa"), 1, 0 );
-		for( TArray<FString>::TIterator It(Saves); It; ++It )
-		{
-			INT Pos = appAtoi(**It+4);
-			FString Section = TEXT("UnrealShare.UnrealSlotMenu");
-			FString Key     = FString::Printf(TEXT("SlotNames[%i]"),Pos);
-			if( appStricmp(GConfig->GetStr(*Section,*Key,TEXT("user")),TEXT(""))==0 )
-				GConfig->SetString(*Section,*Key,TEXT("Saved game"),TEXT("user"));
-		}
-	}
-
 	// EXEC from command-line
 	FString Command;
 	if( Parse(appCmdLine(),TEXT("consolecommand="), Command) )
@@ -1524,49 +1495,6 @@ static UEngine* InitEngine()
         }
 		return NULL;
 	}
-
-	// Test render device.
-	FString Device;
-	if( Parse(appCmdLine(),TEXT("testrendev="),Device) )
-	{
-		debugf(TEXT("Detecting %s"),*Device);
-		try
-		{
-			UClass* Cls = LoadClass<URenderDevice>( NULL, *Device, NULL, 0, NULL );
-			GConfig->SetInt(*Device,TEXT("DescFlags"),RDDESCF_Incompatible);
-			GConfig->Flush(0);
-			if( Cls )
-			{
-				URenderDevice* RenDev = ConstructObject<URenderDevice>(Cls);
-				if( RenDev )
-				{
-					if( RenDev->Init() )
-					{
-						debugf(TEXT("Successfully detected %s"),*Device);
-					}
-					else
-					{
-						delete RenDev;
-						RenDev = NULL;
-					}
-				}
-			}
-		} catch( ... ) {}
-		FArchive* Ar = GFileManager->CreateFileWriter(TEXT("Detected.ini"),0);
-		if( Ar )
-			delete Ar;
-		return NULL;
-	}
-
-    // gam ---
-    if( ParseParam(appCmdLine(),TEXT("debugging")) && (GFileManager->FileSize(TEXT("Running.ini")) >= 0) )
-        GFileManager->Delete(TEXT("Running.ini"),0,0);
-    // --- gam
-
-	// Create is-running semaphore file.
-	FArchive* Ar = GFileManager->CreateFileWriter(TEXT("Running.ini"),0);
-	if( Ar )
-		delete Ar;
 
 	// Update first-run.
 	if( FirstRun<ENGINE_VERSION )
@@ -1733,8 +1661,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 			Filename = FString(TEXT("../Help")) * GPackage + TEXT("Logo.bmp"); // gam
 		if( HasContent && (!ShowLog) &&
             (!ParseParam(CmdLine,TEXT("server"))) &&
-            (!ParseParam(CmdLine,TEXT("nosplash"))) &&
-            !appStrfind(CmdLine,TEXT("TestRenDev")) )
+            (!ParseParam(CmdLine,TEXT("nosplash"))) )
 			InitSplash( *Filename );
 
 		// Benchmarking/ movie recording.
@@ -1778,15 +1705,6 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 					Engine->Client->Viewports(0)->Exec( *Temp, *GLog );
 			}
 
-#ifdef BETAEXPIRE
-			if ( time(NULL) > (BETAEXPIRE + 30 * 24 * 60 * 60) )
-			{
-				GIsRequestingExit = 1;
-				appMsgf( 0, TEXT("This beta has expired.") );
-				while (1) _exit(42);
-			}
-#endif
-
 			if( !GIsClient )
 				InitServerTray();
 
@@ -1797,8 +1715,6 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 		}
 
 		// Clean shutdown.
-		GFileManager->Delete(TEXT("Running.ini"),0,0);
-
 		GLog->Log( NAME_Title, LocalizeGeneral(TEXT("Exit"),GPackage) );
 
 		appPreExit();

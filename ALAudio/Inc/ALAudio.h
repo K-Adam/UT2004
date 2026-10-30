@@ -40,9 +40,6 @@ Revision history:
 	Audio public includes.
 -----------------------------------------------------------------------------*/
 
-#define SAVE_SOUNDS 0
-#define SAFE_RELEASE(p) { if(p) { (p)->Release(); (p)=NULL; } }
-
 #include "ALAudioStream.h"
 #include "ALAudioCapture.h"
 
