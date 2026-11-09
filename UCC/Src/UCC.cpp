@@ -22,25 +22,10 @@ Revision history:
 #include "Engine.h"
 
 #if __STATIC_LINK
-#include "Engine.h"
-
 #if __UNIX__
 #undef clock
 #endif
-
-#include "UnRender.h"
-#include "UnNullRenderDevice.h"
-#include "UnNet.h"
-#include "UnFractal.h"
-#include "UnIpDrv.h"
-#include "UnTcpNetDriver.h"
-#include "UnIpDrvCommandlets.h"
-#include "UnIpDrvNative.h"
-#include "XInterface.h"
-#include "UWeb.h"
-#include "UWebNative.h"
-#include "OnslaughtPrivate.h"
-void autoInitializeRegistrantsEditor(INT &Lookup);
+#include "StaticLink.h"
 #endif
 
 INT GFilesOpen, GFilesOpened;
@@ -90,12 +75,7 @@ FFeedbackContextAnsi Warn;
 #endif
 
 #if __STATIC_LINK
-static struct FEarlyMalloc { FEarlyMalloc() { GMalloc = &Malloc; } } EarlyMalloc
-#ifndef _MSC_VER
-	// Clang and GCC have no init_seg, the lowest priority runs before the other static constructors.
-	__attribute__((init_priority(101)))
-#endif
-	;
+static FEarlyMalloc EarlyMalloc EARLY_INIT_PRIORITY = &Malloc;
 #endif
 
 // Config.
@@ -174,30 +154,10 @@ int main( int argc, char* argv[] )
 		appInit( TEXT("UT2004"), CmdLine, &Malloc, &Log, &Error, &Warn, &FileManager, FConfigCacheIni::Factory, 1 );
 
 #if __STATIC_LINK
-        // Clean lookups.
-        for( INT k=0; k<ARRAY_COUNT(GNativeLookupFuncs); k++ )
-            GNativeLookupFuncs[k] = NULL;
-
         INT Lookup = 0;
-        // Core natives.
-        GNativeLookupFuncs[Lookup++] = &FindCoreUObjectNative;
-        GNativeLookupFuncs[Lookup++] = &FindCoreUCommandletNative;
-
-        // auto-generated lookups and statics
-        AUTO_INITIALIZE_REGISTRANTS_ENGINE;
+        RegisterEngineNatives(Lookup);
         AUTO_INITIALIZE_REGISTRANTS_FIRE;
-        AUTO_INITIALIZE_REGISTRANTS_IPDRV;
-        RegisterNamesXInterface();
-        AUTO_INITIALIZE_REGISTRANTS_XINTERFACE;
-        AUTO_INITIALIZE_REGISTRANTS_XGAME;
-        AUTO_INITIALIZE_REGISTRANTS_UWEB;
-        RegisterNamesOnslaught();
-        AUTO_INITIALIZE_REGISTRANTS_ONSLAUGHT;
-        autoInitializeRegistrantsEditor(Lookup);
-
-        GNativeLookupFuncs[Lookup++] = &FindUWebUWebResponseNative;
-        GNativeLookupFuncs[Lookup++] = &FindUWebUWebRequestNative;
-        check( Lookup < ARRAY_COUNT(GNativeLookupFuncs) );
+        RegisterGameNatives(Lookup);
 #endif
 
 

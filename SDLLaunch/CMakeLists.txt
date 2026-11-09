@@ -15,6 +15,7 @@ if(WIN32)
   target_link_options(SDLLaunch PRIVATE /ENTRY:mainCRTStartup)
 endif()
 if(ANDROID)
+  target_sources(SDLLaunch PRIVATE Src/SDLLaunchAndroid.cpp)
   # System and script files ship xz compressed inside the APK, the content comes as a .tar.xz on first run.
   target_link_libraries(SDLLaunch PRIVATE LibLZMA::LibLZMA)
   # Read on every configure unless set with -D, so test builds can point at localhost.
@@ -40,7 +41,7 @@ if(EMSCRIPTEN)
   endforeach()
   file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/LinkedPackages.cpp CONTENT
     "#include <string.h>\n${decls}extern \"C\" void* appLinkedPackage(const char* Symbol)\n{\n${checks}\treturn 0;\n}\n")
-  target_sources(SDLLaunch PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/LinkedPackages.cpp)
+  target_sources(SDLLaunch PRIVATE Src/SDLLaunchWeb.cpp ${CMAKE_CURRENT_BINARY_DIR}/LinkedPackages.cpp)
 
   set(webrtc ${CMAKE_SOURCE_DIR}/Emscripten/webrtc.js)
   set(content ${CMAKE_SOURCE_DIR}/Emscripten/content.js)

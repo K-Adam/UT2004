@@ -22,6 +22,21 @@ Revision history:
 #include "Engine.h"
 #include "UnRender.h"
 
+int RunEngine( TCHAR* CmdLine );
+
+#ifdef __ANDROID__
+// SDLLaunchAndroid.cpp
+void InitSplash(const TCHAR *filename);
+bool AndroidFail(const char* Fmt, const char* Arg);
+void CloseSetupScreen();
+bool ExtractAssets(const char* Root);
+bool InstallContent(const char* Root);
+void StartServerService(const TCHAR* Cmd);
+#elif __EMSCRIPTEN__
+// SDLLaunchWeb.cpp
+extern FOutputDevice* GWebLogHook;
+#endif
+
 /*-----------------------------------------------------------------------------
 	The End.
 -----------------------------------------------------------------------------*/
