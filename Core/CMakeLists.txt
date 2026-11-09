@@ -10,3 +10,8 @@ if(WIN32)
 else()
   ut_module(Core SHARED SOURCES ${CORE_SRC} UnUnix.cpp DEPS Vorbis::vorbisfile)
 endif()
+
+# Read at configure time, so the log of a build names the commit it was configured at.
+execute_process(COMMAND git describe --always --dirty WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE UT_PORT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+set_property(SOURCE Src/UnMisc.cpp APPEND PROPERTY COMPILE_DEFINITIONS UT_PORT_VERSION="${UT_PORT_VERSION}")

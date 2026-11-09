@@ -353,6 +353,9 @@ CORE_API const UNICHAR* appToUnicode( const TCHAR* Str, UNICHAR* UCh=NULL, INT m
 CORE_API const TCHAR* appFromAnsi( const ANSICHAR* Str, TCHAR* TCh=NULL, INT maxlen = STATICSTRINGLENGTH );
 CORE_API const TCHAR* appFromUnicode( const UNICHAR* Str, TCHAR* TCh=NULL, INT maxlen = STATICSTRINGLENGTH );
 CORE_API UBOOL appIsPureAnsi( const TCHAR* Str );
+// Null terminated, &Result(0) is the C string
+CORE_API TArray<ANSICHAR> appToUtf8( const TCHAR* Str );
+CORE_API FString appFromUtf8( const ANSICHAR* Str );
 
 CORE_API TCHAR* appStrcpy( TCHAR* Dest, const TCHAR* Src );
 CORE_API INT appStrcpy( const TCHAR* String );

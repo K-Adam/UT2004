@@ -300,6 +300,60 @@ CORE_API UBOOL appIsPureAnsi( const TCHAR* Str )
 	return 1;
 }
 
+// TCHAR is UTF-16 on every platform. Input that is not valid gives "?" for the whole string.
+CORE_API TArray<ANSICHAR> appToUtf8( const TCHAR* Str )
+{
+	TArray<ANSICHAR> Out;
+	for( ; *Str; Str++ )
+	{
+		DWORD C = (_WORD)*Str;
+		if( C>=0xD800 && C<0xDC00 && (_WORD)Str[1]>=0xDC00 && (_WORD)Str[1]<0xE000 )
+			C = 0x10000 + ((C-0xD800)<<10) + ((_WORD)*++Str-0xDC00);
+		else if( C>=0xD800 && C<0xE000 )
+		{
+			Out.Empty();
+			Out.AddItem( '?' );
+			break;
+		}
+		INT Extra = C<0x80 ? 0 : C<0x800 ? 1 : C<0x10000 ? 2 : 3;
+		Out.AddItem( (ANSICHAR)(Extra ? ((0xF0<<(3-Extra)) | (C>>(6*Extra))) : C) );
+		while( Extra-- )
+			Out.AddItem( (ANSICHAR)(0x80 | ((C>>(6*Extra)) & 0x3F)) );
+	}
+	Out.AddItem( 0 );
+	return Out;
+}
+
+CORE_API FString appFromUtf8( const ANSICHAR* Str )
+{
+	static const DWORD Smallest[] = { 0, 0x80, 0x800, 0x10000 };
+	TArray<TCHAR> Out;
+	for( const BYTE* P=(const BYTE*)Str; *P; )
+	{
+		INT Extra = *P<0x80 ? 0 : (*P&0xE0)==0xC0 ? 1 : (*P&0xF0)==0xE0 ? 2 : (*P&0xF8)==0xF0 ? 3 : -1;
+		if( Extra<0 )
+			return TEXT("?");
+		DWORD C = *P++ & (Extra ? 0x3F>>Extra : 0x7F);
+		for( INT i=0; i<Extra; i++ )
+		{
+			// The terminator is no continuation byte, so this stops at the end
+			if( (*P&0xC0)!=0x80 )
+				return TEXT("?");
+			C = (C<<6) | (*P++ & 0x3F);
+		}
+		if( C<Smallest[Extra] || C>0x10FFFF || (C>=0xD800 && C<0xE000) )
+			return TEXT("?");
+		if( C>=0x10000 )
+		{
+			Out.AddItem( (TCHAR)(0xD800 + ((C-0x10000)>>10)) );
+			C = 0xDC00 + (C & 0x3FF);
+		}
+		Out.AddItem( (TCHAR)C );
+	}
+	Out.AddItem( 0 );
+	return FString( &Out(0) );
+}
+
 //
 // Failed assertion handler.
 //warning: May be called at library startup time.
@@ -2144,6 +2198,7 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 
 	// Command line.
 	debugf( NAME_Init, TEXT("Version: %i (%i.%i)"), ENGINE_VERSION, PACKAGE_FILE_VERSION, PACKAGE_FILE_VERSION_LICENSEE ); // gam
+	debugf( NAME_Init, TEXT("Port: %s"), appFromAnsi(UT_PORT_VERSION) );
 	debugf( NAME_Init, TEXT("Compiled: %s %s"), appFromAnsi(__DATE__), appFromAnsi(__TIME__) );
 	debugf( NAME_Init, TEXT("Command line: %s"), appCmdLine() );
 	// Parameters.
