@@ -1,5 +1,5 @@
 // What the libdatachannel and the browser WebRTC peers share.
-// Included after <string>, <random> and the engine headers.
+// Included after <string> and the engine headers.
 //
 // Signaling-free like libp2p's WebRTC Direct (v1). The server advertises its
 // WebRTC port and certificate fingerprint. A client picks one random string as
@@ -29,6 +29,7 @@
 #define WEBRTC_GATHER_TIME 3.0
 
 struct FWebRtcPeer;
+struct FWebRtcHost;
 
 class UWebRtcConnection : public UTcpipConnection
 {
@@ -49,162 +50,21 @@ class UWebRtcConnection : public UTcpipConnection
 	void Destroy();
 };
 
-static const char* WebRtcSdpEnd = "a=sctp-port:5000\r\na=max-message-size:16384\r\n";
+// WebRtcCommon.cpp
+extern const char* WebRtcSdpEnd;
+std::string WebRtcCandidate( const std::string& Ip, INT Port );
+UBOOL WebRtcSignalSetup( FURL& ConnectURL, FString& Id, sockaddr_in& Addr );
+UBOOL WebRtcClientSetup( FURL& ConnectURL, FString& Error, sockaddr_in& Addr, std::string& Ufrag, std::string& Answer );
+void WebRtcServerConnection( UTcpNetDriver* Driver, FWebRtcPeer* Peer, sockaddr_in& Addr, UWebRtcConnection*& Connection, const FURL& ConnectURL );
+UBOOL WebRtcIpLimited( UTcpNetDriver* Driver, sockaddr_in& Addr, INT Connecting );
+EAcceptConnection WebRtcAccept( UTcpNetDriver* Driver, FWebRtcPeer* Peer, sockaddr_in& Addr, UWebRtcConnection*& Connection );
+FURL WebRtcQueryURL( const FString& Host, const FString& Details );
+UBOOL WebRtcAnswerQuery( FWebRtcPeer* Peer, INT& Queries, const BYTE* Data, INT Count );
+UBOOL WebRtcPendingExpired( DOUBLE CreatedTime, INT Queries );
 
-static std::string WebRtcCandidate( const std::string& Ip, INT Port )
-{
-	return "a=candidate:1467250027 1 UDP 1467250027 " + Ip + " " + std::to_string(Port) + " typ host\r\na=end-of-candidates\r\n";
-}
-
-static std::string ToStd( const FString& S )
-{
-	return std::string( TCHAR_TO_ANSI(*S) );
-}
-
-// The fingerprint goes into an SDP line, so anything but hex pairs and colons is refused
-static bool ValidFingerprint( const FString& Fp )
-{
-	if( Fp.Len()!=95 )
-		return false;
-	for( INT i=0; i<Fp.Len(); i++ )
-		if( i%3==2 ? (*Fp)[i]!=':' : !appStrchr(TEXT("0123456789ABCDEFabcdef"), (*Fp)[i]) )
-			return false;
-	return true;
-}
-
-// A browser host's details are "signal:<id>". Its address is only shown, the web master knows it by the id.
-static UBOOL WebRtcSignalSetup( FURL& ConnectURL, FString& Id, sockaddr_in& Addr )
-{
-	FString Details = ConnectURL.GetOption( TEXT("WebRTC="), TEXT("") );
-	if( appStrnicmp( *Details, TEXT("signal:"), 7 ) )
-		return 0;
-	Id = Details.Mid( 7 );
-	if( Id.Len()!=32 )
-		return 0;
-	for( INT i=0; i<Id.Len(); i++ )
-		if( !appStrchr( TEXT("0123456789abcdef"), (*Id)[i] ) )
-			return 0;
-	appMemzero( &Addr, sizeof(Addr) );
-	Addr.sin_family = AF_INET;
-	Addr.sin_port = htons( ConnectURL.Port );
-	Addr.sin_addr.s_addr = inet_addr( TCHAR_TO_ANSI(*ConnectURL.Host) );
-	return 1;
-}
-
-// The per IP limit of new UDP connections, Connecting counts the address's peers that have not sent yet
-static UBOOL WebRtcIpLimited( UTcpNetDriver* Driver, sockaddr_in& Addr, INT Connecting )
-{
-	for( INT i=0; i<Driver->ClientConnections.Num(); i++ )
-		if( IpAddressMatches( ((UTcpipConnection*)Driver->ClientConnections(i))->RemoteAddr, Addr ) && ((UTcpipConnection*)Driver->ClientConnections(i))->OpenedTime > GCurrentTime-60.0 )
-			Connecting++;
-	return Connecting >= (Driver->MaxConnPerIPPerMinute ? Driver->MaxConnPerIPPerMinute : 5);
-}
-
-// Accepts on the first packet like the UDP path. While the level changes it ignores, so later packets retry.
-static EAcceptConnection WebRtcAccept( UTcpNetDriver* Driver, FWebRtcPeer* Peer, sockaddr_in& Addr, UWebRtcConnection*& Connection )
-{
-	EAcceptConnection Accept = Driver->Notify->NotifyAcceptingConnection();
-	if( Accept==ACCEPTC_Accept )
-	{
-		Connection = new UWebRtcConnection( Driver, Peer, Addr, USOCK_Open, FURL() );
-		Connection->URL.Host = IpString( Addr.sin_addr );
-		Driver->Notify->NotifyAcceptedConnection( Connection );
-		Driver->ClientConnections.AddItem( Connection );
-		debugf( TEXT("WebRTC connection from %s"), *Connection->LowLevelGetRemoteAddress() );
-	}
-	return Accept;
-}
-
-// A server browser row as the URL the setups below read
-static FURL WebRtcQueryURL( const FString& Host, const FString& Details )
-{
-	FURL URL;
-	URL.Host = Host;
-	URL.AddOption( *(FString(TEXT("WebRTC=")) + Details) );
-	return URL;
-}
+// WebRtc.cpp or WebRtcBrowser.cpp
 
 // False while the peer's channel is not open
-static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count );
-
-// The query replies as the UDP query port sends them, one message per packet
-struct FArchiveWebRtcWriter : public FArchiveUdpWriter
-{
-	FWebRtcPeer* Peer;
-
-	FArchiveWebRtcWriter( FWebRtcPeer* InPeer )
-	:	FArchiveUdpWriter( NULL, FIpAddr() )
-	,	Peer( InPeer )
-	{}
-	void Flush()
-	{
-		WebRtcPeerSend( Peer, &SendData(0), SendData.Num() );
-		// The version header stays for the next packet
-		SendData.Remove( sizeof(INT), SendData.Num()-sizeof(INT) );
-	}
-};
-
-// A game packet has at least two bytes, so a single byte from a peer without a connection is a server browser query.
-// Queries counts them per peer, they come from anyone and each costs a reply of several packets.
-static UBOOL WebRtcAnswerQuery( FWebRtcPeer* Peer, INT& Queries, const BYTE* Data, INT Count )
-{
-	if( Count!=1 )
-		return 0;
-	if( Queries++ < WEBRTC_MAX_QUERIES )
-	{
-		FArchiveWebRtcWriter ArSend( Peer );
-		ServerQueryAnswer( Data[0], ArSend );
-	}
-	return 1;
-}
-
-// Reads the server's details from the URL and makes up the client's ufrag and the server's answer.
-static UBOOL WebRtcClientSetup( FURL& ConnectURL, FString& Error, sockaddr_in& Addr, std::string& Ufrag, std::string& Answer )
-{
-	// The server browser adds the details the server advertises, a typed address needs ?WebRTC=<port>,<fingerprint>
-	FString Details = ConnectURL.GetOption( TEXT("WebRTC="), TEXT("") );
-	FString PortText, Fingerprint;
-	if( !Details.Split( TEXT(","), &PortText, &Fingerprint ) || appAtoi(*PortText)<=0 || appAtoi(*PortText)>65535 || !ValidFingerprint(Fingerprint) )
-	{
-		Error = TEXT("This server has no WebRTC details. Join it from the server browser or add ?WebRTC=<port>,<fingerprint>");
-		debugf( TEXT("WebRTC: %s"), *Error );
-		return 0;
-	}
-	INT Port = appAtoi( *PortText );
-
-	appMemzero( &Addr, sizeof(Addr) );
-	Addr.sin_family = AF_INET;
-	Addr.sin_port = htons(Port);
-	Addr.sin_addr.s_addr = inet_addr( TCHAR_TO_ANSI(*ConnectURL.Host) );
-	if( Addr.sin_addr.s_addr == INADDR_NONE )
-	{
-#if __EMSCRIPTEN__
-		// Emscripten's resolver makes up addresses for its WebSocket emulation.
-		HOSTENT* HostEnt = NULL;
-#else
-		HOSTENT* HostEnt = gethostbyname( TCHAR_TO_ANSI(*ConnectURL.Host) );
-#endif
-		if( !HostEnt || HostEnt->h_addrtype!=AF_INET )
-		{
-			Error = FString::Printf( TEXT("Could not resolve %s"), *ConnectURL.Host );
-			return 0;
-		}
-		Addr.sin_addr = *(in_addr*)HostEnt->h_addr_list[0];
-	}
-	std::string Ip = ToStd( IpString(Addr.sin_addr) );
-
-	static const char Chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-	std::random_device Random;
-	Ufrag.clear();
-	for( INT i=0; i<24; i++ )
-		Ufrag += Chars[Random() % (sizeof(Chars)-1)];
-
-	Answer =
-		"v=0\r\no=- 0 0 IN IP4 " + Ip + "\r\ns=-\r\nt=0 0\r\na=ice-lite\r\n"
-		"m=application " + std::to_string(Port) + " UDP/DTLS/SCTP webrtc-datachannel\r\n"
-		"c=IN IP4 " + Ip + "\r\na=mid:0\r\na=ice-options:ice2\r\n"
-		"a=ice-ufrag:" + Ufrag + "\r\na=ice-pwd:" + Ufrag + "\r\n"
-		"a=fingerprint:sha-256 " + ToStd(Fingerprint) + "\r\na=setup:passive\r\n"
-		+ WebRtcSdpEnd + WebRtcCandidate( Ip, Port );
-	return 1;
-}
+UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count );
+// Closes the peer and takes it off the host's list
+void WebRtcRemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer );

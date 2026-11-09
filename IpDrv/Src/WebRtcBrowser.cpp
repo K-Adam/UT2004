@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -43,9 +42,7 @@ struct FWebRtcHost
 	std::vector<std::shared_ptr<FWebRtcPeer>> Peers;
 };
 
-IMPLEMENT_CLASS(UWebRtcConnection);
-
-static void RemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
+void WebRtcRemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
 {
 	auto It = std::find_if( Host->Peers.begin(), Host->Peers.end(), [Peer]( const std::shared_ptr<FWebRtcPeer>& P ) { return P.get()==Peer; } );
 	if( It!=Host->Peers.end() )
@@ -55,7 +52,7 @@ static void RemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
 	}
 }
 
-static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
+UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
 {
 	return ut_webrtc_send( Peer->Id, Data, Count );
 }
@@ -83,31 +80,6 @@ static INT ConnectPeer( FURL& ConnectURL, FString& Error, sockaddr_in& Addr )
 	if( !WebRtcClientSetup( ConnectURL, Error, Addr, Ufrag, Answer ) )
 		return 0;
 	return ut_webrtc_connect( Answer.c_str(), Ufrag.c_str(), WEBRTC_MAX_INBOX );
-}
-
-void UWebRtcConnection::LowLevelSend( void* Data, INT Count )
-{
-	guard(UWebRtcConnection::LowLevelSend);
-	// The script drops it while the channel opens, the engine resends what needs to arrive
-	if( Peer )
-	{
-		clock(Driver->SendCycles);
-		WebRtcPeerSend( Peer, Data, Count );
-		unclock(Driver->SendCycles);
-	}
-	unguard;
-}
-
-void UWebRtcConnection::Destroy()
-{
-	guard(UWebRtcConnection::Destroy);
-	// Super flushes the last packets through the peer, so the peer goes after it
-	FWebRtcPeer* Closing = Peer;
-	Super::Destroy();
-	FWebRtcHost* Host = ((UTcpNetDriver*)Driver)->WebRtc;
-	if( Host && Closing )
-		RemovePeer( Host, Closing );
-	unguard;
 }
 
 void UTcpNetDriver::WebRtcListen()
@@ -138,9 +110,7 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 	FWebRtcHost* Host = new FWebRtcHost;
 	Host->Peers.push_back( Peer );
 	WebRtc = Host;
-	ServerConnection = Peer->Connection = new UWebRtcConnection( this, Peer.get(), Peer->Addr, USOCK_Pending, ConnectURL );
-	debugf( NAME_DevNet, TEXT("Game client over WebRTC to %s"), *IpString(Peer->Addr.sin_addr,ntohs(Peer->Addr.sin_port)) );
-	ServerConnection->CreateChannel( CHTYPE_Control, 1, 0 );
+	WebRtcServerConnection( this, Peer.get(), Peer->Addr, Peer->Connection, ConnectURL );
 	return 1;
 	unguard;
 }
@@ -184,7 +154,7 @@ void UTcpNetDriver::WebRtcTick()
 			}
 			// Peers are in creation order. The oldest idle one makes room, refusing the new one would let idle peers lock everyone out.
 			if( Pending>=WEBRTC_MAX_PENDING )
-				RemovePeer( Host, Oldest );
+				WebRtcRemovePeer( Host, Oldest );
 			Host->Peers.push_back( Peer );
 		}
 	}
@@ -202,22 +172,21 @@ void UTcpNetDriver::WebRtcTick()
 				if( Peer->Connection )
 					Peer->Connection->State = USOCK_Closed;
 				else
-					RemovePeer( Host, Peer.get() );
+					WebRtcRemovePeer( Host, Peer.get() );
 				break;
 			}
 			if( !Peer->Connection && !ServerConnection && WebRtcAnswerQuery( Peer.get(), Peer->Queries, Data, Count ) )
 				continue;
 			if( !Peer->Connection && !ServerConnection && WebRtcAccept( this, Peer.get(), Peer->Addr, Peer->Connection )==ACCEPTC_Reject )
 			{
-				RemovePeer( Host, Peer.get() );
+				WebRtcRemovePeer( Host, Peer.get() );
 				break;
 			}
 			if( Peer->Connection )
 				Peer->Connection->ReceivedRawPacket( Data, Count );
 		}
-		// A peer that connects but never sends would hold its slot
-		if( WebRtc==Host && !Peer->Connection && GCurrentTime - Peer->CreatedTime > (Peer->Queries ? WEBRTC_QUERY_TIMEOUT : WEBRTC_PENDING_TIMEOUT) )
-			RemovePeer( Host, Peer.get() );
+		if( WebRtc==Host && !Peer->Connection && WebRtcPendingExpired( Peer->CreatedTime, Peer->Queries ) )
+			WebRtcRemovePeer( Host, Peer.get() );
 	}
 	unguard;
 }

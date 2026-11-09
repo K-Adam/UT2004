@@ -15,30 +15,13 @@
 #include <sstream>
 #endif
 #include <nlohmann/json.hpp>
-#include <codecvt>
 #include <functional>
-#include <locale>
 #include <memory>
 #include <mutex>
 #include <string>
 #pragma pack(pop)
 
 #include "UnIpDrv.h"
-
-
-// TCHAR is UTF-16 on every platform. libc++ throws on invalid input unless the error strings are non-empty.
-typedef std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> FUtf8Convert;
-
-static std::string ToUtf8( const FString& S )
-{
-	return FUtf8Convert( "?", u"?" ).to_bytes( (const char16_t*)*S );
-}
-
-static FString FromUtf8( const std::string& S )
-{
-	std::u16string Out = FUtf8Convert( "?", u"?" ).from_bytes( S );
-	return FString( (const TCHAR*)Out.c_str() );
-}
 
 // Done gets whether the server answered 2xx, and the body.
 typedef std::function<void( bool, std::string )> FHttpDone;
@@ -194,17 +177,17 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 
 	nlohmann::json Info = nlohmann::json::array();
 	for( INT i=0; i<Server.ServerInfo.Num(); i++ )
-		Info.push_back( { { "key", ToUtf8(Server.ServerInfo(i).Key) }, { "value", ToUtf8(Server.ServerInfo(i).Value) } } );
+		Info.push_back( { { "key", &appToUtf8(*Server.ServerInfo(i).Key)(0) }, { "value", &appToUtf8(*Server.ServerInfo(i).Value)(0) } } );
 	nlohmann::json Body =
 	{
 		{ "port", Server.Port },
-		{ "name", ToUtf8(Server.ServerName) },
-		{ "map", ToUtf8(Server.MapName) },
-		{ "gameType", ToUtf8(Server.GameType) },
+		{ "name", &appToUtf8(*Server.ServerName)(0) },
+		{ "map", &appToUtf8(*Server.MapName)(0) },
+		{ "gameType", &appToUtf8(*Server.GameType)(0) },
 		{ "players", Server.CurrentPlayers },
 		{ "maxPlayers", Server.MaxPlayers },
 		{ "flags", Server.Flags },
-		{ "skill", ToUtf8(Server.SkillLevel) },
+		{ "skill", &appToUtf8(*Server.SkillLevel)(0) },
 		{ "info", Info },
 	};
 
@@ -213,7 +196,7 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 	// A browser host is listed through its signaling socket, a JSON post would need a CORS preflight
 	ut_webrtc_host_state( Json.c_str() );
 #else
-	HttpRequestAsync( ToUtf8( Base + TEXT("/advertise") ), Json, []( bool, std::string ) {} );
+	HttpRequestAsync( &appToUtf8( *(Base + TEXT("/advertise")) )(0), Json, []( bool, std::string ) {} );
 #endif
 }
 
@@ -252,9 +235,9 @@ static FWebMasterRequest* WebMasterRequest( const TCHAR* Path, const std::string
 		Response->Done = true;
 	};
 #if __EMSCRIPTEN__
-	HttpGetAsync( ToUtf8( Base + Path ), Done );
+	HttpGetAsync( &appToUtf8( *(Base + Path) )(0), Done );
 #else
-	HttpRequestAsync( ToUtf8( Base + Path ), Body, Done );
+	HttpRequestAsync( &appToUtf8( *(Base + Path) )(0), Body, Done );
 #endif
 	return Request;
 }
@@ -277,7 +260,7 @@ FWebMasterRequest* WebMasterList()
 #if !__EMSCRIPTEN__
 FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp )
 {
-	return WebMasterRequest( TEXT("/offer"), nlohmann::json{ { "host", ToUtf8(HostId) }, { "sdp", ToUtf8(Sdp) } }.dump() );
+	return WebMasterRequest( TEXT("/offer"), nlohmann::json{ { "host", &appToUtf8(*HostId)(0) }, { "sdp", &appToUtf8(*Sdp)(0) } }.dump() );
 }
 
 UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp )
@@ -288,7 +271,7 @@ UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp )
 	nlohmann::json Root = nlohmann::json::parse( Body, nullptr, false );
 	Ok = Ok && Root.is_object() && Root.contains("sdp") && Root["sdp"].is_string();
 	if( Ok )
-		Sdp = FromUtf8( Root["sdp"].get<std::string>() );
+		Sdp = appFromUtf8( Root["sdp"].get<std::string>().c_str() );
 	return 1;
 }
 #endif
@@ -320,7 +303,7 @@ UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerRe
 		return 1;
 	}
 
-	auto Str = []( const nlohmann::json& J, const char* Key ) { return J.contains(Key) && J[Key].is_string() ? FromUtf8( J[Key].get<std::string>() ) : FString(); };
+	auto Str = []( const nlohmann::json& J, const char* Key ) { return J.contains(Key) && J[Key].is_string() ? appFromUtf8( J[Key].get<std::string>().c_str() ) : FString(); };
 	auto Int = []( const nlohmann::json& J, const char* Key ) { return J.contains(Key) && J[Key].is_number_integer() ? J[Key].get<INT>() : 0; };
 	if( Root.contains("servers") && Root["servers"].is_array() )
 		for( const nlohmann::json& S : Root["servers"] )

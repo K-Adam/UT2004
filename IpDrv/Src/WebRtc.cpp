@@ -58,8 +58,6 @@ struct FWebRtcHost
 };
 #pragma pack(pop)
 
-IMPLEMENT_CLASS(UWebRtcConnection);
-
 // v1 sets the ICE password to the ufrag, so the ufrag also has to satisfy the password rules (RFC 8839)
 static bool ValidUfrag( const std::string& Ufrag )
 {
@@ -196,7 +194,7 @@ static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
 	}
 }
 
-static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
+UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
 {
 	if( !Peer->Dc->isOpen() )
 		return 0;
@@ -210,36 +208,14 @@ static UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
 	return 1;
 }
 
-void UWebRtcConnection::LowLevelSend( void* Data, INT Count )
+void WebRtcRemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
 {
-	guard(UWebRtcConnection::LowLevelSend);
-	// Dropped while the channel opens, the engine resends what needs to arrive
-	if( Peer )
+	auto It = std::find_if( Host->Peers.begin(), Host->Peers.end(), [Peer]( const std::shared_ptr<FWebRtcPeer>& P ) { return P.get()==Peer; } );
+	if( It!=Host->Peers.end() )
 	{
-		clock(Driver->SendCycles);
-		WebRtcPeerSend( Peer, Data, Count );
-		unclock(Driver->SendCycles);
+		ClosePeer( *It );
+		Host->Peers.erase( It );
 	}
-	unguard;
-}
-
-void UWebRtcConnection::Destroy()
-{
-	guard(UWebRtcConnection::Destroy);
-	// Super flushes the last packets through the peer, so the peer goes after it
-	FWebRtcPeer* Closing = Peer;
-	Super::Destroy();
-	FWebRtcHost* Host = ((UTcpNetDriver*)Driver)->WebRtc;
-	if( Host && Closing )
-	{
-		auto It = std::find_if( Host->Peers.begin(), Host->Peers.end(), [Closing]( const std::shared_ptr<FWebRtcPeer>& P ) { return P.get()==Closing; } );
-		if( It!=Host->Peers.end() )
-		{
-			ClosePeer( *It );
-			Host->Peers.erase( It );
-		}
-	}
-	unguard;
 }
 
 void UTcpNetDriver::WebRtcListen()
@@ -255,7 +231,7 @@ void UTcpNetDriver::WebRtcListen()
 	}
 	Host->Port = ntohs(LocalAddr.sin_port) + 2;
 	if( LocalAddr.sin_addr.s_addr != INADDR_ANY )
-		Host->BindAddress = ToStd( IpString(LocalAddr.sin_addr) );
+		Host->BindAddress = std::string( TCHAR_TO_ANSI(*IpString(LocalAddr.sin_addr)) );
 	try
 	{
 		Host->Listener = std::make_unique<rtc::IceUdpMuxListener>( Host->Port, Host->BindAddress );
@@ -339,9 +315,7 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 	Host->Peers.push_back( Peer );
 	WebRtc = Host;
 
-	ServerConnection = Peer->Connection = new UWebRtcConnection( this, Peer.get(), Peer->Addr, USOCK_Pending, ConnectURL );
-	debugf( NAME_DevNet, TEXT("Game client over WebRTC to %s"), *IpString(Peer->Addr.sin_addr,ntohs(Peer->Addr.sin_port)) );
-	ServerConnection->CreateChannel( CHTYPE_Control, 1, 0 );
+	WebRtcServerConnection( this, Peer.get(), Peer->Addr, Peer->Connection, ConnectURL );
 	return 1;
 	unguard;
 }
@@ -364,8 +338,9 @@ static void WebRtcSignal( FWebRtcPeer& Peer )
 		WebMasterRequestFree( Peer.Offer );
 		Peer.Offer = nullptr;
 		Peer.SignalId = TEXT("");
+		// The answer is as large as the web master makes it, so it must not go through the stack
 		if( Ok )
-			Peer.Pc->setRemoteDescription( rtc::Description( ToStd(Answer), rtc::Description::Type::Answer ) );
+			Peer.Pc->setRemoteDescription( rtc::Description( std::string(&appToUtf8(*Answer)(0)), rtc::Description::Type::Answer ) );
 		else
 		{
 			debugf( TEXT("WebRTC: the host did not answer through the web master") );
@@ -507,8 +482,7 @@ void UTcpNetDriver::WebRtcTick()
 			if( Closed )
 				Peer->Connection->State = USOCK_Closed;
 		}
-		// A peer that finishes the handshake but never sends would hold its slot, the UDP path has no such state
-		else if( Closed || GCurrentTime - Peer->CreatedTime > (Peer->Queries ? WEBRTC_QUERY_TIMEOUT : WEBRTC_PENDING_TIMEOUT) )
+		else if( Closed || WebRtcPendingExpired( Peer->CreatedTime, Peer->Queries ) )
 		{
 			ClosePeer( Peer );
 			Host->Peers.erase( Host->Peers.begin()+i );
