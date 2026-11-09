@@ -895,16 +895,9 @@ void USDLViewport::SetMouseCapture( UBOOL Capture, UBOOL Clip, UBOOL OnlyFocus )
 //
 enum { TAP_None, TAP_Wait, TAP_WaitRelease, TAP_Press, TAP_PressRelease, TAP_Release };
 
-void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
+void USDLViewport::UpdateTap()
 {
-	guard(USDLViewport::UpdateInput);
-
-	// Resets come from SetRes and from inside the event loop below, so they leave the queue alone.
-	if( Reset )
-		return;
-
 	USDLClient* Client = GetOuterUSDLClient();
-
 	// A tap moves the pointer and presses in the same frame, but the GUI picks the control under the
 	// pointer in the tick after it renders the move. So the press waits two frames and the release one more.
 	switch( TapState )
@@ -928,11 +921,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 			TapState = TAP_None;
 			break;
 	}
+}
 
-	UBOOL InMenu = GUIController && GUIController->bActive;
-	// A vehicle outlives its driver, so NEXTSEAT starts over once the player has left it.
-	if( !Actor || Actor->Pawn != LastSeatPawn )
-		LastSeatPawn = NULL;
+void USDLViewport::UpdateGamepad( UBOOL InMenu, FLOAT DeltaSeconds )
+{
+	USDLClient* Client = GetOuterUSDLClient();
     if( USDLClient::Gamepad )
     {
         // Guide and Misc1 belong to the system overlay and capture, so the triggers take their keys.
@@ -1002,6 +995,10 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
                 Input->DirectAxis( Axes[i], V[i], DeltaSeconds );
         }
     }
+}
+
+void USDLViewport::UpdateCursor( UBOOL InMenu )
+{
 	// Windowed menus use the OS cursor, so the menu cursor is where the mouse is.
 	// UGameEngine::Tick releases and restores the grab for them.
 	// The on-screen controls show in game only, opening a menu lets go of them.
@@ -1021,7 +1018,11 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 		else
 			SDL_HideCursor();
 	}
+}
 
+void USDLViewport::UpdateTextInput( UBOOL InMenu )
+{
+	USDLClient* Client = GetOuterUSDLClient();
 	// Text input only while a menu or the console reads it, so an IME does not take game keys.
 	// An on-screen keyboard would cover the menus, so there it waits for a focused edit box.
 	// ExtendedConsole's full console sets only its state, bVisible also flashes for demo speed changes.
@@ -1041,13 +1042,227 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 		else
 			SDL_StopTextInput( Client->Window );
 	}
+}
+
+void USDLViewport::KeyEvent( const SDL_KeyboardEvent& Event )
+{
+	USDLClient* Client = GetOuterUSDLClient();
+	UBOOL Down = Event.type == SDL_EVENT_KEY_DOWN;
+	if( Down && Event.key == SDLK_G && (Event.mod & SDL_KMOD_CTRL) )
+	{
+		if( !Event.repeat )
+		{
+			WantGrab = !WantGrab;
+			UpdateMouseGrabState();
+		}
+		return;
+	}
+	if( Down && Event.key == SDLK_RETURN && (Event.mod & SDL_KMOD_ALT) )
+	{
+		if( !Event.repeat )
+			ToggleFullscreen();
+		return;
+	}
+
+	// Repeats press again, like WM_KEYDOWN.
+	EInputKey Key = KeyFromSDL( Event.key, Event.scancode );
+	if( Key != IK_None )
+		CauseInputEvent( Key, Down ? IST_Press : IST_Release );
+
+	// Text input leaves out the control characters WM_CHAR sends, edit boxes use them for editing and the clipboard.
+	// Ctrl+Alt is AltGr, which types text.
+	if( Down && (Key == IK_Backspace || Key == IK_Tab || Key == IK_Escape) )
+		Client->Engine->Key( this, Key, Key );
+	else if( Down && Key >= IK_A && Key <= IK_Z && (Event.mod & SDL_KMOD_CTRL) && !(Event.mod & SDL_KMOD_ALT) )
+		Client->Engine->Key( this, (EInputKey)(Key - IK_A + 1), Key - IK_A + 1 );
+}
+
+void USDLViewport::MouseButtonEvent( const SDL_MouseButtonEvent& Event, UBOOL InMenu, FLOAT& DX, FLOAT& DY )
+{
+	static const EInputKey MouseButtons[] = { IK_None, IK_LeftMouse, IK_MiddleMouse, IK_RightMouse, IK_Mouse4, IK_Mouse5, IK_Mouse6, IK_Mouse7, IK_Mouse8 };
+	USDLClient* Client = GetOuterUSDLClient();
+	// Touch and pen arrive as fingers too. VJShown follows a frame later, VirtualPad at once.
+	if( VJShown && USDLClient::VirtualPad && Event.which != SDL_TOUCH_MOUSEID && Event.which != SDL_PEN_MOUSEID )
+		SwitchVirtualJoystick( 0 );
+	if( Event.which == SDL_TOUCH_MOUSEID && Event.button == SDL_BUTTON_LEFT )
+	{
+		if( InMenu && Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN )
+		{
+			FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
+			WindowsMouseX = Event.x * Density;
+			WindowsMouseY = Event.y * Density;
+			// The motion before it is already in this position.
+			DX = DY = 0;
+			if( TapState == TAP_Release )
+				CauseInputEvent( IK_LeftMouse, IST_Release );
+			TapState = TAP_Wait;
+			return;
+		}
+		// Also when the menu closed meanwhile, so the press still comes before its release.
+		if( Event.type == SDL_EVENT_MOUSE_BUTTON_UP && (TapState == TAP_Wait || TapState == TAP_Press) )
+		{
+			TapState = TapState == TAP_Wait ? TAP_WaitRelease : TAP_PressRelease;
+			return;
+		}
+	}
+	// Touch and pen drive the on-screen controls as fingers. VJWanted, as SDL sends this before the finger that brings them back.
+	if( !InMenu && Client->VJWanted && (Event.which == SDL_TOUCH_MOUSEID || Event.which == SDL_PEN_MOUSEID) )
+		return;
+	if( Event.button < ARRAY_COUNT(MouseButtons) && MouseButtons[Event.button] != IK_None )
+		CauseInputEvent( MouseButtons[Event.button], Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? IST_Press : IST_Release );
+}
+
+void USDLViewport::MouseWheelEvent( const SDL_MouseWheelEvent& Event )
+{
+	// Precise wheels and touchpads send fractions of a notch.
+	FLOAT Wheel = Event.direction == SDL_MOUSEWHEEL_FLIPPED ? -Event.y : Event.y;
+	if( Wheel * WheelRemainder < 0.f )
+		WheelRemainder = 0.f;
+	WheelRemainder += Wheel;
+	while( Abs(WheelRemainder) >= 1.f )
+	{
+		EInputKey Key = WheelRemainder > 0.f ? IK_MouseWheelUp : IK_MouseWheelDown;
+		CauseInputEvent( Key, IST_Press );
+		CauseInputEvent( Key, IST_Release );
+		WheelRemainder -= WheelRemainder > 0.f ? 1.f : -1.f;
+	}
+}
+
+void USDLViewport::MouseMotionEvent( const SDL_MouseMotionEvent& Event, UBOOL InMenu, UBOOL& MouseMoved, FLOAT& DX, FLOAT& DY )
+{
+	USDLClient* Client = GetOuterUSDLClient();
+	// The cursor is absolute while the on-screen controls show, so it does not turn the view.
+	if( VJShown )
+	{
+		if( USDLClient::VirtualPad && Event.which != SDL_TOUCH_MOUSEID && Event.which != SDL_PEN_MOUSEID )
+			SwitchVirtualJoystick( 0 );
+		return;
+	}
+	if( !InMenu && Client->VJWanted && (Event.which == SDL_TOUCH_MOUSEID || Event.which == SDL_PEN_MOUSEID) )
+		return;
+	if ((!MouseIsGrabbed) && (Client->IgnoreUngrabbedMouse))
+		return;
+
+	MouseMoved = true;
+	DX += Event.xrel;
+	DY += Event.yrel;
+}
+
+void USDLViewport::GamepadEvent( const SDL_Event& Event )
+{
+	USDLClient* Client = GetOuterUSDLClient();
+	switch( Event.type )
+	{
+		case SDL_EVENT_GAMEPAD_ADDED:
+			if( Client->UseJoystick && !USDLClient::Gamepad )
+				Client->OpenGamepad();
+			else if( !USDLClient::WatchedPad )
+				Client->WatchPads();
+			break;
+
+		// Using a real pad puts the on-screen controls away and hands it the game.
+		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+		case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+			if( USDLClient::WatchedPad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::WatchedPad )
+				&& (Event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || Abs( (INT)Event.gaxis.value ) > 16000) )
+				SwitchVirtualJoystick( 0 );
+			break;
+
+		case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
+			if( USDLClient::Gamepad && Event.gsensor.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
+				ProcessGyro( Event.gsensor.which, (SDL_SensorType)Event.gsensor.sensor, Event.gsensor.sensor_timestamp, Event.gsensor.timestamp, Event.gsensor.data );
+			break;
+
+		case SDL_EVENT_SENSOR_UPDATE:
+			ProcessDeviceGyro( Event.sensor, Client->Window );
+			break;
+
+		case SDL_EVENT_GAMEPAD_REMOVED:
+			if( USDLClient::WatchedPad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::WatchedPad ) )
+				Client->WatchPads();
+			if( USDLClient::Gamepad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
+			{
+				Client->CloseGamepad();
+				// Falls back to another connected pad, which sends no added event.
+				if( Client->UseJoystick )
+					Client->OpenGamepad();
+				PadHeld = 0;
+				if( GUIController )
+					GUIController->ResetInput();
+				Input->ResetInput();
+			}
+			break;
+
+		default:;
+	}
+}
+
+void USDLViewport::SendGyro()
+{
+	USDLClient* Client = GetOuterUSDLClient();
+	// The JoyU and JoySlider2 binds turn degrees into view rotation, menus drop the turn.
+	if( (GyroYaw || GyroPitch) && !(GUIController && GUIController->bActive) )
+	{
+		CauseInputEvent( IK_JoyU, IST_Axis, GyroYaw * Client->PadGyroSensitivity );
+		CauseInputEvent( IK_JoySlider2, IST_Axis, GyroPitch * Client->PadGyroSensitivity );
+	}
+	GyroYaw = GyroPitch = 0.f;
+}
+
+void USDLViewport::SendMouse( FLOAT DX, FLOAT DY )
+{
+	USDLClient* Client = GetOuterUSDLClient();
+    WindowsMouseX = Clamp<FLOAT>( WindowsMouseX + DX, 0, SizeX );
+    WindowsMouseY = Clamp<FLOAT>( WindowsMouseY + DY, 0, SizeY );
+
+	// Send to input subsystem.
+	if( DX )
+		CauseInputEvent( IK_MouseX, IST_Axis, +DX );
+
+	if( DY )
+		CauseInputEvent( IK_MouseY, IST_Axis, -DY );
+
+	if (!Client->InMenuLoop)
+		Client->Engine->MouseDelta(this, 0, appRound(DX), appRound(DY));
+
+	if (!IsRealtime())
+	{
+		if( Input->KeyDown(IK_Space) )
+		{
+			for( INT i=0; i<Client->Viewports.Num(); i++ )
+				Client->Viewports(i)->Repaint( 1 );
+		}
+		else
+		{
+			Repaint( 1 );
+		}
+	}
+}
+
+void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
+{
+	guard(USDLViewport::UpdateInput);
+
+	// Resets come from SetRes and from inside the event loop below, so they leave the queue alone.
+	if( Reset )
+		return;
+
+	USDLClient* Client = GetOuterUSDLClient();
+
+	UpdateTap();
+
+	UBOOL InMenu = GUIController && GUIController->bActive;
+	// A vehicle outlives its driver, so NEXTSEAT starts over once the player has left it.
+	if( !Actor || Actor->Pawn != LastSeatPawn )
+		LastSeatPawn = NULL;
+	UpdateGamepad( InMenu, DeltaSeconds );
+	UpdateCursor( InMenu );
+	UpdateTextInput( InMenu );
 
 	// Mouse movement management.
 	UBOOL MouseMoved = false;
 	UBOOL Resized = false;
 	FLOAT DX = 0, DY = 0;
-
-	static const EInputKey MouseButtons[] = { IK_None, IK_LeftMouse, IK_MiddleMouse, IK_RightMouse, IK_Mouse4, IK_Mouse5, IK_Mouse6, IK_Mouse7, IK_Mouse8 };
 
 	SDL_Event Event;
 	while( SDL_PollEvent( &Event ) )
@@ -1060,37 +1275,8 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 			case SDL_EVENT_KEY_DOWN:
 			case SDL_EVENT_KEY_UP:
-			{
-				UBOOL Down = Event.type == SDL_EVENT_KEY_DOWN;
-				if( Down && Event.key.key == SDLK_G && (Event.key.mod & SDL_KMOD_CTRL) )
-				{
-					if( !Event.key.repeat )
-					{
-						WantGrab = !WantGrab;
-						UpdateMouseGrabState();
-					}
-					break;
-				}
-				if( Down && Event.key.key == SDLK_RETURN && (Event.key.mod & SDL_KMOD_ALT) )
-				{
-					if( !Event.key.repeat )
-						ToggleFullscreen();
-					break;
-				}
-
-				// Repeats press again, like WM_KEYDOWN.
-				EInputKey Key = KeyFromSDL( Event.key.key, Event.key.scancode );
-				if( Key != IK_None )
-					CauseInputEvent( Key, Down ? IST_Press : IST_Release );
-
-				// Text input leaves out the control characters WM_CHAR sends, edit boxes use them for editing and the clipboard.
-				// Ctrl+Alt is AltGr, which types text.
-				if( Down && (Key == IK_Backspace || Key == IK_Tab || Key == IK_Escape) )
-					Client->Engine->Key( this, Key, Key );
-				else if( Down && Key >= IK_A && Key <= IK_Z && (Event.key.mod & SDL_KMOD_CTRL) && !(Event.key.mod & SDL_KMOD_ALT) )
-					Client->Engine->Key( this, (EInputKey)(Key - IK_A + 1), Key - IK_A + 1 );
+				KeyEvent( Event.key );
 				break;
-			}
 
 			case SDL_EVENT_TEXT_INPUT:
 			{
@@ -1114,110 +1300,24 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 			case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			case SDL_EVENT_MOUSE_BUTTON_UP:
-				// Touch and pen arrive as fingers too. VJShown follows a frame later, VirtualPad at once.
-				if( VJShown && USDLClient::VirtualPad && Event.button.which != SDL_TOUCH_MOUSEID && Event.button.which != SDL_PEN_MOUSEID )
-					SwitchVirtualJoystick( 0 );
-				if( Event.button.which == SDL_TOUCH_MOUSEID && Event.button.button == SDL_BUTTON_LEFT )
-				{
-					if( InMenu && Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN )
-					{
-						FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
-						WindowsMouseX = Event.button.x * Density;
-						WindowsMouseY = Event.button.y * Density;
-						// The motion before it is already in this position.
-						DX = DY = 0;
-						if( TapState == TAP_Release )
-							CauseInputEvent( IK_LeftMouse, IST_Release );
-						TapState = TAP_Wait;
-						break;
-					}
-					// Also when the menu closed meanwhile, so the press still comes before its release.
-					if( Event.type == SDL_EVENT_MOUSE_BUTTON_UP && (TapState == TAP_Wait || TapState == TAP_Press) )
-					{
-						TapState = TapState == TAP_Wait ? TAP_WaitRelease : TAP_PressRelease;
-						break;
-					}
-				}
-				// Touch and pen drive the on-screen controls as fingers. VJWanted, as SDL sends this before the finger that brings them back.
-				if( !InMenu && Client->VJWanted && (Event.button.which == SDL_TOUCH_MOUSEID || Event.button.which == SDL_PEN_MOUSEID) )
-					break;
-				if( Event.button.button < ARRAY_COUNT(MouseButtons) && MouseButtons[Event.button.button] != IK_None )
-					CauseInputEvent( MouseButtons[Event.button.button], Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? IST_Press : IST_Release );
+				MouseButtonEvent( Event.button, InMenu, DX, DY );
 				break;
 
 			case SDL_EVENT_MOUSE_WHEEL:
-			{
-				// Precise wheels and touchpads send fractions of a notch.
-				FLOAT Wheel = Event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -Event.wheel.y : Event.wheel.y;
-				if( Wheel * WheelRemainder < 0.f )
-					WheelRemainder = 0.f;
-				WheelRemainder += Wheel;
-				while( Abs(WheelRemainder) >= 1.f )
-				{
-					EInputKey Key = WheelRemainder > 0.f ? IK_MouseWheelUp : IK_MouseWheelDown;
-					CauseInputEvent( Key, IST_Press );
-					CauseInputEvent( Key, IST_Release );
-					WheelRemainder -= WheelRemainder > 0.f ? 1.f : -1.f;
-				}
+				MouseWheelEvent( Event.wheel );
 				break;
-			}
 
 			case SDL_EVENT_MOUSE_MOTION:
-				// The cursor is absolute while the on-screen controls show, so it does not turn the view.
-				if( VJShown )
-				{
-					if( USDLClient::VirtualPad && Event.motion.which != SDL_TOUCH_MOUSEID && Event.motion.which != SDL_PEN_MOUSEID )
-						SwitchVirtualJoystick( 0 );
-					break;
-				}
-				if( !InMenu && Client->VJWanted && (Event.motion.which == SDL_TOUCH_MOUSEID || Event.motion.which == SDL_PEN_MOUSEID) )
-					break;
-				if ((!MouseIsGrabbed) && (Client->IgnoreUngrabbedMouse))
-					break;
-
-				MouseMoved = true;
-				DX += Event.motion.xrel;
-				DY += Event.motion.yrel;
+				MouseMotionEvent( Event.motion, InMenu, MouseMoved, DX, DY );
 				break;
 
 			case SDL_EVENT_GAMEPAD_ADDED:
-				if( Client->UseJoystick && !USDLClient::Gamepad )
-					Client->OpenGamepad();
-				else if( !USDLClient::WatchedPad )
-					Client->WatchPads();
-				break;
-
-			// Using a real pad puts the on-screen controls away and hands it the game.
 			case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 			case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-				if( USDLClient::WatchedPad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::WatchedPad )
-					&& (Event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || Abs( (INT)Event.gaxis.value ) > 16000) )
-					SwitchVirtualJoystick( 0 );
-				break;
-
 			case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
-				if( USDLClient::Gamepad && Event.gsensor.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
-					ProcessGyro( Event.gsensor.which, (SDL_SensorType)Event.gsensor.sensor, Event.gsensor.sensor_timestamp, Event.gsensor.timestamp, Event.gsensor.data );
-				break;
-
 			case SDL_EVENT_SENSOR_UPDATE:
-				ProcessDeviceGyro( Event.sensor, Client->Window );
-				break;
-
 			case SDL_EVENT_GAMEPAD_REMOVED:
-				if( USDLClient::WatchedPad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::WatchedPad ) )
-					Client->WatchPads();
-				if( USDLClient::Gamepad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::Gamepad ) )
-				{
-					Client->CloseGamepad();
-					// Falls back to another connected pad, which sends no added event.
-					if( Client->UseJoystick )
-						Client->OpenGamepad();
-					PadHeld = 0;
-					if( GUIController )
-						GUIController->ResetInput();
-					Input->ResetInput();
-				}
+				GamepadEvent( Event );
 				break;
 
 			case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -1245,43 +1345,10 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 			ResizeViewport( BlitFlags | BLIT_NoWindowChange, W, H );
 	}
 
-	// The JoyU and JoySlider2 binds turn degrees into view rotation, menus drop the turn.
-	if( (GyroYaw || GyroPitch) && !(GUIController && GUIController->bActive) )
-	{
-		CauseInputEvent( IK_JoyU, IST_Axis, GyroYaw * Client->PadGyroSensitivity );
-		CauseInputEvent( IK_JoySlider2, IST_Axis, GyroPitch * Client->PadGyroSensitivity );
-	}
-	GyroYaw = GyroPitch = 0.f;
+	SendGyro();
 
-	// Deliver mouse behavior to the engine.
-	if ( MouseMoved )
-	{
-	    WindowsMouseX = Clamp<FLOAT>( WindowsMouseX + DX, 0, SizeX );
-	    WindowsMouseY = Clamp<FLOAT>( WindowsMouseY + DY, 0, SizeY );
-
-		// Send to input subsystem.
-		if( DX )
-			CauseInputEvent( IK_MouseX, IST_Axis, +DX );
-
-		if( DY )
-			CauseInputEvent( IK_MouseY, IST_Axis, -DY );
-
-		if (!Client->InMenuLoop)
-			Client->Engine->MouseDelta(this, 0, appRound(DX), appRound(DY));
-
-		if (!IsRealtime())
-		{
-			if( Input->KeyDown(IK_Space) )
-            {
-				for( INT i=0; i<Client->Viewports.Num(); i++ )
-					Client->Viewports(i)->Repaint( 1 );
-            }
-			else
-            {
-				Repaint( 1 );
-            }
-		}
-	}
+	if( MouseMoved )
+		SendMouse( DX, DY );
 
 	unguard;
 }

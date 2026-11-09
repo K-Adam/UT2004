@@ -153,7 +153,7 @@ class USDLViewport : public UViewport
 	UBOOL				MouseIsGrabbed;
 	UBOOL				WindowsMouseShown;
 	UBOOL				TextWanted;
-	// A touch tap in a menu still to be delivered, see UpdateInput.
+	// A touch tap in a menu still to be delivered, see UpdateTap.
 	BYTE				TapState;
 	INT					TextToSpeechObject;  // file descriptor for named pipe.
 
@@ -192,6 +192,19 @@ class USDLViewport : public UViewport
 	DWORD GetViewportButtonFlags( DWORD wParam );
 
 	UBOOL CauseInputEvent( INT iKey, EInputAction Action, FLOAT Delta=0.0 );
+
+	// The steps of UpdateInput, in the order it runs them.
+	void UpdateTap();
+	void UpdateGamepad( UBOOL InMenu, FLOAT DeltaSeconds );
+	void UpdateCursor( UBOOL InMenu );
+	void UpdateTextInput( UBOOL InMenu );
+	void KeyEvent( const SDL_KeyboardEvent& Event );
+	void MouseButtonEvent( const SDL_MouseButtonEvent& Event, UBOOL InMenu, FLOAT& DX, FLOAT& DY );
+	void MouseWheelEvent( const SDL_MouseWheelEvent& Event );
+	void MouseMotionEvent( const SDL_MouseMotionEvent& Event, UBOOL InMenu, UBOOL& MouseMoved, FLOAT& DX, FLOAT& DY );
+	void GamepadEvent( const SDL_Event& Event );
+	void SendGyro();
+	void SendMouse( FLOAT DX, FLOAT DY );
 
 	void VJLayout( INT i, FLOAT& X, FLOAT& Y, FLOAT& R );
 	UBOOL VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Phase, FLOAT X, FLOAT Y );
