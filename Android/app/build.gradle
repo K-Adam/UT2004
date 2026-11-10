@@ -6,6 +6,20 @@ plugins {
 def utBuild = file(project.findProperty('utBuild') ?: "${rootDir}/../build/android-arm64")
 layout.buildDirectory = new File(utBuild, 'gradle')
 
+// An update must carry a higher code than the installed app, the commit count grows with every change.
+def utVersionCode = 1
+try {
+    utVersionCode = providers.exec { commandLine 'git', 'rev-list', '--count', 'HEAD' }.standardOutput.asText.get().trim() as int
+} catch (Exception ignored) {
+}
+
+// A release key comes from local.properties (ut.storeFile, ut.storePassword, ut.keyAlias, ut.keyPassword), which is not tracked.
+def utLocal = new Properties()
+def utLocalFile = rootProject.file('local.properties')
+if (utLocalFile.exists()) {
+    utLocalFile.withInputStream { utLocal.load(it) }
+}
+
 android {
     namespace 'org.ut2004.game'
     compileSdk 36
@@ -14,7 +28,7 @@ android {
         // Bionic has aligned_alloc and getrandom from Android 9.
         minSdk 28
         targetSdk 36
-        versionCode 1
+        versionCode utVersionCode
         versionName '3369'
     }
     sourceSets.main {
@@ -25,10 +39,20 @@ android {
         // The assets are xz files already, deflate would only cost time.
         noCompress 'xz', 'txt'
     }
+    signingConfigs {
+        release {
+            if (utLocal['ut.storeFile']) {
+                storeFile file(utLocal['ut.storeFile'])
+                storePassword utLocal['ut.storePassword']
+                keyAlias utLocal['ut.keyAlias']
+                keyPassword utLocal['ut.keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
-            // Shared with friends by hand, not through a store, so the local debug key is enough.
-            signingConfig signingConfigs.debug
+            // Without a release key the local debug key signs, which is enough for sideloading a test build.
+            signingConfig utLocal['ut.storeFile'] ? signingConfigs.release : signingConfigs.debug
         }
     }
     lint {
