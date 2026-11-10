@@ -111,12 +111,12 @@
   ],
   "buildPresets": [
     {
-      "name": "debug",
+      "name": "win32-debug",
       "configurePreset": "win32",
       "configuration": "Debug"
     },
     {
-      "name": "release",
+      "name": "win32-release",
       "configurePreset": "win32",
       "configuration": "Release"
     },

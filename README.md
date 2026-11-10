@@ -18,7 +18,7 @@ Third party libraries come from [vcpkg](https://github.com/microsoft/vcpkg) on W
 | Target | Needs | Configure | Build |
 |---|---|---|---|
 | Windows x64 | Visual Studio 2022 | `cmake --preset win64` | `cmake --build --preset win64-release` |
-| Windows x86 | Visual Studio 2022 | `cmake --preset win32` | `cmake --build --preset release` |
+| Windows x86 | Visual Studio 2022 | `cmake --preset win32` | `cmake --build --preset win32-release` |
 | Linux | GCC, Ninja, CMake 3.26, SDL 3.2 | `cmake --preset linux64` | `cmake --build --preset linux64-release` |
 | Android arm64 | JDK 17, SDK platform 36, NDK r28c | `cmake --preset android-arm64` | `cmake --build --preset android-arm64-release` |
 | Web | emsdk 7.0.0 | `cmake --preset web` | `cmake --build --preset web-release` |
