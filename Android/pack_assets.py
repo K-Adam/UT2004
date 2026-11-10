@@ -7,8 +7,9 @@ import argparse
 import hashlib
 import lzma
 import os
-import sys
 from concurrent.futures import ProcessPoolExecutor
+
+from pack_common import collect, read
 
 # Phone defaults: gyro aim on, effects phone GPUs can't afford off, VSync instead of the per-frame GPU wait.
 OVERRIDES = {'UT2004/System/Default.ini': [
@@ -27,24 +28,9 @@ OVERRIDES = {'UT2004/System/Default.ini': [
         (b'ResolutionScale', b'100', b'70'))]}
 
 
-def walk(src, dest, exts=None):
-    for root, dirs, files in os.walk(src):
-        for f in files:
-            ext = os.path.splitext(f)[1].lower()
-            if exts and ext not in exts:
-                continue
-            path = os.path.join(root, f)
-            yield path, dest + '/' + os.path.relpath(path, src).replace(os.sep, '/')
-
-
 def compress(job):
     src, rel, out = job
-    with open(src, 'rb') as f:
-        data = f.read()
-    for old, new in OVERRIDES.get(rel, []):
-        assert old in data, (rel, old)
-        data = data.replace(old, new)
-    data = lzma.compress(data, preset=9 | lzma.PRESET_EXTREME)
+    data = lzma.compress(read(src, rel, OVERRIDES), preset=9 | lzma.PRESET_EXTREME)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out + '.tmp', 'wb') as f:
         f.write(data)
@@ -62,13 +48,7 @@ def main():
     a = p.parse_args()
 
     # Laid out like build/: Default.ini finds the scripts at ../../Scripts, and SDLLaunch installs the content next to System.
-    files = list(walk(os.path.join(a.source, 'System'), 'UT2004/System'))
-    files += walk(a.scripts, 'Scripts', {'.u', '.ucl'})
-    files += walk(os.path.join(a.source, 'KarmaData'), 'UT2004/KarmaData')
-    for f in ('ut2004logo.bmp', 'Unreal.bmp'):
-        files.append((os.path.join(a.source, 'Help', f), 'UT2004/Help/' + f))
-    if not any(rel.startswith('Scripts/') for _, rel in files):
-        sys.exit('No script packages in %s, build ucc_make with a desktop preset first' % a.scripts)
+    files = collect(a.source, a.scripts, 'UT2004/')
 
     jobs = []
     stamp = hashlib.sha256(repr(OVERRIDES).encode())

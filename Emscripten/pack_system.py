@@ -11,7 +11,10 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Android'))
-from pack_assets import walk  # noqa: E402
+from pack_common import collect, read  # noqa: E402
+
+# Browsers only enter fullscreen from a click or key press.
+OVERRIDES = {'System/Default.ini': [(b'StartupFullscreen=True', b'StartupFullscreen=False')]}
 
 
 def main():
@@ -22,24 +25,16 @@ def main():
     p.add_argument('--packager', required=True, help="Emscripten's tools/file_packager.py")
     a = p.parse_args()
 
-    files = list(walk(os.path.join(a.source, 'System'), 'System'))
-    files += walk(a.scripts, 'Scripts', {'.u', '.ucl'})
-    files += walk(os.path.join(a.source, 'KarmaData'), 'KarmaData')
-    for f in ('ut2004logo.bmp', 'Unreal.bmp'):
-        files.append((os.path.join(a.source, 'Help', f), 'Help/' + f))
-    if not any(rel.startswith('Scripts/') for _, rel in files):
-        sys.exit('No script packages in %s, build ucc_make with a desktop preset first' % a.scripts)
+    files = collect(a.source, a.scripts)
 
     os.makedirs(a.out, exist_ok=True)
     with tempfile.TemporaryDirectory() as stage:
         for src, rel in files:
             dest = os.path.join(stage, rel)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            if rel == 'System/Default.ini':
-                # Browsers only enter fullscreen from a click or key press.
-                data = open(src, 'rb').read()
-                assert b'StartupFullscreen=True' in data
-                open(dest, 'wb').write(data.replace(b'StartupFullscreen=True', b'StartupFullscreen=False'))
+            if rel in OVERRIDES:
+                with open(dest, 'wb') as f:
+                    f.write(read(src, rel, OVERRIDES))
             else:
                 shutil.copyfile(src, dest)
         # The loader embeds the target name as given, so it runs from the output folder with a bare name.
