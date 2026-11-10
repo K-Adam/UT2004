@@ -289,6 +289,236 @@ public:
 		unguard;
 	}
 
+private:
+	void OnWaitingChallenge()
+	{
+		guard(MSUS_WaitingChallenge);
+		FString Challenge;
+		FString CDKeyHash, Response, ClientType;
+		INT Version = ENGINE_VERSION;
+		INT MatchID = Actor->GameStats ? Actor->MatchID : -1;
+		BYTE Platform = GRunningOS;
+		FString Language = UObject::GetLanguage();
+
+		*ArRecv << Challenge;
+
+		CDKeyHash = GetCDKeyHash();
+		Response = GetCDKeyResponse( *Challenge );
+		ClientType = TEXT("UT2K4SERVER");
+
+		BYTE IUTB = Actor->bIgnoreUTANBans;
+
+		*ArSend << CDKeyHash << Response << ClientType << Version << Platform << Language << MatchID << IUTB;
+		ArSend->Flush();
+
+		UplinkState = MSUS_WaitingApproval;
+		unguard;
+	}
+
+	void OnWaitingApproval()
+	{
+		guard(MSUS_WaitingApproval);
+		FString Approval;
+		*ArRecv << Approval;
+
+		GWarn->Logf(TEXT("Approval %s from %s"),*Approval,*MasterServerName);
+
+		if( Approval == TEXT("APPROVED") )
+		{
+			// Server was approved.  Send our configuration and wait for
+			// command to send UDP heartbeats.
+			SendServerConfig();
+			UplinkState = MSUS_WaitingForUDPResponse;
+		}
+
+		// Updating the master server List
+
+		else if( Approval == TEXT("MSUPDATE") )
+		{
+			// The master sends the server elsewhere, so it is not asked again and the new entries connect instead
+			AddMasterServers( Actor, *ArRecv );
+			ShouldTryReconnect = 0;
+			ConnectionFailed = 1;
+		}
+		else if( Approval == TEXT("UPGRADE") )
+		{
+			INT UpgradeVersion;
+			*ArRecv << UpgradeVersion;
+			GWarn->Logf(TEXT("MasterServerUplink: Rejected.  Must upgrade to version %d."), UpgradeVersion);
+			ShouldTryReconnect = 0;
+			ConnectionFailed = 1;
+		}
+		else if( Approval == TEXT("DENIED") )
+		{
+			GWarn->Logf(TEXT("MasterServerUplink: Master server rejected authentication request."));
+			GWarn->Logf(TEXT("Check your CD key."));
+			if( GetCDKeyHash() == TEXT("d41d8cd98f00b204e9800998ecf8427e") )
+				GWarn->Logf(TEXT("Your CD key appears to be blank.  Double-check it's installed in the registry correctly."));
+			else
+				GWarn->Logf(TEXT("Sent CD key hash: \"%s\""), *GetCDKeyHash() );
+			ShouldTryReconnect = 0;
+			ConnectionFailed = 1;
+		}
+		else
+		{
+			// master server busy, or i didn't understand its response
+			ShouldTryReconnect = 1;
+			ConnectionFailed = 1;
+		}
+		unguard;
+	}
+
+	void OnWaitingForUDPResponse()
+	{
+		guard(MSUS_WaitingForUDPResponse);
+		BYTE Success;
+		*ArRecv << Success;
+
+		if( Success )
+		{
+			*ArRecv << HeartbeatPeriod;
+			*ArRecv << QueryNatPort << GameNatPort << GamespyNatPort;
+			UplinkState = MSUS_ChannelOpen;
+			OnChannelOpened();
+		}
+		else
+		{
+			BYTE HeartbeatType;
+			INT HeartbeatCode;
+			*ArRecv << HeartbeatType << HeartbeatCode;
+			GWarn->Logf(TEXT("Master server requests heartbeat %d with code %d"), HeartbeatType, HeartbeatCode);
+			switch( HeartbeatType )
+			{
+			case HB_QueryInterface:
+				Owner->QueryInterface->SendHeartbeat(RemoteHost, HeartbeatCode);
+				break;
+			case HB_GamePort:
+				Owner->GameHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
+				break;
+			case HB_GamespyQueryPort:
+				if( Owner->GSQueryHeartbeat )
+					Owner->GSQueryHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
+				break;
+			}
+		}
+		unguard;
+	}
+
+	void OnChannelOpen()
+	{
+		guard(MSUS_ChannelOpen);
+		BYTE Command;
+		*ArRecv << Command;
+		switch( Command )
+		{
+		case MTS_ClientChallenge:
+			{
+				FString Client;
+				FString ClientChallenge;
+				*ArRecv << Client;
+				*ArRecv << ClientChallenge;
+				ChallengeClient( *Client, *ClientChallenge );
+			}
+			break;
+		case MTS_ClientAuthFailed:
+		case MTS_ClientDupKey:
+			{
+				FString Client;
+				*ArRecv << Client;
+				ClientAuthFailed( *Client, TEXT("RI_AuthenticationFailed"), TEXT("") );
+			}
+			break;
+		case MTS_UTANBan:
+			{
+				FString Client;
+				*ArRecv << Client;
+				ClientAuthFailed( *Client, TEXT("RI_UTANBan"), TEXT("") );
+			}
+			break;
+		case MTS_ClientMD5Fail:
+			{
+				FString Client;
+				*ArRecv << Client;
+				ClientAuthFailed(*Client, TEXT("RI_BadClient"),TEXT("") );
+			}
+		case MTS_ClientBanned:
+			{
+				FString Client, Banned;
+				*ArRecv << Client << Banned;
+				ClientAuthFailed(*Client, TEXT("RI_BannedClient"),*Banned );
+			}
+		case MTS_Shutdown:
+			{
+				Close();
+				ConnectionFailed = 1;
+			}
+			break;
+		case MTS_MatchID:
+			{
+				INT MatchID;
+				*ArRecv << MatchID;
+				GWarn->Logf(TEXT("Master server assigned our MatchID: %d"), MatchID);
+				// A master without stats must not turn them off for one that assigned a match
+				if( !MatchID && Actor->MatchID )
+					break;
+				// save in the GRI.
+				Actor->MatchID = MatchID;
+				if( Actor->Level->Game && Actor->Level->Game->GameReplicationInfo )
+					Actor->Level->Game->GameReplicationInfo->MatchID = MatchID;
+
+				// If we were denied a match ID, don't try to send stats.
+				if( !MatchID && Actor->GameStats )
+				{
+					Actor->GameStats->Uplink = NULL;
+					Actor->GameStats = NULL;
+				}
+
+				Owner->ForceStateRefresh(0);	// Force the initial update of the database.
+			}
+			break;
+		case MTS_MD5Update:
+			{
+				TArray<FMD5UpdateData> UpdateData;
+				*ArRecv << UpdateData;
+				GWarn->Logf(TEXT("Received updated MD5 data from master server."));
+
+				UGameEngine* GE = Cast<UGameEngine>(Actor->XLevel->Engine);
+				if (GE)
+				{
+					for( INT i=0;i<UpdateData.Num();i++ )
+					{
+						GE->AddMD5(*UpdateData(i).Guid, *UpdateData(i).MD5, UpdateData(i).Revision);
+					}
+
+					GE->SaveMD5Database();
+				}
+			}
+			break;
+		case MTS_UpdateOption:
+			{
+				// A master is a third party, so it gets no write access to the server's ini
+				FString Section, Key, Value;
+				UBOOL Unique;
+				*ArRecv << Section << Key << Value << Unique;
+			}
+			break;
+		case MTS_CheckOption:
+			{
+				// The reply stays empty, since the ini holds the admin and game passwords
+				FString Section, Key, Result;
+				*ArRecv << Section << Key;
+				BYTE Command = STM_CheckOptionReply;
+				*ArSend << Command << Section << Key << Result;
+				ArSend->Flush();
+			}
+			break;
+		default:
+			GWarn->Logf(TEXT("MSUS_ChannelOpen: received unknown command %d"), Command);
+		}
+		unguard;
+	}
+
+public:
 	void OnDataReceived()
 	{
 		guard(FMasterConnection::OnDataReceived);
@@ -297,232 +527,16 @@ public:
 			switch( UplinkState )
 			{
 			case MSUS_WaitingChallenge:
-				{
-					guard(MSUS_WaitingChallenge);
-					FString Challenge;
-					FString CDKeyHash, Response, ClientType;
-					INT Version = ENGINE_VERSION;
-					INT MatchID = Actor->GameStats ? Actor->MatchID : -1;
-					BYTE Platform = GRunningOS;
-					FString Language = UObject::GetLanguage();
-
-					*ArRecv << Challenge;
-
-					CDKeyHash = GetCDKeyHash();
-					Response = GetCDKeyResponse( *Challenge );
-					ClientType = TEXT("UT2K4SERVER");
-
-					BYTE IUTB = Actor->bIgnoreUTANBans;
-
-					*ArSend << CDKeyHash << Response << ClientType << Version << Platform << Language << MatchID << IUTB;
-					ArSend->Flush();
-
-					UplinkState = MSUS_WaitingApproval;
-					unguard;
-				}
+				OnWaitingChallenge();
 				break;
 			case MSUS_WaitingApproval:
-				{
-					guard(MSUS_WaitingApproval);
-					FString Approval;
-					*ArRecv << Approval;
-
-					GWarn->Logf(TEXT("Approval %s from %s"),*Approval,*MasterServerName);
-
-					if( Approval == TEXT("APPROVED") )
-					{
-						// Server was approved.  Send our configuration and wait for
-						// command to send UDP heartbeats.
-						SendServerConfig();
-						UplinkState = MSUS_WaitingForUDPResponse;
-					}
-
-					// Updating the master server List
-
-					else if( Approval == TEXT("MSUPDATE") )
-					{
-						// The master sends the server elsewhere, so it is not asked again and the new entries connect instead
-						AddMasterServers( Actor, *ArRecv );
-						ShouldTryReconnect = 0;
-						ConnectionFailed = 1;
-					}
-					else if( Approval == TEXT("UPGRADE") )
-					{
-						INT UpgradeVersion;
-						*ArRecv << UpgradeVersion;
-						GWarn->Logf(TEXT("MasterServerUplink: Rejected.  Must upgrade to version %d."), UpgradeVersion);
-						ShouldTryReconnect = 0;
-						ConnectionFailed = 1;
-					}
-					else if( Approval == TEXT("DENIED") )
-					{
-						GWarn->Logf(TEXT("MasterServerUplink: Master server rejected authentication request."));
-						GWarn->Logf(TEXT("Check your CD key."));
-						if( GetCDKeyHash() == TEXT("d41d8cd98f00b204e9800998ecf8427e") )
-							GWarn->Logf(TEXT("Your CD key appears to be blank.  Double-check it's installed in the registry correctly."));
-						else
-							GWarn->Logf(TEXT("Sent CD key hash: \"%s\""), *GetCDKeyHash() );
-						ShouldTryReconnect = 0;
-						ConnectionFailed = 1;
-					}
-					else
-					{
-						// master server busy, or i didn't understand its response
-						ShouldTryReconnect = 1;
-						ConnectionFailed = 1;
-					}
-					unguard;
-				}
+				OnWaitingApproval();
 				break;
 			case MSUS_WaitingForUDPResponse:
-				{
-					guard(MSUS_WaitingForUDPResponse);
-					BYTE Success;
-					*ArRecv << Success;
-
-					if( Success )
-					{
-						*ArRecv << HeartbeatPeriod;
-						*ArRecv << QueryNatPort << GameNatPort << GamespyNatPort;
-						UplinkState = MSUS_ChannelOpen;
-						OnChannelOpened();
-					}
-					else
-					{
-						BYTE HeartbeatType;
-						INT HeartbeatCode;
-						*ArRecv << HeartbeatType << HeartbeatCode;
-						GWarn->Logf(TEXT("Master server requests heartbeat %d with code %d"), HeartbeatType, HeartbeatCode);
-						switch( HeartbeatType )
-						{
-						case HB_QueryInterface:
-							Owner->QueryInterface->SendHeartbeat(RemoteHost, HeartbeatCode);
-							break;
-						case HB_GamePort:
-							Owner->GameHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
-							break;
-						case HB_GamespyQueryPort:
-							if( Owner->GSQueryHeartbeat )
-								Owner->GSQueryHeartbeat->SendHeartbeat(RemoteHost, HeartbeatCode);
-							break;
-						}
-					}
-					unguard;
-				}
+				OnWaitingForUDPResponse();
 				break;
 			case MSUS_ChannelOpen:
-				{
-					guard(MSUS_ChannelOpen);
-                    BYTE Command;
-					*ArRecv << Command;
-					switch( Command )
-					{
-					case MTS_ClientChallenge:
-						{
-							FString Client;
-							FString ClientChallenge;
-							*ArRecv << Client;
-							*ArRecv << ClientChallenge;
-							ChallengeClient( *Client, *ClientChallenge );
-						}
-						break;
-					case MTS_ClientAuthFailed:
-					case MTS_ClientDupKey:
-						{
-							FString Client;
-							*ArRecv << Client;
-							ClientAuthFailed( *Client, TEXT("RI_AuthenticationFailed"), TEXT("") );
-						}
-						break;
-					case MTS_UTANBan:
-						{
-							FString Client;
-							*ArRecv << Client;
-							ClientAuthFailed( *Client, TEXT("RI_UTANBan"), TEXT("") );
-						}
-						break;
-					case MTS_ClientMD5Fail:
-						{
-							FString Client;
-							*ArRecv << Client;
-							ClientAuthFailed(*Client, TEXT("RI_BadClient"),TEXT("") );
-						}
-					case MTS_ClientBanned:
-						{
-							FString Client, Banned;
-							*ArRecv << Client << Banned;
-							ClientAuthFailed(*Client, TEXT("RI_BannedClient"),*Banned );
-						}
-					case MTS_Shutdown:
-						{
-							Close();
-							ConnectionFailed = 1;
-						}
-						break;
-					case MTS_MatchID:
-						{
-							INT MatchID;
-							*ArRecv << MatchID;
-							GWarn->Logf(TEXT("Master server assigned our MatchID: %d"), MatchID);
-							// A master without stats must not turn them off for one that assigned a match
-							if( !MatchID && Actor->MatchID )
-								break;
-							// save in the GRI.
-							Actor->MatchID = MatchID;
-							if( Actor->Level->Game && Actor->Level->Game->GameReplicationInfo )
-								Actor->Level->Game->GameReplicationInfo->MatchID = MatchID;
-
-							// If we were denied a match ID, don't try to send stats.
-							if( !MatchID && Actor->GameStats )
-							{
-								Actor->GameStats->Uplink = NULL;
-								Actor->GameStats = NULL;
-							}
-
-							Owner->ForceStateRefresh(0);	// Force the initial update of the database.
-						}
-						break;
-					case MTS_MD5Update:
-						{
-							TArray<FMD5UpdateData> UpdateData;
-							*ArRecv << UpdateData;
-							GWarn->Logf(TEXT("Received updated MD5 data from master server."));
-
-							UGameEngine* GE = Cast<UGameEngine>(Actor->XLevel->Engine);
-							if (GE)
-							{
-								for( INT i=0;i<UpdateData.Num();i++ )
-								{
-									GE->AddMD5(*UpdateData(i).Guid, *UpdateData(i).MD5, UpdateData(i).Revision);
-								}
-
-								GE->SaveMD5Database();
-							}
-						}
-						break;
-					case MTS_UpdateOption:
-						{
-							// A master is a third party, so it gets no write access to the server's ini
-							FString Section, Key, Value;
-							UBOOL Unique;
-							*ArRecv << Section << Key << Value << Unique;
-						}
-						break;
-					case MTS_CheckOption:
-						{
-							// The reply stays empty, since the ini holds the admin and game passwords
-							FString Section, Key, Result;
-							*ArRecv << Section << Key;
-							BYTE Command = STM_CheckOptionReply;
-							*ArSend << Command << Section << Key << Result;
-							ArSend->Flush();
-						}
-						break;
-					default:
-						GWarn->Logf(TEXT("MSUS_ChannelOpen: received unknown command %d"), Command);
-					}
-					unguard;
-				}
+				OnChannelOpen();
 				break;
 			}
 		}

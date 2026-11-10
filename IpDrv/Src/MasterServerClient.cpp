@@ -245,6 +245,135 @@ public:
 		SignalQueryTimes.Empty();
 		unguard;
 	}
+private:
+	void OnPingReply( FArchiveUdpReader& ArRecv, FIpAddr SrcAddr, INT i, FServerResponseLine* CurrentState, INT Ping )
+	{
+		FServerResponseLine NewState;
+		ArRecv << NewState;
+			NewState.Ping = Ping;
+		NewState.IP = SrcAddr.GetString(0);
+		NewState.QueryPort = SrcAddr.Port;
+
+		if( CurrentState )
+		{
+			// HACK don't update the data if you clicked on the server while we're pinging!
+			if( OutstandingPings(i).PingType!=QI_Ping )
+			{
+				if( OutstandingPings.Num() > 5 && CurrentState->Ping < 9999 )
+				{
+					NewState.CurrentPlayers = CurrentState->CurrentPlayers;
+					NewState.MaxPlayers = CurrentState->MaxPlayers;
+					NewState.MapName = CurrentState->MapName;
+	                            NewState.Ping = CurrentState->Ping;
+				}
+				else
+				if( CurrentState->Ping < 9999 )
+	                            NewState.Ping = CurrentState->Ping;
+			}
+
+			// HACK keep master server's map capitalization
+			if( NewState.MapName == CurrentState->MapName )
+				NewState.MapName = CurrentState->MapName;
+
+			NewState.Flags      = CurrentState->Flags;
+			NewState.SkillLevel = CurrentState->SkillLevel;
+			NewState.PlayerInfo = CurrentState->PlayerInfo;
+			// Servers put only their WebRTC details in the ping, so a restart replaces or drops the old ones
+			FString WebRtc = GetServerDetail( NewState.ServerInfo, TEXT("WebRTC") );
+			NewState.ServerInfo = CurrentState->ServerInfo;
+			SetServerDetail( NewState.ServerInfo, TEXT("WebRTC"), WebRtc );
+			// The rules and players replies report this copy, which would bring back a ping that timed out earlier
+			CurrentState->Ping = NewState.Ping;
+			Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, NewState );
+		}
+		else
+			Actor->delegateOnReceivedPingInfo( -1, PC_Unknown, NewState );
+	}
+
+	void OnRulesReply( FArchiveUdpReader& ArRecv, FIpAddr SrcAddr, INT i, FServerResponseLine* CurrentState )
+	{
+		if( CurrentState )
+		{
+			TArray<FKeyValuePair> NewInfo;
+			while( !ArRecv.AtEnd() && !ArRecv.IsError() )
+			{
+				INT i = NewInfo.AddZeroed();
+				ArRecv << NewInfo(i);
+			}
+
+			UBOOL HadIP = 0;
+			for(INT ci=0;ci<CurrentState->ServerInfo.Num();ci++ )
+			{
+				for( INT ni=0;ni<NewInfo.Num();ni++ )
+				{
+					if( CurrentState->ServerInfo(ci).Key==NewInfo(ni).Key && CurrentState->ServerInfo(ci).Value==NewInfo(ni).Value )
+					{
+						NewInfo.Remove(ni);
+						ni--;
+					}
+				}
+
+				if( CurrentState->ServerInfo(ci).Key == TEXT("IP") )
+					HadIP = 1;
+			}
+
+			for( INT ni=0;ni<NewInfo.Num();ni++ )
+			{
+				INT ci=CurrentState->ServerInfo.AddZeroed();
+				CurrentState->ServerInfo(ci).Key = NewInfo(ni).Key;
+				CurrentState->ServerInfo(ci).Value = NewInfo(ni).Value;
+			}
+
+			// Add IP:Port to rules
+			if( !HadIP )
+			{
+				INT ci=CurrentState->ServerInfo.AddZeroed();
+				CurrentState->ServerInfo(ci).Key = TEXT("IP");
+				CurrentState->ServerInfo(ci).Value = FString::Printf(TEXT("%s:%d"), *CurrentState->IP, CurrentState->Port);
+			}
+
+			Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, *CurrentState );
+		}
+		else
+			GWarn->Logf(TEXT("Couldn't find outstanding request for rules from %s"), *SrcAddr.GetString(1) );
+	}
+
+	void OnPlayersReply( FArchiveUdpReader& ArRecv, FIpAddr SrcAddr, INT i, FServerResponseLine* CurrentState )
+	{
+		if( CurrentState )
+		{
+			TArray<FPlayerResponseLine> NewInfo;
+			while( !ArRecv.AtEnd() && !ArRecv.IsError() )
+			{
+				INT i = NewInfo.AddZeroed();
+				ArRecv << NewInfo(i);
+			}
+
+			for( INT np=0;np<NewInfo.Num();np++ )
+			{
+				for(INT cp=0;cp<CurrentState->PlayerInfo.Num();cp++ )
+				{
+					if( CurrentState->PlayerInfo(cp).PlayerNum==NewInfo(np).PlayerNum )
+					{
+						CurrentState->PlayerInfo.Remove(cp);
+						cp--;
+					}
+				}
+			}
+
+			for( INT np=0;np<NewInfo.Num();np++ )
+			{
+				INT cp=CurrentState->PlayerInfo.AddZeroed();
+				CurrentState->PlayerInfo(cp) = NewInfo(np);
+			}
+
+			Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, *CurrentState );
+		}
+		else
+			GWarn->Logf(TEXT("Couldn't find outstanding request for players from %s"), *SrcAddr.GetString(1) );
+	}
+
+public:
 	void OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 	{
 		guard(FServerQueryLink::OnReceivedData);
@@ -291,127 +420,13 @@ public:
 			switch( Command )
 			{
 			case QI_Ping:
-				{
-					FServerResponseLine NewState;
-					ArRecv << NewState;
-						NewState.Ping = Ping;
-					NewState.IP = SrcAddr.GetString(0);
-					NewState.QueryPort = SrcAddr.Port;
-
-					if( CurrentState )
-					{
-						// HACK don't update the data if you clicked on the server while we're pinging!
-						if( OutstandingPings(i).PingType!=QI_Ping )
-						{
-							if( OutstandingPings.Num() > 5 && CurrentState->Ping < 9999 )
-							{
-								NewState.CurrentPlayers = CurrentState->CurrentPlayers;
-								NewState.MaxPlayers = CurrentState->MaxPlayers;
-								NewState.MapName = CurrentState->MapName;
-	                            NewState.Ping = CurrentState->Ping;
-							}
-							else
-							if( CurrentState->Ping < 9999 )
-	                            NewState.Ping = CurrentState->Ping;
-						}
-
-						// HACK keep master server's map capitalization
-						if( NewState.MapName == CurrentState->MapName )
-							NewState.MapName = CurrentState->MapName;
-
-						NewState.Flags      = CurrentState->Flags;
-						NewState.SkillLevel = CurrentState->SkillLevel;
-						NewState.PlayerInfo = CurrentState->PlayerInfo;
-						// Servers put only their WebRTC details in the ping, so a restart replaces or drops the old ones
-						FString WebRtc = GetServerDetail( NewState.ServerInfo, TEXT("WebRTC") );
-						NewState.ServerInfo = CurrentState->ServerInfo;
-						SetServerDetail( NewState.ServerInfo, TEXT("WebRTC"), WebRtc );
-						// The rules and players replies report this copy, which would bring back a ping that timed out earlier
-						CurrentState->Ping = NewState.Ping;
-						Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, NewState );
-					}
-					else
-						Actor->delegateOnReceivedPingInfo( -1, PC_Unknown, NewState );
-				}
+				OnPingReply( ArRecv, SrcAddr, i, CurrentState, Ping );
 				break;
 			case QI_Rules:
-				if( CurrentState )
-				{
-					TArray<FKeyValuePair> NewInfo;
-					while( !ArRecv.AtEnd() && !ArRecv.IsError() )
-					{
-						INT i = NewInfo.AddZeroed();
-						ArRecv << NewInfo(i);
-					}
-
-					UBOOL HadIP = 0;
-					for(INT ci=0;ci<CurrentState->ServerInfo.Num();ci++ )
-					{
-						for( INT ni=0;ni<NewInfo.Num();ni++ )
-						{
-							if( CurrentState->ServerInfo(ci).Key==NewInfo(ni).Key && CurrentState->ServerInfo(ci).Value==NewInfo(ni).Value )
-							{
-								NewInfo.Remove(ni);
-								ni--;
-							}
-						}
-
-						if( CurrentState->ServerInfo(ci).Key == TEXT("IP") )
-							HadIP = 1;
-					}
-
-					for( INT ni=0;ni<NewInfo.Num();ni++ )
-					{
-						INT ci=CurrentState->ServerInfo.AddZeroed();
-						CurrentState->ServerInfo(ci).Key = NewInfo(ni).Key;
-						CurrentState->ServerInfo(ci).Value = NewInfo(ni).Value;
-					}
-
-					// Add IP:Port to rules
-					if( !HadIP )
-					{
-						INT ci=CurrentState->ServerInfo.AddZeroed();
-						CurrentState->ServerInfo(ci).Key = TEXT("IP");
-						CurrentState->ServerInfo(ci).Value = FString::Printf(TEXT("%s:%d"), *CurrentState->IP, CurrentState->Port);
-					}
-
-					Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, *CurrentState );
-				}
-				else
-					GWarn->Logf(TEXT("Couldn't find outstanding request for rules from %s"), *SrcAddr.GetString(1) );
+				OnRulesReply( ArRecv, SrcAddr, i, CurrentState );
 				break;
 			case QI_Players:
-				if( CurrentState )
-				{
-					TArray<FPlayerResponseLine> NewInfo;
-					while( !ArRecv.AtEnd() && !ArRecv.IsError() )
-					{
-						INT i = NewInfo.AddZeroed();
-						ArRecv << NewInfo(i);
-					}
-
-					for( INT np=0;np<NewInfo.Num();np++ )
-					{
-						for(INT cp=0;cp<CurrentState->PlayerInfo.Num();cp++ )
-						{
-							if( CurrentState->PlayerInfo(cp).PlayerNum==NewInfo(np).PlayerNum )
-							{
-								CurrentState->PlayerInfo.Remove(cp);
-								cp--;
-							}
-						}
-					}
-
-					for( INT np=0;np<NewInfo.Num();np++ )
-					{
-						INT cp=CurrentState->PlayerInfo.AddZeroed();
-						CurrentState->PlayerInfo(cp) = NewInfo(np);
-					}
-
-					Actor->delegateOnReceivedPingInfo(OutstandingPings(i).ServerID, OutstandingPings(i).PingCause, *CurrentState );
-				}
-				else
-					GWarn->Logf(TEXT("Couldn't find outstanding request for players from %s"), *SrcAddr.GetString(1) );
+				OnPlayersReply( ArRecv, SrcAddr, i, CurrentState );
 				break;
 			}
 		}
@@ -643,7 +658,8 @@ public:
 		QueryType = InQueryType;
 		// A WebRTC only client lists the web master, which holds only servers it can join.
 		// Others list the main masters after it, web-only servers are on the web master alone.
-		if( WebRtcOnly() || QueryType==CTM_Query )
+		// The news is the web master's too, a community master only stands in while it cannot be reached.
+		if( WebRtcOnly() || QueryType==CTM_Query || QueryType==CTM_GetMOTD )
 		{
 			if( !WebList )
 				WebList = WebMasterList();
@@ -678,6 +694,11 @@ public:
 		if( !Ok && WebOnly )
 		{
 			Client->delegateOnQueryFinished( RI_ConnectionFailed, 0 );
+			return Result;
+		}
+		if( Type == CTM_GetMOTD && !Ok )
+		{
+			StartMasterQuery();
 			return Result;
 		}
 		if( Type == CTM_Query )
@@ -767,6 +788,360 @@ public:
 		appSaveStringToFile( s, DOWNLOADLISTFILE );
 	}
 
+private:
+	void OnWaitingChallenge()
+	{
+		FString Challenge;
+		*ArRecv << Challenge;
+		FString CDKeyHash, Response, ClientType;
+		CDKeyHash = GetCDKeyHash();
+		Response = GetCDKeyResponse( *Challenge ) ;
+		ClientType = TEXT("UT2K4CLIENT");
+		INT Version = ENGINE_VERSION;
+		BYTE Platform = GRunningOS;
+		FString Language = UObject::GetLanguage();
+		*ArSend << CDKeyHash << Response << ClientType << Version << Platform << Language;
+		
+		// The protocol still carries CPU speed and type, the engine no longer detects them.
+		INT		CPUSpeed	= 0,
+				GPUDeviceID	= GGPUDeviceID,
+				GPUVendorID	= GGPUVendorID;
+		BYTE	CPUType		= 255;
+		*ArSend << GPUDeviceID << GPUVendorID << CPUSpeed << CPUType;
+
+		ArSend->Flush();
+		ClientState = MSCS_WaitingReview;
+	}
+
+	// Returns whether reading goes on. A master list update ends or restarts the query.
+	UBOOL OnWaitingReview()
+	{
+		FString Results;
+		*ArRecv << Results;
+
+		if ( Results != TEXT("APPROVED") )
+		{
+				if ( Results == TEXT("UNKNOWN_CDKEY") )	
+				{
+					Finish(RI_AuthenticationFailed,0);
+					Close();
+				}
+				else if( Results == TEXT("MODIFIED_CLIENT") )
+				{
+					Finish(RI_BadClient,0);
+					Close();
+				}
+				else if( Results == TEXT("DEV_CLIENT") )
+				{
+					Finish(RI_DevClient,0);
+					Close();
+				}
+				else if( Results == TEXT("UTAN_BAN") )
+				{
+					Finish(RI_UTANBan,0);
+					Close();
+				}
+				else if( Results == TEXT("BANNED_CLIENT" ) )
+				{
+					*ArRecv << Actor->OptionalResult;
+					Finish(RI_BannedClient,0);
+					Close();
+				}
+				else if( Results == TEXT("NEED_UPGRADE") )
+				{
+					INT UpgradeVersion;
+					TArray<FString> DownloadSites;
+					FString MOTD;
+					*ArRecv << UpgradeVersion << DownloadSites << MOTD;
+					SaveDownloadSites(DownloadSites);
+
+					AMasterServerClient* MSClient = Actor;
+
+					// Delegates give unrealscript access to protected members - might invalidate Actor pointer
+					if (MSClient)
+					{
+						MSClient->delegateOnReceivedMOTDData( MR_MandatoryUpgrade, FString::Printf(TEXT("%d"), UpgradeVersion) );
+						MSClient->delegateOnReceivedMOTDData( MR_MOTD, MOTD );
+						Finish(RI_MustUpgrade, UpgradeVersion);
+						Close();
+					}
+				}
+				else if( Results == TEXT("MSUPDATE") )
+				{
+					AddMasterServers( Actor, *ArRecv );
+
+					// A merged query lists the new masters on the next refresh
+					if( IsChild )
+					{
+						Finish(RI_ConnectionFailed,0);
+						Close();
+						return 0;
+					}
+					ClientState= MSCS_WaitingChallenge;
+					StartMasterQuery();
+					return 0;
+				}
+
+
+			else
+			{
+				// master server busy, or i didn't understand its response
+				Finish(RI_ConnectionFailed,0);
+				Close();
+			}
+		}
+		else
+		{
+
+			*ArRecv << Actor->ModRevLevel;
+
+			FString GlobalMD5;
+			for (INT i=0; i<16; i++)
+				GlobalMD5 += FString::Printf(TEXT("%02x"), GMD5[i]);	
+
+			*ArSend << GlobalMD5;
+			ArSend->Flush();
+
+			ClientState = MSCS_WaitingApproval;
+		}
+		return 1;
+	}
+
+	void OnWaitingApproval()
+	{
+		FString Results;
+		*ArRecv << Results;
+		if( Results == TEXT("VERIFIED") )
+		{
+			*ArSend << QueryType;
+			switch( QueryType )
+			{
+			case CTM_Query:
+				*ArSend << Actor->Query;
+				break;
+			case CTM_GetMOTD:
+				break;
+			case CTM_GetModMOTD:
+				*ArSend << Actor->OwnageLevel;
+				break;
+			}
+			ArSend->Flush();
+			ClientState = MSCS_SentQuery;
+		}
+		else
+		{
+			Finish(RI_BadClient,0);
+			Close();
+		}
+	}
+
+	void OnSentQuery()
+	{
+		switch( QueryType )
+		{
+		case CTM_Query:
+			{
+				*ArRecv << ResultCount << ResultsCompressed;
+				if( ResultCount > 0 )
+					ClientState = MSCS_WaitQueryData;
+				else
+				{
+					Finish(RI_Success,QueryType);
+					Close();
+				}
+			}
+			break;
+		case CTM_GetMOTD:
+			{
+				INT UpgradeVersion = 0;
+				FString MOTD;
+				*ArRecv << MOTD << UpgradeVersion;
+				Actor->delegateOnReceivedMOTDData( MR_MOTD, MOTD );
+				if( UpgradeVersion )
+				{
+					TArray<FString> DownloadSites;
+					*ArRecv << DownloadSites;
+					SaveDownloadSites(DownloadSites);
+					Actor->delegateOnReceivedMOTDData( MR_OptionalUpgrade, FString::Printf(TEXT("%d"), UpgradeVersion) );
+				}
+				Finish(RI_Success,QueryType);
+				Close();
+			}
+			break;
+		case CTM_GetModMOTD:
+			{	
+				BYTE PacketType;
+				*ArRecv << PacketType;
+
+				if ( PacketType == 0 )		// Mod MOTD
+				{
+					FString ModMOTD;
+					*ArRecv << ModMOTD;
+					Actor->delegateOnReceivedModMOTDData(ModMOTD);
+				}
+
+				else if (PacketType == 1)	// Ownage Entry
+				{
+
+					INT		RevisionLevel, OwnagePacketType;
+					*ArRecv << OwnagePacketType << RevisionLevel;
+
+					switch (OwnagePacketType)
+					{
+					case 0:			//	Header
+						{
+							FString MapName;
+							*ArRecv << MapName;
+					
+							GWarn->Logf(TEXT("Received Ownage Map Header: %i [%s]"),RevisionLevel,*MapName);
+							Actor->delegateOnReceivedOwnageItem(RevisionLevel,MapName,TEXT(""),TEXT(""));
+						}
+						break;
+
+					case 1:			// Description
+						{
+							FString MapDesc;
+							*ArRecv << MapDesc;
+							GWarn->Logf(TEXT("Received Ownage Map Body: %i [%s]"),RevisionLevel,*MapDesc);
+							Actor->delegateOnReceivedOwnageItem(RevisionLevel,TEXT(""),MapDesc,TEXT(""));
+						}
+						break;
+
+					case 2:			// URL
+						{
+							FString MapURL;
+							*ArRecv << MapURL;
+							GWarn->Logf(TEXT("Received Ownage Map URL: %i [%s]"),RevisionLevel,*MapURL);
+							Actor->delegateOnReceivedOwnageItem(RevisionLevel,TEXT(""),TEXT(""),MapURL);
+						}
+						break;
+					}
+				}
+				else	// End of Packet Sends
+				{
+					Finish(RI_Success,QueryType);
+					Close();
+				}
+			}
+			break;
+		}
+	}
+
+	// Returns whether reading goes on. A broken server entry ends the query.
+	UBOOL OnWaitQueryData()
+	{
+		if( ReceiveCount < ResultCount )
+		{
+			FServerResponseLine Server;
+			appMemzero( &Server, sizeof(FServerResponseLine) );
+			ReceiveCount++;
+			if( ResultsCompressed )
+			{
+				// decode compressed results.
+				DWORD IP;
+				_WORD Port;
+				_WORD QueryPort;
+				BYTE CurrentPlayers;
+				BYTE MaxPlayers;
+				FString SkillLevel;
+				INT ServerFlags=0;
+
+				*ArRecv << IP << Port << QueryPort;
+				if( ArRecv->IsError() )
+				{
+					Finish(RI_ConnectionFailed,0);
+					Close();
+					return 0;
+				}
+
+
+				*ArRecv << Server.ServerName;
+				if( Server.ServerName.Len() == 25 )
+					Server.ServerName = Server.ServerName + TEXT("....");
+
+				if( ArRecv->IsError() )
+				{
+					Finish(RI_ConnectionFailed,0);
+					Close();
+					return 0;
+				}
+				*ArRecv << Server.MapName;
+
+				if( ArRecv->IsError() )
+				{
+					Finish(RI_ConnectionFailed,0);
+					Close();
+					return 0;
+				}
+				*ArRecv << Server.GameType
+						<< CurrentPlayers
+						<< MaxPlayers
+						<< ServerFlags
+						<< SkillLevel;
+
+				INT j = Server.MapName.InStr(TEXT("-"));
+				UBOOL HasPrefix = (j==2 || j==3);
+				if( Server.GameType == TEXT("0") )
+				{
+					Server.GameType = TEXT("xDeathMatch");
+					if( !HasPrefix )
+						Server.MapName = FString(TEXT("DM-")) + Server.MapName;
+				}
+				else
+				if( Server.GameType == TEXT("1") )
+				{
+					Server.GameType = TEXT("xCTFGame");
+					if( !HasPrefix )
+						Server.MapName = FString(TEXT("CTF-")) + Server.MapName;
+				}
+				else
+				if( Server.GameType == TEXT("2") )
+				{
+					Server.GameType = TEXT("xBombingRun");
+					if( !HasPrefix )
+						Server.MapName = FString(TEXT("BR-")) + Server.MapName;
+				}
+				else
+				if( Server.GameType == TEXT("3") )
+				{
+					Server.GameType = TEXT("xTeamGame");
+					if( !HasPrefix )
+						Server.MapName = FString(TEXT("DM-")) + Server.MapName;
+				}
+				else
+				if( Server.GameType == TEXT("4") )
+				{
+					Server.GameType = TEXT("xDoubleDom");
+					if( !HasPrefix )
+						Server.MapName = FString(TEXT("DOM-")) + Server.MapName;
+				}
+
+				FIpAddr Addr;
+				Addr.Addr = ntohl(IP);
+				Server.IP = Addr.GetString(0);
+				Server.Port = Port;
+				Server.QueryPort = QueryPort;
+				Server.CurrentPlayers = CurrentPlayers;
+				Server.MaxPlayers = MaxPlayers;
+				Server.Flags = ServerFlags;
+				Server.SkillLevel = SkillLevel;
+
+			}
+			else
+				*ArRecv << Server;
+
+			new(Pending) FServerResponseLine( Server );
+		}
+
+		if( ReceiveCount == ResultCount )
+		{
+			Finish(RI_Success,QueryType);
+			Close();
+		}
+		return 1;
+	}
+
+public:
 	void OnDataReceived()
 	{
 		while( DataAvailable() )
@@ -774,353 +1149,22 @@ public:
 			switch( ClientState )
 			{
 			case MSCS_WaitingChallenge:
-				{
-					FString Challenge;
-					*ArRecv << Challenge;
-					FString CDKeyHash, Response, ClientType;
-					CDKeyHash = GetCDKeyHash();
-					Response = GetCDKeyResponse( *Challenge ) ;
-					ClientType = TEXT("UT2K4CLIENT");
-					INT Version = ENGINE_VERSION;
-					BYTE Platform = GRunningOS;
-					FString Language = UObject::GetLanguage();
-					*ArSend << CDKeyHash << Response << ClientType << Version << Platform << Language;
-					
-					// The protocol still carries CPU speed and type, the engine no longer detects them.
-					INT		CPUSpeed	= 0,
-							GPUDeviceID	= GGPUDeviceID,
-							GPUVendorID	= GGPUVendorID;
-					BYTE	CPUType		= 255;
-					*ArSend << GPUDeviceID << GPUVendorID << CPUSpeed << CPUType;
-
-					ArSend->Flush();
-					ClientState = MSCS_WaitingReview;
-				}
+				OnWaitingChallenge();
 				break;
 			case MSCS_WaitingReview:
-				{
-					FString Results;
-					*ArRecv << Results;
-
-					if ( Results != TEXT("APPROVED") )
-					{
-							if ( Results == TEXT("UNKNOWN_CDKEY") )	
-							{
-								Finish(RI_AuthenticationFailed,0);
-								Close();
-							}
-							else if( Results == TEXT("MODIFIED_CLIENT") )
-							{
-								Finish(RI_BadClient,0);
-								Close();
-							}
-							else if( Results == TEXT("DEV_CLIENT") )
-							{
-								Finish(RI_DevClient,0);
-								Close();
-							}
-							else if( Results == TEXT("UTAN_BAN") )
-							{
-								Finish(RI_UTANBan,0);
-								Close();
-							}
-							else if( Results == TEXT("BANNED_CLIENT" ) )
-							{
-								*ArRecv << Actor->OptionalResult;
-								Finish(RI_BannedClient,0);
-								Close();
-							}
-							else if( Results == TEXT("NEED_UPGRADE") )
-							{
-								INT UpgradeVersion;
-								TArray<FString> DownloadSites;
-								FString MOTD;
-								*ArRecv << UpgradeVersion << DownloadSites << MOTD;
-								SaveDownloadSites(DownloadSites);
-
-								AMasterServerClient* MSClient = Actor;
-
-								// Delegates give unrealscript access to protected members - might invalidate Actor pointer
-								if (MSClient)
-								{
-									MSClient->delegateOnReceivedMOTDData( MR_MandatoryUpgrade, FString::Printf(TEXT("%d"), UpgradeVersion) );
-									MSClient->delegateOnReceivedMOTDData( MR_MOTD, MOTD );
-									Finish(RI_MustUpgrade, UpgradeVersion);
-									Close();
-								}
-							}
-							else if( Results == TEXT("MSUPDATE") )
-							{
-								AddMasterServers( Actor, *ArRecv );
-
-								// A merged query lists the new masters on the next refresh
-								if( IsChild )
-								{
-									Finish(RI_ConnectionFailed,0);
-									Close();
-									return;
-								}
-								ClientState= MSCS_WaitingChallenge;
-								StartMasterQuery();
-								return;
-							}
-
-
-						else
-						{
-							// master server busy, or i didn't understand its response
-							Finish(RI_ConnectionFailed,0);
-							Close();
-						}
-					}
-					else
-					{
-
-						*ArRecv << Actor->ModRevLevel;
-
-						FString GlobalMD5;
-						for (INT i=0; i<16; i++)
-							GlobalMD5 += FString::Printf(TEXT("%02x"), GMD5[i]);	
-
-						*ArSend << GlobalMD5;
-						ArSend->Flush();
-
-						ClientState = MSCS_WaitingApproval;
-					}
-				}
+				if( !OnWaitingReview() )
+					return;
 				break;
 			case MSCS_WaitingApproval:
-				{
-					FString Results;
-					*ArRecv << Results;
-					if( Results == TEXT("VERIFIED") )
-					{
-						*ArSend << QueryType;
-						switch( QueryType )
-						{
-						case CTM_Query:
-							*ArSend << Actor->Query;
-							break;
-						case CTM_GetMOTD:
-							break;
-						case CTM_GetModMOTD:
-							*ArSend << Actor->OwnageLevel;
-							break;
-						}
-						ArSend->Flush();
-						ClientState = MSCS_SentQuery;
-					}
-					else
-					{
-						Finish(RI_BadClient,0);
-						Close();
-					}
-				}
+				OnWaitingApproval();
 				break;
 			case MSCS_SentQuery:
-				{
-					switch( QueryType )
-					{
-					case CTM_Query:
-						{
-							*ArRecv << ResultCount << ResultsCompressed;
-							if( ResultCount > 0 )
-								ClientState = MSCS_WaitQueryData;
-							else
-							{
-								Finish(RI_Success,QueryType);
-								Close();
-							}
-						}
-						break;
-					case CTM_GetMOTD:
-						{
-							INT UpgradeVersion = 0;
-							FString MOTD;
-							*ArRecv << MOTD << UpgradeVersion;
-							Actor->delegateOnReceivedMOTDData( MR_MOTD, MOTD );
-							if( UpgradeVersion )
-							{
-								TArray<FString> DownloadSites;
-								*ArRecv << DownloadSites;
-								SaveDownloadSites(DownloadSites);
-								Actor->delegateOnReceivedMOTDData( MR_OptionalUpgrade, FString::Printf(TEXT("%d"), UpgradeVersion) );
-							}
-							Finish(RI_Success,QueryType);
-							Close();
-						}
-						break;
-					case CTM_GetModMOTD:
-						{	
-							BYTE PacketType;
-							*ArRecv << PacketType;
-
-							if ( PacketType == 0 )		// Mod MOTD
-							{
-								FString ModMOTD;
-								*ArRecv << ModMOTD;
-								Actor->delegateOnReceivedModMOTDData(ModMOTD);
-							}
-
-							else if (PacketType == 1)	// Ownage Entry
-							{
-
-								INT		RevisionLevel, OwnagePacketType;
-								*ArRecv << OwnagePacketType << RevisionLevel;
-
-								switch (OwnagePacketType)
-								{
-								case 0:			//	Header
-									{
-										FString MapName;
-										*ArRecv << MapName;
-								
-										GWarn->Logf(TEXT("Received Ownage Map Header: %i [%s]"),RevisionLevel,*MapName);
-										Actor->delegateOnReceivedOwnageItem(RevisionLevel,MapName,TEXT(""),TEXT(""));
-									}
-									break;
-
-								case 1:			// Description
-									{
-										FString MapDesc;
-										*ArRecv << MapDesc;
-										GWarn->Logf(TEXT("Received Ownage Map Body: %i [%s]"),RevisionLevel,*MapDesc);
-										Actor->delegateOnReceivedOwnageItem(RevisionLevel,TEXT(""),MapDesc,TEXT(""));
-									}
-									break;
-
-								case 2:			// URL
-									{
-										FString MapURL;
-										*ArRecv << MapURL;
-										GWarn->Logf(TEXT("Received Ownage Map URL: %i [%s]"),RevisionLevel,*MapURL);
-										Actor->delegateOnReceivedOwnageItem(RevisionLevel,TEXT(""),TEXT(""),MapURL);
-									}
-									break;
-								}
-							}
-							else	// End of Packet Sends
-							{
-								Finish(RI_Success,QueryType);
-								Close();
-							}
-					}
-					break;
-				}
+				OnSentQuery();
 				break;
 			case MSCS_WaitQueryData:
-				{
-					if( ReceiveCount < ResultCount )
-					{
-						FServerResponseLine Server;
-						appMemzero( &Server, sizeof(FServerResponseLine) );
-						ReceiveCount++;
-						if( ResultsCompressed )
-						{
-                            // decode compressed results.
-							DWORD IP;
-							_WORD Port;
-							_WORD QueryPort;
-							BYTE CurrentPlayers;
-							BYTE MaxPlayers;
-							FString SkillLevel;
-							INT ServerFlags=0;
-
-							*ArRecv << IP << Port << QueryPort;
-							if( ArRecv->IsError() )
-							{
-								Finish(RI_ConnectionFailed,0);
-								Close();
-								return;
-							}
-
-
-							*ArRecv << Server.ServerName;
-							if( Server.ServerName.Len() == 25 )
-								Server.ServerName = Server.ServerName + TEXT("....");
-
-							if( ArRecv->IsError() )
-							{
-								Finish(RI_ConnectionFailed,0);
-								Close();
-								return;
-							}
-							*ArRecv << Server.MapName;
-
-							if( ArRecv->IsError() )
-							{
-								Finish(RI_ConnectionFailed,0);
-								Close();
-								return;
-							}
-							*ArRecv << Server.GameType
-									<< CurrentPlayers
-									<< MaxPlayers
-									<< ServerFlags
-									<< SkillLevel;
-
-							INT j = Server.MapName.InStr(TEXT("-"));
-							UBOOL HasPrefix = (j==2 || j==3);
-							if( Server.GameType == TEXT("0") )
-							{
-								Server.GameType = TEXT("xDeathMatch");
-								if( !HasPrefix )
-									Server.MapName = FString(TEXT("DM-")) + Server.MapName;
-							}
-							else
-							if( Server.GameType == TEXT("1") )
-							{
-								Server.GameType = TEXT("xCTFGame");
-								if( !HasPrefix )
-									Server.MapName = FString(TEXT("CTF-")) + Server.MapName;
-							}
-							else
-							if( Server.GameType == TEXT("2") )
-							{
-								Server.GameType = TEXT("xBombingRun");
-								if( !HasPrefix )
-									Server.MapName = FString(TEXT("BR-")) + Server.MapName;
-							}
-							else
-							if( Server.GameType == TEXT("3") )
-							{
-								Server.GameType = TEXT("xTeamGame");
-								if( !HasPrefix )
-									Server.MapName = FString(TEXT("DM-")) + Server.MapName;
-							}
-							else
-							if( Server.GameType == TEXT("4") )
-							{
-								Server.GameType = TEXT("xDoubleDom");
-								if( !HasPrefix )
-									Server.MapName = FString(TEXT("DOM-")) + Server.MapName;
-							}
-
-							FIpAddr Addr;
-							Addr.Addr = ntohl(IP);
-							Server.IP = Addr.GetString(0);
-							Server.Port = Port;
-							Server.QueryPort = QueryPort;
-							Server.CurrentPlayers = CurrentPlayers;
-							Server.MaxPlayers = MaxPlayers;
-							Server.Flags = ServerFlags;
-							Server.SkillLevel = SkillLevel;
-
-						}
-						else
-							*ArRecv << Server;
-
-						new(Pending) FServerResponseLine( Server );
-					}
-
-					if( ReceiveCount == ResultCount )
-					{
-						Finish(RI_Success,QueryType);
-						Close();
-					}
-					break;
-				}
-			}
+				if( !OnWaitQueryData() )
+					return;
+				break;
 			}
 		}
 	}
