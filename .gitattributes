@@ -1,2 +1,5 @@
+* text=auto eol=lf
+*.bat text eol=crlf
 ports/**/*.patch -text
 DevIni/*.ini -text
+KarmaData/*.ka -text
