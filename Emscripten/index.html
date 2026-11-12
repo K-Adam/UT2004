@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<canvas id="canvas" tabindex="-1"></canvas>
+<canvas id="canvas" tabindex="-1" aria-label="UT2004 game"></canvas>
 <div id="server" hidden>
   <header>
     <strong>UT2004 dedicated server</strong>
@@ -39,12 +39,13 @@
   <pre id="log"></pre>
 </div>
 <div id="status">
-  <span id="message">Loading</span>
+  <span id="message" aria-live="polite">Loading</span>
   <div id="details"></div>
-  <progress id="progress"></progress>
+  <progress id="progress" aria-labelledby="message"></progress>
   <button id="action" hidden></button>
   <button id="pick" hidden>Use a retail zip</button>
-  <input id="zip" type="file" accept=".zip" hidden>
+  <button id="forget" hidden>Delete stored content</button>
+  <input id="zip" type="file" accept=".zip" aria-label="Zip of a retail UT2004 install" hidden>
 </div>
 <dialog class="dialog" id="welcome">
   <form method="dialog">
@@ -70,6 +71,7 @@ const details = document.getElementById('details');
 const progress = document.getElementById('progress');
 const action = document.getElementById('action');
 const pick = document.getElementById('pick');
+const forget = document.getElementById('forget');
 const zipInput = document.getElementById('zip');
 const canvas = document.getElementById('canvas');
 
@@ -89,6 +91,9 @@ const RETRY_WAIT = 12000;
 
 // Set once a zip was imported, from then on the page runs on the stored content and leaves the asset host alone.
 const ZIP_KEY = 'ut2004-content-zip';
+// Set while the stored content matches the last content list, so the game can start when the list cannot be fetched.
+const SYNCED_KEY = 'ut2004-content-synced';
+const WELCOME_KEY = 'ut2004-welcome';
 const CONTENT_DIRS = ['Animations', 'Maps', 'Music', 'Sounds', 'StaticMeshes', 'Textures'];
 
 let db, files, warning = '';
@@ -105,7 +110,18 @@ function stop(text, retry) {
   action.textContent = 'Retry';
   action.onclick = () => location.reload();
   action.hidden = !retry;
+  forget.hidden = !retry;
 }
+
+forget.onclick = async () => {
+  if (!confirm('Delete the game content stored in this browser? Playing again needs a new download.')) return;
+  // An open connection would block the delete.
+  db?.close();
+  await request(indexedDB.deleteDatabase('ut2004-content')).catch(() => {});
+  localStorage.removeItem(ZIP_KEY);
+  localStorage.removeItem(SYNCED_KEY);
+  location.reload();
+};
 
 const gb = (n) => (n / 2 ** 30).toFixed(1) + ' GB';
 const mb = (n) => Math.round(n / 2 ** 20) + ' MB';
@@ -136,9 +152,9 @@ async function consent(missing) {
     (quota ? `\nFree space for this site: ${gb(quota - usage)}.` : ''));
   progress.hidden = true;
   action.textContent = 'Store and play';
-  action.hidden = false;
+  action.hidden = forget.hidden = false;
   await new Promise((resolve) => (action.onclick = resolve));
-  action.hidden = true;
+  action.hidden = forget.hidden = true;
   // Without it the browser may evict the content when storage runs low. Firefox asks the user, so the download doesn't wait.
   navigator.storage?.persist?.()?.then((granted) => {
     if (!granted) warning = '\nThe browser may clear the stored content when it runs low on space.';
@@ -245,18 +261,27 @@ async function storedFiles() {
 }
 
 async function syncHosted() {
-  const response = await fetch(manifestUrl, { cache: 'no-cache' });
-  if (!response.ok) throw new Error(`The content list: HTTP ${response.status}`);
-  files = await response.json();
-  const stored = new Map((await storedFiles()).map((f) => [f.path, f.hash]));
+  const kept = await storedFiles();
+  try {
+    const response = await fetch(manifestUrl, { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`The content list: HTTP ${response.status}`);
+    files = await response.json();
+  } catch (e) {
+    if (!localStorage.getItem(SYNCED_KEY) || !kept.length) throw e;
+    files = kept;
+    return;
+  }
+  const stored = new Map(kept.map((f) => [f.path, f.hash]));
   const wanted = new Set(files.map((f) => f.path));
   for (const path of stored.keys()) if (!wanted.has(path)) store('readwrite').delete(path);
 
   const missing = files.filter((f) => stored.get(f.path) !== f.hash);
   if (missing.length) {
+    localStorage.removeItem(SYNCED_KEY);
     await consent(missing);
     await download(missing);
   }
+  localStorage.setItem(SYNCED_KEY, '1');
 }
 
 // The content folders may sit one level down, as in a zip of the whole game folder.
@@ -324,6 +349,7 @@ async function importZip(file) {
   if (!list.length) throw new Error(`No ${CONTENT_DIRS.join(', ')} folders were found in ${file.name}.`);
   await consent(list);
   // Hosted packages are cut down, so none of them may stay next to the retail ones.
+  localStorage.removeItem(SYNCED_KEY);
   await request(store('readwrite').clear());
   const total = list.reduce((sum, f) => sum + f.packed.size, 0);
   let done = 0;
@@ -349,7 +375,7 @@ async function zipFallback(error) {
     pick.onclick = () => zipInput.click();
     const file = await new Promise((resolve) => (zipInput.onchange = () => zipInput.files[0] && resolve(zipInput.files[0])));
     zipInput.value = '';
-    pick.hidden = action.hidden = true;
+    pick.hidden = action.hidden = forget.hidden = true;
     try {
       files = await importZip(file);
       // Written last, so an interrupted import downloads or asks again on the next visit.
@@ -365,6 +391,8 @@ async function sync() {
   const opening = indexedDB.open('ut2004-content', 1);
   opening.onupgradeneeded = () => opening.result.createObjectStore('files');
   db = await request(opening);
+  // Lets another tab delete the stored content.
+  db.onversionchange = () => db.close();
 
   if (localStorage.getItem(ZIP_KEY)) {
     files = await storedFiles();
@@ -496,6 +524,17 @@ const ask = (id) => new Promise((resolve) => {
   dialog.showModal();
 });
 
+async function welcome() {
+  // Storage can be blocked, then the dialog shows on every visit.
+  try {
+    if (localStorage.getItem(WELCOME_KEY)) return;
+  } catch {}
+  await ask('welcome');
+  try {
+    localStorage.setItem(WELCOME_KEY, '1');
+  } catch {}
+}
+
 // Phones skip everything below, so they never download the content.
 if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
   status.hidden = true;
@@ -506,7 +545,7 @@ if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
   stop('This browser cannot pause WebAssembly for storage reads (JSPI). Use Chrome 137, Firefox 153 or newer.');
 } else {
   // The system package loader registers itself with Module as it runs, so it goes before the engine.
-  (serverCmd ? Promise.resolve() : ask('welcome'))
+  (serverCmd ? Promise.resolve() : welcome())
     .then(sync)
     .then(() => load('system.js'))
     .then(() => load('UT2004.js'))
