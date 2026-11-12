@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.26)
 project(UT2004 LANGUAGES C CXX)
+if(EMSCRIPTEN AND EMSCRIPTEN_VERSION VERSION_LESS 7.0.0)
+  message(FATAL_ERROR "The web build needs emsdk 7.0.0 or newer, this one is ${EMSCRIPTEN_VERSION}")
+endif()
 
 if(WIN32)
   enable_language(RC)
@@ -246,7 +249,7 @@ else()
   pkg_check_modules(SPEEXDSP REQUIRED IMPORTED_TARGET GLOBAL speexdsp)
   target_link_libraries(speex PUBLIC PkgConfig::SPEEXDSP)
 endif()
-find_package(SDL3 CONFIG REQUIRED)
+find_package(SDL3 3.2 CONFIG REQUIRED)
 add_subdirectory(Tools/NVTriStrip)
 # Static, but linked into Engine.so.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -305,5 +308,28 @@ add_custom_target(ucc_make
   ${UT_COPY_RETAIL_SCRIPTS}
   COMMAND $<TARGET_FILE:UCC> make -NOH -SOURCE=${UT_SOURCE_FROM_SYSTEM}
   WORKING_DIRECTORY ${UT_SYSTEM_DIR}
-  DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught UTV2004
+  DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught $<TARGET_NAME_IF_EXISTS:UTV2004>
   USES_TERMINAL VERBATIM)
+
+if(UT_ASSETS_DIR AND TARGET UCC)
+  enable_testing()
+  add_test(NAME server_smoke
+    COMMAND ${CMAKE_COMMAND} -DUCC=$<TARGET_FILE:UCC> -DINI_DIR=${CMAKE_SOURCE_DIR}/DevIni -P ${CMAKE_SOURCE_DIR}/Tools/ServerSmoke.cmake
+    WORKING_DIRECTORY ${UT_SYSTEM_DIR})
+endif()
+
+# cpack -G ZIP -C Release gives a folder a player can unpack and run. It is laid out like build/<preset>,
+# because Default.ini reaches the script packages through ../../Scripts.
+if(TARGET UCC)
+  set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION UT2004/System)
+  include(InstallRequiredSystemLibraries)
+  install(DIRECTORY System Help KarmaData Web DESTINATION UT2004)
+  install(DIRECTORY ${UT_SYSTEM_DIR}/ DESTINATION UT2004/System USE_SOURCE_PERMISSIONS
+    FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll" PATTERN "*.so" PATTERN "*-bin")
+  install(DIRECTORY ${UT_SCRIPTS_DIR}/ DESTINATION Scripts FILES_MATCHING PATTERN "*.u" PATTERN "*.ucl")
+  install(FILES README.md NOTICE.md LICENSE DESTINATION UT2004)
+  set(CPACK_PACKAGE_NAME UT2004)
+  set(CPACK_PACKAGE_FILE_NAME UT2004-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR})
+  set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+  include(CPack)
+endif()

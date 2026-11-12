@@ -3,3 +3,5 @@
 /Android/build/
 /Android/local.properties
 __pycache__/
+.vs/
+CMakeUserPresets.json
