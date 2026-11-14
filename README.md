@@ -60,7 +60,7 @@ The game only connects when you use an online feature. These are the defaults in
 | Content host | `assets.ut2004.dev` | First launch on Android and on the web |
 | Game servers | The server you pick | Joining a game |
 
-Stats tracking is off until you turn it on in the settings. There is no telemetry.
+The first start makes up a player name and a random stats password, so servers that track stats can list you without a prompt. Turn it off under Settings, Game, if you do not want that. There is no telemetry.
 
 ## Licensing
 
