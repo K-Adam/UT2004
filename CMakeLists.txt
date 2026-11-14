@@ -301,12 +301,19 @@ foreach(classes ${UT_SCRIPT_SOURCES})
 endforeach()
 if(UT_RETAIL_SCRIPTS)
   set(UT_COPY_RETAIL_SCRIPTS COMMAND ${CMAKE_COMMAND} -E copy_if_different ${UT_RETAIL_SCRIPTS} ${UT_SCRIPTS_DIR})
+  # The retail packages import sounds and meshes, so they only load with the install's content in reach.
+  file(READ ${CMAKE_SOURCE_DIR}/System/Default.ini UT_MAKE_INI)
+  foreach(dir Maps Textures Sounds Music StaticMeshes Animations)
+    string(REPLACE "Paths=../${dir}/" "Paths=${UT_RETAIL_DIR}/${dir}/" UT_MAKE_INI "${UT_MAKE_INI}")
+  endforeach()
+  file(WRITE ${UT_SYSTEM_DIR}/Make.ini "${UT_MAKE_INI}")
+  set(UT_MAKE_INI -INI=Make.ini)
 else()
   message(WARNING "No retail script packages in UT_RETAIL_DIR (${UT_RETAIL_DIR}), ucc_make compiles them all and online play only works with servers running this build")
 endif()
 add_custom_target(ucc_make
   ${UT_COPY_RETAIL_SCRIPTS}
-  COMMAND $<TARGET_FILE:UCC> make -NOH -SOURCE=${UT_SOURCE_FROM_SYSTEM}
+  COMMAND $<TARGET_FILE:UCC> make -NOH -SOURCE=${UT_SOURCE_FROM_SYSTEM} ${UT_MAKE_INI}
   WORKING_DIRECTORY ${UT_SYSTEM_DIR}
   DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught $<TARGET_NAME_IF_EXISTS:UTV2004>
   USES_TERMINAL VERBATIM)
