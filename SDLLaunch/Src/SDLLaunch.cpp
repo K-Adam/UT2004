@@ -873,7 +873,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 			FString Message = GErrorHist;
 			for( INT i; (i=Message.InStr(TEXT(" <- ")))!=-1; )
 				Message = Message.Left(i) + TEXT("\n") + Message.Mid(i+4);
-			Message += FString(TEXT("\n\nThe log file is ")) + Log.Filename;
+			Message += FString::Printf( TEXT("\n\nThe log file is %s"), Log.Filename );
 			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(*Message), NULL );
 		}
 	}
