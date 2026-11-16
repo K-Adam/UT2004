@@ -209,9 +209,9 @@ static void McdVanillaAddTriBoxSegmentPoints(MeVector3* &outList,
 	dn[i2] = inRBox[i2]*(*inTri->normal)[i2];
 
 	// ++ edge
-	if (axb[0][i0]-x[0][i1]-x[0][i2] < 0 == ccw &&
-		axb[1][i0]-x[1][i1]-x[1][i2] < 0 == ccw &&
-		axb[2][i0]-x[2][i1]-x[2][i2] < 0 == ccw)
+	if ((axb[0][i0]-x[0][i1]-x[0][i2] < 0) == ccw &&
+		(axb[1][i0]-x[1][i1]-x[1][i2] < 0) == ccw &&
+		(axb[2][i0]-x[2][i1]-x[2][i2] < 0) == ccw)
 	{   // points at triangle
 		MeReal r = (inTriD-dn[i1]-dn[i2])*recipDen;
 		if (r >= -r0 && r <= r0)
@@ -224,9 +224,9 @@ static void McdVanillaAddTriBoxSegmentPoints(MeVector3* &outList,
 	}
 
 	// +- edge
-	if (axb[0][i0]-x[0][i1]+x[0][i2] < 0 == ccw &&
-		axb[1][i0]-x[1][i1]+x[1][i2] < 0 == ccw &&
-		axb[2][i0]-x[2][i1]+x[2][i2] < 0 == ccw)
+	if ((axb[0][i0]-x[0][i1]+x[0][i2] < 0) == ccw &&
+		(axb[1][i0]-x[1][i1]+x[1][i2] < 0) == ccw &&
+		(axb[2][i0]-x[2][i1]+x[2][i2] < 0) == ccw)
 	{   // points at triangle
 		MeReal r = (inTriD-dn[i1]+dn[i2])*recipDen;
 		if (r >= -r0 && r <= r0)
@@ -239,9 +239,9 @@ static void McdVanillaAddTriBoxSegmentPoints(MeVector3* &outList,
 	}
 
 	// -- edge
-	if (axb[0][i0]+x[0][i1]+x[0][i2] < 0 == ccw &&
-		axb[1][i0]+x[1][i1]+x[1][i2] < 0 == ccw &&
-		axb[2][i0]+x[2][i1]+x[2][i2] < 0 == ccw)
+	if ((axb[0][i0]+x[0][i1]+x[0][i2] < 0) == ccw &&
+		(axb[1][i0]+x[1][i1]+x[1][i2] < 0) == ccw &&
+		(axb[2][i0]+x[2][i1]+x[2][i2] < 0) == ccw)
 	{   // points at triangle
 		MeReal r = (inTriD+dn[i1]+dn[i2])*recipDen;
 		if (r >= -r0 && r <= r0)
@@ -254,9 +254,9 @@ static void McdVanillaAddTriBoxSegmentPoints(MeVector3* &outList,
 	}
 
 	// -+ edge
-	if (axb[0][i0]+x[0][i1]-x[0][i2] < 0 == ccw &&
-		axb[1][i0]+x[1][i1]-x[1][i2] < 0 == ccw &&
-		axb[2][i0]+x[2][i1]-x[2][i2] < 0 == ccw)
+	if ((axb[0][i0]+x[0][i1]-x[0][i2] < 0) == ccw &&
+		(axb[1][i0]+x[1][i1]-x[1][i2] < 0) == ccw &&
+		(axb[2][i0]+x[2][i1]-x[2][i2] < 0) == ccw)
 	{   // points at triangle
 		MeReal r = (inTriD+dn[i1]-dn[i2])*recipDen;
 		if (r >= -r0 && r <= r0) {  // intersects segment

@@ -696,7 +696,7 @@ void UObject::ExportProperties
 						{
 							appStrncpy(DelegateName,ThisName,NAME_SIZE);
 							ThisName = DelegateName;
-							while ( *ThisName && *ThisName == '_' )
+							while ( *ThisName == '_' )
 								ThisName++;
 							*appStrchr(ThisName,'_')=0;
 						}

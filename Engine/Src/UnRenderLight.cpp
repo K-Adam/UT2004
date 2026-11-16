@@ -649,7 +649,7 @@ BYTE* Illuminate(BYTE* ShadowMap,FBspSurf& Surf,FLightMap* LightMap,FLightBitmap
 
 			SPATIAL_BEGIN;
 
-			FLOAT SizeSq = Vertex | Vertex;
+			FLOAT SizeSq = Vertex | Vertex; // NOLINT(misc-redundant-expression)
 			FLOAT VDotV  = Vertex | View;
 			if( VDotV > 0.0 && Square(VDotV) > SineSq * SizeSq )
 			{

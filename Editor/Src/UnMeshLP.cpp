@@ -1394,8 +1394,6 @@ QSORT_RETURN CDECL CompareFaces( const VTriangle* A, const VTriangle* B )
 	else if( A->MatIndex    < B->MatIndex    ) return -1;		
 	else if( A->AuxMatIndex > B->AuxMatIndex ) return 1;
 	else if( A->AuxMatIndex < B->AuxMatIndex ) return -1;
-	else if( A->WedgeIndex  > A->WedgeIndex  ) return 1;
-	else if( A->WedgeIndex  < A->WedgeIndex  ) return -1;	
 	else                                       return 0;
 }
 

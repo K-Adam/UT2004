@@ -1355,7 +1355,7 @@ void FCollisionOctree::AddActor(AActor* Actor)
 		return;
 
 	// Do nothing if actors location is invalid
-	if( !(Actor->Location == Actor->Location) )
+	if( !(Actor->Location == Actor->Location) ) // NOLINT(misc-redundant-expression)
 	{
 		debugf(TEXT("Octree Warning (AddActor): %s Has Invalid Location."), Actor->GetName());
 		return;
@@ -1421,7 +1421,7 @@ void FCollisionOctree::RemoveActor(AActor* Actor)
 	if( !Actor->bDeleteMe && Actor->Location!=Actor->ColLocation )
 	{
 		// make sure ColLocation not undefined
-		if( !(Actor->ColLocation == Actor->ColLocation) )
+		if( !(Actor->ColLocation == Actor->ColLocation) ) // NOLINT(misc-redundant-expression)
 			debugf( TEXT("Octree Warning (RemoveActor): %s has invalid ColLocation"), Actor->GetName() );
 		if ( Actor->Role == ROLE_Authority )
 			debugf( TEXT("Octree Warning (RemoveActor): %s moved without proper hashing"), Actor->GetName() );

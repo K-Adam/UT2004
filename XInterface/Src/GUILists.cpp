@@ -439,7 +439,7 @@ void UGUICharacterList::PreDraw(UCanvas* Canvas)
 	ItemWidth = ItemHeight / 2;
 	ItemsPerPage = appFloor( (ClientBounds[2] - ClientBounds[0]) / ItemWidth );
 
-	if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != ItemsPerPage > 0 && ItemCount > ItemsPerPage )
+	if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != (ItemsPerPage > 0) && ItemCount > ItemsPerPage )
 	{
 		MyScrollBar->eventSetVisibility(ItemsPerPage > 0 && ItemCount > ItemsPerPage);
 		SetAdjustedDims( Max<FLOAT>(ActualWidth() - (MyScrollBar->bVisible ? MyScrollBar->ActualWidth() : 0), 2.f), ActualHeight(), ActualLeft(), ActualTop() );
@@ -501,7 +501,7 @@ void UGUICircularImageList::PreDraw(UCanvas* Canvas)
 	ItemWidth = ItemHeight;
 	ItemsPerPage = appFloor( (ClientBounds[2] - ClientBounds[0]) / ItemWidth );
 
-	if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != ItemsPerPage > 0 && ItemCount > ItemsPerPage )
+	if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != (ItemsPerPage > 0) && ItemCount > ItemsPerPage )
 	{
 		MyScrollBar->eventSetVisibility(ItemsPerPage > 0 && ItemCount > ItemsPerPage);
 		SetAdjustedDims( Max<FLOAT>(ActualWidth() - (MyScrollBar->bVisible ? MyScrollBar->ActualWidth() : 0), 2.f), ActualHeight(), ActualLeft(), ActualTop() );
@@ -590,7 +590,7 @@ void UGUIVertImageList::PreDraw(UCanvas* Canvas)
 			MyScrollBar->Step = NoVisibleCols;
 
 		ItemsPerPage = NoVisibleRows * NoVisibleCols;
-		if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != ItemsPerPage > 0 && ItemCount > ItemsPerPage )
+		if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != (ItemsPerPage > 0) && ItemCount > ItemsPerPage )
 		{
 			MyScrollBar->eventSetVisibility(ItemsPerPage > 0 && ItemCount > ItemsPerPage);
 			SetAdjustedDims( Max<FLOAT>(ActualWidth() - (MyScrollBar->bVisible ? MyScrollBar->ActualWidth() : 0), 2.f), ActualHeight(), ActualLeft(), ActualTop() );
@@ -600,7 +600,7 @@ void UGUIVertImageList::PreDraw(UCanvas* Canvas)
 	else if ( CellStyle == CELL_FixedCount  )
 	{
 		ItemsPerPage = NoVisibleRows * NoVisibleCols;
-		if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != ItemsPerPage > 0 && ItemCount > ItemsPerPage )
+		if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != (ItemsPerPage > 0) && ItemCount > ItemsPerPage )
 		{
 			MyScrollBar->eventSetVisibility(ItemsPerPage > 0 && ItemCount > ItemsPerPage);
 			SetAdjustedDims( Max<FLOAT>(ActualWidth() - (MyScrollBar->bVisible ? MyScrollBar->ActualWidth() : 0), 2.f), ActualHeight(), ActualLeft(), ActualTop() );
@@ -1006,7 +1006,7 @@ void UGUIMultiOptionList::PreDraw(UCanvas* Canvas)
 	ItemsPerPage = appFloor((ClientBounds[3] - ClientBounds[1]) / ItemHeight) * NumColumns;
 	ItemsPerColumn = appRound( FLOAT(ItemCount) / FLOAT(NumColumns));
 
-	if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != ItemsPerPage > 0 && ItemCount > ItemsPerPage )
+	if ( !bAnimating && MyScrollBar && MyScrollBar->bVisible != (ItemsPerPage > 0) && ItemCount > ItemsPerPage )
 	{
 		MyScrollBar->eventSetVisibility(ItemsPerPage > 0 && ItemCount > ItemsPerPage);
 		SetAdjustedDims( Max<FLOAT>(ActualWidth() - (MyScrollBar->bVisible ? MyScrollBar->ActualWidth() : 0), 2.f), ActualHeight(), ActualLeft(), ActualTop() );

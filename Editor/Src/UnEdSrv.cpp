@@ -2305,8 +2305,8 @@ UBOOL UEditorEngine::Exec_Brush( const TCHAR* Str, FOutputDevice& Ar )
 			GBrush->Linked = 0;
 			ImportObject<UPolys>( GEditor->Level, GBrush->Polys->GetOuter(), GBrush->Polys->GetName(), 0, TempFname );
 			if( Flags )
-				for( Word2=0; Word2<TempModel->Polys->Element.Num(); Word2++ )
-					GBrush->Polys->Element(Word2).PolyFlags |= Flags;
+				for( INT i=0; i<TempModel->Polys->Element.Num(); i++ )
+					GBrush->Polys->Element(i).PolyFlags |= Flags;
 			for( INT i=0; i<GBrush->Polys->Element.Num(); i++ )
 				GBrush->Polys->Element(i).iLink = i;
 			if( Merge )

@@ -2398,7 +2398,7 @@ inline UBOOL FLineSphereIntersection(FVector Start,FVector Dir,FLOAT Length,FVec
 {
 	FVector	EO = Start - Origin;
 	FLOAT	v = (Dir | (Origin - Start)),
-			disc = Radius * Radius - ((EO | EO) - v * v);
+			disc = Radius * Radius - ((EO | EO) - v * v); // NOLINT(misc-redundant-expression)
 
 	if(disc >= 0.0f)
 	{
@@ -2616,7 +2616,7 @@ class CORE_API FQuat
 
 		FVector qv(X, Y, Z);
 		FVector vOut = 2.f * W * (qv ^ v);
-		vOut += ((W * W) - (qv | qv)) * v;
+		vOut += ((W * W) - (qv | qv)) * v; // NOLINT(misc-redundant-expression)
 		vOut += (2.f * (qv | v)) * qv;
 
 		return vOut;

@@ -118,7 +118,8 @@ static UBOOL ActorsShouldCollide(AActor* a1, AActor* a2)
 	// NB. Should always have KParams at this point.
 	UKarmaParams* kparams1 = Cast<UKarmaParams>(a1->KParams);
 	UKarmaParams* kparams2 = Cast<UKarmaParams>(a2->KParams);
-	if(kparams1 && kparams2 && kparams1->bKDoubleTickRate != kparams1->bKDoubleTickRate)
+	// Retail compares the first actor with itself, so the check never fires. Fixing it would change which actors collide online.
+	if(kparams1 && kparams2 && kparams1->bKDoubleTickRate != kparams1->bKDoubleTickRate) // NOLINT(misc-redundant-expression)
 	{
 		debugf(TEXT("ActorsShouldCollide: Allowed collion between actors with different bKDoubleTickRate"));
 		return 0;

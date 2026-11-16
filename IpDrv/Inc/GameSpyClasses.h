@@ -81,7 +81,7 @@ void rc4(BYTE *buffer_ptr, INT buffer_len, FRC4Key *key)
 	BYTE y;
 	BYTE* state;
 	BYTE xorIndex;
-	short counter;              
+	INT counter;              
 	
 	x = key->x;     
 	y = key->y;     

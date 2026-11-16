@@ -1,0 +1,33 @@
+# Checks that find real defects. Style and modernize checks are left out, because rewriting
+# twenty year old engine code for them risks more than it gains.
+# The disabled bugprone checks flag idioms the engine is built on:
+#   multi-level-implicit-pointer-conversion, sizeof-expression: the containers move raw memory, also of pointer elements.
+#   parent-virtual-call: Super:: skips a level on purpose in places.
+#   integer-division: gameplay and layout code truncates on purpose, and retail behaviour has to stay.
+#   unhandled-self-assignment, multiple-new-in-one-expression, inc-dec-in-conditions: the engine's allocator never throws and its parsers step in conditions.
+# A dot product or comparison of a value with itself (length, NaN test) is marked NOLINT where it is meant.
+Checks: >
+  -*,
+  bugprone-*,
+  misc-redundant-expression,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-reserved-identifier,
+  -bugprone-macro-parentheses,
+  -bugprone-branch-clone,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-switch-missing-default-case,
+  -bugprone-signed-char-misuse,
+  -bugprone-casting-through-void,
+  -bugprone-exception-escape,
+  -bugprone-empty-catch,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-sizeof-expression,
+  -bugprone-parent-virtual-call,
+  -bugprone-integer-division,
+  -bugprone-unhandled-self-assignment,
+  -bugprone-multiple-new-in-one-expression,
+  -bugprone-inc-dec-in-conditions
+WarningsAsErrors: '*'
+HeaderFilterRegex: '/(ALAudio|Core|Editor|Engine|Fire|IpDrv|Onslaught|OpenGLDrv|SDLDrv|SDLLaunch|UCC|UTV2004|UWeb|XGame|XInterface)/(Inc|Src)/'

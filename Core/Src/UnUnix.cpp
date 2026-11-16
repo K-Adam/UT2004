@@ -1146,7 +1146,8 @@ void* appGetDllHandle( const TCHAR* Filename )
 		debugf( TEXT("dlerror(): %s"), Error );
 	else
 	{
-		(void*)dlsym( Result, appToAnsi(Test) );
+		// Only dlerror's verdict on the lookup is needed.
+		(void)dlsym( Result, appToAnsi(Test) ); // NOLINT(bugprone-unused-return-value)
 		Error = dlerror();
 		if( Error == NULL )
 			return Result;
@@ -1450,9 +1451,9 @@ CORE_API const TCHAR* appTimestamp()
 
 	CurTime = time( NULL );
 	SysTime = localtime( &CurTime );
-	appSprintf( Result, ANSI_TO_TCHAR(asctime( SysTime )) );
-	// Strip newline.
-	Result[appStrlen( Result )-1] = '\0';
+	ANSICHAR Text[64];
+	strftime( Text, sizeof(Text), "%a %b %e %H:%M:%S %Y", SysTime );
+	appStrcpy( Result, ANSI_TO_TCHAR(Text) );
 	return Result;
 
 	unguard;

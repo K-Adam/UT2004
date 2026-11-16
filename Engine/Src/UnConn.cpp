@@ -954,7 +954,7 @@ void UNetConnection::HandleClientPlayer( APlayerController *PC )
 	// Init the new playerpawn.
 	guard(InitialPlayerPawn);
 	PC->Role        = ROLE_AutonomousProxy;
-	PC->ShowFlags   = SHOW_Backdrop | SHOW_Actors | SHOW_StaticMeshes | SHOW_Terrain | SHOW_DistanceFog | SHOW_Backdrop | SHOW_PlayerCtrl | SHOW_RealTime | SHOW_Coronas | SHOW_Particles | SHOW_BSP | SHOW_FluidSurfaces | SHOW_Projectors;
+	PC->ShowFlags   = SHOW_Backdrop | SHOW_Actors | SHOW_StaticMeshes | SHOW_Terrain | SHOW_DistanceFog | SHOW_PlayerCtrl | SHOW_RealTime | SHOW_Coronas | SHOW_Particles | SHOW_BSP | SHOW_FluidSurfaces | SHOW_Projectors;
 	PC->RendMap	  = REN_DynLight;
 	PC->SetPlayer( Viewport );
 	debugf(TEXT("%s setplayer %s"),PC->GetName(), Viewport->GetName());

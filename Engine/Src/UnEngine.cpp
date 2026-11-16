@@ -682,7 +682,7 @@ INT UServerCommandlet::Main( const TCHAR* Parms )
 	if (Engine->ServerReadsStdin)
 	{
 		debugf(NAME_Init, TEXT("ServerReadsStdin: Setting stdin non-blocking."));
-		setbuf(stdin, NULL);  // no buffering.
+		setvbuf(stdin, NULL, _IONBF, 0);
 		stdinfd = fileno(stdin);  // probably zero, but just in case...
 		int flags = fcntl(stdinfd, F_GETFL, 0);
 		if (flags == -1)

@@ -110,8 +110,8 @@ void ShowBanner( FOutputDevice& Warn )
 int main( int argc, char* argv[] )
 {
     #if ((__UNIX__) && (defined _DEBUG))
-        setbuf(stdout, NULL);
-        setbuf(stderr, NULL);
+        setvbuf(stdout, NULL, _IONBF, 0);
+        setvbuf(stderr, NULL, _IONBF, 0);
     #endif
 
 	INT ErrorLevel = 0;

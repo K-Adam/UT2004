@@ -628,7 +628,7 @@ APlayerController* ULevel::SpawnPlayActor( UPlayer* Player, ENetRole RemoteRole,
 	Actor->SetPlayer( Player );
 	Actor->Role       = ROLE_Authority;
 	Actor->RemoteRole = RemoteRole;
-	Actor->ShowFlags  = SHOW_Backdrop | SHOW_Actors | SHOW_StaticMeshes | SHOW_Terrain | SHOW_DistanceFog | SHOW_Backdrop | SHOW_PlayerCtrl | SHOW_RealTime | SHOW_Coronas | SHOW_Particles | SHOW_BSP | SHOW_FluidSurfaces | SHOW_Projectors;
+	Actor->ShowFlags  = SHOW_Backdrop | SHOW_Actors | SHOW_StaticMeshes | SHOW_Terrain | SHOW_DistanceFog | SHOW_PlayerCtrl | SHOW_RealTime | SHOW_Coronas | SHOW_Particles | SHOW_BSP | SHOW_FluidSurfaces | SHOW_Projectors;
 	Actor->RendMap	  = REN_DynLight;
 	GetLevelInfo()->Game->eventPostLogin( Actor );
 

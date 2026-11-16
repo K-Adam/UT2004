@@ -1864,7 +1864,7 @@ UBOOL APawn::PickWallAdjust(FVector WallHitNormal, AActor* HitActor)
 	FLOAT AdjustDist = 1.5f * CollisionRadius + 16.f;
 	AActor *MoveTarget = ( Controller->MoveTarget ? Controller->MoveTarget->AssociatedLevelGeometry() : NULL );
 
-	if ( (zdiff < CollisionHeight) && ((Dir | Dir) - CollisionRadius * CollisionRadius < 0) )
+	if ( (zdiff < CollisionHeight) && ((Dir | Dir) - CollisionRadius * CollisionRadius < 0) ) // NOLINT(misc-redundant-expression)
 		return false;
 	FLOAT Dist = Dir.Size();
 	if ( Dist == 0.f )
@@ -1982,7 +1982,7 @@ UBOOL APawn::Pick3DWallAdjust(FVector WallHitNormal, AActor* HitActor)
 	INT bCheckUp = 0;
 	if ( zdiff < CollisionHeight )
 	{
-		if ( (Dir | Dir) - CollisionRadius * CollisionRadius < 0 )
+		if ( (Dir | Dir) - CollisionRadius * CollisionRadius < 0 ) // NOLINT(misc-redundant-expression)
 			return false;
 		if ( Dir.SizeSquared() < 4.f * CollisionHeight * CollisionHeight )
 		{

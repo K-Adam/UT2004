@@ -666,7 +666,7 @@ UBOOL UModel::LineCheck
 			if( !Outside )
 			{
 				FVector V       = End-Start;
-				Hit.Time        = ((Hit.Location-Start)|V)/(V|V);
+				Hit.Time        = ((Hit.Location-Start)|V)/(V|V); // NOLINT(misc-redundant-expression)
 				Hit.Time		= Clamp( Hit.Time - 0.5f / V.Size(), 0.f, 1.f );
 				Hit.Location	= Start + V * Hit.Time;
 				Hit.Actor		= Owner;

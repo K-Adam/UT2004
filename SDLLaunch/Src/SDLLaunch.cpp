@@ -184,7 +184,7 @@ static void PumpServerTray(void)
 #ifdef WIN32
         FString Path = Log.Filename;
 #else
-        FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + Log.Filename;
+        FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + FString(Log.Filename);
 #endif
         SDL_OpenURL(appToAnsi(*Path));
     }

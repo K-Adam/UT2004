@@ -2030,7 +2030,7 @@ UBOOL ATerrainInfo::LineCheckWithQuad( INT X, INT Y, FCheckResult &Result, const
 		FVector Int = FLinePlaneIntersection( End, Start, FPlane(V1, N) );
 		if( Result.Actor == NULL ||	((Int-Start).SizeSquared() < (Result.Location-Start).SizeSquared()) )  
 		{					
-			FLOAT T = ((Int-Start|StartEnd)/(StartEnd|StartEnd));
+			FLOAT T = ((Int-Start|StartEnd)/(StartEnd|StartEnd)); // NOLINT(misc-redundant-expression)
 			if( T >=0.f && T<=1.f )
 			{	
 				FVector& Vert3 = Turned ? V4 : V3;
@@ -2053,7 +2053,7 @@ UBOOL ATerrainInfo::LineCheckWithQuad( INT X, INT Y, FCheckResult &Result, const
 							Result.Location = Int;
 							Result.Normal	= N;
 							FVector V       = End-Start;
-							Result.Time     = ((Result.Location-Start)|V)/(V|V);
+							Result.Time     = ((Result.Location-Start)|V)/(V|V); // NOLINT(misc-redundant-expression)
 							Result.Time		= Clamp( Result.Time - 0.5f / V.Size(), 0.f, 1.f );
 							Result.Location	= Start + V * Result.Time;
 
@@ -2083,7 +2083,7 @@ UBOOL ATerrainInfo::LineCheckWithQuad( INT X, INT Y, FCheckResult &Result, const
 		if( Result.Actor == NULL ||
 			((Int-Start).SizeSquared() < (Result.Location-Start).SizeSquared()) )  
 		{
-			FLOAT T = ((Int-Start|StartEnd)/(StartEnd|StartEnd));
+			FLOAT T = ((Int-Start|StartEnd)/(StartEnd|StartEnd)); // NOLINT(misc-redundant-expression)
 			if( T >=0.f && T<=1.f )
 			{
 				FVector& Vert1 = Turned ? V4 : V1;				
@@ -2104,7 +2104,7 @@ UBOOL ATerrainInfo::LineCheckWithQuad( INT X, INT Y, FCheckResult &Result, const
 							Result.Location = Int;
 							Result.Normal	= N;
 							FVector V       = End-Start;
-							Result.Time     = ((Result.Location-Start)|V)/(V|V);
+							Result.Time     = ((Result.Location-Start)|V)/(V|V); // NOLINT(misc-redundant-expression)
 							Result.Time		= Clamp( Result.Time - 0.5f / V.Size(), 0.f, 1.f );
 							Result.Location	= Start + V * Result.Time;
 

@@ -229,7 +229,7 @@ void UPlayInfo::execAddClass( FFrame& Stack, RESULT_DECL )
 	{
 		UClass* badclass = NULL;
 		INT last = ClassStack.Num() ? ClassStack.Last() : INDEX_NONE;
-		if ( last != INDEX_NONE && last >= 0 && last < InfoClasses.Num() )
+		if ( last >= 0 && last < InfoClasses.Num() )
 			badclass = InfoClasses(last);
 
 		debugf(NAME_Warning, TEXT("%s called PlayInfo.AddClass() with AddingClass == None!"), badclass ? badclass->GetName() : TEXT("Someone"));
@@ -264,7 +264,7 @@ void UPlayInfo::execRemoveClass( FFrame& Stack, RESULT_DECL )
 	{
 		UClass* badclass = NULL;
 		INT last = ClassStack.Num() ? ClassStack.Last() : INDEX_NONE;
-		if ( last != INDEX_NONE && last >= 0 && last < InfoClasses.Num() )
+		if ( last >= 0 && last < InfoClasses.Num() )
 			badclass = InfoClasses(last);
 		debugf(TEXT("%s called PlayInfo.RemoveClass() with RemovingClass == None!"), badclass ? badclass->GetName() : TEXT("Someone"));
 		return;
