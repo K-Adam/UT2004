@@ -64,8 +64,10 @@ set(UT_ASSETS_DIR "$ENV{UT_ASSETS_DIR}" CACHE PATH "Content set for development 
 if(UT_ASSETS_DIR AND NOT ANDROID)
   ut_link(assets ${UT_ASSETS_DIR})
 endif()
+# The tracked script packages are copied, because the game writes CacheRecords.ucl next to them.
 add_custom_target(ut_stage ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/System ${UT_SYSTEM_DIR}
+  COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/Scripts ${UT_SCRIPTS_DIR}
   VERBATIM)
 
 option(UT_STATIC_LINK "Link the engine modules into the executables instead of loading them at runtime" OFF)
@@ -264,7 +266,7 @@ endif()
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
     XGame XInterface Onslaught SDLDrv SDLLaunch)
-# Nothing built for Android or the web runs on the host, so the script packages come from a desktop build.
+# Nothing built for Android or the web runs on the host, so UCC is left out there.
 if(NOT ANDROID AND NOT EMSCRIPTEN)
   list(APPEND UT_MODULES UCC)
 endif()
@@ -287,20 +289,11 @@ endif()
 # -NOH keeps the checked-in *Classes.h headers. The source path is relative because the engine's
 # command line parser stops at spaces.
 cmake_path(RELATIVE_PATH CMAKE_SOURCE_DIR BASE_DIRECTORY ${UT_SYSTEM_DIR} OUTPUT_VARIABLE UT_SOURCE_FROM_SYSTEM)
-# Online servers reject packages that differ from retail, even by GUID, so retail copies are used
-# and ucc make only compiles the packages left without one.
-set(UT_RETAIL_DIR "$ENV{UT_RETAIL_DIR}" CACHE PATH "Installed UT2004 that provides the script packages")
-file(GLOB UT_SCRIPT_SOURCES LIST_DIRECTORIES true RELATIVE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/*/Classes)
-foreach(classes ${UT_SCRIPT_SOURCES})
-  cmake_path(GET classes PARENT_PATH pkg)
-  foreach(ext u ucl)
-    if(EXISTS "${UT_RETAIL_DIR}/System/${pkg}.${ext}")
-      list(APPEND UT_RETAIL_SCRIPTS "${UT_RETAIL_DIR}/System/${pkg}.${ext}")
-    endif()
-  endforeach()
-endforeach()
-if(UT_RETAIL_SCRIPTS)
-  set(UT_COPY_RETAIL_SCRIPTS COMMAND ${CMAKE_COMMAND} -E copy_if_different ${UT_RETAIL_SCRIPTS} ${UT_SCRIPTS_DIR})
+# Online servers reject packages that differ from retail, even by GUID, so Scripts/ tracks the retail
+# packages and ucc make only compiles this port's own ones, which no server checks.
+set(UT_OWN_SCRIPTS ${UT_SCRIPTS_DIR}/GUI2K4Fix.u ${UT_SCRIPTS_DIR}/XAdminFix.u)
+set(UT_RETAIL_DIR "$ENV{UT_RETAIL_DIR}" CACHE PATH "Installed UT2004 that provides the content ucc_make loads")
+if(EXISTS "${UT_RETAIL_DIR}/Textures")
   # The retail packages import sounds and meshes, so they only load with the install's content in reach.
   file(READ ${CMAKE_SOURCE_DIR}/System/Default.ini UT_MAKE_INI)
   foreach(dir Maps Textures Sounds Music StaticMeshes Animations)
@@ -308,12 +301,12 @@ if(UT_RETAIL_SCRIPTS)
   endforeach()
   file(WRITE ${UT_SYSTEM_DIR}/Make.ini "${UT_MAKE_INI}")
   set(UT_MAKE_INI -INI=Make.ini)
-else()
-  message(WARNING "No retail script packages in UT_RETAIL_DIR (${UT_RETAIL_DIR}), ucc_make compiles them all and online play only works with servers running this build")
 endif()
+# ucc make skips packages that exist, so the own ones are removed first and the result goes back into Scripts/.
 add_custom_target(ucc_make
-  ${UT_COPY_RETAIL_SCRIPTS}
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${UT_OWN_SCRIPTS}
   COMMAND $<TARGET_FILE:UCC> make -NOH -SOURCE=${UT_SOURCE_FROM_SYSTEM} ${UT_MAKE_INI}
+  COMMAND ${CMAKE_COMMAND} -E copy ${UT_OWN_SCRIPTS} ${CMAKE_SOURCE_DIR}/Scripts
   WORKING_DIRECTORY ${UT_SYSTEM_DIR}
   DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught $<TARGET_NAME_IF_EXISTS:UTV2004>
   USES_TERMINAL VERBATIM)
@@ -333,7 +326,8 @@ if(TARGET UCC)
   install(DIRECTORY System Help KarmaData Web DESTINATION UT2004)
   install(DIRECTORY ${UT_SYSTEM_DIR}/ DESTINATION UT2004/System USE_SOURCE_PERMISSIONS
     FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll" PATTERN "*.so" PATTERN "*-bin")
-  install(DIRECTORY ${UT_SCRIPTS_DIR}/ DESTINATION Scripts FILES_MATCHING PATTERN "*.u" PATTERN "*.ucl")
+  install(DIRECTORY Scripts DESTINATION .)
+  install(FILES System/CacheRecords.ucl DESTINATION Scripts)
   install(FILES README.md NOTICE.md LICENSE DESTINATION UT2004)
   set(CPACK_PACKAGE_NAME UT2004)
   set(CPACK_PACKAGE_FILE_NAME UT2004-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR})

@@ -1,6 +1,5 @@
 """The file set and the ini overrides that the Android and web packers share."""
 import os
-import sys
 
 
 def walk(src, dest, exts=None):
@@ -20,8 +19,6 @@ def collect(source, scripts, prefix=''):
     files += walk(os.path.join(source, 'KarmaData'), prefix + 'KarmaData')
     for f in ('ut2004logo.bmp', 'Unreal.bmp'):
         files.append((os.path.join(source, 'Help', f), prefix + 'Help/' + f))
-    if not any(rel.startswith('Scripts/') for _, rel in files):
-        sys.exit('No script packages in %s, build ucc_make with a desktop preset first' % scripts)
     return files
 
 

@@ -29,7 +29,7 @@ The output lands in `build/<preset>/System/`. The Android build writes `build/an
 
 ### Script packages
 
-`cmake --build --preset <build preset> --target ucc_make` fills `build/Scripts/` with the compiled UnrealScript packages. Online play needs packages identical to retail, so set `UT_RETAIL_DIR` to your UT2004 install first: the retail packages are copied from there and only this port's two fix packages are compiled. Android and the web take the packages from `build/Scripts/`, so run a desktop `ucc_make` before building them.
+Online play needs UnrealScript packages identical to retail, so `Scripts/` holds the retail packages plus this port's two fix packages, and every build copies them to `build/Scripts/`. After changing `GUI2K4Fix` or `XAdminFix`, set `UT_RETAIL_DIR` to your UT2004 install (the compiler loads its content) and run `cmake --build --preset <build preset> --target ucc_make`. It compiles those two and puts them back into `Scripts/`.
 
 ## Run
 
