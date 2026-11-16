@@ -440,7 +440,8 @@ class UOpenGLRenderDevice : public URenderDevice
 			VolumetricFog,
 			GlobalIllumination,
 			HeatHaze,
-			MotionBlur;
+			MotionBlur,
+			DetectSettings;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
 	UBOOL	SupportsDXT1,
@@ -559,7 +560,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	virtual void Flush(UViewport* Viewport);
 	virtual void FlushResource(QWORD CacheId);
 	virtual UBOOL ResourceCached(QWORD CacheId);
-	virtual UBOOL Exec(const TCHAR* Cmd,FOutputDevice& Ar) { return 0; }
+	virtual UBOOL Exec(const TCHAR* Cmd,FOutputDevice& Ar);
 	virtual FRenderInterface* Lock(UViewport* Viewport,BYTE* HitData,INT* HitSize);
 	virtual void Unlock(FRenderInterface* RI);
 	virtual void Present(UViewport* Viewport);
@@ -589,6 +590,7 @@ class UOpenGLRenderDevice : public URenderDevice
 
 private:
 	UBOOL InitContext();
+	void DetectOptions();
 	UBOOL InitPostProcess(GLuint VertexShader);
 	void ResetStateCache();
 	void DestroyFramebuffer(FOpenGLFramebuffer& F);

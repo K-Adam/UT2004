@@ -158,16 +158,7 @@ function ResetClicked()
 	Super.ResetClicked();
 
 	PC = PlayerOwner();
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ResolutionScale 100");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice Antialiasing True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice AmbientOcclusion True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ContactShadows True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ScreenSpaceReflections True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice DepthOfField True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice VolumetricFog True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice GlobalIllumination True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice HeatHaze True");
-	PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice MotionBlur False");
+	PC.ConsoleCommand("RESETRENDEROPTIONS");
 	PC.ConsoleCommand("GAMMA 1.0");
 	SetShadows(true);
 

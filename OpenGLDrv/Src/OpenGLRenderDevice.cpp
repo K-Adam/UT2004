@@ -37,10 +37,72 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("HeatHaze"),		RF_Public)UBoolProperty(CPP_PROPERTY(HeatHaze),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("MotionBlur"),		RF_Public)UBoolProperty(CPP_PROPERTY(MotionBlur),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("DetectSettings"),	RF_Public)UBoolProperty(CPP_PROPERTY(DetectSettings),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
 	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = HeatHaze = 1;
 	ResolutionScale = 100;
+}
+
+// Guessed from the renderer's name. 0 affords every effect, 1 is an integrated desktop GPU, 2 a weak phone GPU, 3 a software rasterizer.
+static INT GpuTier(const TCHAR* Renderer,UBOOL Capable)
+{
+	static const struct { const TCHAR* Name; INT Tier; } Known[] =
+	{
+		{ TEXT("llvmpipe"), 3 }, { TEXT("softpipe"), 3 }, { TEXT("SwiftShader"), 3 }, { TEXT("Basic Render"), 3 },
+		{ TEXT("Mali-4"), 2 }, { TEXT("Mali-T"), 2 }, { TEXT("Mali-G3"), 2 }, { TEXT("Mali-G5"), 2 }, { TEXT("PowerVR"), 2 }, { TEXT("VideoCore"), 2 },
+		{ TEXT("HD Graphics"), 1 },
+	};
+	for( INT i=0; i<ARRAY_COUNT(Known); i++ )
+		if( appStrstr(Renderer,Known[i].Name) )
+			return Known[i].Tier;
+	// Adreno 6xx starts to cope at the 640.
+	const TCHAR* Adreno = appStrstr(Renderer,TEXT("Adreno (TM) "));
+	if( Adreno && appAtoi(Adreno + 12) < 640 )
+		return 2;
+	return Capable ? 0 : 2;
+}
+
+// Lowers the first run's options to what the GPU is likely to afford. It never raises one.
+void UOpenGLRenderDevice::DetectOptions()
+{
+	checkSlow(GpuTier(TEXT("ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)"),1) == 0);
+	checkSlow(GpuTier(TEXT("ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)"),1) == 1);
+	checkSlow(GpuTier(TEXT("Adreno (TM) 618"),1) == 2 && GpuTier(TEXT("Adreno (TM) 740"),1) == 0 && GpuTier(TEXT("Mali-G52 MC2"),1) == 2);
+	checkSlow(GpuTier(TEXT("llvmpipe (LLVM 15.0.7, 256 bits)"),1) == 3 && GpuTier(TEXT("Mali-G715"),0) == 2);
+
+	INT Tier = GpuTier(appFromAnsi((const ANSICHAR*)glGetString(GL_RENDERER)),SupportsFloatTargets && MaxTextureSize >= 4096);
+	if( Tier >= 1 )
+		VolumetricFog = GlobalIllumination = 0;
+	if( Tier >= 2 )
+	{
+		ScreenSpaceReflections = AmbientOcclusion = ContactShadows = DepthOfField = 0;
+		ResolutionScale = Min(ResolutionScale,75);
+	}
+	if( Tier >= 3 )
+	{
+		Antialiasing = HeatHaze = 0;
+		ResolutionScale = Min(ResolutionScale,50);
+	}
+	debugf(TEXT("OpenGLDrv: first run, GPU tier %i"),Tier);
+	DetectSettings = 0;
+	SaveConfig();
+}
+
+UBOOL UOpenGLRenderDevice::Exec(const TCHAR* Cmd,FOutputDevice& Ar)
+{
+	if( ContextReady && ParseCommand(&Cmd,TEXT("RESETRENDEROPTIONS")) )
+	{
+		// Default.ini holds the platform's defaults, the packers adjust it for phones and the web.
+		// The menu that resets has no controls for these two, so they stay.
+		UBOOL VSync = UseVSync, MouseLag = ReduceMouseLag;
+		LoadConfig(0,NULL,TEXT("Default.ini"));
+		UseVSync		= VSync;
+		ReduceMouseLag	= MouseLag;
+		DetectOptions();
+		return 1;
+	}
+	return 0;
 }
 
 UBOOL UOpenGLRenderDevice::Init()
@@ -259,6 +321,8 @@ UBOOL UOpenGLRenderDevice::InitContext()
 
 	ResetStateCache();
 	ContextReady = 1;
+	if( DetectSettings )
+		DetectOptions();
 	// The level may have loaded before this context existed, so its Flush never asked for a precache.
 	PrecacheOnFlip = 1;
 	return 1;

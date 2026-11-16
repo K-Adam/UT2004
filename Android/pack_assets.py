@@ -11,21 +11,15 @@ from concurrent.futures import ProcessPoolExecutor
 
 from pack_common import collect, read
 
-# Phone defaults: gyro aim on, effects phone GPUs can't afford off, VSync instead of the per-frame GPU wait.
+# Phone defaults: gyro aim on, the two costliest effects off, VSync instead of the per-frame GPU wait.
 OVERRIDES = {'UT2004/System/Default.ini': [
     (b'%s=%s' % (k, old), b'%s=%s' % (k, new)) for k, old, new in (
         (b'PadGyro', b'False', b'True'),
         (b'ReduceMouseLag', b'True', b'False'),
         (b'UseVSync', b'False', b'True'),
-        (b'Antialiasing', b'True', b'False'),
-        (b'AmbientOcclusion', b'True', b'False'),
-        (b'ContactShadows', b'True', b'False'),
-        (b'ScreenSpaceReflections', b'True', b'False'),
-        (b'DepthOfField', b'True', b'False'),
         (b'VolumetricFog', b'True', b'False'),
         (b'GlobalIllumination', b'True', b'False'),
-        (b'HeatHaze', b'True', b'False'),
-        (b'ResolutionScale', b'100', b'70'))]}
+        (b'ResolutionScale', b'100', b'75'))]}
 
 
 def compress(job):

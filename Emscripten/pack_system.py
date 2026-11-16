@@ -13,8 +13,11 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Android'))
 from pack_common import collect, read  # noqa: E402
 
-# Browsers only enter fullscreen from a click or key press.
-OVERRIDES = {'System/Default.ini': [(b'StartupFullscreen=True', b'StartupFullscreen=False')]}
+# Browsers only enter fullscreen from a click or key press, and WebGL's overhead leaves no room for the two costliest effects.
+OVERRIDES = {'System/Default.ini': [
+    (b'StartupFullscreen=True', b'StartupFullscreen=False'),
+    (b'VolumetricFog=True', b'VolumetricFog=False'),
+    (b'GlobalIllumination=True', b'GlobalIllumination=False')]}
 
 
 def main():
