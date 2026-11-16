@@ -56,8 +56,7 @@
         "ANDROID_PLATFORM": "android-28",
         "ANDROID_STL": "c++_shared",
         "UT_STATIC_LINK": "ON"
-      },
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+      }
     },
     {
       "name": "web",

@@ -51,7 +51,7 @@
   <form method="dialog">
     <h2>Welcome</h2>
     <p>This web port of Unreal Tournament 2004 is a hobby project I maintain. It is not affiliated with or endorsed by Epic Games.</p>
-    <p>Found a problem or want to get in touch? <a href="https://github.com/K-Adam/UT2004_3369/issues" target="_blank" rel="noopener">Open an issue on GitHub</a>.</p>
+    <p>Found a problem or want to get in touch? <a href="https://github.com/K-Adam/UT2004/issues" target="_blank" rel="noopener">Open an issue on GitHub</a>.</p>
     <button autofocus>OK</button>
   </form>
 </dialog>
@@ -538,7 +538,7 @@ async function welcome() {
 // Phones skip everything below, so they never download the content.
 if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
   status.hidden = true;
-  ask('mobile').then(() => location.replace('https://github.com/K-Adam/UT2004_3369/releases'));
+  ask('mobile').then(() => location.replace('https://github.com/K-Adam/UT2004/releases'));
 } else if (!document.createElement('canvas').getContext('webgl2')) {
   stop('This browser has no WebGL 2.');
 } else if (!('Suspending' in WebAssembly)) {
