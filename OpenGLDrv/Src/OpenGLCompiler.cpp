@@ -1168,8 +1168,9 @@ public:
 		{
 			if( !(Shader ? this->Shader(Shader,Mod) : Simple(Base,Mod)) )
 				return 0;
-			// Leaves and other cutouts, not particles, projectors or terrain layers.
-			State.DepthPass = !State.Beam && State.AlphaTest && !State.ZWrite && State.ZTest && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA;
+			// Leaves and other cutouts, not particles, projectors or terrain layers. Reflective films such as
+			// puddles lie on the floor, their own depth would be a step that ambient occlusion and contact shadows outline.
+			State.DepthPass = !State.Beam && !State.Reflectivity && State.AlphaTest && !State.ZWrite && State.ZTest && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA;
 			return 1;
 		}
 		if( (Terrain = CheckMaterial<UTerrainMaterial,MT_TerrainMaterial>(Time,Material,&Mod)) != NULL )
