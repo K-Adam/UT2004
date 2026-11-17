@@ -368,6 +368,15 @@ UBOOL WebMasterListDone( struct FWebMasterRequest* Request, UBOOL& Ok, TArray<FS
 struct FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp );
 UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp );
 void WebMasterRequestFree( struct FWebMasterRequest* Request );
+// The relay for joining a browser host that can't be reached directly, an empty Host when the web master gives none.
+// The strings are valid until the next call.
+struct FWebMasterTurn
+{
+	const ANSICHAR *Host, *Username, *Password;
+	INT Port;
+};
+// Returns false while the web master is being asked
+UBOOL WebMasterTurn( FWebMasterTurn& Out );
 
 // Writes the server's reply packets to a server browser query, nothing while no server runs
 void ServerQueryAnswer( BYTE Command, FArchive& ArSend );

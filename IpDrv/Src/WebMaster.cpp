@@ -35,6 +35,14 @@ enum
 	MAX_WEB_NEWS		= 32,
 };
 
+// The web master's credential lasts 48 hours and an expired one drops a relayed game.
+// A failure is kept for a while too, or every server browser query would ask again.
+enum
+{
+	TURN_REFRESH_TIME	= 24 * 3600,
+	TURN_RETRY_TIME		= 600,
+};
+
 #if __EMSCRIPTEN__
 extern "C" void ut_webrtc_host_state( const char* Json );
 
@@ -272,6 +280,70 @@ UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp )
 	Ok = Ok && Root.is_object() && Root.contains("sdp") && Root["sdp"].is_string();
 	if( Ok )
 		Sdp = appFromUtf8( Root["sdp"].get<std::string>().c_str() );
+	return 1;
+}
+
+// The first UDP relay of the list, the only kind the game's ICE library can use
+static void ParseTurn( const std::string& Body, std::string& Host, INT& Port, std::string& Username, std::string& Password )
+{
+	nlohmann::json Root = nlohmann::json::parse( Body, nullptr, false );
+	if( !Root.is_object() || !Root.contains("iceServers") || !Root["iceServers"].is_array() )
+		return;
+	for( const auto& Server : Root["iceServers"] )
+	{
+		if( !Server.is_object() || !Server.contains("urls") || !Server["urls"].is_array()
+		||	!Server.contains("username") || !Server["username"].is_string()
+		||	!Server.contains("credential") || !Server["credential"].is_string() )
+			continue;
+		for( const auto& Item : Server["urls"] )
+		{
+			if( !Item.is_string() )
+				continue;
+			std::string Url = Item.get<std::string>();
+			size_t Colon = Url.find( ':', 5 );
+			if( Url.compare( 0, 5, "turn:" ) != 0 || Colon == std::string::npos || Url.find("transport=tcp") != std::string::npos )
+				continue;
+			INT UrlPort = atoi( Url.c_str() + Colon + 1 );
+			if( Colon == 5 || UrlPort < 1 || UrlPort > 65535 )
+				continue;
+			Host = Url.substr( 5, Colon - 5 );
+			Port = UrlPort;
+			Username = Server["username"].get<std::string>();
+			Password = Server["credential"].get<std::string>();
+			return;
+		}
+	}
+}
+
+UBOOL WebMasterTurn( FWebMasterTurn& Out )
+{
+	// Standard strings, these outlive the engine's allocator
+	static FWebMasterRequest* Request;
+	static std::string Host, Username, Password;
+	static INT Port;
+	static DOUBLE NextTime;
+	if( Request )
+	{
+		UBOOL Ok;
+		std::string Body;
+		if( !WebMasterRequestDone( Request, Ok, Body ) )
+			return 0;
+		WebMasterRequestFree( Request );
+		Request = nullptr;
+		Host.clear();
+		if( Ok )
+			ParseTurn( Body, Host, Port, Username, Password );
+		NextTime = appSeconds() + (Host.empty() ? TURN_RETRY_TIME : TURN_REFRESH_TIME);
+	}
+	else if( appSeconds() >= NextTime )
+	{
+		Request = WebMasterRequest( TEXT("/ice"), std::string() );
+		return 0;
+	}
+	Out.Host = Host.c_str();
+	Out.Username = Username.c_str();
+	Out.Password = Password.c_str();
+	Out.Port = Port;
 	return 1;
 }
 #endif

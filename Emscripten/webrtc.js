@@ -7,7 +7,33 @@ addToLibrary({
     // The host socket lives as long as the page, so the id players join by survives map changes.
     host: null,
     accepted: [],
+    // Used until the web master's list arrives and when it gives none.
     signaled: { iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }] },
+    relay: null,
+
+    // The web master's STUN and relay servers. One request serves the page's joins and queries, and a failure
+    // is kept for a while too, or every server browser query would ask again.
+    ice: (url) => {
+      let relay = UTWebRtc.relay;
+      if (!relay || Date.now() > relay.until) {
+        relay = UTWebRtc.relay = { until: Infinity };
+        relay.config = fetch(`${url}/ice`, { signal: AbortSignal.timeout(5000) })
+          .then(async (res) => {
+            if (!res.ok) throw new Error(res.status);
+            const config = await res.json();
+            // An empty list would be accepted and take the STUN server away.
+            if (!config.iceServers?.length) throw new Error('no ICE servers');
+            // The credential lasts 48 hours and an expired one drops a relayed game.
+            relay.until = Date.now() + 24 * 3600 * 1000;
+            return config;
+          })
+          .catch(() => {
+            relay.until = Date.now() + 600 * 1000;
+            return UTWebRtc.signaled;
+          });
+      }
+      return relay.config;
+    },
 
     add: (config, maxInbox) => {
       const peer = { inbox: [], closed: false };
@@ -58,10 +84,11 @@ addToLibrary({
         const m = JSON.parse(e.data);
         if (m.type == 'id') {
           host.id = m.id;
+          host.config = m.iceServers ? { iceServers: m.iceServers } : UTWebRtc.signaled;
         } else if (m.type == 'offer' && host.active && host.setup < 16) {
           // Each offer costs a peer connection for the seconds it gathers, so a burst of them goes unanswered.
           host.setup++;
-          const [id, peer] = UTWebRtc.add(UTWebRtc.signaled, host.maxInbox);
+          const [id, peer] = UTWebRtc.add(host.config, host.maxInbox);
           try {
             await peer.pc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
             await peer.pc.setLocalDescription(await peer.pc.createAnswer());
@@ -107,6 +134,13 @@ addToLibrary({
     hostId = UTF8ToString(hostId);
     const [id, peer] = UTWebRtc.add(UTWebRtc.signaled, maxInbox);
     (async () => {
+      const config = await UTWebRtc.ice(url);
+      // A list the browser rejects leaves the STUN server the peer was made with.
+      try {
+        peer.pc.setConfiguration(config);
+      } catch (e) {
+        err(`WebRTC: ${e}`);
+      }
       await peer.pc.setLocalDescription(await peer.pc.createOffer());
       await UTWebRtc.gathered(peer.pc);
       // Sent as text/plain, which needs no CORS preflight.

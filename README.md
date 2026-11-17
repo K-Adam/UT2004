@@ -21,7 +21,7 @@ The [releases](https://github.com/K-Adam/UT2004/releases) carry a build for each
 | `UT2004-<version>-win64.zip` | The same without an installer. Unpack it and start `System/UT2004.exe`. |
 | `UT2004-<version>-linux64.tar.gz`, `-linux-arm64.tar.gz` | Linux x64 and arm64, built on Ubuntu 22.04. Unpack it and run `./install.sh` (or `sudo ./install.sh --system` for everyone), then start `ut2004`. The installed folder has an `uninstall.sh`. SDL 3 is included, the other libraries come from your distribution: OpenAL, Vorbis, Bullet, squish, OpenGL ES, speexdsp, OpenSSL and curl. |
 | `UT2004-<version>-android.apk` | Android 9 or newer on arm64. |
-| `UT2004-<version>-web.zip` | The files of the web page. Only the page at `ut2004.dev` gets the hosted content: on another domain the browser blocks the downloads from `assets.ut2004.dev`, and on localhost the page looks for a local content link instead. In both cases it offers to import a zip of a retail install. Only pages on the origins the web master allows can host games. |
+| `UT2004-<version>-web.zip` | The files of the web page. Only the page at `ut2004.dev` gets the hosted content: on another domain the browser blocks the downloads from `assets.ut2004.dev`, and on localhost the page looks for a local content link instead. In both cases it offers to import a zip of a retail install. Only pages on the origins the web master allows get the server list and can host or join games through it. |
 
 On the first start the game asks for its content. It can download the full game from the [Internet Archive](https://archive.org/details/ut2004-3369) (3.8 GB, about 13 GB of free space while it unpacks), or use the folder of a UT2004 install in place. The Android app also offers a set of ten maps (1 GB) and takes an archive or folder on the device.
 
@@ -79,6 +79,7 @@ The game only connects when you use an online feature. These are the defaults in
 | Community master servers | `utmaster.openspy.net`, `ut2004master.333networks.com` (port 28902) | The server browser is open, or you host an advertised server |
 | Web master | `master.ut2004.dev` | The same, for servers and clients that use WebRTC |
 | STUN | `stun.cloudflare.com` | Joining or hosting a browser hosted game |
+| TURN relay | `turn.cloudflare.com`, with a credential from the web master | Joining a browser hosted game. The game data goes through it only when the host can't be reached directly |
 | Content host | `assets.ut2004.dev` | First launch on Android and on the web |
 | Internet Archive | `archive.org` | First start, if you pick the download of the full game |
 | Game servers | The server you pick | Joining a game |

@@ -38,6 +38,7 @@ struct FWebRtcPeer
 	// A client of a browser host sends its offer once gathered and waits for the answer
 	FString SignalId;
 	FWebMasterRequest* Offer = nullptr;
+	DOUBLE GatherTime = 0;
 
 	// Filled on libdatachannel threads
 	std::mutex Lock;
@@ -273,6 +274,8 @@ static std::shared_ptr<FWebRtcPeer> ConnectPeer( FURL& ConnectURL, FString& Erro
 		{
 			// The URL constructor parses with std::regex, which links only with the STL vcpkg built against
 			Config.iceServers.emplace_back( WEBRTC_STUN_HOST, WEBRTC_STUN_PORT );
+			// Gathering waits in WebRtcSignal for the web master's relay
+			Config.disableAutoGathering = true;
 			Peer = MakeClientPeer( Config );
 			Peer->SignalId = SignalId;
 			Peer->Pc->setLocalDescription( rtc::Description::Type::Offer );
@@ -324,10 +327,23 @@ static void WebRtcSignal( FWebRtcPeer& Peer )
 {
 	try
 	{
+		if( !Peer.GatherTime )
+		{
+			FWebMasterTurn Turn;
+			if( !WebMasterTurn( Turn ) )
+				return;
+			// ICE only picks the relay when no direct path works
+			std::vector<rtc::IceServer> Relay;
+			if( *Turn.Host )
+				Relay.emplace_back( std::string(Turn.Host), (uint16_t)Turn.Port, std::string(Turn.Username), std::string(Turn.Password), rtc::IceServer::RelayType::TurnUdp );
+			Peer.Pc->gatherLocalCandidates( Relay );
+			Peer.GatherTime = appSeconds();
+			return;
+		}
 		if( !Peer.Offer )
 		{
 			auto Local = Peer.Pc->localDescription();
-			if( Local && (Peer.Pc->gatheringState()==rtc::PeerConnection::GatheringState::Complete || appSeconds()-Peer.CreatedTime > WEBRTC_GATHER_TIME) )
+			if( Local && (Peer.Pc->gatheringState()==rtc::PeerConnection::GatheringState::Complete || appSeconds()-Peer.GatherTime > WEBRTC_GATHER_TIME) )
 				Peer.Offer = WebMasterOffer( Peer.SignalId, FString( std::string(*Local).c_str() ) );
 			return;
 		}
