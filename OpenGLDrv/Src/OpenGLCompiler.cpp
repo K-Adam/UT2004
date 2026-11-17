@@ -758,7 +758,12 @@ public:
 			if( SelfIllumination )
 				Emit(TEXT("\tr%i.rgb = mix(r%i.rgb, r%i.rgb, r%i.a * r%i.a);\n"),C,C,SI,SIMask,C);
 			if( Spec != INDEX_NONE )
-				Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb + r%i.rgb * r%i, 0.0, 1.0);\n"),C,C,Spec,SpecMask);
+			{
+				if( Shader->ModulateSpecular2X )
+					Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb * r%i.rgb * 2.0, 0.0, 1.0);\n"),C,C,Spec);
+				else
+					Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb + r%i.rgb * r%i, 0.0, 1.0);\n"),C,C,Spec,SpecMask);
+			}
 			Output(C);
 			return 1;
 		}
