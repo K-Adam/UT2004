@@ -11,6 +11,19 @@ An unofficial, non-commercial port of Unreal Tournament 2004 (build 3369) to mod
 
 The game content is not part of this repository. You need the files of a UT2004 install that you own.
 
+## Download
+
+The [releases](https://github.com/K-Adam/UT2004/releases) carry a build for each platform, and the web version runs at <https://k-adam.github.io/UT2004/>.
+
+| Archive | Platform |
+|---|---|
+| `UT2004-<version>-win64.zip` | Windows x64. Unpack it and start `UT2004/System/UT2004.exe`. |
+| `UT2004-<version>-linux64.tar.gz`, `-linux-arm64.tar.gz` | Linux x64 and arm64, built on Ubuntu 22.04. SDL 3 is included, the other libraries come from your distribution: OpenAL, Vorbis, Bullet, squish, OpenGL ES, speexdsp, OpenSSL and curl. |
+| `UT2004-<version>-android.apk` | Android 9 or newer on arm64. |
+| `UT2004-<version>-web.zip` | The files of the web page, for hosting it on your own domain. It loads the content from `assets.ut2004.dev`, and only pages on the origins the web master allows can host games. |
+
+None of them contains the game content, see Run below.
+
 ## Build
 
 Third party libraries come from [vcpkg](https://github.com/microsoft/vcpkg) on Windows, Android and the web (`VCPKG_ROOT` must point to it), and from the system packages on Linux. Clone with `git submodule update --init`.
@@ -26,6 +39,10 @@ Third party libraries come from [vcpkg](https://github.com/microsoft/vcpkg) on W
 Linux packages on Debian and Ubuntu: `build-essential ninja-build pkg-config zlib1g-dev libvorbis-dev libopenal-dev libbullet-dev libbullet-extras-dev libgles-dev libsquish-dev libssl-dev libcurl4-openssl-dev nlohmann-json3-dev libspeexdsp-dev`, plus SDL 3.2 or newer.
 
 The output lands in `build/<preset>/System/`. The Android build writes `build/android-arm64/UT2004.apk` and the web build writes `build/web/`.
+
+### Checks and releases
+
+`python3 Tools/tidy.py` runs clang-tidy with the checks in `.clang-tidy` (Linux, needs Clang). GitHub Actions runs it on every push to `main` and every pull request and then builds and packages every platform. A tag like `v1.0.0` or `v1.0.0-rc.1` also publishes the archives as a release and the web build to GitHub Pages.
 
 ### Script packages
 

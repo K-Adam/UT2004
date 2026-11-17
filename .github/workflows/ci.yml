@@ -93,7 +93,6 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: gradle
-          cache-dependency-path: Android/**/*.gradle*
       - name: Android SDK
         if: matrix.name == 'android'
         env:
