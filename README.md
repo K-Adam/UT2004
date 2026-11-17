@@ -13,11 +13,11 @@ The game content is not part of this repository. You need the files of a UT2004 
 
 ## Download
 
-The [releases](https://github.com/K-Adam/UT2004/releases) carry a build for each platform, and the web version runs at <https://k-adam.github.io/UT2004/>.
+The [releases](https://github.com/K-Adam/UT2004/releases) carry a build for each platform, and the web version runs at <https://ut2004.dev>.
 
 | Archive | Platform |
 |---|---|
-| `UT2004-<version>-win64.zip` | Windows x64. Unpack it and start `UT2004/System/UT2004.exe`. |
+| `UT2004-<version>-win64.zip` | Windows x64. Unpack it and start `System/UT2004.exe`. |
 | `UT2004-<version>-linux64.tar.gz`, `-linux-arm64.tar.gz` | Linux x64 and arm64, built on Ubuntu 22.04. SDL 3 is included, the other libraries come from your distribution: OpenAL, Vorbis, Bullet, squish, OpenGL ES, speexdsp, OpenSSL and curl. |
 | `UT2004-<version>-android.apk` | Android 9 or newer on arm64. |
 | `UT2004-<version>-web.zip` | The files of the web page, for hosting it on your own domain. It loads the content from `assets.ut2004.dev`, and only pages on the origins the web master allows can host games. |
@@ -50,7 +50,7 @@ Online play needs UnrealScript packages identical to retail, so `Scripts/` holds
 
 ## Run
 
-Start `UT2004.exe` (`ut2004-bin` on Linux) in `build/<preset>/System/`. On the first start it asks for the folder of your UT2004 install and uses the content in place.
+Start `UT2004.exe` (`ut2004-bin` on Linux) in the `System` folder of a release, or in `build/<preset>/System/` of your own build. On the first start it asks for the folder of your UT2004 install and uses the content in place.
 
 A dedicated server is `UCC server DM-Rankin` (`ucc-bin` on Linux). It does not ask for content, add the `Paths=` lines of your install to its `UT2004.ini`.
 
@@ -60,7 +60,7 @@ The Android app downloads its content on the first launch, or takes an archive o
 
 | Platform | Settings, saves and `UT2004.log` |
 |---|---|
-| Windows | `build/<preset>/System/` |
+| Windows | the `System` folder the game runs from |
 | Linux | `~/.ut2004/System/` (next to the binary with `-nohomedir`) |
 | Android | `Android/data/org.ut2004.game/files/UT2004/System/` |
 | Web | the browser's IndexedDB for the page |

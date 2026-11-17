@@ -318,19 +318,25 @@ if(UT_ASSETS_DIR AND TARGET UCC)
     WORKING_DIRECTORY ${UT_SYSTEM_DIR})
 endif()
 
-# cpack -G ZIP -C Release gives a folder a player can unpack and run. It is laid out like build/<preset>,
-# because Default.ini reaches the script packages through ../../Scripts.
+# cpack -G ZIP -C Release gives the game folder a player unpacks and runs. It has no shared Scripts
+# folder beside it, so the script packages and cache records go into System and its Default.ini looks there.
 if(TARGET UCC)
-  set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION UT2004/System)
+  set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION System)
   # The physics submodule and the fetched libraries have install rules of their own, the archive only takes this component.
   set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME game)
   include(InstallRequiredSystemLibraries)
-  install(DIRECTORY System Help KarmaData Web DESTINATION UT2004)
-  install(DIRECTORY ${UT_SYSTEM_DIR}/ DESTINATION UT2004/System USE_SOURCE_PERMISSIONS
+  install(DIRECTORY System Help KarmaData Web DESTINATION .)
+  install(DIRECTORY ${UT_SYSTEM_DIR}/ DESTINATION System USE_SOURCE_PERMISSIONS
     FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll" PATTERN "*.so" PATTERN "*.so.*" PATTERN "*-bin")
-  install(DIRECTORY Scripts DESTINATION .)
-  install(FILES System/CacheRecords.ucl DESTINATION Scripts)
-  install(FILES README.md NOTICE.md LICENSE DESTINATION UT2004)
+  install(DIRECTORY Scripts/ DESTINATION System)
+  install(CODE [[
+    set(ini "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/System/Default.ini")
+    file(READ "${ini}" text)
+    string(REGEX REPLACE "Paths=\\.\\./\\.\\./Scripts/[^\n]*\n" "" text "${text}")
+    string(REPLACE "../../Scripts/" "../System/" text "${text}")
+    file(WRITE "${ini}" "${text}")
+  ]])
+  install(FILES README.md NOTICE.md LICENSE DESTINATION .)
   set(CPACK_PACKAGE_NAME UT2004)
   set(CPACK_PACKAGE_FILE_NAME UT2004-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR})
   set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
