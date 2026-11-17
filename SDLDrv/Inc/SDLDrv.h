@@ -115,7 +115,7 @@ class USDLClient : public UClient, public FNotifyHook
 	USDLViewport.
 -----------------------------------------------------------------------------*/
 
-enum { VJ_Move, VJ_Look, VJ_Fire, VJ_AltFire, VJ_Jump, VJ_Use, VJ_Count };
+enum { VJ_Move, VJ_Look, VJ_Fire, VJ_AltFire, VJ_Jump, VJ_Crouch, VJ_Use, VJ_Count };
 
 struct FTouchTarget
 {
@@ -143,9 +143,6 @@ class USDLViewport : public UViewport
 	SDL_TouchID			VJTouch[VJ_Count];
 	SDL_FingerID		VJFinger[VJ_Count];
 	UBOOL				VJShown;
-	// A second press on Jump this soon after the first crouches while it is held.
-	DOUBLE				VJJumpTime;
-	UBOOL				VJCrouch;
 	TArray<FTouchTarget> TouchTargets;
 	// The seat NEXTSEAT last asked for, while the player keeps this pawn.
 	APawn*				LastSeatPawn;

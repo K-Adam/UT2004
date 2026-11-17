@@ -625,7 +625,7 @@ void USDLViewport::UpdateMousePosition()
 
 //
 // Pixel layout of the on-screen controls: the move stick bottom left, the look stick bottom right
-// and the buttons in an arc above and inside the look stick, where the right thumb reaches.
+// and the buttons in an arc over the look stick, where the right thumb reaches.
 // Use sits above and inside the move stick for the left thumb.
 //
 void USDLViewport::VJLayout( INT i, FLOAT& X, FLOAT& Y, FLOAT& R )
@@ -636,7 +636,7 @@ void USDLViewport::VJLayout( INT i, FLOAT& X, FLOAT& Y, FLOAT& R )
 	R = StickR;
 	if( i >= VJ_Fire )
 	{
-		static const FLOAT Angles[] = { 165.f, 120.f, 75.f, 60.f };
+		static const FLOAT Angles[] = { 170.f, 135.f, 100.f, 65.f, 60.f };
 		FLOAT A = Angles[i - VJ_Fire] * PI / 180.f;
 		X += appCos( A ) * StickR * 1.7f;
 		Y -= appSin( A ) * StickR * 1.7f;
@@ -668,9 +668,11 @@ void USDLViewport::VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y )
 		SDL_SetJoystickVirtualAxis( Joystick, Axis, (Sint16)(DX * 32767.f) );
 		SDL_SetJoystickVirtualAxis( Joystick, Axis + 1, (Sint16)(DY * 32767.f) );
 	}
-	// The second button is the pad's east button, bound to Duck.
 	else if( i == VJ_Jump )
-		SDL_SetJoystickVirtualButton( Joystick, VJCrouch ? 1 : 0, Held != 0 );
+		SDL_SetJoystickVirtualButton( Joystick, 0, Held != 0 );
+	// The second button is the pad's east button, bound to Duck.
+	else if( i == VJ_Crouch )
+		SDL_SetJoystickVirtualButton( Joystick, 1, Held != 0 );
 	// The third button is the pad's west button, bound to Use like E.
 	else if( i == VJ_Use )
 		SDL_SetJoystickVirtualButton( Joystick, 2, Held != 0 );
@@ -715,13 +717,6 @@ UBOOL USDLViewport::VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Ph
 		}
 		VJTouch[i] = Touch;
 		VJFinger[i] = Finger;
-		if( i == VJ_Jump )
-		{
-			// Double jump needs the second press near the apex, later than this, so both gestures fit one button.
-			DOUBLE Now = appSeconds();
-			VJCrouch = Now - VJJumpTime < 0.25;
-			VJJumpTime = Now;
-		}
 	}
 	else if( i == VJ_Count )
 		return 0;
@@ -798,8 +793,8 @@ void USDLViewport::RenderOverlay()
 	DECLARE_STATIC_UOBJECT( UProxyBitmapMaterial, WhiteMaterial, { WhiteMaterial->SetTextureInterface(&WhiteTexture); } );
 	DECLARE_STATIC_UOBJECT( UFinalBlend, WhiteBlend, { WhiteBlend->FrameBufferBlending = FB_AlphaBlend; WhiteBlend->Material = WhiteMaterial; WhiteBlend->ZWrite = 0; WhiteBlend->ZTest = 0; } );
 
-	static const FColor Tints[] = { FColor(230,70,60,0), FColor(240,160,40,0), FColor(80,200,90,0), FColor(70,140,230,0) };
-	static const TCHAR* Captions[] = { TEXT("FIRE"), TEXT("ALT"), TEXT("JUMP"), TEXT("USE") };
+	static const FColor Tints[] = { FColor(230,70,60,0), FColor(240,160,40,0), FColor(80,200,90,0), FColor(60,190,190,0), FColor(70,140,230,0) };
+	static const TCHAR* Captions[] = { TEXT("FIRE"), TEXT("ALT"), TEXT("JUMP"), TEXT("CROUCH"), TEXT("USE") };
 	FCanvasUtil* CU = Canvas->pCanvasUtil;
 	for( INT i=0; i<VJ_Count; i++ )
 	{
@@ -828,7 +823,7 @@ void USDLViewport::RenderOverlay()
 	{
 		FLOAT X, Y, R, XL, YL;
 		VJLayout( i, X, Y, R );
-		const TCHAR* Caption = i == VJ_Jump && VJCrouch && VJFinger[i] ? TEXT("CROUCH") : Captions[i - VJ_Fire];
+		const TCHAR* Caption = Captions[i - VJ_Fire];
 		Canvas->ClippedStrLen( Canvas->SmallFont, 1.f, 1.f, XL, YL, Caption );
 		Canvas->CurX = X - XL * 0.5f;
 		Canvas->CurY = Y - YL * 0.5f;

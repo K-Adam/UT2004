@@ -746,6 +746,8 @@ int main(int argc, char **argv)
 	SDL_SetHint( SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight" );
 	// Back opens and closes menus like Escape instead of closing the app.
 	SDL_SetHint( SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1" );
+	// Mouse clicks would arrive as fingers too and bring the on-screen controls back.
+	SDL_SetHint( SDL_HINT_MOUSE_TOUCH_EVENTS, "0" );
 	// App specific storage needs no permission, and players can still reach the inis over USB.
 	const char* Root = SDL_GetAndroidExternalStoragePath();
 	if( !Root )
