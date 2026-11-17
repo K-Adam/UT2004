@@ -184,7 +184,8 @@ struct FOpenGLMaterialState
 					TwoSided,
 					Beam,			// A fake light shaft, drawn after the rest of the level.
 					Heat,			// Writes how hot it looks into the world's alpha, for the heat haze.
-					DepthPass;		// Blended without depth, drawn again into depth where mostly opaque, so the post process fog sees it.
+					DepthPass,		// Blended without depth, drawn again into depth where mostly opaque, so the post process fog sees it.
+					Reflectivity;	// Blends its reflectivity into the reflection's alpha.
 
 	void Reset();
 };
@@ -571,6 +572,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	FOpenGLResource* GetCachedResource(QWORD CacheId);
 	GLuint SmoothStream(FVertexStream* Source);
 	void SetAlphaMask(GLboolean Alpha);
+	void SetWorldDrawBuffers(UBOOL ReflectionOnly);
 	GLuint GetSampler(DWORD Flags);
 	GLuint CompileProgram(GLuint VertexShader,const ANSICHAR* FragmentSource);
 	// Links without waiting, FinishProgram blocks until the result is known.

@@ -179,6 +179,7 @@ void FOpenGLMaterialState::Reset()
 	Beam				= 0;
 	Heat				= 0;
 	DepthPass			= 0;
+	Reflectivity		= 0;
 }
 
 UBOOL UOpenGLRenderDevice::ProgramReady(FOpenGLProgram* P,UBOOL Wait)

@@ -567,9 +567,8 @@ FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,IN
 	CreateFramebuffer(Scene,Viewport->SizeX,Viewport->SizeY,Samples);
 	INT Scale = Clamp(ResolutionScale,50,100);
 	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples,GL_RGBA8,1,2);
-	GLenum Buffers[] = { GL_COLOR_ATTACHMENT0, ScreenSpaceReflections ? GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE, GlobalIllumination ? GL_COLOR_ATTACHMENT2 : (GLenum)GL_NONE };
 	glBindFramebuffer(GL_FRAMEBUFFER,World.DrawFramebuffer());
-	glDrawBuffers(ARRAY_COUNT(Buffers),Buffers);
+	SetWorldDrawBuffers(0);
 	GL.Framebuffer = World.DrawFramebuffer();
 	LockedViewport = Viewport;
 	Scene.Resolved = World.Resolved = 0;
@@ -616,6 +615,17 @@ void UOpenGLRenderDevice::ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth)
 		GL.Framebuffer = F.MultisampleFramebuffer;
 	}
 	F.Resolved = 1;
+}
+
+void UOpenGLRenderDevice::SetWorldDrawBuffers(UBOOL ReflectionOnly)
+{
+	GLenum Buffers[] =
+	{
+		ReflectionOnly ? (GLenum)GL_NONE : GL_COLOR_ATTACHMENT0,
+		ScreenSpaceReflections ? GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE,
+		GlobalIllumination && !ReflectionOnly ? GL_COLOR_ATTACHMENT2 : (GLenum)GL_NONE,
+	};
+	glDrawBuffers(ARRAY_COUNT(Buffers),Buffers);
 }
 
 void UOpenGLRenderDevice::SetAlphaMask(GLboolean Alpha)

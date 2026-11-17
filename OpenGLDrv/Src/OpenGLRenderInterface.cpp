@@ -850,10 +850,24 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 	FOpenGLMaterialState& M = CurrentState->Material;
 	// Only the perspective world's depth feeds the post process, flat labels and the HUD go to the overlay.
 	UBOOL DepthPass = M.DepthPass && InWorld && !S->RenderTarget && S->CameraToScreen.M[2][3] == 1.f;
-	for( INT Pass=0; Pass<(DepthPass ? 2 : 1); Pass++ )
+	// The mask that keeps blended draws off the heat haze in the world's alpha covers every attachment,
+	// so a puddle's reflectivity is drawn once more into the reflection's alpha alone.
+	UBOOL ReflectivityPass = M.Reflectivity && !RenDev->GL.AlphaMask && RenDev->ScreenSpaceReflections;
+	for( INT Pass=0; Pass<3; Pass++ )
 	{
 		if( Pass == 1 )
 		{
+			if( !ReflectivityPass )
+				continue;
+			RenDev->SetWorldDrawBuffers(1);
+			glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_TRUE);
+		}
+		if( Pass == 2 )
+		{
+			if( ReflectivityPass )
+				RenDev->SetWorldDrawBuffers(0);
+			if( !DepthPass )
+				break;
 			// Only the mostly opaque part, the soft edges would hide what draws behind them later.
 			Program->SentAlphaRef = Max(M.AlphaRef,0.5f);
 			glUniform1f(Program->AlphaRef,Program->SentAlphaRef);
@@ -873,7 +887,7 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 		else
 			glDrawArrays(Mode,FirstIndex,Count);
 	}
-	if( DepthPass )
+	if( DepthPass || ReflectivityPass )
 		glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,RenDev->GL.AlphaMask);
 
 	unguard;

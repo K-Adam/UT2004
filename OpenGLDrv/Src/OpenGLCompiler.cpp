@@ -783,6 +783,7 @@ public:
 		Emit(TEXT("\tFragColor = vec4(r%i, r%i.a + r%i - r%i.a * r%i);\n"),Base,C,Glow,C,Glow);
 		// Puddle decals mask colour and reflectivity with one texture, so the opacity is the reflectivity.
 		// The fog hides it like the rest of the surface.
+		State.Reflectivity = EnvSpecular;
 		if( EnvSpecular )
 			Emit(TEXT("\tReflection = vec4(ApplyFog(r%i.rgb * r%i, vec3(0.0)), FragColor.a * ApplyFog(vec3(1.0), vec3(0.0)).x);\n"),Spec,SpecMask);
 		else
