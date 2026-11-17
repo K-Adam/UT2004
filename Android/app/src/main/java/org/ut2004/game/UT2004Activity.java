@@ -175,6 +175,38 @@ public class UT2004Activity extends SDLActivity {
         }
     }
 
+    // Waits until the player picks one of the two downloads or another source, null if they back out.
+    static String askContentChoice(String reducedUrl, String fullUrl) throws InterruptedException {
+        UT2004Activity activity = (UT2004Activity) mSingleton;
+        activity.runOnUiThread(() -> activity.showContentChoice(reducedUrl, fullUrl));
+        String source = assetSource.take();
+        return source.isEmpty() ? null : source;
+    }
+
+    private void showContentChoice(String reducedUrl, String fullUrl) {
+        String[] items = {
+            "Ten maps (1 GB download)",
+            "Full game from the Internet Archive (3.8 GB download, needs 13 GB free)",
+            "Other source...",
+        };
+        int[] choice = { 0 };
+        new AlertDialog.Builder(this)
+            .setTitle("Download the game content")
+            .setSingleChoiceItems(items, 0, (d, which) -> choice[0] = which)
+            .setPositiveButton("Continue", (d, w) -> {
+                if (choice[0] == 2) {
+                    assetError = "Choose where the game content comes from.";
+                    assetUrl = reducedUrl;
+                    showAssetDialog();
+                } else {
+                    assetSource.add(choice[0] == 0 ? reducedUrl : fullUrl);
+                }
+            })
+            .setOnCancelListener(d -> assetSource.add(""))
+            .show()
+            .setCanceledOnTouchOutside(false);
+    }
+
     // Waits until the player enters a URL or picks an archive or folder, null if they back out.
     static String askAssetSource(String error, String url) throws InterruptedException {
         assetError = error;

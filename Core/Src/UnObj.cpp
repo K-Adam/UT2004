@@ -5241,7 +5241,7 @@ void UObject::CacheDrivers( UBOOL ForceRefresh )
 		for( INT i=0; i<GSys->Paths.Num(); i++ )
 		{
 			TCHAR Filename[256];
-			appSprintf( Filename, TEXT("%s%s"), appBaseDir(), *GSys->Paths(i) );
+			appStrncpy( Filename, *GSys->Paths(i), ARRAY_COUNT(Filename) );
 			TCHAR* Tmp = appStrstr( Filename, TEXT("*.") );
 			if( Tmp )
 			{

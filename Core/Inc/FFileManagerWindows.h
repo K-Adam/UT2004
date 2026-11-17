@@ -567,6 +567,139 @@ public:
 	// -- rjp
 };
 
+// A game folder under Program Files is read-only, so relative paths then also resolve under the player's
+// local application data: their files shadow the installed ones and everything written goes there.
+// A writable game folder keeps working as before, with the settings next to the game.
+class FFileManagerWindowsHome : public FFileManagerWindows
+{
+public:
+	const TCHAR* CalcHomeDir()
+	{
+		if( !Home[0] )
+		{
+			appStrcpy( Home, appBaseDir() );
+			TCHAR Local[MAX_PATH - 64];
+			DWORD Len = GetEnvironmentVariableW( TEXT("LOCALAPPDATA"), Local, ARRAY_COUNT(Local) );
+			// Without a usable folder the game stays where it is and reports that it can't write.
+			Overlaid = !ParseParam( appCmdLine(), TEXT("nohomedir") ) && !CanWrite( Home ) && Len>0 && Len<ARRAY_COUNT(Local);
+			if( Overlaid )
+			{
+				appSprintf( Home, TEXT("%s\\UT2004\\System\\"), Local );
+				FFileManagerGeneric::MakeDirectory( Home, 1 );
+			}
+		}
+		return Home;
+	}
+	FArchive* CreateFileReader( const TCHAR* Filename, DWORD Flags, FOutputDevice* Error )
+	{
+		return FFileManagerWindows::CreateFileReader( *Existing(Filename), Flags, Error );
+	}
+	FArchive* CreateFileWriter( const TCHAR* Filename, DWORD Flags, FOutputDevice* Error )
+	{
+		return FFileManagerWindows::CreateFileWriter( *Written(Filename), Flags, Error );
+	}
+	INT FileSize( const TCHAR* Filename )
+	{
+		return FFileManagerWindows::FileSize( *Existing(Filename) );
+	}
+	DWORD Copy( const TCHAR* DestFile, const TCHAR* SrcFile, UBOOL ReplaceExisting, UBOOL EvenIfReadOnly, UBOOL Attributes, DWORD Compress, FCopyProgress* Progress )
+	{
+		return FFileManagerWindows::Copy( *Written(DestFile), *Existing(SrcFile), ReplaceExisting, EvenIfReadOnly, Attributes, Compress, Progress );
+	}
+	UBOOL Delete( const TCHAR* Filename, UBOOL RequireExists=0, UBOOL EvenReadOnly=0 )
+	{
+		return FFileManagerWindows::Delete( *InHome(Filename), RequireExists, EvenReadOnly );
+	}
+	UBOOL IsReadOnly( const TCHAR* Filename )
+	{
+		return FFileManagerWindows::IsReadOnly( *Existing(Filename) );
+	}
+	UBOOL Move( const TCHAR* Dest, const TCHAR* Src, UBOOL Replace=1, UBOOL EvenIfReadOnly=0, UBOOL Attributes=0 )
+	{
+		return FFileManagerWindows::Move( *Written(Dest), *Existing(Src), Replace, EvenIfReadOnly, Attributes );
+	}
+	UBOOL MakeDirectory( const TCHAR* Path, UBOOL Tree=0 )
+	{
+		return FFileManagerWindows::MakeDirectory( *Written(Path), Tree );
+	}
+	UBOOL DeleteDirectory( const TCHAR* Path, UBOOL RequireExists=0, UBOOL Tree=0 )
+	{
+		return FFileManagerWindows::DeleteDirectory( *InHome(Path), RequireExists, Tree );
+	}
+	TArray<FString> FindFiles( const TCHAR* Filename, UBOOL Files, UBOOL Directories )
+	{
+		TArray<FString> Result = FFileManagerWindows::FindFiles( Filename, Files, Directories );
+		if( IsOverlaid(Filename) )
+		{
+			TArray<FString> Own = FFileManagerWindows::FindFiles( *InHome(Filename), Files, Directories );
+			for( INT i=0; i<Own.Num(); i++ )
+			{
+				INT j = 0;
+				while( j<Result.Num() && appStricmp( *Result(j), *Own(i) )!=0 )
+					j++;
+				if( j==Result.Num() )
+					new(Result)FString( Own(i) );
+			}
+		}
+		return Result;
+	}
+	INT CompareFileTimes( const TCHAR* FileA, const TCHAR* FileB )
+	{
+		return FFileManagerWindows::CompareFileTimes( *Existing(FileA), *Existing(FileB) );
+	}
+	FString ExpandPath( const TCHAR* Path )
+	{
+		return FFileManagerWindows::ExpandPath( *Existing(Path) );
+	}
+
+private:
+	TCHAR Home[MAX_PATH] = TEXT("");
+	UBOOL Overlaid = 0;
+
+	static UBOOL CanWrite( const TCHAR* Dir )
+	{
+		FString Probe = FString(Dir) + TEXT("write.probe");
+		HANDLE Handle = CreateFileW( *Probe, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, NULL );
+		if( Handle==INVALID_HANDLE_VALUE )
+			return 0;
+		CloseHandle( Handle );
+		return 1;
+	}
+	UBOOL IsOverlaid( const TCHAR* Path )
+	{
+		CalcHomeDir();
+		return Overlaid && Path[0] && Path[0]!='\\' && Path[0]!='/' && Path[1]!=':';
+	}
+	// Where the player's copy of a file is or would be.
+	FString InHome( const TCHAR* Path )
+	{
+		if( !IsOverlaid(Path) )
+			return Path;
+		// Paths like ..\Save leave the System folder, and the directory functions need them without the dots.
+		TCHAR Full[MAX_PATH] = TEXT("");
+		DWORD Len = GetFullPathNameW( *(FString(Home) + Path), ARRAY_COUNT(Full), Full, NULL );
+		// The engine's own path buffers hold 256 characters, a longer path fails as an unknown file does.
+		return Len>0 && Len<256 ? FString(Full) : FString(Path);
+	}
+	FString Existing( const TCHAR* Path )
+	{
+		FString Own = InHome( Path );
+		return GetFileAttributesW( *Own )!=INVALID_FILE_ATTRIBUTES ? Own : FString(Path);
+	}
+	FString Written( const TCHAR* Path )
+	{
+		FString Own = InHome( Path );
+		if( IsOverlaid(Path) )
+		{
+			INT End = Own.Len();
+			while( End>0 && Own[End-1]!='\\' )
+				End--;
+			FFileManagerGeneric::MakeDirectory( *Own.Left(End), 1 );
+		}
+		return Own;
+	}
+};
+
 UBOOL GetFileLastModTime( const TCHAR* FakeFilename, DWORD &Hours, DWORD &Minutes, DWORD &Secs, DWORD &Day, DWORD &Month, DWORD &Year )
 {
 

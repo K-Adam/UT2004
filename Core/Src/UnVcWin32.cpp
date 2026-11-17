@@ -214,7 +214,8 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		UBOOL Params = 1;
 		if ( *Cmd )
 		{
-            verify(appSaveStringToFile(FString(Cmd),*(FString(appBaseDir())+TEXT("ServerCommand.txt")),GFileManager));
+            // Relative, so the file manager puts it where the server it starts reads it, also when the game folder is read-only.
+            verify(appSaveStringToFile(FString(Cmd),TEXT("ServerCommand.txt"),GFileManager));
 		}
 		else Params = 0;
 
@@ -1010,8 +1011,9 @@ void appPlatformInit()
 		GetTempPathW( ARRAY_COUNT(CacheRoot), CacheRoot );
 	GSys->CachePath = FString(CacheRoot) * TEXT("UT2004") * TEXT("Cache");
 	// Old mods such as AntiTCC 1.19 locate package files by the ".." that starts a retail relative path.
-	TCHAR Cwd[MAX_PATH+1], Relative[MAX_PATH+1];
-	if( GetCurrentDirectoryW( ARRAY_COUNT(Cwd), Cwd ) && PathRelativePathToW( Relative, Cwd, FILE_ATTRIBUTE_DIRECTORY, *GSys->CachePath, FILE_ATTRIBUTE_DIRECTORY ) )
+	// Relative to the file manager's home dir, because that is where it resolves writes.
+	TCHAR Relative[MAX_PATH+1];
+	if( PathRelativePathToW( Relative, GFileManager->CalcHomeDir(), FILE_ATTRIBUTE_DIRECTORY, *GSys->CachePath, FILE_ATTRIBUTE_DIRECTORY ) )
 		GSys->CachePath = Relative;
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );

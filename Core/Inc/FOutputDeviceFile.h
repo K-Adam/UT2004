@@ -47,7 +47,7 @@ public:
 					if( !Filename[0] )
 					{
                         #if WIN32
-						appStrcpy( Filename, appBaseDir() );
+						appStrcpy( Filename, GFileManager ? GFileManager->CalcHomeDir() : appBaseDir() );
                         #endif
 
 						if

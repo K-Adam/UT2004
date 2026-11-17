@@ -110,17 +110,32 @@ jobs:
               "$RUNNER_TEMP/release.jks" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > Android/local.properties
           fi
 
+      - name: WiX
+        if: matrix.name == 'win64'
+        run: |
+          dotnet tool install --global wix --version 7.0.1
+          echo "$USERPROFILE/.dotnet/tools" >> "$GITHUB_PATH"
+          "$USERPROFILE/.dotnet/tools/wix" eula accept wix7
+          "$USERPROFILE/.dotnet/tools/wix" extension add -g WixToolset.UI.wixext/7.0.1 WixToolset.Util.wixext/7.0.1
+
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
       - name: Build
         # Maven Central turns runners away now and then, and a second try only repeats the step that failed.
         run: cmake --build --preset ${{ matrix.build }} || { sleep 60 && cmake --build --preset ${{ matrix.build }}; }
 
+      - name: Test
+        if: matrix.name == 'win64' || startsWith(matrix.name, 'linux')
+        run: ctest --test-dir build/${{ matrix.preset }} -C Release -R content --output-on-failure
+
       - name: Package
         run: |
           mkdir out
           case ${{ matrix.name }} in
-            win64) cpack --config build/win64/CPackConfig.cmake -C Release -G ZIP -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE ;;
+            win64)
+              cpack --config build/win64/CPackConfig.cmake -C Release -G ZIP -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE
+              cmake --build --preset win64-release --target msi
+              cp build/win64/UT2004.msi out/$ARCHIVE.msi ;;
             linux*)
               # SDL 3 is not in the distributions yet, so the one built here goes along.
               cp -L /usr/local/lib/libSDL3.so.0 build/linux64/System/
@@ -133,7 +148,8 @@ jobs:
         # An APK keeps its packed files under assets/ by design.
         if: matrix.name != 'android'
         run: |
-          f=$(echo out/*)
+          # The installer packs the same folder as the zip.
+          f=$(ls out/*.zip out/*.tar.gz 2>/dev/null || true)
           case $f in
             *.zip) unzip -Z1 "$f" > list.txt ;;
             *) tar -tzf "$f" > list.txt ;;

@@ -87,7 +87,7 @@ static size_t AppendResponse( char* Data, size_t Size, size_t Count, void* Respo
 
 #if __ANDROID__
 // OpenSSL has no CA store on Android. The files are PEM, the text around each certificate is skipped.
-static const std::string& AndroidCaCerts()
+const std::string& AndroidCaCerts()
 {
 	static const std::string Certs = []()
 	{

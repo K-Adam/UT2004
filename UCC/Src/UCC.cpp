@@ -64,7 +64,7 @@ FFeedbackContextAnsi Warn;
 // File manager.
 #if WIN32
 	#include "FFileManagerWindows.h"
-	FFileManagerWindows FileManager;
+	FFileManagerWindowsHome FileManager;
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
 #else

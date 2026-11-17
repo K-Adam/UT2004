@@ -1,17 +1,13 @@
 #include <time.h>  // dodging a macro clash with Unix C runtime headers...
 
 #include "SDLLaunchPrivate.h"
+#include "SDLLaunchContent.h"
 
 #pragma pack(push,8)
-#include <SDL3/SDL.h>
 #include <lzma.h>
-#include <zlib.h>
 #include <jni.h>
-#include <string>
-#include <vector>
 #pragma pack(pop)
 #include <errno.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 // Android has one window, so SDLDrv takes this one over and the logo stays up until the game draws.
@@ -53,53 +49,6 @@ bool AndroidFail(const char* Fmt, const char* Arg)
     SDL_snprintf(Msg, sizeof(Msg), Fmt, Arg);
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "UT2004", Msg, NULL);
     return false;
-}
-
-static SDL_Window* SetupWindow = NULL;
-static SDL_Renderer* SetupRenderer = NULL;
-// The app was closed during setup, every step stops at its next read.
-static bool SetupQuit = false;
-
-// Shared by the unpack and install steps, so the screen doesn't flicker between them.
-static void DrawProgress(const char* Label, float Fraction)
-{
-    if (!SetupWindow && SDL_Init(SDL_INIT_VIDEO)
-        && !SDL_CreateWindowAndRenderer("UT2004", 0, 0, SDL_WINDOW_FULLSCREEN, &SetupWindow, &SetupRenderer))
-        SDL_QuitSubSystem(SDL_INIT_VIDEO);
-    SDL_PumpEvents();
-    SetupQuit |= SDL_HasEvent(SDL_EVENT_QUIT);
-    if (!SetupRenderer)
-        return;
-    int W, H;
-    SDL_GetCurrentRenderOutputSize(SetupRenderer, &W, &H);
-    SDL_FRect Back = { W * 0.1f, H * 0.48f, W * 0.8f, H * 0.04f };
-    SDL_FRect Bar = Back;
-    Bar.w *= SDL_clamp(Fraction, 0.0f, 1.0f);
-    SDL_SetRenderDrawColor(SetupRenderer, 0, 0, 0, 255);
-    SDL_RenderClear(SetupRenderer);
-    SDL_SetRenderDrawColor(SetupRenderer, 60, 60, 60, 255);
-    SDL_RenderFillRect(SetupRenderer, &Back);
-    SDL_SetRenderDrawColor(SetupRenderer, 40, 120, 230, 255);
-    SDL_RenderFillRect(SetupRenderer, &Bar);
-    // The debug font is 8 pixels, whole multiples keep it sharp.
-    float Scale = SDL_max(1.0f, SDL_floorf(H / 270.0f));
-    float Char = SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
-    SDL_SetRenderScale(SetupRenderer, Scale, Scale);
-    SDL_SetRenderDrawColor(SetupRenderer, 220, 220, 220, 255);
-    SDL_RenderDebugText(SetupRenderer, (W / Scale - SDL_strlen(Label) * Char) / 2, Back.y / Scale - 2 * Char, Label);
-    SDL_SetRenderScale(SetupRenderer, 1.0f, 1.0f);
-    SDL_RenderPresent(SetupRenderer);
-}
-
-void CloseSetupScreen()
-{
-    if (!SetupWindow)
-        return;
-    SDL_DestroyRenderer(SetupRenderer);
-    SDL_DestroyWindow(SetupWindow);
-    SetupRenderer = NULL;
-    SetupWindow = NULL;
-    SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
 // Decodes the APK asset <Rel>.xz into Dest.
@@ -184,82 +133,6 @@ bool ExtractAssets(const char* Root)
         SDL_SaveFile(StampPath, Manifest, SDL_strlen(Manifest));
     SDL_free(Manifest);
     return Ok;
-}
-
-// One attempt at installing the content folders from a URL, an archive or a folder.
-struct FInstall
-{
-    const char* Root;
-    const char* Src;
-    const char* Verb;
-    Sint64 Size, Done, Drawn;
-    INT Files;
-    char Err[1024];
-
-    void Draw()
-    {
-        char Label[128];
-        if (Size > 0)
-            SDL_snprintf(Label, sizeof(Label), "%s  %d / %d MB", Verb, (int)(Done >> 20), (int)(Size >> 20));
-        else
-            SDL_snprintf(Label, sizeof(Label), "%s  %d MB", Verb, (int)(Done >> 20));
-        DrawProgress(Label, Size > 0 ? (float)Done / Size : 0.0f);
-    }
-    void Progress(Sint64 Bytes)
-    {
-        Done += Bytes;
-        if (Done - Drawn >= (1 << 20))
-        {
-            Drawn = Done;
-            Draw();
-        }
-    }
-    bool Fail(const char* Fmt)
-    {
-        SDL_snprintf(Err, sizeof(Err), Fmt, Src);
-        return false;
-    }
-};
-
-static const char* ContentDirs[] = { "Animations", "Maps", "Music", "Sounds", "StaticMeshes", "Textures" };
-
-// Archives and folders come from anywhere, so only files inside the content folders are written.
-// The folders may sit one level down, as in an archive of a whole game folder.
-static bool ContentPath(const FInstall& I, const char* Rel, char* Dest, size_t DestSize)
-{
-    if (SDL_strstr(Rel, ".."))
-        return false;
-    for (INT Level = 0; Level < 2 && Rel; Level++)
-    {
-        for (const char* Dir : ContentDirs)
-        {
-            size_t Len = SDL_strlen(Dir);
-            if (SDL_strncasecmp(Rel, Dir, Len) == 0 && Rel[Len] == '/' && Rel[Len + 1])
-            {
-                // The engine looks the folders up by these names.
-                SDL_snprintf(Dest, DestSize, "%s/UT2004/%s%s", I.Root, Dir, Rel + Len);
-                return true;
-            }
-        }
-        Rel = SDL_strchr(Rel, '/');
-        if (Rel)
-            Rel++;
-    }
-    return false;
-}
-
-// Set while a download with a known digest unpacks, so a wrong one can be taken out again.
-static std::vector<std::string>* CreatedFiles;
-
-static SDL_IOStream* CreateContentFile(const char* Dest)
-{
-    if (CreatedFiles)
-        CreatedFiles->push_back(Dest);
-    char Dir[1024];
-    SDL_strlcpy(Dir, Dest, sizeof(Dir));
-    *SDL_strrchr(Dir, '/') = 0;
-    SDL_CreateDirectory(Dir);
-    return SDL_IOFromFile(Dest, "wb");
 }
 
 // Reads a stream with or without xz compression, the first bytes stay buffered to tell the format.
@@ -446,151 +319,6 @@ static bool Untar(FStreamReader& R, FInstall& I)
     return R.Fail();
 }
 
-static uint32_t Le16(const uint8_t* P) { return P[0] | P[1] << 8; }
-static uint32_t Le32(const uint8_t* P) { return Le16(P) | (uint32_t)Le16(P + 2) << 16; }
-static uint64_t Le64(const uint8_t* P) { return Le32(P) | (uint64_t)Le32(P + 4) << 32; }
-
-static bool ReadAt(int Fd, void* Out, size_t N, Sint64 Offset)
-{
-    return !SetupQuit && pread(Fd, Out, N, Offset) == (ssize_t)N;
-}
-
-// Writes one zip entry, stored or deflated, to Dest.
-static bool UnzipEntry(int Fd, FInstall& I, Sint64 Offset, Sint64 CSize, INT Method, const char* Dest)
-{
-    static uint8_t In[1 << 16], Out[1 << 18];
-    SDL_IOStream* File = CreateContentFile(Dest);
-    if (!File)
-        return I.Fail("Couldn't write the content of %s. Is the device out of storage?");
-    z_stream Z = {};
-    bool Ok = Method == 0 || inflateInit2(&Z, -MAX_WBITS) == Z_OK;
-    bool Inflating = Ok && Method == 8;
-    bool WriteOk = true;
-    for (Sint64 Left = CSize; Ok && WriteOk; )
-    {
-        if (!Z.avail_in)
-        {
-            if (!Left)
-            {
-                // Stored data ends with its size, a deflate stream has to reach its end marker first.
-                Ok = Method == 0;
-                break;
-            }
-            size_t N = (size_t)SDL_min(Left, (Sint64)sizeof(In));
-            Ok = ReadAt(Fd, In, N, Offset);
-            Offset += N;
-            Left -= N;
-            I.Progress(N);
-            Z.next_in = In;
-            Z.avail_in = N;
-            continue;
-        }
-        if (Method == 0)
-        {
-            WriteOk = SDL_WriteIO(File, In, Z.avail_in) == Z.avail_in;
-            Z.avail_in = 0;
-            continue;
-        }
-        Z.next_out = Out;
-        Z.avail_out = sizeof(Out);
-        int Ret = inflate(&Z, Z_NO_FLUSH);
-        size_t Got = sizeof(Out) - Z.avail_out;
-        Ok = Ret == Z_OK || Ret == Z_STREAM_END;
-        WriteOk = SDL_WriteIO(File, Out, Got) == Got;
-        if (Ret == Z_STREAM_END)
-            break;
-    }
-    if (Inflating)
-        inflateEnd(&Z);
-    if (!SDL_CloseIO(File))
-        WriteOk = false;
-    if (!WriteOk)
-        return I.Fail("Couldn't write the content of %s. Is the device out of storage?");
-    return Ok || I.Fail("%s is damaged.");
-}
-
-// Zip keeps its index at the end, so it needs a seekable local file.
-static bool Unzip(int Fd, FInstall& I)
-{
-    struct stat St;
-    if (fstat(Fd, &St) != 0 || !S_ISREG(St.st_mode))
-        return I.Fail("%s can't be read as a local file, which zip archives need.");
-    static uint8_t Tail[22 + 65535];
-    Sint64 TailLen = SDL_min((Sint64)St.st_size, (Sint64)sizeof(Tail));
-    if (!ReadAt(Fd, Tail, TailLen, St.st_size - TailLen))
-        return I.Fail("Couldn't read %s.");
-    Sint64 End = TailLen - 22;
-    while (End >= 0 && Le32(Tail + End) != 0x06054b50)
-        End--;
-    if (End < 0)
-        return I.Fail("%s is damaged.");
-    uint64_t Count = Le16(Tail + End + 10), DirSize = Le32(Tail + End + 12), DirOffset = Le32(Tail + End + 16);
-    uint8_t Zip64[56];
-    if (End >= 20 && Le32(Tail + End - 20) == 0x07064b50)
-    {
-        if (!ReadAt(Fd, Zip64, sizeof(Zip64), Le64(Tail + End - 12)) || Le32(Zip64) != 0x06064b50)
-            return I.Fail("%s is damaged.");
-        Count = Le64(Zip64 + 32);
-        DirSize = Le64(Zip64 + 40);
-        DirOffset = Le64(Zip64 + 48);
-    }
-    if (DirOffset + DirSize > (uint64_t)St.st_size)
-        return I.Fail("%s is damaged.");
-    uint8_t* Dir = (uint8_t*)SDL_malloc(DirSize);
-    bool Ok = Dir && ReadAt(Fd, Dir, DirSize, DirOffset);
-    if (!Ok)
-        I.Fail("Couldn't read %s.");
-    const uint8_t* P = Dir;
-    const uint8_t* DirEnd = Dir + DirSize;
-    for (uint64_t i = 0; Ok && i < Count; i++)
-    {
-        if (P + 46 > DirEnd || Le32(P) != 0x02014b50 || P + 46 + Le16(P + 28) + Le16(P + 30) + Le16(P + 32) > DirEnd)
-        {
-            Ok = I.Fail("%s is damaged.");
-            break;
-        }
-        INT Flags = Le16(P + 8), Method = Le16(P + 10), NameLen = Le16(P + 28), ExtraLen = Le16(P + 30);
-        uint64_t CSize = Le32(P + 20), USize = Le32(P + 24), Local = Le32(P + 42);
-        // Zip64 moves the fields that overflowed into an extra record, in this order.
-        const uint8_t* ExtraEnd = P + 46 + NameLen + ExtraLen;
-        for (const uint8_t* E = P + 46 + NameLen; E + 4 <= ExtraEnd; E += 4 + Le16(E + 2))
-        {
-            if (Le16(E) != 0x0001)
-                continue;
-            const uint8_t* F = E + 4;
-            const uint8_t* FEnd = SDL_min(E + 4 + Le16(E + 2), ExtraEnd);
-            if (USize == 0xFFFFFFFF && F + 8 <= FEnd) { USize = Le64(F); F += 8; }
-            if (CSize == 0xFFFFFFFF && F + 8 <= FEnd) { CSize = Le64(F); F += 8; }
-            if (Local == 0xFFFFFFFF && F + 8 <= FEnd) Local = Le64(F);
-        }
-        char Name[1024];
-        SDL_snprintf(Name, sizeof(Name), "%.*s", NameLen, (const char*)P + 46);
-        // Some Windows tools write backslashes.
-        for (char* C = Name; *C; C++)
-            if (*C == '\\')
-                *C = '/';
-        P = ExtraEnd + Le16(P + 32);
-
-        char Dest[1024];
-        uint8_t LocalHdr[30];
-        if (!Name[0] || Name[SDL_strlen(Name) - 1] == '/' || !ContentPath(I, Name, Dest, sizeof(Dest)))
-            I.Progress(CSize);
-        else if (Flags & 1)
-            Ok = I.Fail("%s is encrypted.");
-        else if (Method != 0 && Method != 8)
-            Ok = I.Fail("%s uses a compression other than deflate.");
-        else if (!ReadAt(Fd, LocalHdr, sizeof(LocalHdr), Local) || Le32(LocalHdr) != 0x04034b50)
-            Ok = I.Fail("%s is damaged.");
-        else
-        {
-            Ok = UnzipEntry(Fd, I, Local + 30 + Le16(LocalHdr + 26) + Le16(LocalHdr + 28), CSize, Method, Dest);
-            I.Files++;
-        }
-    }
-    SDL_free(Dir);
-    return Ok;
-}
-
 static bool Unpack(int Fd, FInstall& I)
 {
     FStreamReader R(Fd, I);
@@ -607,7 +335,13 @@ static bool Unpack(int Fd, FInstall& I)
     {
         // Unzip counts what it reads itself.
         I.Done = I.Drawn = 0;
-        return Unzip(Fd, I);
+        // SDL opens content:// URIs through the ContentResolver, a download has nothing to seek in.
+        SDL_IOStream* Zip = SDL_strncmp(I.Src, "content:", 8) ? NULL : SDL_IOFromFile(I.Src, "rb");
+        if (!Zip)
+            return I.Fail("%s can't be read as a local file, which zip archives need.");
+        bool Ok = Unzip(Zip, I);
+        SDL_CloseIO(Zip);
+        return Ok;
     }
     if (R.Avail >= 512 && TarHeaderValid((const char*)R.In))
         return Untar(R, I);
@@ -698,6 +432,9 @@ static bool DigestMatches(JNIEnv* Env, jclass Activity, int Fd)
 
 static bool TryInstall(JNIEnv* Env, jclass Activity, FInstall& I)
 {
+    // The full game is too large to unpack while it arrives, and its download has to survive a lost connection.
+    if (SDL_strcmp(I.Src, UT_FULL_URL) == 0)
+        return InstallFull(I);
     jstring JSrc = Env->NewStringUTF(I.Src);
     jmethodID ListTree = Env->GetStaticMethodID(Activity, "listAssetTree", "(Ljava/lang/String;)[Ljava/lang/String;");
     jobjectArray Tree = (jobjectArray)Env->CallStaticObjectMethod(Activity, ListTree, JSrc);
@@ -743,7 +480,24 @@ static bool TryInstall(JNIEnv* Env, jclass Activity, FInstall& I)
     return Ok;
 }
 
-// The content is too large for the APK, so it comes from UT_ASSETS_URL on first launch, or from wherever the player points.
+static bool JavaSource(JNIEnv* Env, jclass Activity, const char* Method, const char* First, const char* Second, char* Src, size_t SrcSize)
+{
+    jmethodID Ask = Env->GetStaticMethodID(Activity, Method, "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    jstring JFirst = Env->NewStringUTF(First), JSecond = Env->NewStringUTF(Second);
+    jstring JSrc = (jstring)Env->CallStaticObjectMethod(Activity, Ask, JFirst, JSecond);
+    Env->ExceptionClear();
+    Env->DeleteLocalRef(JFirst);
+    Env->DeleteLocalRef(JSecond);
+    if (!JSrc)
+        return false;
+    const char* Chars = Env->GetStringUTFChars(JSrc, NULL);
+    SDL_strlcpy(Src, Chars, SrcSize);
+    Env->ReleaseStringUTFChars(JSrc, Chars);
+    Env->DeleteLocalRef(JSrc);
+    return true;
+}
+
+// The content is too large for the APK, so the player picks on first launch where it comes from.
 bool InstallContent(const char* Root)
 {
     char StampPath[1024];
@@ -755,14 +509,14 @@ bool InstallContent(const char* Root)
     jobject ActivityObj = (jobject)SDL_GetAndroidActivity();
     jclass Activity = Env->GetObjectClass(ActivityObj);
     Env->DeleteLocalRef(ActivityObj);
-    jmethodID Ask = Env->GetStaticMethodID(Activity, "askAssetSource", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
 
-    char Src[1024] = UT_ASSETS_URL, Url[1024] = UT_ASSETS_URL;
+    char Src[1024], Url[1024] = UT_ASSETS_URL, ContentRoot[1024];
+    SDL_snprintf(ContentRoot, sizeof(ContentRoot), "%s/UT2004", Root);
     bool Ok = false;
-    for (;;)
+    for (bool Asked = JavaSource(Env, Activity, "askContentChoice", UT_ASSETS_URL, UT_FULL_URL, Src, sizeof(Src)); Asked; )
     {
         FInstall I = {};
-        I.Root = Root;
+        I.Root = ContentRoot;
         I.Src = Src;
         if (TryInstall(Env, Activity, I))
         {
@@ -777,17 +531,7 @@ bool InstallContent(const char* Root)
             SDL_strlcpy(Url, Src, sizeof(Url));
         // A picker covering the activity destroys the window surface, which must not be current then.
         CloseSetupScreen();
-        jstring JErr = Env->NewStringUTF(I.Err), JUrl = Env->NewStringUTF(Url);
-        jstring JSrc = (jstring)Env->CallStaticObjectMethod(Activity, Ask, JErr, JUrl);
-        Env->ExceptionClear();
-        Env->DeleteLocalRef(JErr);
-        Env->DeleteLocalRef(JUrl);
-        if (!JSrc)
-            break;
-        const char* Chars = Env->GetStringUTFChars(JSrc, NULL);
-        SDL_strlcpy(Src, Chars, sizeof(Src));
-        Env->ReleaseStringUTFChars(JSrc, Chars);
-        Env->DeleteLocalRef(JSrc);
+        Asked = JavaSource(Env, Activity, "askAssetSource", I.Err, Url, Src, sizeof(Src));
     }
     Env->DeleteLocalRef(Activity);
     return Ok;

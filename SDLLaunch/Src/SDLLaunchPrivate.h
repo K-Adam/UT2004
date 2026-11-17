@@ -28,7 +28,6 @@ int RunEngine( TCHAR* CmdLine );
 // SDLLaunchAndroid.cpp
 void InitSplash(const TCHAR *filename);
 bool AndroidFail(const char* Fmt, const char* Arg);
-void CloseSetupScreen();
 bool ExtractAssets(const char* Root);
 bool InstallContent(const char* Root);
 void StartServerService(const TCHAR* Cmd);

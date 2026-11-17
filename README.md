@@ -9,20 +9,21 @@ An unofficial, non-commercial port of Unreal Tournament 2004 (build 3369) to mod
 - Network compatible with retail build 3369. WebRTC transport next to UDP, so browsers can join and host.
 - No editor. The command line tools of `ucc` are kept.
 
-The game content is not part of this repository. You need the files of a UT2004 install that you own.
+The game content is not part of this repository or its releases. The first start downloads it or takes it from a UT2004 install.
 
 ## Download
 
 The [releases](https://github.com/K-Adam/UT2004/releases) carry a build for each platform, and the web version runs at <https://ut2004.dev>.
 
-| Archive | Platform |
+| File | Platform |
 |---|---|
-| `UT2004-<version>-win64.zip` | Windows x64. Unpack it and start `System/UT2004.exe`. |
-| `UT2004-<version>-linux64.tar.gz`, `-linux-arm64.tar.gz` | Linux x64 and arm64, built on Ubuntu 22.04. SDL 3 is included, the other libraries come from your distribution: OpenAL, Vorbis, Bullet, squish, OpenGL ES, speexdsp, OpenSSL and curl. |
+| `UT2004-<version>-win64.msi` | Windows x64 installer, for everyone on the PC or only for you. Remove it under Installed apps. |
+| `UT2004-<version>-win64.zip` | The same without an installer. Unpack it and start `System/UT2004.exe`. |
+| `UT2004-<version>-linux64.tar.gz`, `-linux-arm64.tar.gz` | Linux x64 and arm64, built on Ubuntu 22.04. Unpack it and run `./install.sh` (or `sudo ./install.sh --system` for everyone), then start `ut2004`. The installed folder has an `uninstall.sh`. SDL 3 is included, the other libraries come from your distribution: OpenAL, Vorbis, Bullet, squish, OpenGL ES, speexdsp, OpenSSL and curl. |
 | `UT2004-<version>-android.apk` | Android 9 or newer on arm64. |
 | `UT2004-<version>-web.zip` | The files of the web page, for hosting it on your own domain. It loads the content from `assets.ut2004.dev`, and only pages on the origins the web master allows can host games. |
 
-None of them contains the game content, see Run below.
+On the first start the game asks for its content. It can download the full game from the [Internet Archive](https://archive.org/details/ut2004-3369) (3.8 GB, about 13 GB of free space while it unpacks), or use the folder of a UT2004 install in place. The Android app also offers a set of ten maps (1 GB) and takes an archive or folder on the device.
 
 ## Build
 
@@ -42,7 +43,9 @@ The output lands in `build/<preset>/System/`. The Android build writes `build/an
 
 ### Checks and releases
 
-`python3 Tools/tidy.py` runs clang-tidy with the checks in `.clang-tidy` (Linux, needs Clang). GitHub Actions runs it on every push to `main` and every pull request and then builds and packages every platform. A tag like `v1.0.0` or `v1.0.0-rc.1` also publishes the archives as a release and the web build to GitHub Pages.
+`python3 Tools/tidy.py` runs clang-tidy with the checks in `.clang-tidy` (Linux, needs Clang). GitHub Actions runs it on every push to `main` and every pull request and then builds and packages every platform. A tag like `v1.0.0` or `v1.0.0-rc.1` also publishes the files as a release and the web build to GitHub Pages.
+
+The Windows installer is the `msi` target (`cmake --build --preset win64-release --target msi`). It needs the [WiX](https://wixtoolset.org) .NET tool with its UI and Util extensions on the path.
 
 ### Script packages
 
@@ -50,20 +53,22 @@ Online play needs UnrealScript packages identical to retail, so `Scripts/` holds
 
 ## Run
 
-Start `UT2004.exe` (`ut2004-bin` on Linux) in the `System` folder of a release, or in `build/<preset>/System/` of your own build. On the first start it asks for the folder of your UT2004 install and uses the content in place.
+Without an installer, start `UT2004.exe` (`ut2004-bin` on Linux) in the `System` folder of a release, or in `build/<preset>/System/` of your own build.
 
-A dedicated server is `UCC server DM-Rankin` (`ucc-bin` on Linux). It does not ask for content, add the `Paths=` lines of your install to its `UT2004.ini`.
+A dedicated server is `UCC server DM-Rankin` (`ucc-bin` on Linux). It does not ask for content, so start the game once on that machine or add the `Paths=` lines of your content to its `UT2004.ini`.
 
-The Android app downloads its content on the first launch, or takes an archive or folder you point it to. The web page is served from any static host, for example `python -m http.server 8000 -d build/web`.
+The web page is served from any static host, for example `python -m http.server 8000 -d build/web`.
 
 ## Files and logs
 
 | Platform | Settings, saves and `UT2004.log` |
 |---|---|
-| Windows | the `System` folder the game runs from |
+| Windows | the `System` folder the game runs from, or `%LocalAppData%\UT2004\System` when that folder is read-only, as in an install for everyone |
 | Linux | `~/.ut2004/System/` (next to the binary with `-nohomedir`) |
 | Android | `Android/data/org.ut2004.game/files/UT2004/System/` |
 | Web | the browser's IndexedDB for the page |
+
+Downloaded game content goes next to that `System` folder. Uninstalling keeps your settings, saves and the downloaded content, delete the folder to remove them.
 
 ## Network connections
 
@@ -75,6 +80,7 @@ The game only connects when you use an online feature. These are the defaults in
 | Web master | `master.ut2004.dev` | The same, for servers and clients that use WebRTC |
 | STUN | `stun.cloudflare.com` | Joining or hosting a browser hosted game |
 | Content host | `assets.ut2004.dev` | First launch on Android and on the web |
+| Internet Archive | `archive.org` | First start, if you pick the download of the full game |
 | Game servers | The server you pick | Joining a game |
 
 The first start makes up a player name and a random stats password, so servers that track stats can list you without a prompt. Turn it off under Settings, Game, if you do not want that. There is no telemetry.
@@ -91,12 +97,8 @@ Unreal, Unreal Tournament, Unreal Tournament 2004 and the Unreal Engine are trad
 
 This repository grants no license to the original code or content. Third-party components remain under their own licenses.
 
+I could not reach Epic Games about this project. If you represent Epic Games and have any request or concern about this repository, including a request to take it down, please contact me at kecskes.adam@outlook.com. I will respond promptly and comply with any reasonable request.
+
 ## Free of charge
 
 This project is free of charge and is not sold or monetized in any way.
-
-## Contact with Epic Games
-
-I have tried for several years to reach Epic Games about this project, by email and through other channels, without receiving a reply.
-
-If you represent Epic Games and have any request or concern about this repository, including a request to take it down, please contact me at kecskes.adam@outlook.com. I will respond promptly and comply with any reasonable request.

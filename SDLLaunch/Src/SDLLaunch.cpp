@@ -8,6 +8,10 @@ Revision history:
 
 #include <time.h>  // dodging a macro clash with Unix C runtime headers...
 
+#if !__EMSCRIPTEN__
+// Before the engine headers, whose operator delete the standard library headers would redeclare.
+#include "SDLLaunchContent.h"
+#endif
 #include "SDLLaunchPrivate.h"
 
 #if __STATIC_LINK
@@ -63,7 +67,7 @@ FFeedbackContextAnsi Warn;
 // File manager.
 #ifdef WIN32
 #include "FFileManagerWindows.h"
-FFileManagerWindows FileManager;
+FFileManagerWindowsHome FileManager;
 #else
 #include "FFileManagerUnix.h"
 FFileManagerUnix FileManager;
@@ -215,49 +219,95 @@ static void SDLCALL FolderPicked(void* UserData, const char* const* List, int)
     SDL_SetAtomicInt(&Pick->Done, 1);
 }
 
-// The build ships without the game content, so the player points it at a retail install, which is used in place.
-// Returns false when the player gives up.
-static bool FindContent(void)
+// Returns the picked folder, empty when the player backs out or the system has no folder dialog.
+static FString BrowseContent(void)
+{
+    FFolderPick Pick = {};
+    SDL_ShowOpenFolderDialog(FolderPicked, &Pick, NULL, NULL, false);
+    while (!SDL_GetAtomicInt(&Pick.Done))
+    {
+        SDL_PumpEvents();
+        SDL_Delay(10);
+    }
+    if (Pick.Failed)
+    {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "UT2004 could not ask for the folder", Pick.Path, NULL);
+        return TEXT("");
+    }
+    return appFromUtf8(Pick.Path);
+}
+
+// The engine joins the base directory and each path in 256 character buffers.
+static bool ContentFolderFits(const FString& Folder)
+{
+    if (appStrlen(appBaseDir()) + Folder.Len() + 24 <= 255)
+        return true;
+    FString Message = FString::Printf(TEXT("The path of this folder is too long for the game:\n%s"), *Folder);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "UT2004", &appToUtf8(*Message)(0), NULL);
+    return false;
+}
+
+static void DownloadContent(void)
+{
+    // Beside the settings, so it is the game folder unless that one is read-only. The default paths look there.
+    FString Folder = GFileManager->CalcHomeDir();
+    INT End = Folder.Len() - 1;
+    while (End > 0 && Folder[End - 1] != '/' && Folder[End - 1] != '\\')
+        End--;
+    TArray<ANSICHAR> Root = appToUtf8(*Folder.Left(Max(End - 1, 0)));
+    FInstall I = {};
+    I.Root = &Root(0);
+    I.Src = UT_FULL_URL;
+    bool Ok = InstallFull(I);
+    CloseSetupScreen();
+    if (!Ok && !SetupQuit)
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "UT2004", I.Err, NULL);
+}
+
+static bool ContentFound(void)
 {
     for (INT i = 0; i < GSys->Paths.Num(); i++)
         if (GSys->Paths(i).Right(4) == TEXT(".ut2") && GFileManager->FindFiles(*GSys->Paths(i), 1, 0).Num())
             return true;
+    return false;
+}
+
+// The build ships without the game content, so the player downloads it or points at a retail install, which is used in place.
+// Returns false when the player gives up.
+static bool FindContent(void)
+{
+    if (ContentFound())
+        return true;
 
     static const TCHAR* Wildcards[] = { TEXT("Maps/*.ut2"), TEXT("Textures/*.utx"), TEXT("Sounds/*.uax"), TEXT("Music/*.umx"), TEXT("StaticMeshes/*.usx"), TEXT("Animations/*.ukx") };
     // Without video there is no dialog to ask with, and the engine reports that failure itself.
     if (!SDL_Init(SDL_INIT_VIDEO))
         return true;
+    enum { Quit, Download, Browse };
+    static const SDL_MessageBoxButtonData Buttons[] = {
+        { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, Quit, "Quit" },
+        { 0, Browse, "Browse..." },
+        { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, Download, "Download" },
+    };
+    static const SDL_MessageBoxData Box = { SDL_MESSAGEBOX_INFORMATION, NULL, "UT2004",
+        "The game content was not found.\n\n"
+        "Download it from the Internet Archive (3.8 GB, needs 13 GB of free space), "
+        "or browse to the folder of a UT2004 install, the one that holds Maps and Textures.",
+        SDL_arraysize(Buttons), Buttons, NULL };
     bool Found = false;
-    while (!Found)
+    while (!Found && !SetupQuit)
     {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "UT2004",
-            "The game content was not found.\nSelect the folder of a UT2004 install, the one that holds Maps and Textures.", NULL);
-        FFolderPick Pick = {};
-        SDL_ShowOpenFolderDialog(FolderPicked, &Pick, NULL, NULL, false);
-        while (!SDL_GetAtomicInt(&Pick.Done))
-        {
-            SDL_PumpEvents();
-            SDL_Delay(10);
-        }
-        // A system without a folder dialog would otherwise close the game without a word.
-        if (Pick.Failed)
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "UT2004 could not ask for the folder", Pick.Path, NULL);
-        if (Pick.Failed || !Pick.Path[0])
+        int Choice = Quit;
+        if (!SDL_ShowMessageBox(&Box, &Choice) || Choice == Quit)
             break;
-#ifdef WIN32
-        TCHAR Dir[1024] = TEXT("");
-        MultiByteToWideChar(CP_UTF8, 0, Pick.Path, -1, Dir, ARRAY_COUNT(Dir));
-#else
-        const TCHAR* Dir = appFromAnsi(Pick.Path);
-#endif
-        FString Folder = Dir;
-        // The engine joins the base directory and each path in 256 character buffers.
-        if (appStrlen(appBaseDir()) + Folder.Len() + 24 > 255)
+        if (Choice == Download)
         {
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "UT2004", "The path of that folder is too long for the game.", NULL);
+            DownloadContent();
+            Found = ContentFound();
             continue;
         }
-        if (!GFileManager->FindFiles(*(Folder * Wildcards[0]), 1, 0).Num())
+        FString Folder = BrowseContent();
+        if (!Folder.Len() || !ContentFolderFits(Folder) || !GFileManager->FindFiles(*(Folder * Wildcards[0]), 1, 0).Num())
             continue;
         for (const TCHAR* Wildcard : Wildcards)
             new(GSys->Paths) FString(Folder * Wildcard);

@@ -311,8 +311,20 @@ add_custom_target(ucc_make
   DEPENDS ut_stage UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught $<TARGET_NAME_IF_EXISTS:UTV2004>
   USES_TERMINAL VERBATIM)
 
-if(UT_ASSETS_DIR AND TARGET UCC)
+if(TARGET UCC)
   enable_testing()
+  # The first run's zip reader and path filter, built apart from the engine.
+  add_executable(content_test SDLLaunch/Src/ContentTest.cpp SDLLaunch/Src/SDLLaunchContent.cpp)
+  target_link_libraries(content_test PRIVATE SDL3::SDL3 ZLIB::ZLIB)
+  # Outside System, which is what gets packaged.
+  foreach(cfg "" _DEBUG _RELEASE _RELWITHDEBINFO _MINSIZEREL)
+    set_target_properties(content_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY${cfg} ${CMAKE_BINARY_DIR}/Test)
+  endforeach()
+  add_test(NAME content
+    COMMAND ${CMAKE_COMMAND} -DTEST=$<TARGET_FILE:content_test> -DDIR=${CMAKE_BINARY_DIR}/Test/content -P ${CMAKE_SOURCE_DIR}/Tools/ContentTest.cmake)
+  set_tests_properties(content PROPERTIES ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${UT_SYSTEM_DIR}")
+endif()
+if(UT_ASSETS_DIR AND TARGET UCC)
   add_test(NAME server_smoke
     COMMAND ${CMAKE_COMMAND} -DUCC=$<TARGET_FILE:UCC> -DINI_DIR=${CMAKE_SOURCE_DIR}/DevIni -P ${CMAKE_SOURCE_DIR}/Tools/ServerSmoke.cmake
     WORKING_DIRECTORY ${UT_SYSTEM_DIR})
@@ -337,6 +349,32 @@ if(TARGET UCC)
     file(WRITE "${ini}" "${text}")
   ]])
   install(FILES README.md NOTICE.md LICENSE DESTINATION .)
+  if(NOT WIN32)
+    install(PROGRAMS Linux/install.sh DESTINATION .)
+    install(FILES Android/app/src/main/res/mipmap-mdpi/ic_launcher.png DESTINATION . RENAME ut2004.png)
+  endif()
+  if(WIN32)
+    # The installer, from the same files the archive gets. Needs the WiX .NET tool with its UI and Util extensions.
+    find_program(WIX_EXECUTABLE wix)
+    # Windows Installer versions are three numbers, so a tag like v1.0.0-rc.2 gives 1.0.0.
+    execute_process(COMMAND git describe --tags --abbrev=0 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+      OUTPUT_VARIABLE UT_MSI_VERSION ERROR_QUIET)
+    if(NOT UT_MSI_VERSION MATCHES "^v([0-9]+\\.[0-9]+\\.[0-9]+)")
+      set(CMAKE_MATCH_1 0.0.0)
+    endif()
+    set(UT_MSI_VERSION ${CMAKE_MATCH_1})
+    set(UT_MSI_DIR ${CMAKE_BINARY_DIR}/msi)
+    add_custom_target(msi
+      COMMAND ${CMAKE_COMMAND} -E rm -rf ${UT_MSI_DIR}
+      COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --config $<CONFIG> --component game --prefix ${UT_MSI_DIR}/stage
+      COMMAND ${CMAKE_COMMAND} -DSOURCE=${CMAKE_SOURCE_DIR} -DOUT=${UT_MSI_DIR}/License.rtf -P ${CMAKE_SOURCE_DIR}/Tools/LicenseRtf.cmake
+      COMMAND ${WIX_EXECUTABLE} build -acceptEula wix7 -arch $<IF:$<EQUAL:${CMAKE_SIZEOF_VOID_P},8>,x64,x86>
+        -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext
+        -d Stage=${UT_MSI_DIR}/stage -d Source=${CMAKE_SOURCE_DIR} -d LicenseRtf=${UT_MSI_DIR}/License.rtf -d Version=${UT_MSI_VERSION}
+        -o ${CMAKE_BINARY_DIR}/UT2004.msi ${CMAKE_SOURCE_DIR}/Windows/UT2004.wxs
+      DEPENDS SDLLaunch UCC Core Engine Editor IpDrv UWeb Fire XGame XInterface Onslaught SDLDrv OpenGLDrv ALAudio $<TARGET_NAME_IF_EXISTS:UTV2004>
+      VERBATIM)
+  endif()
   set(CPACK_PACKAGE_NAME UT2004)
   set(CPACK_PACKAGE_FILE_NAME UT2004-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR})
   set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)

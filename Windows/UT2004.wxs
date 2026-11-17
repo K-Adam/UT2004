@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Built by the msi target, which passes Stage (the installed game folder), Source (this repository),
+     LicenseRtf and Version. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Unreal Tournament 2004" Manufacturer="UT2004 Modernized" Version="$(Version)"
+           UpgradeCode="82ED1F42-ABB0-47BC-949B-BAC6C576EACA" Scope="perUserOrMachine">
+    <!-- Release candidates share the version of their release, so the same version replaces too. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="UT2004.ico" SourceFile="$(Source)\SDLLaunch\Src\Unreal.ico" />
+    <Property Id="ARPPRODUCTICON" Value="UT2004.ico" />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="APPLICATIONFOLDER" Name="UT2004">
+        <Directory Id="GameSystemFolder" Name="System" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut">
+        <Shortcut Id="StartMenuShortcut" Name="Unreal Tournament 2004" Target="[#GameExe]"
+                  WorkingDirectory="GameSystemFolder" Icon="UT2004.ico" />
+        <!-- A shortcut can't be a key path. HKMU follows the scope the player picks. -->
+        <RegistryValue Root="HKMU" Key="Software\UT2004" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Game" Title="Unreal Tournament 2004">
+      <!-- Named, so the shortcut and the last page reach it wherever the player installs. -->
+      <Component Id="GameExe" Directory="GameSystemFolder">
+        <File Id="GameExe" Source="$(Stage)\System\UT2004.exe" />
+      </Component>
+      <Files Include="$(Stage)\**" Directory="APPLICATIONFOLDER">
+        <Exclude Files="$(Stage)\System\UT2004.exe" />
+      </Files>
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!-- The dialogs that ask whether to install for everyone or only for the current user. -->
+    <Property Id="ApplicationFolderName" Value="UT2004" />
+    <Property Id="WixAppFolder" Value="WixPerUserFolder" />
+    <!-- Windows keeps per-user programs under Programs, the dialog set would pick Apps. -->
+    <SetProperty Id="WixPerUserFolder" Value="[LocalAppDataFolder]Programs\[ApplicationFolderName]"
+                 After="WixSetDefaultPerUserFolder" Sequence="both" />
+    <!-- A package for either scope starts out per-user, where the Program Files properties point into the
+         player's own folder, so the folder for everyone comes from the environment. -->
+    <SetProperty Id="WixPerMachineFolder" Value="[%ProgramFiles]\[ApplicationFolderName]"
+                 After="WixSetDefaultPerMachine64Folder" Sequence="both" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(LicenseRtf)" />
+    <ui:WixUI Id="WixUI_Advanced" />
+
+    <!-- The game asks for its content on the first start, so the last page offers to start it. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Start the game to set up its content" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#GameExe]" />
+    <!-- Impersonated, so an install for everyone doesn't run the game elevated. -->
+    <CustomAction Id="StartGame" DllEntry="WixShellExec" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" Impersonate="yes" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="StartGame"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+  </Package>
+</Wix>

@@ -90,7 +90,8 @@ UBOOL FALAudioStream::Init( const TCHAR* Filename, void* InSharedData, EAudioStr
 #if __UNIX__
 	FileHandle	= ((FFileManagerUnix *) GFileManager)->fopenReadRespectHomeDir(Filename);
 #else
-	FileHandle	= TCHAR_CALL_OS( _wfopen(Filename,TEXT("rb")), fopen(TCHAR_TO_ANSI(Filename),"rb") );
+	// The file manager knows where a relative path leads, which can be the player's folder outside the game.
+	FileHandle	= _wfopen( *GFileManager->ExpandPath(Filename), TEXT("rb") );
 #endif
 
 	if( FileHandle == NULL )
