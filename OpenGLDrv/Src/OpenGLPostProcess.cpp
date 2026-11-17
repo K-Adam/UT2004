@@ -774,7 +774,7 @@ void FOpenGLRenderInterface::PickBlasts(FPlane* Out)
 			continue;
 		FLOAT Radius = 0.f;
 		for( UClass* Class=Actor->GetClass(); Class && !Radius; Class=Class->GetSuperClass() )
-			if( appStrstr(Class->GetName(),TEXT("Explosion")) || appStrstr(Class->GetName(),TEXT("VehDeath")) || appStrstr(Class->GetName(),TEXT("ShockCombo")) )
+			if( appStrstr(Class->GetName(),TEXT("Explosion")) || appStrstr(Class->GetName(),TEXT("VehDeath")) || appStrstr(Class->GetName(),TEXT("ShockCombo")) || appStrstr(Class->GetName(),TEXT("TankHitRock")) || appStrstr(Class->GetName(),TEXT("PRVCombo")) )
 				Radius = 600.f;
 		// Minigun shells and the like only pop, and gibs and debris carry the word without any blast.
 		// Of the shock rifle only the combo blasts, its beam and ball hits are named explosions too.
@@ -783,6 +783,8 @@ void FOpenGLRenderInterface::PickBlasts(FPlane* Out)
 			continue;
 		if( appStrstr(Name,TEXT("Small")) )
 			Radius = 50.f;
+		else if( appStrstr(Name,TEXT("TankHitRock")) )
+			Radius = 1000.f;
 		else if( appStrstr(Name,TEXT("Redeemer")) )
 			Radius = 2500.f;
 
