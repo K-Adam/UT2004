@@ -2349,7 +2349,10 @@ void UGUIFont::execGetFont(FFrame& Stack, RESULT_DECL )
 		else
 		{
 			Index = 0;
-			ScaleFactor = float(XRes) / float(NormalXRes); 
+			// Menus space their rows by height, so on screens wider than 16:9 the width would make the rows overlap.
+			if ( Controller && Controller->ResY > 0 )
+				XRes = Min<INT>( XRes, Controller->ResY * 16 / 9 );
+			ScaleFactor = float(XRes) / float(NormalXRes);
 		}
 	}
 	else

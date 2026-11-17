@@ -668,8 +668,9 @@ void USDLViewport::VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y )
 		SDL_SetJoystickVirtualAxis( Joystick, Axis, (Sint16)(DX * 32767.f) );
 		SDL_SetJoystickVirtualAxis( Joystick, Axis + 1, (Sint16)(DY * 32767.f) );
 	}
+	// The second button is the pad's east button, bound to Duck.
 	else if( i == VJ_Jump )
-		SDL_SetJoystickVirtualButton( Joystick, 0, Held != 0 );
+		SDL_SetJoystickVirtualButton( Joystick, VJCrouch ? 1 : 0, Held != 0 );
 	// The third button is the pad's west button, bound to Use like E.
 	else if( i == VJ_Use )
 		SDL_SetJoystickVirtualButton( Joystick, 2, Held != 0 );
@@ -714,6 +715,13 @@ UBOOL USDLViewport::VJPointer( SDL_TouchID Touch, SDL_FingerID Finger, Uint32 Ph
 		}
 		VJTouch[i] = Touch;
 		VJFinger[i] = Finger;
+		if( i == VJ_Jump )
+		{
+			// Double jump needs the second press near the apex, later than this, so both gestures fit one button.
+			DOUBLE Now = appSeconds();
+			VJCrouch = Now - VJJumpTime < 0.25;
+			VJJumpTime = Now;
+		}
 	}
 	else if( i == VJ_Count )
 		return 0;
@@ -820,10 +828,11 @@ void USDLViewport::RenderOverlay()
 	{
 		FLOAT X, Y, R, XL, YL;
 		VJLayout( i, X, Y, R );
-		Canvas->ClippedStrLen( Canvas->SmallFont, 1.f, 1.f, XL, YL, Captions[i - VJ_Fire] );
+		const TCHAR* Caption = i == VJ_Jump && VJCrouch && VJFinger[i] ? TEXT("CROUCH") : Captions[i - VJ_Fire];
+		Canvas->ClippedStrLen( Canvas->SmallFont, 1.f, 1.f, XL, YL, Caption );
 		Canvas->CurX = X - XL * 0.5f;
 		Canvas->CurY = Y - YL * 0.5f;
-		Canvas->ClippedPrint( Canvas->SmallFont, 1.f, 1.f, 0, Captions[i - VJ_Fire] );
+		Canvas->ClippedPrint( Canvas->SmallFont, 1.f, 1.f, 0, Caption );
 	}
 
 	// Left thumb reach above Use, in vehicles with more than one seat.

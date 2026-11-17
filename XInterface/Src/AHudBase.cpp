@@ -113,7 +113,8 @@ void AHudBase::DrawSpriteWidget( UCanvas* Canvas, FSpriteWidget* Widget )
 	{
 		INT Slot = ((BYTE*)Widget - BarBase) / Bar->ElementSize;
 		FLOAT X = Canvas->OrgX + ScreenX, Y = Canvas->OrgY + ScreenY;
-		Canvas->Viewport->AddTouchTarget( X, Y, X + ScreenDX, Y + ScreenDY, *FString::Printf( TEXT("SwitchWeapon %d"), (Slot + 1) % Bar->ArrayDim ) );
+		// Twice the slot's height, as touch screens report a finger on their bottom edge poorly.
+		Canvas->Viewport->AddTouchTarget( X, Y - ScreenDY, X + ScreenDX, Y + ScreenDY, *FString::Printf( TEXT("SwitchWeapon %d"), (Slot + 1) % Bar->ArrayDim ) );
 	}
 
     Canvas->CurX = ScreenX;

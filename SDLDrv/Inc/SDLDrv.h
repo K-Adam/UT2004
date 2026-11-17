@@ -143,6 +143,9 @@ class USDLViewport : public UViewport
 	SDL_TouchID			VJTouch[VJ_Count];
 	SDL_FingerID		VJFinger[VJ_Count];
 	UBOOL				VJShown;
+	// A second press on Jump this soon after the first crouches while it is held.
+	DOUBLE				VJJumpTime;
+	UBOOL				VJCrouch;
 	TArray<FTouchTarget> TouchTargets;
 	// The seat NEXTSEAT last asked for, while the player keeps this pawn.
 	APawn*				LastSeatPawn;
