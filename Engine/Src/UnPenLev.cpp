@@ -266,6 +266,11 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 
 		FURL PartialURL(URL);
 		PartialURL.Host = TEXT("");
+		// The WebRTC details only tell this client how to reach the server, and the server reads the
+		// login URL up to the first comma, which would cut off every option after the fingerprint.
+		for( INT i=PartialURL.Op.Num()-1; i>=0; i-- )
+			if( appStrnicmp(*PartialURL.Op(i),TEXT("WebRTC="),7)==0 )
+				PartialURL.Op.Remove( i );
 
 	    for( INT i=PartialURL.Op.Num()-1; i>=0; i-- )
 	    {

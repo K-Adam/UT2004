@@ -56,8 +56,9 @@ static void SetupFirstRunPlayer()
 	}
 	GConfig->Flush( 0, GUserIni );
 
-	// Engine.u loaded the PlayerController config before this ran.
-	GetDefault<APlayerController>()->LoadConfig( 1 );
+	// Every loaded PlayerController class read its config before this ran, and a static build registers
+	// all native ones at startup. A subclass left with the old values would write them back with its next SaveConfig.
+	GetDefault<APlayerController>()->LoadConfig( 0, NULL, NULL, 0, 1, 1 );
 	debugf( NAME_Init, TEXT("Generated player name %s"), *Name );
 }
 
