@@ -442,6 +442,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			GlobalIllumination,
 			HeatHaze,
 			MotionBlur,
+			SmoothTerrain,
 			DetectSettings;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 

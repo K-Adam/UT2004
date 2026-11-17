@@ -17,6 +17,9 @@
 #define MAXSTREAMVERTICES 65535
 #define TERRAINSECTORSIZE (TerrainSectorSize)
 
+// World units the smoothed surface may leave the one collision uses, approached asymptotically.
+#define SMOOTH_MAX_DEVIATION 12.f
+
 extern ENGINE_API FTerrainTools		GTerrainTools;
 extern ENGINE_API FRebuildTools		GRebuildTools;
 
@@ -44,6 +47,7 @@ UTerrainSector::UTerrainSector( ATerrainInfo* InInfo, INT InOffsetX, INT InOffse
 ,	QuadsX		( InQuadsX )
 ,	QuadsY		( InQuadsY )
 ,	VertexStreamNum(-1)
+,	Subdivision	(1)
 {
 	guard(UTerrainSector::UTerrainSector);
 	unguard;
@@ -95,11 +99,15 @@ void UTerrainSector::Serialize(FArchive& Ar)
 		}
 
 	if( Ar.IsLoading() )
+	{
 		VertexStreamNum = -1;
+		Subdivision = 1;
+	}
 
 	if( !(Ar.IsLoading() || Ar.IsSaving()) )
 	{
-		Ar	<< CompleteIndexBuffer 
+		Ar	<< PassIndexBuffer
+			<< CompleteIndexBuffer 
 			<< CompleteNumTriangles 
 			<< CompleteNumIndices 
 			<< CompleteMinIndex 
@@ -328,6 +336,63 @@ UBOOL UTerrainSector::PassShouldRenderTriangle( INT Pass, INT X, INT Y, INT Tri,
     unguard;
 }
 
+// Subdivides one coarse quad along its own diagonal, so every fine triangle lies in one coarse triangle.
+// V1 is the quad's first corner, Tri1 and Tri2 select the coarse triangles to emit.
+static _WORD* EmitQuad( _WORD* Dest, INT V1, INT Pitch, INT N, UBOOL Turned, UBOOL Tri1, UBOOL Tri2 )
+{
+	for( INT j=0;j<N;j++ )
+	{
+		for( INT i=0;i<N;i++ )
+		{
+			INT A = V1 + i + j*Pitch, B = A+1, D = A+Pitch, C = D+1;
+			// Negative in coarse triangle 1, positive in 2, zero on the diagonal.
+			INT Side = Turned ? i+j-(N-1) : i-j;
+			if( Side <= 0 ? Tri1 : Tri2 )
+			{
+				*Dest++ = A;
+				*Dest++ = D;
+				*Dest++ = Turned ? B : C;
+			}
+			if( Side < 0 ? Tri1 : Tri2 )
+			{
+				*Dest++ = Turned ? D : A;
+				*Dest++ = C;
+				*Dest++ = B;
+			}
+		}
+	}
+	return Dest;
+}
+
+static void AppendQuad( TArray<_WORD>& Indices, INT V1, INT Pitch, INT N, UBOOL Turned, UBOOL Tri1, UBOOL Tri2 )
+{
+	INT Count = N*N*3*((Tri1 ? 1 : 0) + (Tri2 ? 1 : 0));
+	if( Count )
+		EmitQuad( &Indices(Indices.Add(Count)), V1, Pitch, N, Turned, Tri1, Tri2 );
+}
+
+// Bilinear between the corner colours, the triangle split would show as a diamond pattern.
+void UTerrainSector::FillFineColors()
+{
+	const INT N = Subdivision;
+	FTerrainVertex* Vertex = &Info->VertexStreams(VertexStreamNum).Vertices(VertexStreamOffset);
+	for( INT j=0;j<=QuadsY*N;j++ )
+	{
+		for( INT i=0;i<=QuadsX*N;i++ )
+		{
+			INT X = Min(i/N,QuadsX-1), Y = Min(j/N,QuadsY-1), A = i-X*N, B = j-Y*N;
+			const BYTE* C1 = (const BYTE*)&Info->VertexColors(GetGlobalVertex(X,Y));
+			const BYTE* C2 = (const BYTE*)&Info->VertexColors(GetGlobalVertex(X+1,Y));
+			const BYTE* C3 = (const BYTE*)&Info->VertexColors(GetGlobalVertex(X+1,Y+1));
+			const BYTE* C4 = (const BYTE*)&Info->VertexColors(GetGlobalVertex(X,Y+1));
+			BYTE* Dest = (BYTE*)&Vertex->Color;
+			for( INT c=0;c<4;c++ )
+				Dest[c] = ((C1[c]*(N-A) + C2[c]*A)*(N-B) + (C4[c]*(N-A) + C3[c]*A)*B + N*N/2) / (N*N);
+			Vertex++;
+		}
+	}
+}
+
 void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 {
 	guard(UTerrainSector::GenerateTriangles);
@@ -340,7 +405,13 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 	//
 	if( VertexStreamNum == -1 )
 	{
-		INT count = (QuadsX+1) * (QuadsY+1);
+		// The editor lights and edits the heightmap samples themselves.
+		URenderDevice* RenDev = Info->GetLevel()->Engine->GRenDev;
+		Subdivision = GIsEditor || !RenDev ? 1 : RenDev->GetRenderCaps()->TerrainSubdivision;
+		while( Subdivision > 1 && (QuadsX*Subdivision+1) * (QuadsY*Subdivision+1) >= MAXSTREAMVERTICES )
+			Subdivision /= 2;
+
+		INT count = (QuadsX*Subdivision+1) * (QuadsY*Subdivision+1);
 		if( !GIsEditor )
 		{
 			for( INT s=0;s<Info->VertexStreams.Num();s++ )
@@ -368,20 +439,53 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 	//
 	BoundingBox.Init();
 	FTerrainVertex* Vertex = &Info->VertexStreams(VertexStreamNum).Vertices(VertexStreamOffset);
-	for( INT y=0;y<=QuadsY;y++ )
+	const INT N = Subdivision, Pitch = QuadsX*N+1, VertexCount = Pitch * (QuadsY*N+1);
+	if( N == 1 )
 	{
-		for( INT x=0;x<=QuadsX;x++ )
+		for( INT y=0;y<=QuadsY;y++ )
 		{
-			INT g = GetGlobalVertex(x,y);
-			BoundingBox += Info->Vertices( g );
+			for( INT x=0;x<=QuadsX;x++ )
+			{
+				INT g = GetGlobalVertex(x,y);
+				BoundingBox += Info->Vertices( g );
 
-			Vertex->Position = Info->Vertices( g );
-			Vertex->Normal = Info->GetVertexNormal(x+OffsetX,y+OffsetY);
-			Vertex->Color = Info->VertexColors( g );
-			Vertex->U = ((FLOAT)(x+OffsetX) + 0.5f) / (FLOAT)Info->HeightmapX;
-			Vertex->V = ((FLOAT)(y+OffsetY) + 0.5f) / (FLOAT)Info->HeightmapY;
-			Vertex++;
+				Vertex->Position = Info->Vertices( g );
+				Vertex->Normal = Info->GetVertexNormal(x+OffsetX,y+OffsetY);
+				Vertex->Color = Info->VertexColors( g );
+				Vertex->U = ((FLOAT)(x+OffsetX) + 0.5f) / (FLOAT)Info->HeightmapX;
+				Vertex->V = ((FLOAT)(y+OffsetY) + 0.5f) / (FLOAT)Info->HeightmapY;
+				Vertex++;
+			}
 		}
+	}
+	else
+	{
+		// One fine step of margin for the normals. Neighbouring sectors sample the same function, so the seams match.
+		const INT GridX = Pitch+2, GridY = QuadsY*N+3;
+		TArray<FVector> Grid;
+		Grid.Add( GridX*GridY );
+		for( INT j=0;j<GridY;j++ )
+			for( INT i=0;i<GridX;i++ )
+				Grid(i+j*GridX) = Info->SmoothVertex( OffsetX + (FLOAT)(i-1)/N, OffsetY + (FLOAT)(j-1)/N );
+
+		for( INT j=0;j<=QuadsY*N;j++ )
+		{
+			for( INT i=0;i<=QuadsX*N;i++ )
+			{
+				const FVector* P = &Grid((i+1)+(j+1)*GridX);
+				checkSlow(i%N || j%N || *P == Info->Vertices(GetGlobalVertex(i/N,j/N)));
+				BoundingBox += *P;
+
+				// Wound like the face normals.
+				FVector Normal = ((P[1]-P[-1]) ^ (P[GridX]-P[-GridX])).SafeNormal();
+				Vertex->Position = *P;
+				Vertex->Normal = Info->Inverted ? -Normal : Normal;
+				Vertex->U = (OffsetX + (FLOAT)i/N + 0.5f) / (FLOAT)Info->HeightmapX;
+				Vertex->V = (OffsetY + (FLOAT)j/N + 0.5f) / (FLOAT)Info->HeightmapY;
+				Vertex++;
+			}
+		}
+		FillFineColors();
 	}
 	Info->VertexStreams(VertexStreamNum).Revision++;
 
@@ -463,11 +567,11 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 
 
 		// triangulate
+		PassIndexBuffer.Indices.Empty();
 		for( INT pass=0; pass<RenderPasses.Num(); pass++ )
 		{
-			// If layer is visible, build index buffer for it.
-			RenderPasses(pass).Indices.Empty();
-			RenderPasses(pass).NumTriangles = 0;
+			FTerrainSectorRenderPass& Pass = RenderPasses(pass);
+			Pass.FirstIndex = PassIndexBuffer.Indices.Num();
 
 			for( INT y=0;y<QuadsY;y++ )
 			{
@@ -475,126 +579,33 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 				{
 					if( Info->GetQuadVisibilityBitmap( x+OffsetX, y+OffsetY ) )
 					{
-						INT V1 = GetLocalVertex( x, y ) + VertexStreamOffset;
-						INT V2 = V1+1;
-						INT V3 = GetLocalVertex( x+1, y+1 ) + VertexStreamOffset;
-						INT V4 = V3-1;
-	                    
-						if( Info->GetEdgeTurnBitmap( x+OffsetX, y+OffsetY ) )
-						{
-							// triangle 1
-							if( pass == 0 || PassShouldRenderTriangle( pass, x, y, 0, 1 ) )
-							{
-								RenderPasses(pass).Indices.AddItem(V1);
-								RenderPasses(pass).Indices.AddItem(V4);
-								RenderPasses(pass).Indices.AddItem(V2);
-								RenderPasses(pass).NumTriangles++;
-							}
-							// triangle 2
-							if( pass == 0 || PassShouldRenderTriangle( pass, x, y, 1, 1 ) )
-							{
-								RenderPasses(pass).Indices.AddItem(V4);
-								RenderPasses(pass).Indices.AddItem(V3);
-								RenderPasses(pass).Indices.AddItem(V2);
-								RenderPasses(pass).NumTriangles++;
-							}
-						}
-						else
-						{
-							// triangle 1
-							if( pass == 0 || PassShouldRenderTriangle( pass, x, y, 0, 0 ) )
-							{
-								RenderPasses(pass).Indices.AddItem(V1);
-								RenderPasses(pass).Indices.AddItem(V4);
-								RenderPasses(pass).Indices.AddItem(V3);
-								RenderPasses(pass).NumTriangles++;
-							}
-							// triangle 2
-							if( pass == 0 || PassShouldRenderTriangle( pass, x, y, 1, 0 ) )
-							{
-								RenderPasses(pass).Indices.AddItem(V1);
-								RenderPasses(pass).Indices.AddItem(V3);
-								RenderPasses(pass).Indices.AddItem(V2);
-								RenderPasses(pass).NumTriangles++;
-							}
-						}
+						UBOOL Turned = Info->GetEdgeTurnBitmap( x+OffsetX, y+OffsetY );
+						AppendQuad( PassIndexBuffer.Indices, GetLocalVertex( x, y ) + VertexStreamOffset, Pitch, N, Turned,
+							pass == 0 || PassShouldRenderTriangle( pass, x, y, 0, Turned ),
+							pass == 0 || PassShouldRenderTriangle( pass, x, y, 1, Turned ) );
 					}
 				}
 			}
 
-			RenderPasses(pass).NumIndices = RenderPasses(pass).Indices.Num();
-			if( RenderPasses(pass).NumIndices )
-			{
-				// Work out the min and max indices
-				RenderPasses(pass).MinIndex = MAXINT;
-				RenderPasses(pass).MaxIndex = 0;
-				for( INT j=0;j<RenderPasses(pass).NumIndices;j++ )
-				{
-					if( RenderPasses(pass).Indices(j) < RenderPasses(pass).MinIndex )
-						RenderPasses(pass).MinIndex = RenderPasses(pass).Indices(j);
-					if( RenderPasses(pass).Indices(j) > RenderPasses(pass).MaxIndex )
-						RenderPasses(pass).MaxIndex = RenderPasses(pass).Indices(j);
-				}
-			}
-			else
-			{
-				// Remove this pass if there are no triangles to render.
+			Pass.NumTriangles = (PassIndexBuffer.Indices.Num() - Pass.FirstIndex) / 3;
+
+			// Remove this pass if there are no triangles to render.
+			if( !Pass.NumTriangles )
 				RenderPasses.Remove(pass--);
-			}
 		}
+		PassIndexBuffer.Revision++;
 
 		// Complete sector index buffer for rendering editor tools and wireframe.
 		CompleteIndexBuffer.Indices.Empty();
-		CompleteNumTriangles = 0;
 		for( INT y=0;y<QuadsY;y++ )
-		{
 			for( INT x=0;x<QuadsX;x++ )
-			{				
 				if( Info->GetQuadVisibilityBitmap( x+OffsetX, y+OffsetY ) )
-				{
-					INT V1 = GetLocalVertex( x, y ) + VertexStreamOffset;
-					INT V2 = V1+1;
-					INT V3 = GetLocalVertex( x+1, y+1 ) + VertexStreamOffset;
-					INT V4 = V3-1;
-	    
-					if( Info->GetEdgeTurnBitmap( x+OffsetX, y+OffsetY ) )
-					{
-						// triangle 1
-						CompleteIndexBuffer.Indices.AddItem(V1);
-						CompleteIndexBuffer.Indices.AddItem(V4);
-						CompleteIndexBuffer.Indices.AddItem(V2);
-						// triangle 2
-						CompleteIndexBuffer.Indices.AddItem(V4);
-						CompleteIndexBuffer.Indices.AddItem(V3);
-						CompleteIndexBuffer.Indices.AddItem(V2);
-						CompleteNumTriangles += 2;
-					}
-					else
-					{
-						// triangle 1
-						CompleteIndexBuffer.Indices.AddItem(V1);
-						CompleteIndexBuffer.Indices.AddItem(V4);
-						CompleteIndexBuffer.Indices.AddItem(V3);
-						// triangle 2
-						CompleteIndexBuffer.Indices.AddItem(V1);
-						CompleteIndexBuffer.Indices.AddItem(V3);
-						CompleteIndexBuffer.Indices.AddItem(V2);
-						CompleteNumTriangles += 2;
-					}
-				}
-			}
-		}
+					AppendQuad( CompleteIndexBuffer.Indices, GetLocalVertex( x, y ) + VertexStreamOffset, Pitch, N, Info->GetEdgeTurnBitmap( x+OffsetX, y+OffsetY ), 1, 1 );
 
 		CompleteNumIndices = CompleteIndexBuffer.Indices.Num();
-		CompleteMinIndex = MAXINT;
-		CompleteMaxIndex = 0;
-		for( INT j=0;j<CompleteNumIndices;j++ )
-		{
-			if( CompleteIndexBuffer.Indices(j) < CompleteMinIndex )
-				CompleteMinIndex = CompleteIndexBuffer.Indices(j);
-			if( CompleteIndexBuffer.Indices(j) > CompleteMaxIndex )
-				CompleteMaxIndex = CompleteIndexBuffer.Indices(j);
-		}
+		CompleteNumTriangles = CompleteNumIndices / 3;
+		CompleteMinIndex = VertexStreamOffset;
+		CompleteMaxIndex = VertexStreamOffset + VertexCount - 1;
 		CompleteIndexBuffer.Revision++;
 	}
 
@@ -617,11 +628,12 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 	for( INT i=0;i<Projectors.Num();i++ )
 	{
 		FStaticProjectorVertex*	DestVertex = &Projectors(i).Info->Vertices(0);
-		for(INT Y = Projectors(i).MinQuadY;Y <= Projectors(i).MaxQuadY + 1;Y++)
+		Vertex = &Info->VertexStreams(VertexStreamNum).Vertices(VertexStreamOffset);
+		for(INT Y = Projectors(i).MinQuadY * N;Y <= (Projectors(i).MaxQuadY + 1) * N;Y++)
 		{
-			for(INT X = Projectors(i).MinQuadX;X <= Projectors(i).MaxQuadX + 1;X++)
+			for(INT X = Projectors(i).MinQuadX * N;X <= (Projectors(i).MaxQuadX + 1) * N;X++)
 			{
-				DestVertex->WorldPosition = Info->Vertices(GetGlobalVertex(X,Y));
+				DestVertex->WorldPosition = Vertex[X + Y * Pitch].Position;
 				DestVertex++;
 			}
 		}
@@ -759,6 +771,8 @@ void ATerrainInfo::SmoothColors( void )
                 VertexColors(GlobalVertex).B = Min((INT)color.Z,255);
 			}
 		}
+		if( Sectors(i)->Subdivision > 1 )
+			Sectors(i)->FillFineColors();
 		VertexStream.Revision++;
 	}
 }
@@ -777,6 +791,9 @@ static inline INT Compare(FTerrainSectorLightInfo& A, FTerrainSectorLightInfo& B
 
 void UTerrainSector::StaticLight( UBOOL Force )
 {
+	// The light bitmaps and this loop address heightmap samples, which only the editor's unsubdivided stream holds in a row.
+	check(Subdivision == 1);
+
 	if( !Force )
 	{
 		UBOOL TerrainLightingChanged = 0;
@@ -885,18 +902,22 @@ void UTerrainSector::AttachProjector(AProjector* Projector,FProjectorRenderInfo*
 	FVector					WorldDirection = RenderInfo->Projector->Rotation.Vector();
 	FLOAT					InvMaxTraceDistance = 1.0f / RenderInfo->Projector->MaxTraceDistance;
 
-	for(INT Y = MinQuadY;Y <= MaxQuadY + 1;Y++)
+	const INT				N = Subdivision, Pitch = QuadsX * N + 1, ProjectorPitch = (MaxQuadX - MinQuadX + 1) * N + 1;
+	const FTerrainVertex*	Stream = &Info->VertexStreams(VertexStreamNum).Vertices(VertexStreamOffset);
+
+	for(INT Y = MinQuadY * N;Y <= (MaxQuadY + 1) * N;Y++)
 	{
-		for(INT X = MinQuadX;X <= MaxQuadX + 1;X++)
+		for(INT X = MinQuadX * N;X <= (MaxQuadX + 1) * N;X++)
 		{
 			FStaticProjectorVertex*	DestVertex = new(ProjectorInfo->Vertices) FStaticProjectorVertex;
-			
-			DestVertex->WorldPosition = Info->Vertices(GetGlobalVertex(X,Y));
+			const FTerrainVertex&	Source = Stream[X + Y * Pitch];
+
+			DestVertex->WorldPosition = Source.Position;
 
 			FLOAT	DirectionalAttenuation = 1.0f;
 
 			if(!(RenderInfo->ProjectorFlags & PRF_ProjectOnBackfaces))
-				DirectionalAttenuation = Max(Info->GetVertexNormal(X+OffsetX,Y+OffsetY) | -WorldDirection,0.0f);
+				DirectionalAttenuation = Max(Source.Normal | -WorldDirection,0.0f);
 
 			FLOAT	DistanceAttenuation = 1.0f;
 
@@ -934,49 +955,10 @@ void UTerrainSector::AttachProjector(AProjector* Projector,FProjectorRenderInfo*
 		
 			UBOOL Turned = Info->GetEdgeTurnBitmap( X+OffsetX, Y+OffsetY );
 
-			if( Turned )
-			{
-				// 142
-				for( INT i=0;i<6;i++ )
-					if( O1&(1<<i) && O4&(1<<i) && O2&(1<<i) )
-						goto SkipTri1;
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 0) + (Y - MinQuadY + 0) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 0) + (Y - MinQuadY + 1) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 1) + (Y - MinQuadY + 0) * (MaxQuadX - MinQuadX + 2));
-			}
-			else
-			{
-				// 143
-				for( INT i=0;i<6;i++ )
-					if( O1&(1<<i) && O4&(1<<i) && O3&(1<<i) )
-						goto SkipTri1;
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 0) + (Y - MinQuadY + 0) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 0) + (Y - MinQuadY + 1) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 1) + (Y - MinQuadY + 1) * (MaxQuadX - MinQuadX + 2));
-			}
-			
-SkipTri1:;
-			if( Turned )
-			{
-				// 432
-				for( INT i=0;i<6;i++ )
-					if( O4&(1<<i) && O3&(1<<i) && O2&(1<<i) )
-						goto SkipTri2;
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 0) + (Y - MinQuadY + 1) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 1) + (Y - MinQuadY + 1) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 1) + (Y - MinQuadY + 0) * (MaxQuadX - MinQuadX + 2));
-			}
-			else
-			{
-				// 132
-				for( INT i=0;i<6;i++ )
-					if( O1&(1<<i) && O3&(1<<i) && O2&(1<<i) )
-						goto SkipTri2;
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 0) + (Y - MinQuadY + 0) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 1) + (Y - MinQuadY + 1) * (MaxQuadX - MinQuadX + 2));
-				ProjectorInfo->Indices.AddItem((X - MinQuadX + 1) + (Y - MinQuadY + 0) * (MaxQuadX - MinQuadX + 2));
-			}
-SkipTri2:;
+			// A triangle is skipped when all its corners are outside one frustum plane: 142 and 432 turned, 143 and 132 otherwise.
+			AppendQuad( ProjectorInfo->Indices, ((X - MinQuadX) + (Y - MinQuadY) * ProjectorPitch) * N, ProjectorPitch, N, Turned,
+				!(Turned ? O1 & O4 & O2 : O1 & O4 & O3),
+				!(Turned ? O4 & O3 & O2 : O1 & O3 & O2) );
 		}
 	}
 
@@ -1710,6 +1692,65 @@ void ATerrainInfo::PostLoad()
 	}
 
 	unguard;
+}
+
+// Monotone cubic through P1 and P2 (Fritsch-Carlson with harmonic mean tangents), it never leaves their range.
+static FLOAT MonotoneCubic( FLOAT P0, FLOAT P1, FLOAT P2, FLOAT P3, FLOAT T )
+{
+	FLOAT D0 = P1-P0, D1 = P2-P1, D2 = P3-P2;
+	FLOAT M1 = D0*D1 > 0.f ? 2.f*D0*D1/(D0+D1) : 0.f;
+	FLOAT M2 = D1*D2 > 0.f ? 2.f*D1*D2/(D1+D2) : 0.f;
+	FLOAT T2 = T*T, T3 = T2*T;
+	return P1 + (T3 - 2.f*T2 + T)*M1 + (3.f*T2 - 2.f*T3)*D1 + (T3 - T2)*M2;
+}
+
+// Height inside the quad at IX,IY.
+static FLOAT SmoothHeight( ATerrainInfo* Info, INT IX, INT IY, FLOAT U, FLOAT V )
+{
+	FLOAT Rows[4];
+	for( INT r=0;r<4;r++ )
+	{
+		FLOAT P[4];
+		for( INT c=0;c<4;c++ )
+			P[c] = Info->GetHeightmap( Clamp(IX+c-1,0,Info->HeightmapX-1), Clamp(IY+r-1,0,Info->HeightmapY-1) );
+		Rows[r] = MonotoneCubic( P[0], P[1], P[2], P[3], U );
+	}
+	return MonotoneCubic( Rows[0], Rows[1], Rows[2], Rows[3], V );
+}
+
+// World position of the smoothed surface at heightmap coordinates. It equals Vertices on the samples.
+FVector ATerrainInfo::SmoothVertex( FLOAT X, FLOAT Y )
+{
+	X = Clamp<FLOAT>( X, 0.f, HeightmapX-1 );
+	Y = Clamp<FLOAT>( Y, 0.f, HeightmapY-1 );
+	INT IX = Clamp(appFloor(X),0,HeightmapX-2), IY = Clamp(appFloor(Y),0,HeightmapY-2);
+	FLOAT U = X-IX, V = Y-IY;
+	FLOAT H1 = GetHeightmap(IX,IY), H2 = GetHeightmap(IX+1,IY), H3 = GetHeightmap(IX+1,IY+1), H4 = GetHeightmap(IX,IY+1);
+
+	// The triangles collision uses.
+	FLOAT Coarse;
+	if( GetEdgeTurnBitmap(IX,IY) )
+		Coarse = U+V <= 1.f ? H1 + (H2-H1)*U + (H4-H1)*V : H3 + (H4-H3)*(1.f-U) + (H2-H3)*(1.f-V);
+	else
+		Coarse = V >= U ? H1 + (H3-H4)*U + (H4-H1)*V : H1 + (H2-H1)*U + (H3-H2)*V;
+
+	FLOAT Smooth = SmoothHeight(this,IX,IY,U,V);
+	checkSlow(Smooth >= Min(Min(H1,H2),Min(H3,H4)) - 0.1f && Smooth <= Max(Max(H1,H2),Max(H3,H4)) + 0.1f);
+
+	// Meshes are fitted to the map border and to the rims of holes, so those samples keep the retail surface around them.
+	FLOAT Weights[4];
+	for( INT c=0;c<4;c++ )
+	{
+		INT CX = IX + (c&1), CY = IY + (c>>1);
+		Weights[c] = CX > 0 && CY > 0 && CX < HeightmapX-1 && CY < HeightmapY-1
+			&& GetQuadVisibilityBitmap(CX,CY) && GetQuadVisibilityBitmap(CX-1,CY)
+			&& GetQuadVisibilityBitmap(CX,CY-1) && GetQuadVisibilityBitmap(CX-1,CY-1);
+	}
+	FLOAT Near = Lerp(Weights[0],Weights[1],U), Far = Lerp(Weights[2],Weights[3],U), Weight = Lerp(Near,Far,V);
+
+	FVector CoarsePoint = HeightmapToWorld( FVector(X,Y,Coarse) );
+	FVector Offset = HeightmapToWorld( FVector(X,Y,Smooth) ) - CoarsePoint;
+	return CoarsePoint + Offset * (Weight / (1.f + Offset.Size() / SMOOTH_MAX_DEVIATION));
 }
 
 FVector ATerrainInfo::GetVertexNormal( INT x, INT y )
@@ -2784,21 +2825,22 @@ FTerrainRenderCombination* FTerrainSectorRenderPass::GetRenderCombination(ATerra
 // 
 // FTerrainRenderThing
 //
-// - There is one of these for each combination of simultaneous layers and vertex stream.
-// - A number of these will be rendered in the same DrawPrimitive call.
+// - There is one of these for each render pass of a visible sector.
 //
 struct FTerrainRenderThing
 {
 	INT ForceSortOrder;
 	INT NumLayers;
+	UTerrainSector* Sector;
 	FTerrainSectorRenderPass* RenderPass;
 	FTerrainVertexStream* VertexStream;
 	FLOAT Distance;
     FDynamicLight*  DynLights[8]; // sjs
 
-	void Set( INT InForceSortOrder, FTerrainSectorRenderPass* InRenderPass, FTerrainVertexStream* InVertexStream, INT InNumLayers, FLOAT InDistance, FDynamicLight* inDynLights[8] )
+	void Set( INT InForceSortOrder, UTerrainSector* InSector, FTerrainSectorRenderPass* InRenderPass, FTerrainVertexStream* InVertexStream, INT InNumLayers, FLOAT InDistance, FDynamicLight* inDynLights[8] )
     {	
 		ForceSortOrder	= InForceSortOrder;
+		Sector			= InSector;
 		RenderPass		= InRenderPass;
 		VertexStream	= InVertexStream;
 		NumLayers		= InNumLayers;
@@ -2807,17 +2849,6 @@ struct FTerrainRenderThing
         for( int i=0; i<8; i++ )
             DynLights[i] = inDynLights[i];
 	}
-
-    bool CheckMatchingLights( FTerrainRenderThing& other ) // sjs
-    {
-        // 
-        for( int i=0; i<8; i++ )
-        {
-            if( DynLights[i] != other.DynLights[i] )
-                return false;
-        }
-        return true;
-    }
 };
 
 static inline INT Compare(FTerrainRenderThing& A,FTerrainRenderThing& B)
@@ -2848,124 +2879,6 @@ static inline INT Compare(FTerrainRenderThing& A,FTerrainRenderThing& B)
 }
 
 //
-// Dynamic index buffer for terrain rendering
-//
-class FTerrainIndexBuffer : public FIndexBuffer
-{
-public:
-	FTerrainRenderThing**			RenderThings;  // List of things we're going to render simultaneously.
-	INT								RenderThingsNum;
-	QWORD							CacheId;
-	INT								MinIndex;
-	INT								MaxIndex;
-	INT								NumTriangles;
-			
-	FTerrainIndexBuffer( INT MaxThings )
-    {
-		// Allocate memory for the RenderThings array.
-		RenderThings = new(GMem, MaxThings) (FTerrainRenderThing*);
-	}
-
-	void Init()
-    {
-		CacheId	= MakeCacheID(CID_RenderIndices);
-		RenderThingsNum = 0;
-		MinIndex = MAXINT;
-		MaxIndex = 0;
-		NumTriangles = 0;
-	}
-
-	//
-	// AddThing - Add another thing to render with the same DrawPrimitive call.
-	//
-	void AddThing( FTerrainRenderThing* Thing )
-					{
-		RenderThings[RenderThingsNum++] = Thing;
-		MinIndex = Min<INT>( MinIndex, Thing->RenderPass->MinIndex );
-		MaxIndex = Max<INT>( MaxIndex, Thing->RenderPass->MaxIndex );
-		NumTriangles += Thing->RenderPass->NumTriangles;
-					}
-
-	virtual QWORD GetCacheId()
-	{
-		return CacheId;
-    }
-
-	virtual INT GetRevision()
-    {
-		return 1;
-    }
-
-	virtual INT GetSize()
-	{
-		INT total=0;
-		for( INT i=0;i<RenderThingsNum;i++ )
-			total += RenderThings[i]->RenderPass->Indices.Num();
-		return total * sizeof(_WORD);
-	}
-
-	virtual INT GetIndexSize()
-    {
-		return sizeof(_WORD);
-    }
-
-	virtual void GetContents(void* Data)
-	{
-		_WORD* Ptr = (_WORD*)Data;
-		//
-		// Copy the indices of the things we're going to render simultaneously.
-		//
-		for( INT i=0;i<RenderThingsNum;i++ )
-		{
-			INT count = RenderThings[i]->RenderPass->Indices.Num();
-			appMemcpy( Ptr, &RenderThings[i]->RenderPass->Indices(0), count * sizeof(_WORD) );
-			Ptr += count;
-		}
-	}
-};
-
-//
-// FTerrainWireframeIndexBuffer - used to render individual terrain layer wireframes.
-//
-class FTerrainWireframeIndexBuffer : public FIndexBuffer
-{
-	FTerrainSectorRenderPass*	RenderPass;
-	QWORD						CacheId;
-
-public:
-	FTerrainWireframeIndexBuffer( FTerrainSectorRenderPass* InRenderPass )
-	{
-		RenderPass = InRenderPass;
-		CacheId	= MakeCacheID(CID_RenderIndices);
-	}
-
-	virtual QWORD GetCacheId()
-	{
-		return CacheId;
-	}
-
-	virtual INT GetRevision()
-	{
-		return 1;
-	}
-
-	virtual INT GetSize()
-	{
-		return RenderPass->NumIndices * sizeof(_WORD);
-	}
-
-	virtual INT GetIndexSize()
-	{
-		return sizeof(_WORD);
-	}
-
-	virtual void GetContents(void* Data)
-	{
-		appMemcpy( Data, &RenderPass->Indices(0), RenderPass->NumIndices * sizeof(_WORD) );
-	}
-};
-
-//
 //	FDynamicTerrainProjector
 //
 class FDynamicTerrainProjector : public FIndexBuffer
@@ -2983,9 +2896,7 @@ public:
 
 	// Only valid after GetContents.
 
-	INT	ClippedNumTriangles,
-		MinIndex,
-		MaxIndex;
+	INT	ClippedNumTriangles;
 
 	// Constructor.
 
@@ -3000,8 +2911,6 @@ public:
 		MaxQuadY = InMaxY;
 		Next = InNext;
 		ClippedNumTriangles = 0;
-		MinIndex = MAXWORD;
-		MaxIndex = 0;
 	}
 
 	// FRenderResource interface.
@@ -3009,13 +2918,15 @@ public:
 	virtual INT GetRevision() { return 1; }
 
 	// FIndexBuffer interface.
-	virtual INT GetSize() { return (MaxQuadX - MinQuadX + 1) * (MaxQuadY - MinQuadY + 1) * 2 * 3 * sizeof(_WORD); }
+	virtual INT GetSize() { return (MaxQuadX - MinQuadX + 1) * (MaxQuadY - MinQuadY + 1) * 2 * 3 * Sector->Subdivision * Sector->Subdivision * sizeof(_WORD); }
 	virtual INT GetIndexSize() { return sizeof(_WORD); }
 	virtual void GetContents(void* Data)
 	{
         guard(FDynamicTerrainProjector::GetContents);
-		_WORD*	DestIndex = (_WORD*)Data;
+		_WORD*		DestIndex = (_WORD*)Data;
+		const INT	N = Sector->Subdivision;
 
+		ClippedNumTriangles = 0;
 		for( INT y=MinQuadY;y<=MaxQuadY;y++ )
 		{
 			for( INT x=MinQuadX;x<=MaxQuadX;x++ )
@@ -3024,91 +2935,25 @@ public:
 				if( !TerrainInfo->GetQuadVisibilityBitmap( Sector->OffsetX + x, Sector->OffsetY + y ) )
 					continue;
 
-				// index buffer vertex offsets
-				INT v1 = Sector->GetLocalVertex(x,y) + Sector->VertexStreamOffset;
-				INT v2 = v1+1;
-				INT v3 = Sector->GetLocalVertex(x+1,y+1) + Sector->VertexStreamOffset;
-				INT v4 = v3-1;
-
 				// global vertex offsets
 				INT gv1 = Sector->GetGlobalVertex(x,y);
 				INT gv2 = gv1+1;
 				INT gv3 = Sector->GetGlobalVertex(x+1,y+1);
 				INT gv4 = gv3-1;
-	
-				INT O1, O2, O3, O4;
-				{
-					const FVector& V1 = Sector->Info->Vertices(gv1);
-					const FVector& V2 = Sector->Info->Vertices(gv2);
-					const FVector& V3 = Sector->Info->Vertices(gv3);
-					const FVector& V4 = Sector->Info->Vertices(gv4);
-							
-					O1 = CheckVertexForProjector( V1, ProjectorInfo->FrustumPlanes );
-					O2 = CheckVertexForProjector( V2, ProjectorInfo->FrustumPlanes );
-					O3 = CheckVertexForProjector( V3, ProjectorInfo->FrustumPlanes );
-					O4 = CheckVertexForProjector( V4, ProjectorInfo->FrustumPlanes );
-				}
 
-				UBOOL Turned = Sector->Info->GetEdgeTurnBitmap( x+Sector->OffsetX, y+Sector->OffsetY );
+				INT O1 = CheckVertexForProjector( TerrainInfo->Vertices(gv1), ProjectorInfo->FrustumPlanes );
+				INT O2 = CheckVertexForProjector( TerrainInfo->Vertices(gv2), ProjectorInfo->FrustumPlanes );
+				INT O3 = CheckVertexForProjector( TerrainInfo->Vertices(gv3), ProjectorInfo->FrustumPlanes );
+				INT O4 = CheckVertexForProjector( TerrainInfo->Vertices(gv4), ProjectorInfo->FrustumPlanes );
 
-				if( Turned )
-				{
-					// 142
-					if( O1 & O4 & O2 )
-						goto SkipTri1;
-	
-					*DestIndex++ = v1;
-					*DestIndex++ = v4;
-					*DestIndex++ = v2;
+				UBOOL Turned = TerrainInfo->GetEdgeTurnBitmap( x+Sector->OffsetX, y+Sector->OffsetY );
 
-					ClippedNumTriangles++;
-					MinIndex = Min(MinIndex,v1);
-					MaxIndex = Max(MaxIndex,v4);
-				}
-				else
-				{
-					// 143
-					if( O1 & O4 & O3 )
-						goto SkipTri1;
-					
-					*DestIndex++ = v1;
-					*DestIndex++ = v4;
-					*DestIndex++ = v3;
-
-					ClippedNumTriangles++;
-					MinIndex = Min(MinIndex,v1);
-					MaxIndex = Max(MaxIndex,v3);
-				}
-				
-	SkipTri1:;
-				if( Turned )
-				{
-					// 432
-					if( O4 & O3 & O2 )
-						goto SkipTri2;
-
-					*DestIndex++ = v4;
-					*DestIndex++ = v3;
-					*DestIndex++ = v2;
-
-					ClippedNumTriangles++;
-					MinIndex = Min(MinIndex,v2);
-					MaxIndex = Max(MaxIndex,v3);
-				}
-				else
-				{
-					// 132
-					if( O1 & O3 & O2 )
-						goto SkipTri2;
-					*DestIndex++ = v1;
-					*DestIndex++ = v3;
-					*DestIndex++ = v2;
-
-					ClippedNumTriangles++;
-					MinIndex = Min(MinIndex,v1);
-					MaxIndex = Max(MaxIndex,v3);
-				}
-	SkipTri2:;
+				// A triangle is skipped when all its corners are outside one frustum plane: 142 and 432 turned, 143 and 132 otherwise.
+				_WORD* End = EmitQuad( DestIndex, Sector->GetLocalVertex(x,y) + Sector->VertexStreamOffset, Sector->QuadsX * N + 1, N, Turned,
+					!(Turned ? O1 & O4 & O2 : O1 & O4 & O3),
+					!(Turned ? O4 & O3 & O2 : O1 & O3 & O2) );
+				ClippedNumTriangles += (End - DestIndex) / 3;
+				DestIndex = End;
 			}
 		}
         unguard;
@@ -3267,6 +3112,7 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
             // --- sjs
 			for( INT p=0;p<Sector->RenderPasses.Num();p++ )
 				RenderThings[RenderThingsCount++].Set(	(p==0 || Sector->RenderPasses(p).GetRenderCombination(this)->RenderMethod==RM_AlphaMap) ? p : 1, 
+				Sector,
 				&Sector->RenderPasses(p), 
 				&VertexStreams(Sector->VertexStreamNum), 
 				Sector->RenderPasses(p).GetRenderCombination(this)->Layers.Num(), 
@@ -3278,37 +3124,15 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 		// sort it to minimize state changes
 		Sort( RenderThings, RenderThingsCount );
 		
-		FTerrainIndexBuffer IndexBuffer( RenderThingsCount );
-		
 		// Render
 		for( INT t=0;t<RenderThingsCount;t++ )
 		{
-			// clear out the dynamic index buffer
-			IndexBuffer.Init();
-			IndexBuffer.AddThing( &RenderThings[t] );
-			
-			//!!powervr_aaron: DrawIndexedPrimitive gets smaller ranges, so D3D SW TnL transforms fewer vertices, if the following is skipped
-			if( GetLevel()->Engine->GRenDev->GetRenderCaps()->HardwareTL )
-			{
-				// Check the following RenderThings and render them simultaneously
-				// if they have the same textures and vertex stream.
-				for( INT n=t+1;n<RenderThingsCount;n++ )
-				{
-					if( RenderThings[t].ForceSortOrder != RenderThings[n].ForceSortOrder ||
-						RenderThings[t].VertexStream != RenderThings[n].VertexStream ||
-						RenderThings[t].RenderPass->RenderCombinationNum != RenderThings[n].RenderPass->RenderCombinationNum ||
-                        !RenderThings[t].CheckMatchingLights(RenderThings[n]) ) // sjs
-						break;
-					IndexBuffer.AddThing( &RenderThings[n] );
-					t = n;
-				}
-			}
-			
-			FTerrainRenderCombination* RenderCombination = RenderThings[t].RenderPass->GetRenderCombination(this);
-			
+			FTerrainSectorRenderPass* RenderPass = RenderThings[t].RenderPass;
+			FTerrainRenderCombination* RenderCombination = RenderPass->GetRenderCombination(this);
+
 			FVertexStream*	Streams[1] = { RenderThings[t].VertexStream };
 			RI->SetVertexStreams(VS_FixedFunction, Streams, 1);
-			INT BaseIndex = RI->SetDynamicIndexBuffer(&IndexBuffer,0);
+			RI->SetIndexBuffer(&RenderThings[t].Sector->PassIndexBuffer,0);
 			
 			DECLARE_STATIC_UOBJECT( UTerrainMaterial, TerrainMaterial, {} );
 			TerrainMaterial->UseFallback = 0;
@@ -3363,8 +3187,8 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 				for( int i=0; i<8; i++ )
 					RI->SetLight( i, RenderThings[t].DynLights[i] );
 				
-				RI->DrawPrimitive(PT_TriangleList,BaseIndex,IndexBuffer.NumTriangles,IndexBuffer.MinIndex,IndexBuffer.MaxIndex);			
-				GStats.DWORDStats( GEngineStats.STATS_Terrain_Triangles ) += IndexBuffer.NumTriangles;
+				RI->DrawPrimitive(PT_TriangleList,RenderPass->FirstIndex,RenderPass->NumTriangles,RenderThings[t].Sector->CompleteMinIndex,RenderThings[t].Sector->CompleteMaxIndex);
+				GStats.DWORDStats( GEngineStats.STATS_Terrain_Triangles ) += RenderPass->NumTriangles;
 				GStats.DWORDStats( GEngineStats.STATS_Terrain_DrawPrimitives ) ++;
 		}
 		
@@ -3470,8 +3294,8 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 							PT_TriangleList,
 							BaseIndex,
 							DynamicProjector->ClippedNumTriangles,
-							DynamicProjector->MinIndex,
-							DynamicProjector->MaxIndex
+							Sector->CompleteMinIndex,
+							Sector->CompleteMaxIndex
 							);
 
 						GStats.DWORDStats( GEngineStats.STATS_Projector_Projectors )++;
@@ -3524,9 +3348,8 @@ void ATerrainInfo::Render(FLevelSceneNode* SceneNode,FRenderInterface* RI,FVisib
 					// Draw the grid for this renderpass
 					if( RenderGrid )
 					{
-						FTerrainWireframeIndexBuffer WireframeIndexBuffer(&RenderPass);
-						INT BaseIndex = RI->SetDynamicIndexBuffer(&WireframeIndexBuffer,0);
-						RI->DrawPrimitive(PT_TriangleList,BaseIndex,RenderPass.NumTriangles,RenderPass.MinIndex,RenderPass.MaxIndex);					
+						RI->SetIndexBuffer(&Sector->PassIndexBuffer,0);
+						RI->DrawPrimitive(PT_TriangleList,RenderPass.FirstIndex,RenderPass.NumTriangles,Sector->CompleteMinIndex,Sector->CompleteMaxIndex);
 					}
 				}
 			}
@@ -3675,6 +3498,10 @@ void ATerrainInfo::UpdateDecorations( INT SectorIndex )
 							Location	 = Vertices(Sector->GetGlobalVertex( x, y+1 )) + DirX * RandX + DirY * (1 - RandY);
 							Normal		 = (DirX ^ DirY).SafeNormal();
 						}
+
+						// The same heightmap point on the surface that is drawn.
+						if( Sector->Subdivision > 1 )
+							Location = RandX > RandY ? SmoothVertex( GlobalX + RandX, GlobalY + RandY ) : SmoothVertex( GlobalX + 1 - RandY, GlobalY + 1 - RandX );
 
 						if (Normal.Z < 0)
 							Normal *= -1;
@@ -3965,7 +3792,8 @@ void ATerrainInfo::execPokeTerrain( FFrame& Stack, RESULT_DECL )
             G16Heightmap(x,y) = Clamp<INT>( appRound(MaxDepth*appSqrt( Radius*Radius - ((Center.X-x)*(Center.X-x)+(Center.Y-y)*(Center.Y-y)) ) / Radius) + (INT)G16Heightmap(x,y), 0, 65535 );
 
 	UpdateVertices( 0, X1, Y1, X2+1, Y2+1 );
-	UpdateTriangles( X1, Y1, X2, Y2, 0, 0 );
+	// The smoothed surface reads two samples beyond a quad.
+	UpdateTriangles( X1-2, Y1-2, X2+2, Y2+2, 0, 0 );
 
 	unguard;
 }

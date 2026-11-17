@@ -36,11 +36,12 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("GlobalIllumination"),RF_Public)UBoolProperty(CPP_PROPERTY(GlobalIllumination),TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("HeatHaze"),		RF_Public)UBoolProperty(CPP_PROPERTY(HeatHaze),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("MotionBlur"),		RF_Public)UBoolProperty(CPP_PROPERTY(MotionBlur),		TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("SmoothTerrain"),	RF_Public)UBoolProperty(CPP_PROPERTY(SmoothTerrain),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("DetectSettings"),	RF_Public)UBoolProperty(CPP_PROPERTY(DetectSettings),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = HeatHaze = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = HeatHaze = SmoothTerrain = 1;
 	ResolutionScale = 100;
 }
 
@@ -76,7 +77,7 @@ void UOpenGLRenderDevice::DetectOptions()
 		VolumetricFog = GlobalIllumination = 0;
 	if( Tier >= 2 )
 	{
-		ScreenSpaceReflections = AmbientOcclusion = ContactShadows = DepthOfField = 0;
+		ScreenSpaceReflections = AmbientOcclusion = ContactShadows = DepthOfField = SmoothTerrain = 0;
 		ResolutionScale = Min(ResolutionScale,75);
 	}
 	if( Tier >= 3 )
@@ -756,8 +757,8 @@ void UOpenGLRenderDevice::ReadPixels(UViewport* Viewport,FColor* Pixels,UBOOL Fl
 
 FRenderCaps* UOpenGLRenderDevice::GetRenderCaps()
 {
-	RenderCaps.HardwareTL					= 1;
 	RenderCaps.PixelShaderVersion			= 14;
 	RenderCaps.MaxSimultaneousTerrainLayers	= 4;
+	RenderCaps.TerrainSubdivision			= SmoothTerrain ? 2 : 1;
 	return &RenderCaps;
 }

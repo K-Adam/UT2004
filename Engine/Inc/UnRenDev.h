@@ -215,13 +215,13 @@ struct FRenderCaps
 {
 	INT MaxSimultaneousTerrainLayers;
 	INT		PixelShaderVersion;	//!!powervr_aaron: Terrain optimisation code needs to know whether pixel shaders are being used
-	UBOOL	HardwareTL;			//!!powervr_aaron: Terrain optimisation code needs to know whether SW TnL is being used
+	INT		TerrainSubdivision;	// Rendered terrain vertices per heightmap sample along an axis.
 
 	// set default render caps in constructor
 	FRenderCaps()
 	:	MaxSimultaneousTerrainLayers(1),
 		PixelShaderVersion(0),
-		HardwareTL(0)
+		TerrainSubdivision(1)
 	{}
 };
 

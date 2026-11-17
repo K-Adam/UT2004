@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze, ch_MotionBlur;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze, ch_MotionBlur, ch_SmoothTerrain;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2], ReflectionsText[2];
 
@@ -30,6 +30,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Options.ManageComponent(ch_GlobalIllumination);
 	sb_Options.ManageComponent(ch_HeatHaze);
 	sb_Options.ManageComponent(ch_MotionBlur);
+	sb_Options.ManageComponent(ch_SmoothTerrain);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -77,6 +78,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_MotionBlur:
 		ch_MotionBlur.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice MotionBlur")), true);
+		break;
+	case ch_SmoothTerrain:
+		ch_SmoothTerrain.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice SmoothTerrain")), true);
 		break;
 	}
 }
@@ -129,6 +133,9 @@ function InternalOnChange(GUIComponent Sender)
 		break;
 	case ch_MotionBlur:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice MotionBlur" @ ch_MotionBlur.IsChecked());
+		break;
+	case ch_SmoothTerrain:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice SmoothTerrain" @ ch_SmoothTerrain.IsChecked());
 		break;
 	}
 }
@@ -365,6 +372,19 @@ defaultproperties
 		TabOrder=12
 	End Object
 	ch_MotionBlur=MotionBlurCheck
+
+	Begin Object class=moCheckBox Name=SmoothTerrainCheck
+		Caption="Smooth Terrain"
+		Hint="Rounds off the facets of hills. Applied when a map loads, so reopen the map after changing it."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=13
+	End Object
+	ch_SmoothTerrain=SmoothTerrainCheck
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"

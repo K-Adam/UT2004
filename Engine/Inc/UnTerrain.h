@@ -246,18 +246,13 @@ struct FTerrainSectorRenderPass
 	ATerrainInfo* TerrainInfo;
 	INT RenderCombinationNum;
 
-	TArray<_WORD> Indices;
+	INT FirstIndex;				// Into the sector's PassIndexBuffer.
 	INT NumTriangles;
-	INT NumIndices;
-	DWORD MinIndex;
-	DWORD MaxIndex;
 
 	FTerrainSectorRenderPass()
 	:	RenderCombinationNum(-1)
+	,	FirstIndex			(0)
 	,	NumTriangles		(0)
-	,	NumIndices			(0)
-	,	MinIndex			(0)
-	,	MaxIndex			(0)
 	{}
 
 	inline FTerrainRenderCombination* GetRenderCombination(ATerrainInfo* InTerrainInfo);
@@ -265,8 +260,7 @@ struct FTerrainSectorRenderPass
 	friend FArchive& operator<<( FArchive& Ar, FTerrainSectorRenderPass& P )
 	{
 		return Ar	<< P.RenderCombinationNum
-					<< P.Indices << P.NumTriangles << P.NumIndices
-					<< P.MinIndex << P.MaxIndex;
+					<< P.FirstIndex << P.NumTriangles;
 	}
 };
 
@@ -333,7 +327,9 @@ class ENGINE_API UTerrainSector : public UObject
 
 	INT VertexStreamNum;
 	_WORD VertexStreamOffset;
+	INT Subdivision;			// Rendered vertices per heightmap sample along an axis, fixed once the stream slot is taken.
 
+	FRawIndexBuffer PassIndexBuffer;
 	FRawIndexBuffer CompleteIndexBuffer;
 	INT CompleteNumTriangles;
 	INT CompleteNumIndices;
@@ -352,7 +348,8 @@ class ENGINE_API UTerrainSector : public UObject
 	void GenerateTriangles( UBOOL CheckLayerBlending=1 );
 	void StaticLight( UBOOL Force );
 	inline INT GetGlobalVertex( INT x, INT y );
-	INT GetLocalVertex( INT x, INT y ) { return x + y*(QuadsX+1); }
+	INT GetLocalVertex( INT x, INT y ) { return (x + y*(QuadsX*Subdivision+1))*Subdivision; }
+	void FillFineColors();
 	inline UBOOL IsTriangleAll( INT Layer, INT X, INT Y, INT Tri, UBOOL Turned, BYTE AlphaValue );
 	UBOOL IsSectorAll( INT Layer, BYTE AlphaValue );
 	UBOOL PassShouldRenderTriangle( INT Pass, INT X, INT Y, INT Tri, UBOOL Turned );
@@ -507,6 +504,7 @@ class ENGINE_API ATerrainInfo : public AInfo
 	void CalcCoords();
 	void CalcLayerTexCoords();
 	FVector GetVertexNormal( INT x, INT y ); 
+	FVector SmoothVertex( FLOAT X, FLOAT Y );
 	void PrecomputeLayerWeights();
 	void CombineLayerWeights();
 
