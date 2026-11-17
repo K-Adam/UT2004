@@ -1,0 +1,13 @@
+diff --git a/src/impl/iceudpmuxlistener.hpp b/src/impl/iceudpmuxlistener.hpp
+index f58a2f57..1c19016f 100644
+--- a/src/impl/iceudpmuxlistener.hpp
++++ b/src/impl/iceudpmuxlistener.hpp
+@@ -36,7 +36,7 @@ private:
+ 	static void UnhandledStunRequestCallback(const juice_mux_binding_request *info, void *user_ptr);
+ #endif
+ 
+-	std::atomic<bool> mStopped;
++	std::atomic<bool> mStopped{false};
+ };
+ 
+ }
