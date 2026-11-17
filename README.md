@@ -97,7 +97,7 @@ Unreal, Unreal Tournament, Unreal Tournament 2004 and the Unreal Engine are trad
 
 This repository grants no license to the original code or content. Third-party components remain under their own licenses.
 
-I could not reach Epic Games about this project. If you represent Epic Games and have any request or concern about this repository, including a request to take it down, please contact me at kecskes.adam@outlook.com. I will respond promptly and comply with any reasonable request.
+I could not reach Epic Games about this project. If you represent Epic Games and have any request or concern about this repository, including a request to take it down, please contact me at contact@ut2004.dev. I will respond promptly and comply with any reasonable request.
 
 ## Free of charge
 

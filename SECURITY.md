@@ -11,7 +11,7 @@ Fixes go into `main` and the next release. Only the latest release is supported,
 Please do not open a public issue. Report it privately instead, either way works:
 
 - GitHub: the Security tab of this repository, then "Report a vulnerability".
-- Email: kecskes.adam@outlook.com
+- Email: security@ut2004.dev
 
 Include the platform, the build or commit, and the steps or the packet that triggers the problem. A proof of concept helps but is not required.
 
