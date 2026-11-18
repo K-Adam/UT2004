@@ -166,7 +166,12 @@ enum EFixedVertexFunction
 	FVF_TexCoord4,
 	FVF_TexCoord5,
 	FVF_TexCoord6,
-	FVF_TexCoord7
+	FVF_TexCoord7,
+	// Read once per instance by DrawInstanced.
+	FVF_Instance0,
+	FVF_Instance1,
+	FVF_Instance2,
+	FVF_Instance3
 };
 
 //

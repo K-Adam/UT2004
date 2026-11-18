@@ -126,7 +126,7 @@ jobs:
 
       - name: Test
         if: matrix.name == 'win64' || startsWith(matrix.name, 'linux')
-        run: ctest --test-dir build/${{ matrix.preset }} -C Release -R content --output-on-failure
+        run: ctest --test-dir build/${{ matrix.preset }} -C Release -R "content|foliage_pack" --output-on-failure
 
       - name: Package
         run: |

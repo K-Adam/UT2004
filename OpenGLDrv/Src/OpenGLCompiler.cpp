@@ -1229,6 +1229,7 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	Compiler.K(State.NumTextures);
 	Compiler.K(State.NumMatrices);
 	Compiler.K(State.NumConstants);
+	Compiler.K(CurrentState->Instanced);
 
 	DWORD Hash = appMemCrc(&Key(0),Key.Num());
 	RenDev->Programs.MultiFind(Hash,Candidates);
@@ -1248,7 +1249,12 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	FOpenGLCompiler Writer(this,State,Unused,&Body,ErrorString,ErrorMaterial);
 	Writer.Compile(Material);
 
-	FString Fragment = FString(OpenGLFragmentPrologue) + Writer.Declarations() + TEXT("void main()\n{\n") + Body + TEXT("}\n");
+	// Interleaved gradient noise. Two detail levels that hand over keep exactly one of them per pixel.
+	const TCHAR* Fade = CurrentState->Instanced ? TEXT("in vec2 vFade;\n") : TEXT("");
+	const TCHAR* Dissolve = CurrentState->Instanced
+		? TEXT("\tfloat Dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));\n\tif (vFade.x <= Dither || vFade.y < 1.0 - Dither) discard;\n")
+		: TEXT("");
+	FString Fragment = FString(OpenGLFragmentPrologue) + Fade + Writer.Declarations() + TEXT("void main()\n{\n") + Dissolve + Body + TEXT("}\n");
 	FOpenGLProgram* Program = new FOpenGLProgram;
 	Program->Key = Key;
 	// No real value has this pattern, so the first draw sends everything.
@@ -1256,7 +1262,7 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	appMemset(Program->SentMatrices,0xff,sizeof(Program->SentMatrices));
 	appMemset(Program->SentConstants,0xff,sizeof(Program->SentConstants));
 	appMemset(&Program->SentAlphaRef,0xff,sizeof(Program->SentAlphaRef));
-	Program->Program = RenDev->StartProgram(RenDev->VertexShaderObject,&ToAnsi(Fragment)(0),Program->FragmentShader);
+	Program->Program = RenDev->StartProgram(CurrentState->Instanced ? RenDev->InstancedVertexShaderObject : RenDev->VertexShaderObject,&ToAnsi(Fragment)(0),Program->FragmentShader);
 	Program->Pending = 1;
 	RenDev->Programs.Add(Hash,Program);
 	State.Program = Program;

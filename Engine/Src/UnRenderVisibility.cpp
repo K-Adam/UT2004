@@ -7,6 +7,7 @@
 =============================================================================*/
 
 #include "EnginePrivate.h"
+#include "UnFoliage.h"
 #include "UnRenderPrivate.h"
 
 //
@@ -214,6 +215,7 @@ struct FRenderState
 	TList<FTranslucentDrawItem>*	TranslucentDrawList;	// A draw list for translucent surfaces and actors.
 
 	FStaticMeshBatchList			StaticMeshBatchList;	// A list of visible static mesh batches.
+	TArray<FDynamicActor*>			FoliageActors;			// Visible actors whose mesh a Foliage folder plant stands in for.
 
 	FBspDrawList**					BspDrawLists;			// An array of BSP draw list pointers.
 	TList<INT>*						SectionDrawList;		// A list of BSP sections to draw.
@@ -669,6 +671,12 @@ static void RenderActor(FRenderState& RenderState,FDynamicActor* DynamicActor)
     if( !GIsEditor && RenderActor->bSpecialLit && RenderActor->ExcludeTag[0] != NAME_None )
         skipRendering = true;
     // --- sjs
+
+	if( !skipRendering && FFoliage::ReplacesActor(RenderState.SceneNode,RenderActor) )
+	{
+		RenderState.FoliageActors.AddItem(DynamicActor);
+		return;
+	}
 
 	// Offset the bounding sphere to account for root motion.
 
@@ -1980,6 +1988,7 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 		RenderActor(RenderState,ActorDrawList->Element);
 
 	RenderState.StaticMeshBatchList.Render(SceneNode,RI);
+	FFoliage::RenderActors(RenderState.FoliageActors,SceneNode,RI);
 
 	if(!SceneNode->Viewport->HitTesting)
 		for(TList<FProjectorRenderBatch*>* ProjectorBatchList = GProjectorBatchList;ProjectorBatchList;ProjectorBatchList = ProjectorBatchList->Next)
@@ -2031,6 +2040,9 @@ void RenderLevel(FLevelSceneNode* SceneNode,FRenderInterface* RI)
 	}
 
 	GProjectorBatchList = SavedGProjectorBatchList;
+
+	// The retail plants are translucent, so some only turn up in the pass above.
+	FFoliage::RenderActors(RenderState.FoliageActors,SceneNode,RI);
 
 	// Render terrain decorations.
 	if( SceneNode->Viewport->Actor->ShowFlags & SHOW_Terrain )

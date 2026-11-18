@@ -3,4 +3,6 @@
 ports/**/*.patch -text
 DevIni/*.ini -text
 KarmaData/*.ka -text
+Foliage/textures/* -text
+Foliage/meshes/* -text
 Scripts/* -text

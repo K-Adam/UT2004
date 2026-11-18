@@ -13,6 +13,7 @@ The builds link or bundle the libraries below. Each keeps its own license, which
 | `Tools/NVTriStrip/` | NVIDIA Corporation | NvTriStrip library |
 | `metoolkit-karma/` (submodule) | Karma API on Bullet | see that repository |
 | `ports/speex/` | Speex with Epic's 4.8 kbps mode | BSD, see speex below |
+| `Foliage/` | Poly Haven models `grass_medium_01`, `fern_02` and `searsia_lucida`, reduced and repacked | CC0 1.0, polyhaven.com/license |
 
 The web build also holds the Emscripten runtime, under the MIT and the University of Illinois/NCSA licenses (the `LICENSE` file of the emscripten-core/emscripten repository on GitHub).
 

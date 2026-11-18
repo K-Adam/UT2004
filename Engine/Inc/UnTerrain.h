@@ -505,6 +505,7 @@ class ENGINE_API ATerrainInfo : public AInfo
 	void CalcLayerTexCoords();
 	FVector GetVertexNormal( INT x, INT y ); 
 	FVector SmoothVertex( FLOAT X, FLOAT Y );
+	UBOOL SurfacePoint( const FVector& World, UBOOL Smooth, FVector& Point );
 	void PrecomputeLayerWeights();
 	void CombineLayerWeights();
 

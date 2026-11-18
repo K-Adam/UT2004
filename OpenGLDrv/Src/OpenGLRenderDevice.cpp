@@ -13,7 +13,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 {
 	LockedViewport	= NULL;
 	ContextReady	= 0;
-	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
+	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = InstancedVertexShaderObject = 0;
 	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
@@ -37,11 +37,12 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("HeatHaze"),		RF_Public)UBoolProperty(CPP_PROPERTY(HeatHaze),			TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("MotionBlur"),		RF_Public)UBoolProperty(CPP_PROPERTY(MotionBlur),		TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("SmoothTerrain"),	RF_Public)UBoolProperty(CPP_PROPERTY(SmoothTerrain),	TEXT("Options"),CPF_Config);
+	new(GetClass(),TEXT("ImprovedFoliage"),	RF_Public)UBoolProperty(CPP_PROPERTY(ImprovedFoliage),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("DetectSettings"),	RF_Public)UBoolProperty(CPP_PROPERTY(DetectSettings),	TEXT("Options"),CPF_Config);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
-	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = HeatHaze = SmoothTerrain = 1;
+	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = HeatHaze = SmoothTerrain = ImprovedFoliage = 1;
 	ResolutionScale = 100;
 }
 
@@ -77,7 +78,7 @@ void UOpenGLRenderDevice::DetectOptions()
 		VolumetricFog = GlobalIllumination = 0;
 	if( Tier >= 2 )
 	{
-		ScreenSpaceReflections = AmbientOcclusion = ContactShadows = DepthOfField = SmoothTerrain = 0;
+		ScreenSpaceReflections = AmbientOcclusion = ContactShadows = DepthOfField = SmoothTerrain = ImprovedFoliage = 0;
 		ResolutionScale = Min(ResolutionScale,75);
 	}
 	if( Tier >= 3 )
@@ -152,10 +153,11 @@ static void LogShaderError(GLuint Shader)
 	}
 }
 
-static GLuint CompileShader(GLenum Type,const ANSICHAR* Source)
+static GLuint CompileShader(GLenum Type,const ANSICHAR* Source,const ANSICHAR* Header="")
 {
 	GLuint Shader = glCreateShader(Type);
-	glShaderSource(Shader,1,&Source,NULL);
+	const ANSICHAR* Sources[] = { Header, Source };
+	glShaderSource(Shader,2,Sources,NULL);
 	glCompileShader(Shader);
 	GLint Status = 0;
 	glGetShaderiv(Shader,GL_COMPILE_STATUS,&Status);
@@ -171,7 +173,8 @@ static GLuint CompileShader(GLenum Type,const ANSICHAR* Source)
 GLuint UOpenGLRenderDevice::StartProgram(GLuint VertexShader,const ANSICHAR* FragmentSource,GLuint& FragmentShader)
 {
 	static const ANSICHAR* Attributes[GLA_Max] = { "aPosition", "aNormal", "aDiffuse", "aSpecular",
-		"aTexCoord0", "aTexCoord1", "aTexCoord2", "aTexCoord3", "aTexCoord4", "aTexCoord5", "aTexCoord6", "aTexCoord7" };
+		"aTexCoord0", "aTexCoord1", "aTexCoord2", "aTexCoord3", "aTexCoord4", "aTexCoord5", "aTexCoord6", "aTexCoord7",
+		"aInstance0", "aInstance1", "aInstance2", "aInstance3" };
 	FragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(FragmentShader,1,&FragmentSource,NULL);
 	glCompileShader(FragmentShader);
@@ -297,16 +300,19 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	}
 	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile);
 
-	VertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader);
+	VertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader,"#version 300 es\n");
+	InstancedVertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader,"#version 300 es\n#define INSTANCED\n");
 	GLuint FullscreenVertex = CompileShader(GL_VERTEX_SHADER,FullscreenVertexShader);
 	UBOOL PostReady = InitPostProcess(FullscreenVertex);
 	glDeleteShader(FullscreenVertex);
-	if( !VertexShaderObject || !PostReady )
+	if( !VertexShaderObject || !InstancedVertexShaderObject || !PostReady )
 		return 0;
 
 	glGenVertexArrays(1,&EmptyVertexArray);
 	glGenVertexArrays(1,&VertexArray);
 	glBindVertexArray(VertexArray);
+	for( INT i=0; i<4; i++ )
+		glVertexAttribDivisor(GLA_Instance0 + i,1);
 	glGenBuffers(1,&SceneBuffer);
 	glBindBuffer(GL_UNIFORM_BUFFER,SceneBuffer);
 	glBufferData(GL_UNIFORM_BUFFER,sizeof(FOpenGLSceneBlock),NULL,GL_DYNAMIC_DRAW);
@@ -482,12 +488,13 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	for( INT i=0; i<ARRAY_COUNT(PostPrograms); i++ )
 		glDeleteProgram(PostPrograms[i]);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
+	if( InstancedVertexShaderObject )	glDeleteShader(InstancedVertexShaderObject);
 	if( FrameFence )			glDeleteSync(FrameFence);
 	GLuint ShadowTextures[] = { ShadowAtlas, SunShadow };
 	glDeleteTextures(ARRAY_COUNT(ShadowTextures),ShadowTextures);
 	FlushShadows();
 	FrameFence = NULL;
-	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = 0;
+	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = InstancedVertexShaderObject = 0;
 	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
 }
 
@@ -760,5 +767,6 @@ FRenderCaps* UOpenGLRenderDevice::GetRenderCaps()
 	RenderCaps.PixelShaderVersion			= 14;
 	RenderCaps.MaxSimultaneousTerrainLayers	= 4;
 	RenderCaps.TerrainSubdivision			= SmoothTerrain ? 2 : 1;
+	RenderCaps.ImprovedFoliage				= ImprovedFoliage;
 	return &RenderCaps;
 }

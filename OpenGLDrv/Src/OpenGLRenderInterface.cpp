@@ -328,28 +328,46 @@ void FOpenGLRenderInterface::SetZBias(INT ZBias)
 	CurrentState->ZBias = ZBias;
 }
 
+// Uploads a stream that changed and describes it for CommitStreams. Returns the bytes uploaded.
+static INT CacheStream(UOpenGLRenderDevice* RenDev,FVertexStream* Source,FOpenGLStream& Out)
+{
+	INT Size = 0;
+	FOpenGLVertexStream* Stream = (FOpenGLVertexStream*)RenDev->GetCachedResource(Source->GetCacheId());
+	if( !Stream )
+		Stream = new FOpenGLVertexStream(RenDev,Source->GetCacheId());
+	if( Stream->CachedRevision != Source->GetRevision() )
+	{
+		Size = Source->GetSize();
+		Stream->Cache(Source);
+	}
+	Out.Buffer			= Stream->Buffer;
+	Out.Stride			= Source->GetStride();
+	Out.NumComponents	= Source->GetComponents(Out.Components);
+	return Size;
+}
+
 INT FOpenGLRenderInterface::SetVertexStreams(EVertexShader Shader,FVertexStream** Streams,INT NumStreams)
 {
 	INT Size = 0;
 	NumStreams = Min<INT>(NumStreams,OGL_MAX_STREAMS);
 	for( INT i=0; i<NumStreams; i++ )
-	{
-		FOpenGLVertexStream* Stream = (FOpenGLVertexStream*)RenDev->GetCachedResource(Streams[i]->GetCacheId());
-		if( !Stream )
-			Stream = new FOpenGLVertexStream(RenDev,Streams[i]->GetCacheId());
-		if( Stream->CachedRevision != Streams[i]->GetRevision() )
-		{
-			Size += Streams[i]->GetSize();
-			Stream->Cache(Streams[i]);
-		}
-		FOpenGLStream& Out = CurrentState->Streams[i];
-		Out.Buffer			= Stream->Buffer;
-		Out.Stride			= Streams[i]->GetStride();
-		Out.NumComponents	= Streams[i]->GetComponents(Out.Components);
-	}
+		Size += CacheStream(RenDev,Streams[i],CurrentState->Streams[i]);
 	CurrentState->NumStreams = NumStreams;
 	CurrentState->Source = NumStreams ? Streams[0] : NULL;
 	return Size;
+}
+
+UBOOL FOpenGLRenderInterface::SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap,const FPlane* Range)
+{
+	CurrentState->InstanceRange = Range ? *Range : FPlane(0.f,1e30f,1.f,1.f);
+	CurrentState->Instanced = Instances != NULL;
+	if( Instances )
+		CacheStream(RenDev,Instances,CurrentState->Instances);
+	if( WorldToLightmap )
+		CurrentState->WorldToLightmap = *WorldToLightmap;
+	else
+		appMemzero(&CurrentState->WorldToLightmap,sizeof(FMatrix));
+	return 1;
 }
 
 INT FOpenGLRenderInterface::UseDynamicVertices(INT Offset,INT Stride,const FVertexComponent* Components,INT NumComponents)
@@ -629,6 +647,10 @@ void FOpenGLRenderInterface::Commit()
 			glUniform3fv(Program->Probe,3,&Probe.Origin.X);
 		}
 	}
+	if( S->Instanced && Program->WorldToLightmap != -1 )
+		glUniformMatrix4fv(Program->WorldToLightmap,1,GL_FALSE,&S->WorldToLightmap.M[0][0]);
+	if( S->Instanced && Program->InstanceRange != -1 )
+		glUniform4fv(Program->InstanceRange,1,&S->InstanceRange.X);
 	if( M.AlphaTest && Program->SentAlphaRef != M.AlphaRef )
 	{
 		Program->SentAlphaRef = M.AlphaRef;
@@ -733,7 +755,9 @@ static UBOOL SameStream(const FOpenGLStream& A,const FOpenGLStream& B)
 static void CommitStreams(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FSavedState* S,INT BaseVertex)
 {
 	UOpenGLRenderDevice::FGLState& GL = RenDev->GL;
-	if( GL.NumStreams == S->NumStreams && GL.BaseVertex == BaseVertex )
+	UBOOL Instanced = S->Instanced;
+	if( GL.NumStreams == S->NumStreams && GL.BaseVertex == BaseVertex && GL.Instanced == Instanced
+	&&	(!Instanced || SameStream(GL.Instances,S->Instances)) )
 	{
 		INT i = 0;
 		while( i < S->NumStreams && SameStream(GL.Streams[i],S->Streams[i]) )
@@ -744,11 +768,12 @@ static void CommitStreams(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FS
 
 	UBOOL Used[GLA_Max];
 	appMemzero(Used,sizeof(Used));
-	for( INT StreamIndex=0; StreamIndex<S->NumStreams; StreamIndex++ )
+	for( INT StreamIndex=0; StreamIndex<S->NumStreams + (Instanced ? 1 : 0); StreamIndex++ )
 	{
-		FOpenGLStream& Stream = S->Streams[StreamIndex];
+		UBOOL			PerInstance = StreamIndex == S->NumStreams;
+		FOpenGLStream&	Stream = PerInstance ? S->Instances : S->Streams[StreamIndex];
 		glBindBuffer(GL_ARRAY_BUFFER,Stream.Buffer);
-		INT Offset = BaseVertex * Stream.Stride;
+		INT Offset = PerInstance ? 0 : BaseVertex * Stream.Stride;
 		for( INT i=0; i<Stream.NumComponents; i++ )
 		{
 			FVertexComponent&	Component = Stream.Components[i];
@@ -757,6 +782,7 @@ static void CommitStreams(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FS
 										: Component.Function == FVF_Normal ? GLA_Normal
 										: Component.Function == FVF_Diffuse ? GLA_Diffuse
 										: Component.Function == FVF_Specular ? GLA_Specular
+										: Component.Function >= FVF_Instance0 ? GLA_Instance0 + (Component.Function - FVF_Instance0)
 										: GLA_TexCoord0 + (Component.Function - FVF_TexCoord0);
 			if( Component.Type == CT_Color )
 				glVertexAttribPointer(Location,4,GL_UNSIGNED_BYTE,GL_TRUE,Stream.Stride,(void*)(PTRINT)Offset);
@@ -780,11 +806,27 @@ static void CommitStreams(UOpenGLRenderDevice* RenDev,FOpenGLRenderInterface::FS
 	appMemcpy(GL.Streams,S->Streams,S->NumStreams * sizeof(FOpenGLStream));
 	GL.NumStreams	= S->NumStreams;
 	GL.BaseVertex	= BaseVertex;
+	GL.Instanced	= Instanced;
+	GL.Instances	= S->Instances;
+}
+
+void FOpenGLRenderInterface::DrawInstanced(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances)
+{
+	if( CurrentState->Instanced && CurrentState->IndexBuffer && NumInstances > 0 )
+		Draw(PrimitiveType,FirstIndex,NumPrimitives,NumInstances);
 }
 
 void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT MinIndex,INT MaxIndex)
 {
-	guard(FOpenGLRenderInterface::DrawPrimitive);
+	// A program built for instances reads attributes a plain draw does not feed.
+	if( !CurrentState->Instanced )
+		Draw(PrimitiveType,FirstIndex,NumPrimitives,0);
+}
+
+// NumInstances is 0 for a plain draw.
+void FOpenGLRenderInterface::Draw(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances)
+{
+	guard(FOpenGLRenderInterface::Draw);
 
 	FOpenGLProgram* Program = CurrentState->Material.Program;
 	// Render targets may be drawn only once, so they wait instead of keeping the hole.
@@ -794,7 +836,7 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 	// The engine sorts translucent actors by their centre, which puts long beams behind foliage they
 	// stand in front of. Adding is order independent, so beams wait until the level is done.
 	FSavedState* S = CurrentState;
-	if( S->Material.Beam && InWorld && !ViewModel && !S->RenderTarget && S->Streams[0].Buffer != RenDev->DynamicVertexBuffer.Buffer )
+	if( S->Material.Beam && !NumInstances && InWorld && !ViewModel && !S->RenderTarget && S->Streams[0].Buffer != RenDev->DynamicVertexBuffer.Buffer )
 	{
 		FDeferredDraw& D	= DeferredDraws(DeferredDraws.Add());
 		D.State				= *S;
@@ -804,8 +846,6 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 		D.Type				= PrimitiveType;
 		D.FirstIndex		= FirstIndex;
 		D.NumPrimitives		= NumPrimitives;
-		D.MinIndex			= MinIndex;
-		D.MaxIndex			= MaxIndex;
 		D.IndexBytes		= 0;
 		if( S->IndexBuffer && S->IndexBuffer == RenDev->DynamicIndexBuffer.Buffer )
 		{
@@ -830,7 +870,8 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 
 	Commit();
 	UBOOL Indexed = CurrentState->IndexBuffer != 0;
-	INT Base = Indexed ? CurrentState->IndexBufferBase : 0, DrawBase = RenDev->DrawElementsBaseVertex ? Base : 0;
+	// Only the plain base vertex draw call is loaded, instanced draws take the base through the offsets.
+	INT Base = Indexed ? CurrentState->IndexBufferBase : 0, DrawBase = RenDev->DrawElementsBaseVertex && !NumInstances ? Base : 0;
 	CommitStreams(RenDev,CurrentState,Base - DrawBase);
 
 	// Without a colour stream D3D lights with its black material emissive, and unlit draws get white.
@@ -879,7 +920,9 @@ void FOpenGLRenderInterface::DrawPrimitive(EPrimitiveType PrimitiveType,INT Firs
 			GLenum	Type = CurrentState->IndexSize == 4 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
 			// Not glDrawRangeElements, ANGLE rejects draws whose indices leave the range and D3D treats it as a hint.
 			void*	Indices = (void*)(PTRINT)(FirstIndex * CurrentState->IndexSize);
-			if( DrawBase )
+			if( NumInstances )
+				glDrawElementsInstanced(Mode,Count,Type,Indices,NumInstances);
+			else if( DrawBase )
 				RenDev->DrawElementsBaseVertex(Mode,Count,Type,Indices,DrawBase);
 			else
 				glDrawElements(Mode,Count,Type,Indices);
@@ -921,7 +964,7 @@ void FOpenGLRenderInterface::DrawDeferred()
 			FDeferredIndices Indices(&DeferredIndices(D.IndexOffset),D.IndexBytes,D.State.IndexSize);
 			FirstIndex += SetDynamicIndexBuffer(&Indices,D.State.IndexBufferBase);
 		}
-		DrawPrimitive(D.Type,FirstIndex,D.NumPrimitives,D.MinIndex,D.MaxIndex);
+		Draw(D.Type,FirstIndex,D.NumPrimitives,0);
 	}
 	PopState();
 	DeferredDraws.Empty(DeferredDraws.Num());

@@ -7,6 +7,7 @@
 =============================================================================*/
 
 #include "EnginePrivate.h"
+#include "UnFoliage.h"
 #include <math.h>
 
 #include "UnRenderPrivate.h"
@@ -1314,6 +1315,7 @@ void ATerrainInfo::PostEditChange()
 void ATerrainInfo::Destroy()
 {
 	guard(ATerrainInfo::Destroy);
+	FFoliage::ForgetTerrain(this);
 	if( Level && Level->XLevel && GIsEditor )
 		Level->XLevel->UpdateTerrainArrays();
 	Super::Destroy();
@@ -1718,6 +1720,28 @@ static FLOAT SmoothHeight( ATerrainInfo* Info, INT IX, INT IY, FLOAT U, FLOAT V 
 	return MonotoneCubic( Rows[0], Rows[1], Rows[2], Rows[3], V );
 }
 
+// Height on the two triangles collision uses for a quad.
+static FLOAT CoarseHeight( ATerrainInfo* Info, INT IX, INT IY, FLOAT U, FLOAT V )
+{
+	FLOAT H1 = Info->GetHeightmap(IX,IY), H2 = Info->GetHeightmap(IX+1,IY), H3 = Info->GetHeightmap(IX+1,IY+1), H4 = Info->GetHeightmap(IX,IY+1);
+	if( Info->GetEdgeTurnBitmap(IX,IY) )
+		return U+V <= 1.f ? H1 + (H2-H1)*U + (H4-H1)*V : H3 + (H4-H3)*(1.f-U) + (H2-H3)*(1.f-V);
+	return V >= U ? H1 + (H3-H4)*U + (H4-H1)*V : H1 + (H2-H1)*U + (H3-H2)*V;
+}
+
+// The drawn surface under a world position, or 0 where the terrain has a hole or ends.
+UBOOL ATerrainInfo::SurfacePoint( const FVector& World, UBOOL Smooth, FVector& Point )
+{
+	FVector H = WorldToHeightmap( World );
+	if( H.X < 0.f || H.Y < 0.f || H.X > HeightmapX-1 || H.Y > HeightmapY-1 )
+		return 0;
+	INT IX = Clamp(appFloor(H.X),0,HeightmapX-2), IY = Clamp(appFloor(H.Y),0,HeightmapY-2);
+	if( !GetQuadVisibilityBitmap(IX,IY) )
+		return 0;
+	Point = Smooth ? SmoothVertex( H.X, H.Y ) : HeightmapToWorld( FVector(H.X,H.Y,CoarseHeight(this,IX,IY,H.X-IX,H.Y-IY)) );
+	return 1;
+}
+
 // World position of the smoothed surface at heightmap coordinates. It equals Vertices on the samples.
 FVector ATerrainInfo::SmoothVertex( FLOAT X, FLOAT Y )
 {
@@ -1727,12 +1751,7 @@ FVector ATerrainInfo::SmoothVertex( FLOAT X, FLOAT Y )
 	FLOAT U = X-IX, V = Y-IY;
 	FLOAT H1 = GetHeightmap(IX,IY), H2 = GetHeightmap(IX+1,IY), H3 = GetHeightmap(IX+1,IY+1), H4 = GetHeightmap(IX,IY+1);
 
-	// The triangles collision uses.
-	FLOAT Coarse;
-	if( GetEdgeTurnBitmap(IX,IY) )
-		Coarse = U+V <= 1.f ? H1 + (H2-H1)*U + (H4-H1)*V : H3 + (H4-H3)*(1.f-U) + (H2-H3)*(1.f-V);
-	else
-		Coarse = V >= U ? H1 + (H3-H4)*U + (H4-H1)*V : H1 + (H2-H1)*U + (H3-H2)*V;
+	FLOAT Coarse = CoarseHeight(this,IX,IY,U,V);
 
 	FLOAT Smooth = SmoothHeight(this,IX,IY,U,V);
 	checkSlow(Smooth >= Min(Min(H1,H2),Min(H3,H4)) - 0.1f && Smooth <= Max(Max(H1,H2),Max(H3,H4)) + 0.1f);
@@ -3439,6 +3458,7 @@ void ATerrainInfo::UpdateDecorations( INT SectorIndex )
 	}
 
 	UTerrainSector* Sector = Sectors(SectorIndex);
+	FFoliage::ForgetTerrain(this,SectorIndex);
 
 	for (INT LayerIndex=0; LayerIndex<DecoLayers.Num(); LayerIndex++)
 	{
@@ -3687,6 +3707,9 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 			}
 
 			RI->EnableLighting( (DecoLayers(LayerIndex).LitDirectional && !SceneNode->Viewport->IsWire()) ? 1 : 0, 0, 1, NULL, SceneNode->Viewport->Actor->RendMap == REN_LightingOnly );
+
+			if( FFoliage::RenderDecorations(this,LayerIndex,SectorIndices[s],SceneNode,RI) )
+				continue;
 			
 			// Set vertex and index buffers.
 			UStaticMesh*	StaticMesh			= DecoLayers(LayerIndex).StaticMesh;

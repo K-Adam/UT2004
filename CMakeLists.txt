@@ -56,7 +56,7 @@ function(ut_link name target)
   endif()
 endfunction()
 # Read-only data the engine reads from next to System/.
-foreach(dir Help Web KarmaData)
+foreach(dir Help Web KarmaData Foliage)
   ut_link(${dir} ${CMAKE_SOURCE_DIR}/${dir})
 endforeach()
 # Dev.ini and the web page served from build/web read the content through this link.
@@ -323,6 +323,8 @@ if(TARGET UCC)
   add_test(NAME content
     COMMAND ${CMAKE_COMMAND} -DTEST=$<TARGET_FILE:content_test> -DDIR=${CMAKE_BINARY_DIR}/Test/content -P ${CMAKE_SOURCE_DIR}/Tools/ContentTest.cmake)
   set_tests_properties(content PROPERTIES ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${UT_SYSTEM_DIR}")
+  add_test(NAME foliage_pack
+    COMMAND ${CMAKE_COMMAND} -DDIR=${CMAKE_SOURCE_DIR}/Foliage -P ${CMAKE_SOURCE_DIR}/Tools/FoliagePack.cmake)
 endif()
 if(UT_ASSETS_DIR AND TARGET UCC)
   add_test(NAME server_smoke
@@ -337,7 +339,7 @@ if(TARGET UCC)
   # The physics submodule and the fetched libraries have install rules of their own, the archive only takes this component.
   set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME game)
   include(InstallRequiredSystemLibraries)
-  install(DIRECTORY System Help KarmaData Web DESTINATION .)
+  install(DIRECTORY System Help KarmaData Web Foliage DESTINATION .)
   install(DIRECTORY ${UT_SYSTEM_DIR}/ DESTINATION System USE_SOURCE_PERMISSIONS
     FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll" PATTERN "*.so" PATTERN "*.so.*" PATTERN "*-bin")
   install(DIRECTORY Scripts/ DESTINATION System)

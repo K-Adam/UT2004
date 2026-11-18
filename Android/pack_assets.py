@@ -11,7 +11,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 from pack_common import collect, read
 
-# Phone defaults: gyro aim on, the two costliest effects off, VSync instead of the per-frame GPU wait.
+# Phone defaults: gyro aim on, the two costliest effects and the denser plants off, VSync instead of the per-frame GPU wait.
 OVERRIDES = {'UT2004/System/Default.ini': [
     (b'%s=%s' % (k, old), b'%s=%s' % (k, new)) for k, old, new in (
         (b'PadGyro', b'False', b'True'),
@@ -19,6 +19,7 @@ OVERRIDES = {'UT2004/System/Default.ini': [
         (b'UseVSync', b'False', b'True'),
         (b'VolumetricFog', b'True', b'False'),
         (b'GlobalIllumination', b'True', b'False'),
+        (b'ImprovedFoliage', b'True', b'False'),
         (b'ResolutionScale', b'100', b'75'))]}
 
 

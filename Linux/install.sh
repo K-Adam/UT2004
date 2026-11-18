@@ -39,7 +39,7 @@ fi
 # Only the program lives here, so an older version can go.
 rm -rf "$dir"
 mkdir -p "$dir" "$bin" "$apps" "$icons"
-cp -R "$src/System" "$src/Help" "$src/KarmaData" "$src/Web" "$src/README.md" "$src/NOTICE.md" "$src/LICENSE" "$dir/"
+cp -R "$src/System" "$src/Help" "$src/KarmaData" "$src/Web" "$src/Foliage" "$src/README.md" "$src/NOTICE.md" "$src/LICENSE" "$dir/"
 cp "$src/ut2004.png" "$icons/ut2004.png"
 
 cat > "$bin/ut2004" <<EOF

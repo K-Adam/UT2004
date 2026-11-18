@@ -6,7 +6,7 @@ set(ENGINE_SRC
   UnActor.cpp UnAudio.cpp UnBeamEmitter.cpp UnBunch.cpp UnCacheManager.cpp UnCamera.cpp
   UnCameraEffects.cpp UnCamMgr.cpp UnCanvas.cpp UnCDKey.cpp UnChan.cpp UnConn.cpp UnController.cpp
   UnConvexVolume.cpp UnDemoPenLev.cpp UnDemoRec.cpp UnDownload.cpp UnEngine.cpp UnErrorChecking.cpp
-  UnFluidSurface.cpp UnFont.cpp UnFPoly.cpp UnGame.cpp UnGameUtilities.cpp UnIn.cpp
+  UnFluidSurface.cpp UnFoliage.cpp UnFont.cpp UnFPoly.cpp UnGame.cpp UnGameUtilities.cpp UnIn.cpp
   UnInteraction.cpp UnInteractionMaster.cpp UnkDOP.cpp UnLevAct.cpp UnLevel.cpp UnLevTic.cpp
   UnLodMesh.cpp UnManifest.cpp UnMaterial.cpp UnMatineeTools.cpp UnMesh.cpp UnMeshEmitter.cpp
   UnModel.cpp UnModelLight.cpp UnMover.cpp UnNavigationPoint.cpp UnNetDrv.cpp UnOctree.cpp

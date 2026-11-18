@@ -22,8 +22,8 @@
 	"	vec4 LightParams[8];\n" \
 	"};\n"
 
+// Compiled behind a header with the version line, and INSTANCED for the variant DrawInstanced uses.
 const ANSICHAR* OpenGLVertexShader =
-	"#version 300 es\n"
 	OGL_SCENE_BLOCK
 	"uniform mat4 LocalToWorld;\n"
 	"uniform mat3 NormalToWorld;\n"
@@ -38,9 +38,33 @@ const ANSICHAR* OpenGLVertexShader =
 	"out vec4 vDiffuse;\n"
 	"out vec4 vSpecular;\n"
 	"out vec4 vTexCoord0, vTexCoord1, vTexCoord2, vTexCoord3, vTexCoord4, vTexCoord5, vTexCoord6, vTexCoord7;\n"
+	"#ifdef INSTANCED\n"
+	"in vec4 aInstance0, aInstance1, aInstance2, aInstance3;\n"
+	"uniform mat4 WorldToLightmap;\n"
+	"uniform vec4 InstanceRange;\n"
+	"out vec2 vFade;\n"
+	"vec3 Rotate(vec3 V)\n"
+	"{\n"
+	"	return V + 2.0 * cross(aInstance1.xyz, cross(aInstance1.xyz, V) + aInstance1.w * V);\n"
+	"}\n"
+	"#endif\n"
 	"void main()\n"
 	"{\n"
+	"#ifdef INSTANCED\n"
+	// X is how much of the instance is left toward its far end, Y how much has arrived at the near end
+	// of the range. The fragment shader dithers both, which keeps depth writes and needs no sorting.
+	"	float Distance = length((WorldToCamera * LocalToWorld * vec4(aInstance0.xyz, 1.0)).xyz);\n"
+	"	float Gone = clamp((aInstance0.w - Distance) / max(aInstance0.w - aInstance2.w, 1.0), 0.0, 1.0);\n"
+	"	vFade.x = min(Gone, clamp((InstanceRange.y - Distance) / InstanceRange.z, 0.0, 1.0));\n"
+	"	vFade.y = InstanceRange.x > 0.0 ? clamp((Distance - InstanceRange.x) / InstanceRange.w + 1.0, 0.0, 1.0) : 1.0;\n"
+	"	vec4 WorldPos = LocalToWorld * vec4(aInstance0.xyz + Rotate(aPosition.xyz * aInstance2.xyz), 1.0);\n"
+	"	vec3 Normal = Rotate(aNormal / aInstance2.xyz);\n"
+	"	vec4 Diffuse = aInstance3 * aDiffuse;\n"
+	"#else\n"
 	"	vec4 WorldPos = LocalToWorld * vec4(aPosition.xyz, 1.0);\n"
+	"	vec3 Normal = aNormal;\n"
+	"	vec4 Diffuse = aDiffuse;\n"
+	"#endif\n"
 	"	vec4 CameraPos = WorldToCamera * WorldPos;\n"
 	"	vec4 P = CameraToScreen * CameraPos;\n"
 	// D3D depth runs from 0 to 1, D3D pixel centres sit on integer coordinates and
@@ -48,14 +72,22 @@ const ANSICHAR* OpenGLVertexShader =
 	"	P.y *= ClipAdjust.x;\n"
 	"	P.xy += ClipAdjust.zw * P.w;\n"
 	"	P.z = 2.0 * P.z - P.w;\n"
+	"#ifdef INSTANCED\n"
+	// Instances outside the range fold into one point and cost no pixels.
+	"	if (min(vFade.x, vFade.y) <= 0.0)\n"
+	"		P = vec4(2.0, 2.0, 2.0, 1.0);\n"
+	"#endif\n"
 	"	gl_Position = P;\n"
 	"	gl_PointSize = 1.0;\n"
 	"	vWorldPos = WorldPos.xyz;\n"
-	"	vWorldNormal = NormalToWorld * aNormal;\n"
+	"	vWorldNormal = NormalToWorld * Normal;\n"
 	"	vCameraPos = CameraPos.xyz;\n"
-	"	vDiffuse = aDiffuse.bgra;\n"
+	"	vDiffuse = Diffuse.bgra;\n"
 	"	vSpecular = aSpecular.bgra;\n"
 	"	vTexCoord0 = aTexCoord0; vTexCoord1 = aTexCoord1; vTexCoord2 = aTexCoord2; vTexCoord3 = aTexCoord3;\n"
+	"#ifdef INSTANCED\n"
+	"	vTexCoord1 = WorldToLightmap * WorldPos;\n"
+	"#endif\n"
 	"	vTexCoord4 = aTexCoord4; vTexCoord5 = aTexCoord5; vTexCoord6 = aTexCoord6; vTexCoord7 = aTexCoord7;\n"
 	"}\n";
 
@@ -200,6 +232,8 @@ UBOOL UOpenGLRenderDevice::ProgramReady(FOpenGLProgram* P,UBOOL Wait)
 
 	P->LocalToWorld		= glGetUniformLocation(P->Program,"LocalToWorld");
 	P->NormalToWorld	= glGetUniformLocation(P->Program,"NormalToWorld");
+	P->WorldToLightmap	= glGetUniformLocation(P->Program,"WorldToLightmap");
+	P->InstanceRange	= glGetUniformLocation(P->Program,"InstanceRange");
 	P->AlphaRef			= glGetUniformLocation(P->Program,"AlphaRef");
 	P->Probe			= glGetUniformLocation(P->Program,"Probe");
 	UseProgram(P->Program);

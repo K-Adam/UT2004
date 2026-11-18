@@ -177,6 +177,18 @@ public:
 
 	virtual void DrawPrimitive(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT MinIndex = INDEX_NONE,INT MaxIndex = INDEX_NONE) = 0;
 
+	// Draws the vertex streams once per record of an instance stream, whose components are FVF_Instance0
+	// to 3: position in local space with the distance where the instance is gone in W, a rotation
+	// quaternion, the scale with the distance where it starts to dissolve in W, and a colour that
+	// multiplies the vertex diffuse. The material is set after the instance stream, a device may build a variant.
+	// WorldToLightmap turns a world position into the coordinates EnableLighting's lightmap is read at,
+	// so light baked onto the ground carries over to what stands on it wherever that moves.
+	// Range limits the draw to instances from X to Y away from the viewer. They dissolve over Z before the
+	// far end and W before the near end, one against the other where two ranges meet, which is how detail
+	// levels hand over.
+	virtual UBOOL SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap = NULL,const FPlane* Range = NULL) { return 0; }
+	virtual void DrawInstanced(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances) {}
+
 	// sjs ---
 	virtual int  LockDynBuffer(BYTE** pOutBuffer, int numVerts, int stride, DWORD componentFlags) {*pOutBuffer=NULL; return 0;}
     virtual int  UnlockDynBuffer(void) {return 0;}
@@ -216,12 +228,14 @@ struct FRenderCaps
 	INT MaxSimultaneousTerrainLayers;
 	INT		PixelShaderVersion;	//!!powervr_aaron: Terrain optimisation code needs to know whether pixel shaders are being used
 	INT		TerrainSubdivision;	// Rendered terrain vertices per heightmap sample along an axis.
+	UBOOL	ImprovedFoliage;	// Draws the replacement plants of the Foliage folder, needs SetInstanceStream.
 
 	// set default render caps in constructor
 	FRenderCaps()
 	:	MaxSimultaneousTerrainLayers(1),
 		PixelShaderVersion(0),
-		TerrainSubdivision(1)
+		TerrainSubdivision(1),
+		ImprovedFoliage(0)
 	{}
 };
 

@@ -57,7 +57,8 @@ enum EOpenGLAttribute
 	GLA_Diffuse,
 	GLA_Specular,
 	GLA_TexCoord0,
-	GLA_Max = GLA_TexCoord0 + 8
+	GLA_Instance0 = GLA_TexCoord0 + 8,	// These four advance once per instance.
+	GLA_Max = GLA_Instance0 + 4
 };
 
 class FOpenGLResource
@@ -145,6 +146,8 @@ struct FOpenGLProgram
 	UBOOL			Pending;
 	GLint			LocalToWorld,
 					NormalToWorld,
+					WorldToLightmap,
+					InstanceRange,
 					AlphaRef,
 					Probe,
 					Matrices[OGL_MAX_MATRICES],
@@ -258,6 +261,10 @@ public:
 		FOpenGLStream			Streams[OGL_MAX_STREAMS];
 		INT					NumStreams;
 		FVertexStream*		Source;			// What Streams[0] was cached from, NULL for dynamic vertices. Only valid until the draw.
+		FOpenGLStream			Instances;
+		UBOOL				Instanced;		// Programs come from the instanced vertex shader while this is set.
+		FMatrix				WorldToLightmap;
+		FPlane				InstanceRange;
 		GLuint				IndexBuffer;
 		INT					IndexSize,
 							IndexBufferBase;
@@ -318,8 +325,6 @@ public:
 		EPrimitiveType	Type;
 		INT				FirstIndex,
 						NumPrimitives,
-						MinIndex,
-						MaxIndex,
 						IndexOffset,		// Into DeferredIndices, for draws from the dynamic index buffer.
 						IndexBytes;
 	};
@@ -381,6 +386,9 @@ public:
 	virtual INT SetIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseVertexIndex);
 	virtual INT SetDynamicIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseVertexIndex);
 	virtual void DrawPrimitive(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT MinIndex,INT MaxIndex);
+	virtual UBOOL SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap,const FPlane* Range);
+	virtual void DrawInstanced(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances);
+	void Draw(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances);
 	virtual int LockDynBuffer(BYTE** OutBuffer,int NumVerts,int Stride,DWORD ComponentFlags);
 	virtual int UnlockDynBuffer();
 	virtual void DrawDynQuads(INT NumPrimitives);
@@ -443,6 +451,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			HeatHaze,
 			MotionBlur,
 			SmoothTerrain,
+			ImprovedFoliage,
 			DetectSettings;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
 
@@ -469,6 +478,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			SceneBuffer,
 			QuadIndices,
 			VertexShaderObject,
+			InstancedVertexShaderObject,
 			CopyProgram,
 			OcclusionProgram,
 			CompositeProgram,
@@ -543,9 +553,11 @@ class UOpenGLRenderDevice : public URenderDevice
 		FLOAT			DepthNear,
 						DepthFar;
 		INT				ZBias;
-		FOpenGLStream		Streams[OGL_MAX_STREAMS];
+		FOpenGLStream		Streams[OGL_MAX_STREAMS],
+						Instances;
 		INT				NumStreams,
 						BaseVertex;
+		UBOOL			Instanced;
 		UBOOL			Attributes[GLA_Max],
 						BlackDiffuse;
 		FOpenGLSceneBlock	Scene;

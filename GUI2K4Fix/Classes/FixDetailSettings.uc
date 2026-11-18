@@ -2,7 +2,7 @@ class FixDetailSettings extends Settings_Tabs;
 
 var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
-var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze, ch_MotionBlur, ch_SmoothTerrain;
+var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze, ch_MotionBlur, ch_SmoothTerrain, ch_ImprovedFoliage;
 var automated moSlider sl_Gamma;
 var() localized string ResolutionText[2], ReflectionsText[2];
 
@@ -31,6 +31,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Options.ManageComponent(ch_HeatHaze);
 	sb_Options.ManageComponent(ch_MotionBlur);
 	sb_Options.ManageComponent(ch_SmoothTerrain);
+	sb_Options.ManageComponent(ch_ImprovedFoliage);
 }
 
 function InternalOnLoadINI(GUIComponent Sender, string s)
@@ -81,6 +82,9 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		break;
 	case ch_SmoothTerrain:
 		ch_SmoothTerrain.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice SmoothTerrain")), true);
+		break;
+	case ch_ImprovedFoliage:
+		ch_ImprovedFoliage.SetComponentValue(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ImprovedFoliage")), true);
 		break;
 	}
 }
@@ -136,6 +140,9 @@ function InternalOnChange(GUIComponent Sender)
 		break;
 	case ch_SmoothTerrain:
 		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice SmoothTerrain" @ ch_SmoothTerrain.IsChecked());
+		break;
+	case ch_ImprovedFoliage:
+		PC.ConsoleCommand("set ini:Engine.Engine.RenderDevice ImprovedFoliage" @ ch_ImprovedFoliage.IsChecked());
 		break;
 	}
 }
@@ -194,7 +201,7 @@ defaultproperties
 
 	Begin Object class=GUISectionBackground Name=sbOptions
 		WinWidth=0.502751
-		WinHeight=0.580000
+		WinHeight=0.630000
 		WinLeft=0.495826
 		WinTop=0.012761
 		Caption="Options"
@@ -385,6 +392,19 @@ defaultproperties
 		TabOrder=13
 	End Object
 	ch_SmoothTerrain=SmoothTerrainCheck
+
+	Begin Object class=moCheckBox Name=ImprovedFoliageCheck
+		Caption="Improved Foliage"
+		Hint="Draws grass, ferns and shrubs as denser, sharper plants."
+		IniOption="@Internal"
+		CaptionWidth=0.94
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=14
+	End Object
+	ch_ImprovedFoliage=ImprovedFoliageCheck
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"
