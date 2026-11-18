@@ -186,7 +186,9 @@ public:
 	// Range limits the draw to instances from X to Y away from the viewer. They dissolve over Z before the
 	// far end and W before the near end, one against the other where two ranges meet, which is how detail
 	// levels hand over.
-	virtual UBOOL SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap = NULL,const FPlane* Range = NULL) { return 0; }
+	// Wind bends the instances along its XY in the stream's local space, by up to its length in radians at the
+	// height of 1 / W over the instance's origin, further above. Z is the level time in seconds.
+	virtual UBOOL SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap = NULL,const FPlane* Range = NULL,const FPlane* Wind = NULL) { return 0; }
 	virtual void DrawInstanced(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances) {}
 
 	// sjs ---

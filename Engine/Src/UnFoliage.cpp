@@ -182,7 +182,8 @@ struct FFoliageMesh
 	FStaticMeshUVStream		UVs;
 	FRawColorStream			Colors;		// How open to the sky each vertex is, dark at the root and inside the plant.
 	FRawIndexBuffer			Indices;
-	FLOAT					Radius;		// Of the footprint on the ground.
+	FLOAT					Radius,		// Of the footprint on the ground.
+							Height;
 
 	UBOOL Load(const TCHAR* Filename)
 	{
@@ -196,6 +197,7 @@ struct FFoliageMesh
 			return 0;
 		FLOAT* Bounds = (FLOAT*)&File(16);
 		Radius = Max(Max(-Bounds[0],Bounds[3]),Max(-Bounds[1],Bounds[4]));
+		Height = Max(Bounds[5],1.f);
 		Vertices.Vertices.Add(NumVertices);
 		UVs.UVs.Add(NumVertices);
 		UVs.CoordinateIndex = 0;
@@ -241,7 +243,9 @@ struct FFoliageSet
 								TintJitter,
 								TerrainAlign,	// How far a plant leans with the ground, 1 follows it fully.
 								Sink,			// How deep the base goes under the ground.
-								MaxRelief;		// Ground rougher than this under a wide plant gets a narrow one.
+								MaxRelief,		// Ground rougher than this under a wide plant gets a narrow one.
+								Bend,			// How far the wind leans the top of the plant, in radians.
+								Tallest;
 };
 
 // What one decoration layer scatters over one terrain sector.
@@ -287,6 +291,10 @@ struct FFoliageLibrary
 	TMap<FString,INT>						Replace;	// Retail mesh path to set.
 	TMap<QWORD,FFoliageMeshEntry>			Meshes;		// By mesh address, checked against the names since addresses come back.
 	TMap<QWORD,FFoliageTerrain*>			Terrains;
+	FLOAT									WindYaw;		// In degrees, for a level that shows no wind of its own.
+	ULevel*									WindLevel;		// The level WindDirection was found for, checked against the name like Meshes.
+	FName									WindLevelName;
+	FVector									WindDirection;
 };
 
 /*-----------------------------------------------------------------------------
@@ -308,6 +316,11 @@ static FFoliageLibrary* LoadLibrary()
 	TMap<FString,FFoliageMaterial*>	Materials;
 	TMap<FString,FFoliageVariant*>	Variants;
 	TMap<FString,INT>				SetNames;
+	FLOAT							WindStrength = 1.f;
+	Library->WindYaw	= 0.f;
+	Library->WindLevel	= NULL;
+	GConfig->GetFloat(TEXT("Wind"),TEXT("Direction"),Library->WindYaw,FOLIAGE_INI);
+	GConfig->GetFloat(TEXT("Wind"),TEXT("Strength"),WindStrength,FOLIAGE_INI);
 
 	for( INT i=0; i<Sections.Num(); i++ )
 	{
@@ -379,6 +392,10 @@ static FFoliageLibrary* LoadLibrary()
 		GConfig->GetFloat(Section,TEXT("TerrainAlign"),Set->TerrainAlign,FOLIAGE_INI);
 		GConfig->GetFloat(Section,TEXT("Sink"),Set->Sink,FOLIAGE_INI);
 		GConfig->GetFloat(Section,TEXT("MaxRelief"),Set->MaxRelief,FOLIAGE_INI);
+		Set->Bend			= 0.3f;
+		GConfig->GetFloat(Section,TEXT("Bend"),Set->Bend,FOLIAGE_INI);
+		Set->Bend			*= WindStrength;
+		Set->Tallest		= 0.f;
 
 		// Variant=<mesh>:<weight>
 		TArray<FString>	Entries;
@@ -399,6 +416,7 @@ static FFoliageLibrary* LoadLibrary()
 			Variant->Weight = Colon >= 0 ? Max(appAtof(*Entries(e).Mid(Colon + 1)),0.01f) : 1.f;
 			Set->Variants.AddItem(Variant);
 			Widest = Max(Widest,Variant->LODs[0]->Radius);
+			Set->Tallest = Max(Set->Tallest,Variant->LODs[0]->Height);
 		}
 		for( INT v=0; v<Set->Variants.Num(); v++ )
 			Set->Variants(v)->Narrow = Set->Variants(v)->LODs[0]->Radius < 0.7f * Widest;
@@ -587,13 +605,189 @@ static UBOOL FitToTerrain(ATerrainInfo* Terrain,UBOOL Smooth,const FVector& Cent
 }
 
 /*-----------------------------------------------------------------------------
+	Wind.
+-----------------------------------------------------------------------------*/
+
+// Keeps the fastest drift a material's panners give a surface whose position changes by PerU and PerV over one
+// texture repeat. A panner adds to the coordinates, so the picture moves against them.
+static void TakeFlow(UMaterial* Material,const FVector& PerU,const FVector& PerV,FVector& Fastest,INT Depth = 0)
+{
+	if( !Material || Depth > 8 )
+		return;
+	UTexPanner*	Panner = Cast<UTexPanner>(Material);
+	UShader*	Shader = Cast<UShader>(Material);
+	UCombiner*	Combiner = Cast<UCombiner>(Material);
+	UModifier*	Modifier = Cast<UModifier>(Material);
+	// A triggered panner stands still until something in the game starts it.
+	if( Panner && !Panner->IsA(UTexPannerTriggered::StaticClass()) )
+	{
+		FVector	Rate = Panner->PanDirection.Vector() * Panner->PanRate,
+				Flow = -(PerU * Rate.X + PerV * Rate.Y);
+		if( Flow.SizeSquared2D() > Fastest.SizeSquared2D() )
+			Fastest = Flow;
+	}
+	if( Shader )
+	{
+		TakeFlow(Shader->Diffuse,PerU,PerV,Fastest,Depth + 1);
+		TakeFlow(Shader->Opacity,PerU,PerV,Fastest,Depth + 1);
+		TakeFlow(Shader->SelfIllumination,PerU,PerV,Fastest,Depth + 1);
+	}
+	if( Combiner )
+	{
+		TakeFlow(Combiner->Material1,PerU,PerV,Fastest,Depth + 1);
+		TakeFlow(Combiner->Material2,PerU,PerV,Fastest,Depth + 1);
+		TakeFlow(Combiner->Mask,PerU,PerV,Fastest,Depth + 1);
+	}
+	if( Modifier )
+		TakeFlow(Modifier->Material,PerU,PerV,Fastest,Depth + 1);
+}
+
+// Where the clouds of a sky drift, in the sky's own space. Zero for a sky that stands still.
+static FVector SkyFlow(ULevel* Level,ASkyZoneInfo* Sky)
+{
+	FVector	Fastest(0,0,0);
+	UModel*	Model = Level->Model;
+	for( INT n=0; n<Model->Nodes.Num(); n++ )
+	{
+		const FBspNode& Node = Model->Nodes(n);
+		if( Node.iZone[1] != Sky->Region.ZoneNumber || !Model->Surfs.IsValidIndex(Node.iSurf) )
+			continue;
+		const FBspSurf& Surf = Model->Surfs(Node.iSurf);
+		if( !Surf.Material || !Surf.Material->MaterialUSize() || !Surf.Material->MaterialVSize() )
+			continue;
+		FVector	U = Model->Vectors(Surf.vTextureU),
+				V = Model->Vectors(Surf.vTextureV);
+		if( U.SizeSquared() > 0.f && V.SizeSquared() > 0.f )
+			TakeFlow(Surf.Material,U * (Surf.Material->MaterialUSize() / U.SizeSquared()),V * (Surf.Material->MaterialVSize() / V.SizeSquared()),Fastest);
+	}
+
+	for( INT a=0; a<Level->Actors.Num(); a++ )
+	{
+		AActor*			Actor = Level->Actors(a);
+		UStaticMesh*	Mesh = Actor && Actor->DrawType == DT_StaticMesh && !Actor->bHidden && Actor->Region.Zone == Sky ? Actor->StaticMesh : NULL;
+		if( !Mesh || !Mesh->UVStreams.Num() || Mesh->UVStreams(0).UVs.Num() != Mesh->VertexStream.Vertices.Num() )
+			continue;
+		FMatrix LocalToWorld = Actor->LocalToWorld();
+		for( INT s=0; s<Mesh->Sections.Num(); s++ )
+		{
+			const FStaticMeshSection&	Section = Mesh->Sections(s);
+			UMaterial*					Material = Mesh->GetSkin(Actor,s);
+			// The mean over the triangles, which is the one direction of a flat mapping and next to nothing for
+			// a mapping that wraps around, where the picture has no single way to go.
+			FVector	PerU(0,0,0),
+					PerV(0,0,0);
+			INT		Count = 0,
+					Step = Section.IsStrip ? 1 : 3;
+			for( INT t=0; t<Section.NumPrimitives; t++ )
+			{
+				INT First = Section.FirstIndex + t * Step;
+				if( First + 2 >= Mesh->IndexBuffer.Indices.Num() )
+					break;
+				INT		I[3] = { Mesh->IndexBuffer.Indices(First), Mesh->IndexBuffer.Indices(First + 1), Mesh->IndexBuffer.Indices(First + 2) };
+				if( !Mesh->VertexStream.Vertices.IsValidIndex(Max(I[0],Max(I[1],I[2]))) )
+					continue;
+				FVector	E1 = Mesh->VertexStream.Vertices(I[1]).Position - Mesh->VertexStream.Vertices(I[0]).Position,
+						E2 = Mesh->VertexStream.Vertices(I[2]).Position - Mesh->VertexStream.Vertices(I[0]).Position;
+				FLOAT	U1 = Mesh->UVStreams(0).UVs(I[1]).U - Mesh->UVStreams(0).UVs(I[0]).U,
+						V1 = Mesh->UVStreams(0).UVs(I[1]).V - Mesh->UVStreams(0).UVs(I[0]).V,
+						U2 = Mesh->UVStreams(0).UVs(I[2]).U - Mesh->UVStreams(0).UVs(I[0]).U,
+						V2 = Mesh->UVStreams(0).UVs(I[2]).V - Mesh->UVStreams(0).UVs(I[0]).V,
+						Det = U1 * V2 - U2 * V1;
+				if( Abs(Det) < 1e-9f )
+					continue;
+				PerU += (E1 * V2 - E2 * V1) / Det;
+				PerV += (E2 * U1 - E1 * U2) / Det;
+				Count++;
+			}
+			if( Count )
+				TakeFlow(Material,LocalToWorld.TransformNormal(PerU / Count),LocalToWorld.TransformNormal(PerV / Count),Fastest);
+		}
+	}
+	return Fastest;
+}
+
+// The way the level's wind blows as a flat unit vector: the drift of its clouds, or else of its smoke where
+// that agrees with itself, or else the direction of the ini.
+static FVector FindWind(FFoliageLibrary* Library,ULevel* Level)
+{
+	guard(FFoliage::FindWind);
+
+	FVector Clouds(0,0,0);
+	for( INT a=0; a<Level->Actors.Num(); a++ )
+	{
+		AZoneInfo* Zone = Cast<AZoneInfo>(Level->Actors(a));
+		if( !Zone || !Zone->SkyZone )
+			continue;
+		// A sky is drawn turned against its zone actor's rotation.
+		FVector Flow = FInverseRotationMatrix(Zone->SkyZone->Rotation).TransformNormal(SkyFlow(Level,Zone->SkyZone));
+		// Mostly up or down is a picture sliding along a wall of the sky, not a drift over the land.
+		if( Flow.SizeSquared2D() > Clouds.SizeSquared2D() && Flow.SizeSquared2D() > Square(Flow.Z) )
+			Clouds = Flow;
+	}
+	if( Clouds.SizeSquared2D() > 0.f )
+	{
+		Clouds = FVector(Clouds.X,Clouds.Y,0.f).SafeNormal();
+		debugf(TEXT("Foliage: wind follows the sky, %i degrees"),appRound(appAtan2(Clouds.Y,Clouds.X) * 180.f / PI));
+		return Clouds;
+	}
+
+	FVector	Smoke(0,0,0);
+	INT		Count = 0;
+	for( INT a=0; a<Level->Actors.Num(); a++ )
+	{
+		AEmitter* Emitter = Cast<AEmitter>(Level->Actors(a));
+		for( INT e=0; Emitter && e<Emitter->Emitters.Num(); e++ )
+		{
+			UParticleEmitter* Particles = Emitter->Emitters(e);
+			if( !Particles || Particles->Disabled )
+				continue;
+			FVector Drift = Particles->Acceleration;
+			if( Drift.SizeSquared2D() < 1.f )
+			{
+				Drift = Particles->StartVelocityRange.GetCenter();
+				if( Particles->UseRotationFrom == PTRS_Actor )
+					Drift = FRotationMatrix(Emitter->Rotation).TransformNormal(Drift);
+			}
+			if( Drift.SizeSquared2D() < 1.f )
+				continue;
+			Smoke += FVector(Drift.X,Drift.Y,0.f).SafeNormal();
+			Count++;
+		}
+	}
+	if( Count >= 3 && Smoke.Size2D() > 0.7f * Count )
+	{
+		Smoke = Smoke.SafeNormal();
+		debugf(TEXT("Foliage: wind follows %i particle emitters, %i degrees"),Count,appRound(appAtan2(Smoke.Y,Smoke.X) * 180.f / PI));
+		return Smoke;
+	}
+
+	debugf(TEXT("Foliage: the level shows no wind, %i degrees from the ini"),appRound(Library->WindYaw));
+	return FVector(appCos(Library->WindYaw * PI / 180.f),appSin(Library->WindYaw * PI / 180.f),0.f);
+
+	unguard;
+}
+
+static const FVector& LevelWind(FFoliageLibrary* Library,ULevel* Level)
+{
+	if( Library->WindLevel != Level || Library->WindLevelName != Level->GetOuter()->GetFName() )
+	{
+		Library->WindLevel		= Level;
+		Library->WindLevelName	= Level->GetOuter()->GetFName();
+		Library->WindDirection	= FindWind(Library,Level);
+	}
+	return Library->WindDirection;
+}
+
+/*-----------------------------------------------------------------------------
 	Drawing.
 -----------------------------------------------------------------------------*/
 
 // Draws a variant's instances that lie Near to Far from the viewer, each with the detail level of its own distance.
 // The levels dissolve into each other over the last part of their range.
-static void DrawInstances(FRenderInterface* RI,FLevelSceneNode* SceneNode,FFoliageSet* Set,FFoliageVariant* Variant,FFoliageInstanceStream* Instances,FLOAT Near,FLOAT Far,const FMatrix* WorldToLight = NULL)
+static void DrawInstances(FRenderInterface* RI,FLevelSceneNode* SceneNode,FFoliageSet* Set,FFoliageVariant* Variant,FFoliageInstanceStream* Instances,FLOAT Near,FLOAT Far,const FVector& WindDirection,const FMatrix* WorldToLight = NULL)
 {
+	// The first level's height for all of them, so a plant bends the same on both sides of a handover.
+	FPlane Wind(WindDirection.X * Set->Bend,WindDirection.Y * Set->Bend,SceneNode->Viewport->Actor->Level->TimeSeconds,1.f / Variant->LODs[0]->Height);
 	// A narrow view magnifies, so detail has to last longer.
 	FLOAT FOVBias = Max(SceneNode->Viewport->Actor->FOVBias,0.1f);
 	for( INT LOD=0; LOD<Variant->NumLODs; LOD++ )
@@ -612,7 +806,7 @@ static void DrawInstances(FRenderInterface* RI,FLevelSceneNode* SceneNode,FFolia
 		RI->SetVertexStreams(VS_FixedFunction,Streams,3);
 		RI->SetIndexBuffer(&Mesh->Indices,0);
 		// The instance stream comes before the material, a device builds the material for it.
-		if( !RI->SetInstanceStream(Instances,WorldToLight,&Range) )
+		if( !RI->SetInstanceStream(Instances,WorldToLight,&Range,&Wind) )
 			return;
 		RI->SetMaterial(Set->Material->Get());
 		RI->DrawInstanced(PT_TriangleList,0,Mesh->Indices.Indices.Num() / 3,Instances->Instances.Num());
@@ -724,10 +918,23 @@ UBOOL FFoliage::RenderDecorations(ATerrainInfo* Terrain,INT LayerIndex,INT Secto
 	RI->SetTransform(TT_LocalToWorld,FTranslationMatrix(Group->Origin));
 	for( INT i=0; i<Group->Streams.Num(); i++ )
 		if( Group->Streams(i) )
-			DrawInstances(RI,SceneNode,Set,Set->Variants(i),Group->Streams(i),Distance - Group->Radius,Distance + Group->Radius,Lightmapped ? &Built->WorldToLight : NULL);
+			DrawInstances(RI,SceneNode,Set,Set->Variants(i),Group->Streams(i),Distance - Group->Radius,Distance + Group->Radius,LevelWind(Library,SceneNode->Level),Lightmapped ? &Built->WorldToLight : NULL);
 	return 1;
 
 	unguard;
+}
+
+FLOAT FFoliage::WindReach(FLevelSceneNode* SceneNode,UStaticMesh* StaticMesh)
+{
+	FFoliageLibrary* Library = GetEnabledLibrary(SceneNode);
+	if( !Library )
+		return 0.f;
+	FFoliageMeshEntry Entry = FindMesh(Library,StaticMesh);
+	if( Entry.Set == INDEX_NONE )
+		return 0.f;
+	FFoliageSet* Set = Library->Sets(Entry.Set);
+	// Twice the bend covers the strongest gust and the taller far detail levels.
+	return Set->Tallest * Set->Scale * Entry.Scale * (1.f + Set->ScaleJitter) * Min(2.f * Abs(Set->Bend),1.f);
 }
 
 void FFoliage::ForgetTerrain(ATerrainInfo* Terrain,INT SectorIndex)
@@ -845,7 +1052,7 @@ void FFoliage::RenderActors(TArray<FDynamicActor*>& Actors,FLevelSceneNode* Scen
 			if( !Placed.Instances.Num() )
 				continue;
 			Placed.Revision++;
-			DrawInstances(RI,SceneNode,Set,Set->Variants(v),&Placed,0.f,1e30f);
+			DrawInstances(RI,SceneNode,Set,Set->Variants(v),&Placed,0.f,1e30f,LevelWind(Library,SceneNode->Level));
 			Placed.Instances.Empty(Placed.Instances.Num());
 		}
 	}

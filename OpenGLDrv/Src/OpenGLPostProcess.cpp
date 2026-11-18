@@ -568,6 +568,8 @@ static const ANSICHAR* VolumetricFragmentShader =
 
 // Averages the scattering over frames, its sampling changes every frame. The history is found where
 // the point was last frame and limited to the range around it now, so nothing trails behind motion.
+// The range comes from neighbours at the point's own depth, or what a swaying twig left behind would
+// still fit the range of the sky beside it and outline the twig.
 static const ANSICHAR* ResolveFragmentShader =
 	POST_COMMON
 	"uniform sampler2D Frame, History;\n"
@@ -578,15 +580,20 @@ static const ANSICHAR* ResolveFragmentShader =
 	"{\n"
 	"	ivec2 Q = ivec2(gl_FragCoord.xy), Size = textureSize(Frame, 0);\n"
 	"	vec3 C = texelFetch(Frame, Q, 0).rgb, Lo = C, Hi = C;\n"
+	"	ivec2 P = Q * 2;\n"
+	"	float D = DepthAt(P), Z = LinearZ(D);\n"
+	"	bool Sky = D >= 1.0;\n"
 	"	for (int Y = -1; Y <= 1; Y++)\n"
 	"		for (int X = -1; X <= 1; X++)\n"
 	"		{\n"
-	"			vec3 S = texelFetch(Frame, clamp(Q + ivec2(X, Y), ivec2(0), Size - 1), 0).rgb;\n"
+	"			ivec2 N = clamp(Q + ivec2(X, Y), ivec2(0), Size - 1);\n"
+	"			float ND = DepthAt(N * 2);\n"
+	"			if ((ND >= 1.0) != Sky || (!Sky && abs(LinearZ(ND) - Z) > 0.05 * Z + 1.0))\n"
+	"				continue;\n"
+	"			vec3 S = texelFetch(Frame, N, 0).rgb;\n"
 	"			Lo = min(Lo, S);\n"
 	"			Hi = max(Hi, S);\n"
 	"		}\n"
-	"	ivec2 P = Q * 2;\n"
-	"	bool Sky = DepthAt(P) >= 1.0;\n"
 	"	vec2 NDC = (vec2(P) + 0.5) / vec2(textureSize(Depth, 0)) * 2.0 - 1.0;\n"
 	"	vec4 Prev = Reproject * (Sky ? vec4(NDC * Proj.xy, 1.0, 0.0) : vec4(PosAt(P), 1.0));\n"
 	"	vec2 UV0 = Prev.xy / (Prev.z * PrevProj.xy) * 0.5 + 0.5;\n"

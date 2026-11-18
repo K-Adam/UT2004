@@ -357,9 +357,10 @@ INT FOpenGLRenderInterface::SetVertexStreams(EVertexShader Shader,FVertexStream*
 	return Size;
 }
 
-UBOOL FOpenGLRenderInterface::SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap,const FPlane* Range)
+UBOOL FOpenGLRenderInterface::SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap,const FPlane* Range,const FPlane* Wind)
 {
 	CurrentState->InstanceRange = Range ? *Range : FPlane(0.f,1e30f,1.f,1.f);
+	CurrentState->InstanceWind = Wind ? *Wind : FPlane(0.f,0.f,0.f,0.f);
 	CurrentState->Instanced = Instances != NULL;
 	if( Instances )
 		CacheStream(RenDev,Instances,CurrentState->Instances);
@@ -651,6 +652,9 @@ void FOpenGLRenderInterface::Commit()
 		glUniformMatrix4fv(Program->WorldToLightmap,1,GL_FALSE,&S->WorldToLightmap.M[0][0]);
 	if( S->Instanced && Program->InstanceRange != -1 )
 		glUniform4fv(Program->InstanceRange,1,&S->InstanceRange.X);
+	// Wrapped at the period of the shader's waves, which keeps the time precise.
+	if( S->Instanced && Program->Wind != -1 )
+		glUniform4f(Program->Wind,S->InstanceWind.X,S->InstanceWind.Y,appFmod(S->InstanceWind.Z,1024.f),S->InstanceWind.W);
 	if( M.AlphaTest && Program->SentAlphaRef != M.AlphaRef )
 	{
 		Program->SentAlphaRef = M.AlphaRef;

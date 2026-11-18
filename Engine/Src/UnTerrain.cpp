@@ -3601,7 +3601,7 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 		if ( DecoLayers(i).StaticMesh )
 		{
 			FVector Extent = DecoLayers(i).StaticMesh->BoundingBox.GetExtent();
-			MaxMeshExtent = Max<FLOAT>( MaxMeshExtent, Extent.GetMax() * DecoLayers(i).ScaleMultiplier.GetMax().GetMax() );
+			MaxMeshExtent = Max<FLOAT>( MaxMeshExtent, (Extent.GetMax() + FFoliage::WindReach(SceneNode,DecoLayers(i).StaticMesh)) * DecoLayers(i).ScaleMultiplier.GetMax().GetMax() );
 		}
 	}
 

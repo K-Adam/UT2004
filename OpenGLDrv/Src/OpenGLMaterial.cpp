@@ -42,6 +42,7 @@ const ANSICHAR* OpenGLVertexShader =
 	"in vec4 aInstance0, aInstance1, aInstance2, aInstance3;\n"
 	"uniform mat4 WorldToLightmap;\n"
 	"uniform vec4 InstanceRange;\n"
+	"uniform vec4 Wind;\n"
 	"out vec2 vFade;\n"
 	"vec3 Rotate(vec3 V)\n"
 	"{\n"
@@ -53,12 +54,43 @@ const ANSICHAR* OpenGLVertexShader =
 	"#ifdef INSTANCED\n"
 	// X is how much of the instance is left toward its far end, Y how much has arrived at the near end
 	// of the range. The fragment shader dithers both, which keeps depth writes and needs no sorting.
-	"	float Distance = length((WorldToCamera * LocalToWorld * vec4(aInstance0.xyz, 1.0)).xyz);\n"
+	"	vec3 Base = (LocalToWorld * vec4(aInstance0.xyz, 1.0)).xyz;\n"
+	"	float Distance = length((WorldToCamera * vec4(Base, 1.0)).xyz);\n"
 	"	float Gone = clamp((aInstance0.w - Distance) / max(aInstance0.w - aInstance2.w, 1.0), 0.0, 1.0);\n"
 	"	vFade.x = min(Gone, clamp((InstanceRange.y - Distance) / InstanceRange.z, 0.0, 1.0));\n"
 	"	vFade.y = InstanceRange.x > 0.0 ? clamp((Distance - InstanceRange.x) / InstanceRange.w + 1.0, 0.0, 1.0) : 1.0;\n"
-	"	vec4 WorldPos = LocalToWorld * vec4(aInstance0.xyz + Rotate(aPosition.xyz * aInstance2.xyz), 1.0);\n"
+	"	vec3 Offset = Rotate(aPosition.xyz * aInstance2.xyz);\n"
 	"	vec3 Normal = Rotate(aNormal / aInstance2.xyz);\n"
+	"	vec3 Rest = Base + mat3(LocalToWorld) * Offset;\n"
+	"	float Strength = length(Wind.xy);\n"
+	"	if (Strength > 0.0)\n"
+	"	{\n"
+	"		vec3 Dir = vec3(Wind.xy / Strength, 0.0);\n"
+	"		vec3 Up = Rotate(vec3(0.0, 0.0, 1.0));\n"
+	"		float Along = dot(Base.xy, Dir.xy);\n"
+	"		float Across = dot(Base.xy, vec2(-Dir.y, Dir.x));\n"
+	"		float Plant = fract(52.9829189 * fract(dot(Base.xy, vec2(0.06711056, 0.00583715))));\n"
+	// Two gust fronts that travel downwind read at the root so a plant moves as one, the plant's own sway and
+	// its leaves' flutter. Every time factor is a multiple of 1/1024, the period the device wraps the time at.
+	// As triangle waves with their corners smoothed, cheaper than sines and they repeat exactly every whole phase.
+	"		vec4 W = abs(fract(vec4(\n"
+	"			Along / 3000.0 + Across / 9000.0 - Wind.z * 0.125,\n"
+	"			Along / 1100.0 - Across / 2600.0 - Wind.z * 0.3125,\n"
+	"			Plant + Wind.z * 0.75,\n"
+	"			Plant + dot(aPosition.xyz, vec3(0.013, 0.017, 0.011)) + Wind.z * 2.5)) * 2.0 - 1.0);\n"
+	"		W = W * W * (3.0 - 2.0 * W);\n"
+	"		float Gust = W.x * (0.4 + 0.6 * W.y);\n"
+	"		float Tall = aPosition.z * aInstance2.z;\n"
+	// The angle grows with height, which curves the plant. Leaning each vertex from the point of the stem below
+	// it instead of turning the whole plant about its root keeps the blades of a wide clump at their length.
+	"		float Angle = Strength * aPosition.z * Wind.w * (0.25 + Gust + 0.2 * (W.z - 0.5));\n"
+	"		Offset += (Dir * sin(Angle) + Up * (cos(Angle) - 1.0)) * Tall;\n"
+	"		Normal += (Dir * dot(Normal, Up) - Up * dot(Normal, Dir)) * (2.0 * Angle);\n"
+	// The colour is how open to the sky a vertex is, so the outer leaves flutter and the inside holds still.
+	// One direction for every vertex, along the normal the two sides of a twig would move apart and it would swell.
+	"		Offset += vec3(-Dir.y, Dir.x, 0.35) * ((W.w - 0.5) * Strength * 0.1 * Tall * (0.3 + Gust) * smoothstep(0.55, 0.9, aDiffuse.r));\n"
+	"	}\n"
+	"	vec4 WorldPos = vec4(Base + mat3(LocalToWorld) * Offset, 1.0);\n"
 	"	vec4 Diffuse = aInstance3 * aDiffuse;\n"
 	"#else\n"
 	"	vec4 WorldPos = LocalToWorld * vec4(aPosition.xyz, 1.0);\n"
@@ -86,7 +118,8 @@ const ANSICHAR* OpenGLVertexShader =
 	"	vSpecular = aSpecular.bgra;\n"
 	"	vTexCoord0 = aTexCoord0; vTexCoord1 = aTexCoord1; vTexCoord2 = aTexCoord2; vTexCoord3 = aTexCoord3;\n"
 	"#ifdef INSTANCED\n"
-	"	vTexCoord1 = WorldToLightmap * WorldPos;\n"
+	// Read where the plant stands at rest, or the light baked on the ground would crawl over the swaying leaves.
+	"	vTexCoord1 = WorldToLightmap * vec4(Rest, 1.0);\n"
 	"#endif\n"
 	"	vTexCoord4 = aTexCoord4; vTexCoord5 = aTexCoord5; vTexCoord6 = aTexCoord6; vTexCoord7 = aTexCoord7;\n"
 	"}\n";
@@ -234,6 +267,7 @@ UBOOL UOpenGLRenderDevice::ProgramReady(FOpenGLProgram* P,UBOOL Wait)
 	P->NormalToWorld	= glGetUniformLocation(P->Program,"NormalToWorld");
 	P->WorldToLightmap	= glGetUniformLocation(P->Program,"WorldToLightmap");
 	P->InstanceRange	= glGetUniformLocation(P->Program,"InstanceRange");
+	P->Wind				= glGetUniformLocation(P->Program,"Wind");
 	P->AlphaRef			= glGetUniformLocation(P->Program,"AlphaRef");
 	P->Probe			= glGetUniformLocation(P->Program,"Probe");
 	UseProgram(P->Program);

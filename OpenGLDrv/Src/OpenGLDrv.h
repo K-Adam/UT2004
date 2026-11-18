@@ -148,6 +148,7 @@ struct FOpenGLProgram
 					NormalToWorld,
 					WorldToLightmap,
 					InstanceRange,
+					Wind,
 					AlphaRef,
 					Probe,
 					Matrices[OGL_MAX_MATRICES],
@@ -265,6 +266,7 @@ public:
 		UBOOL				Instanced;		// Programs come from the instanced vertex shader while this is set.
 		FMatrix				WorldToLightmap;
 		FPlane				InstanceRange;
+		FPlane				InstanceWind;
 		GLuint				IndexBuffer;
 		INT					IndexSize,
 							IndexBufferBase;
@@ -386,7 +388,7 @@ public:
 	virtual INT SetIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseVertexIndex);
 	virtual INT SetDynamicIndexBuffer(FIndexBuffer* IndexBuffer,INT BaseVertexIndex);
 	virtual void DrawPrimitive(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT MinIndex,INT MaxIndex);
-	virtual UBOOL SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap,const FPlane* Range);
+	virtual UBOOL SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap,const FPlane* Range,const FPlane* Wind);
 	virtual void DrawInstanced(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances);
 	void Draw(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances);
 	virtual int LockDynBuffer(BYTE** OutBuffer,int NumVerts,int Stride,DWORD ComponentFlags);
