@@ -9,9 +9,10 @@ on:
 permissions:
   contents: read
 
+# A tag and its branch share a commit, so the tag run takes over from a branch run that is still going.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref_type == 'tag' }}
 
 env:
   # A fixed vcpkg keeps the package hashes stable, so the binary cache keeps hitting.
@@ -20,8 +21,45 @@ env:
   VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
 
 jobs:
-  tidy:
+  setup:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      tagged: ${{ steps.refs.outputs.tagged }}
+      assets: ${{ steps.refs.outputs.assets }}
+    steps:
+      - id: refs
+        run: |
+          # A release tag on this commit has its own run, which builds the same sources under the release version.
+          if [ "$GITHUB_REF_TYPE" = branch ] && git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" 'v*' | grep -Eq "^$GITHUB_SHA.refs/tags/v[0-9]+\.[0-9]+\.[0-9]+"; then
+            echo tagged=1 >> "$GITHUB_OUTPUT"
+          fi
+          ASSETS=$(git ls-remote "$GITHUB_SERVER_URL/K-Adam/UT2004-assets" HEAD | cut -f1)
+          test -n "$ASSETS"
+          echo "assets=$ASSETS" >> "$GITHUB_OUTPUT"
+      # The content is 2 GB of Git LFS, so it is pulled once per content revision and the build legs take it from the cache.
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: assets-src
+          key: assets-${{ steps.refs.outputs.assets }}
+          lookup-only: true
+          enableCrossOsArchive: true
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: K-Adam/UT2004-assets
+          ref: ${{ steps.refs.outputs.assets }}
+          path: assets-src
+          lfs: true
+      - if: steps.cache.outputs.cache-hit != 'true'
+        run: rm -rf assets-src/.git
+
+  tidy:
+    needs: setup
+    if: github.ref_type == 'tag' || needs.setup.outputs.tagged != '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - name: Check the tag is a semantic version
         if: github.ref_type == 'tag'
@@ -29,18 +67,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Check the retail script packages are unchanged
+        run: sha256sum -c --quiet .github/scripts.sha256
       - run: sh .github/linux-deps.sh clang clang-tidy
       - run: python3 Tools/tidy.py
 
   build:
-    needs: tidy
+    needs: setup
+    if: github.ref_type == 'tag' || needs.setup.outputs.tagged != '1'
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: win64, os: windows-2022, preset: win64, build: win64-release }
-          - { name: linux64, os: ubuntu-22.04, preset: linux64, build: linux64-release }
-          - { name: linux-arm64, os: ubuntu-22.04-arm, preset: linux64, build: linux64-release }
+          - { name: win64, os: windows-2022, preset: win64, build: win64-release, test: true }
+          - { name: linux64, os: ubuntu-22.04, preset: linux64, build: linux64-release, test: true }
+          - { name: linux-arm64, os: ubuntu-22.04-arm, preset: linux64, build: linux64-release, test: true }
           - { name: web, os: ubuntu-24.04, preset: web, build: web-release }
           - { name: android, os: ubuntu-24.04, preset: android-arm64, build: android-arm64-release }
     runs-on: ${{ matrix.os }}
@@ -81,7 +123,7 @@ jobs:
       - name: emsdk
         if: matrix.name == 'web'
         run: |
-          git clone --depth 1 https://github.com/emscripten-core/emsdk
+          git clone --depth 1 --branch 7.0.0 https://github.com/emscripten-core/emsdk
           emsdk/emsdk install 7.0.0
           emsdk/emsdk activate 7.0.0
           echo "EMSDK=$PWD/emsdk" >> "$GITHUB_ENV"
@@ -103,8 +145,8 @@ jobs:
         run: |
           (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" "platforms;android-36" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-          # Pull requests from forks get no secrets and sign with the debug key.
-          if [ -n "$KEYSTORE" ]; then
+          # Only a release needs the release key, every other build signs with the debug key.
+          if [ -n "$KEYSTORE" ] && [ "$GITHUB_REF_TYPE" = tag ]; then
             echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
             printf 'ut.storeFile=%s\nut.storePassword=%s\nut.keyAlias=%s\nut.keyPassword=%s\n' \
               "$RUNNER_TEMP/release.jks" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > Android/local.properties
@@ -118,15 +160,27 @@ jobs:
           "$USERPROFILE/.dotnet/tools/wix" eula accept wix7
           "$USERPROFILE/.dotnet/tools/wix" extension add -g WixToolset.UI.wixext/7.0.1 WixToolset.Util.wixext/7.0.1
 
+      - name: Content
+        if: matrix.test
+        uses: actions/cache/restore@v4
+        with:
+          path: assets-src
+          key: assets-${{ needs.setup.outputs.assets }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - name: Point the build at the content
+        if: matrix.test
+        run: echo "UT_ASSETS_DIR=${GITHUB_WORKSPACE//\\//}/assets-src" >> "$GITHUB_ENV"
+
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
       - name: Build
         # Maven Central turns runners away now and then, and a second try only repeats the step that failed.
-        run: cmake --build --preset ${{ matrix.build }} || { sleep 60 && cmake --build --preset ${{ matrix.build }}; }
+        run: cmake --build --preset ${{ matrix.build }} || { [ ${{ matrix.name }} = android ] && sleep 60 && cmake --build --preset ${{ matrix.build }}; }
 
       - name: Test
-        if: matrix.name == 'win64' || startsWith(matrix.name, 'linux')
-        run: ctest --test-dir build/${{ matrix.preset }} -C Release -R "content|foliage_pack" --output-on-failure
+        if: matrix.test
+        run: ctest --test-dir build/${{ matrix.preset }} -C Release --output-on-failure --timeout 600
 
       - name: Package
         run: |
@@ -170,8 +224,9 @@ jobs:
 
   release:
     if: github.ref_type == 'tag'
-    needs: build
+    needs: [tidy, build]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -191,6 +246,7 @@ jobs:
     if: github.ref_type == 'tag'
     needs: release
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       pages: write
       id-token: write

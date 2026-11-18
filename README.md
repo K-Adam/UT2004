@@ -39,6 +39,8 @@ Third party libraries come from [vcpkg](https://github.com/microsoft/vcpkg) on W
 
 Linux packages on Debian and Ubuntu: `build-essential ninja-build pkg-config zlib1g-dev libvorbis-dev libopenal-dev libbullet-dev libbullet-extras-dev libgles-dev libsquish-dev libssl-dev libcurl4-openssl-dev nlohmann-json3-dev libspeexdsp-dev`, plus SDL 3.2 or newer.
 
+The x86 presets are not built in CI.
+
 The output lands in `build/<preset>/System/`. The Android build writes `build/android-arm64/UT2004.apk` and the web build writes `build/web/`.
 
 ### Checks and releases
