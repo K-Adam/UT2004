@@ -66,8 +66,10 @@ struct FFoliageMaterial
 			Blend = ConstructObject<UFinalBlend>(UFinalBlend::StaticClass());
 			GGlobalTempObjects->AddGlobalObject((UObject**)&Blend);
 			Blend->Material				= Bitmap;
-			Blend->FrameBufferBlending	= FB_Overwrite;
-			Blend->ZWrite				= 1;
+			// Blended without depth like the retail leaves, so the device can soften the cut outline and
+			// write the depth of the solid part itself.
+			Blend->FrameBufferBlending	= FB_AlphaBlend;
+			Blend->ZWrite				= 0;
 			Blend->ZTest				= 1;
 			Blend->AlphaTest			= 1;
 			Blend->TwoSided				= 1;
@@ -146,6 +148,7 @@ struct FFoliageSet
 								Sink,			// How deep the base goes under the ground.
 								MaxRelief,		// Ground rougher than this under a wide plant gets a narrow one.
 								Bend,			// How far the wind leans the top of the plant, in radians.
+								FadeScale,		// A plant bigger than the retail one is missed from farther away.
 								Tallest;
 };
 
@@ -298,6 +301,8 @@ static FFoliageLibrary* LoadLibrary()
 		Set->Bend			= 0.3f;
 		GConfig->GetFloat(Section,TEXT("Bend"),Set->Bend,FOLIAGE_INI);
 		Set->Bend			*= Library->WindStrength;
+		Set->FadeScale		= 1.f;
+		GConfig->GetFloat(Section,TEXT("FadeScale"),Set->FadeScale,FOLIAGE_INI);
 		Set->Tallest		= 0.f;
 
 		// Variant=<mesh>:<weight>
@@ -769,10 +774,10 @@ static FFoliageGroup* BuildGroup(FFoliageSet* Set,const FFoliageMeshEntry& Entry
 			Group->Streams(VariantIndex) = new FFoliageInstanceStream;
 		FFoliageInstance& Instance = Group->Streams(VariantIndex)->Instances(Group->Streams(VariantIndex)->Instances.Add());
 		Instance.Position	= Base - Up * Set->Sink - Group->Origin;
-		Instance.FadeEnd	= Layer.FadeoutRadius.Max;
+		Instance.FadeEnd	= Layer.FadeoutRadius.Max * Set->FadeScale;
 		// Retail thins the alpha over the whole range, often from the viewer's feet. Dissolving does that with holes
-		// in a fixed pattern, which shows up close and in the contact shadows, so it waits for the last quarter.
-		Instance.FadeStart	= Max(Layer.FadeoutRadius.Min,Layer.FadeoutRadius.Max * 0.75f);
+		// in a noise, which shows up close and in the contact shadows, so it waits for the last tenth.
+		Instance.FadeStart	= Max(Layer.FadeoutRadius.Min,Instance.FadeEnd * 0.9f);
 		Instance.Scale		= Scale;
 		// Half is full brightness, as for the retail colours.
 		Instance.Color		= Tint(UsesTerrainLight(Layer) ? FColor(127,127,127,255) : Info.Color,Set->Tint * Brightness);
@@ -783,18 +788,32 @@ static FFoliageGroup* BuildGroup(FFoliageSet* Set,const FFoliageMeshEntry& Entry
 	unguard;
 }
 
+// The set that replaces a decoration layer, NULL when the retail mesh draws.
+static FFoliageSet* LayerSet(FFoliageLibrary* Library,ATerrainInfo* Terrain,INT LayerIndex,FFoliageMeshEntry& Entry)
+{
+	// Plants hanging from an inverted terrain or standing over a hole in it keep the retail placement.
+	if( !Library || Terrain->Inverted || Terrain->DecoLayers(LayerIndex).ShowOnInvisibleTerrain )
+		return NULL;
+	Entry = FindMesh(Library,Terrain->DecoLayers(LayerIndex).StaticMesh);
+	return Entry.Set == INDEX_NONE ? NULL : Library->Sets(Entry.Set);
+}
+
+FLOAT FFoliage::FadeScale(ATerrainInfo* Terrain,INT LayerIndex,FLevelSceneNode* SceneNode)
+{
+	FFoliageMeshEntry Entry;
+	FFoliageSet* Set = LayerSet(GetEnabledLibrary(SceneNode),Terrain,LayerIndex,Entry);
+	return Set ? Set->FadeScale : 1.f;
+}
+
 UBOOL FFoliage::RenderDecorations(ATerrainInfo* Terrain,INT LayerIndex,INT SectorIndex,FLevelSceneNode* SceneNode,FRenderInterface* RI)
 {
 	guard(FFoliage::RenderDecorations);
 
-	FFoliageLibrary* Library = GetEnabledLibrary(SceneNode);
-	// Plants hanging from an inverted terrain or standing over a hole in it keep the retail placement.
-	if( !Library || Terrain->Inverted || Terrain->DecoLayers(LayerIndex).ShowOnInvisibleTerrain )
+	FFoliageLibrary*	Library = GetEnabledLibrary(SceneNode);
+	FFoliageMeshEntry	Entry;
+	FFoliageSet*		Set = LayerSet(Library,Terrain,LayerIndex,Entry);
+	if( !Set )
 		return 0;
-	FFoliageMeshEntry Entry = FindMesh(Library,Terrain->DecoLayers(LayerIndex).StaticMesh);
-	if( Entry.Set == INDEX_NONE )
-		return 0;
-	FFoliageSet* Set = Library->Sets(Entry.Set);
 
 	FFoliageTerrain** Found = Library->Terrains.Find((QWORD)(PTRINT)Terrain);
 	FFoliageTerrain* Built = Found ? *Found : NULL;

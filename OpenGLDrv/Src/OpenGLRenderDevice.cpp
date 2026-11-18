@@ -298,7 +298,7 @@ UBOOL UOpenGLRenderDevice::InitContext()
 		if( MaxShaderCompilerThreads )
 			MaxShaderCompilerThreads(0xFFFFFFFF);
 	}
-	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile);
+	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i, sample variables %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile,HasExtension("GL_OES_sample_variables"));
 
 	VertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader,"#version 300 es\n");
 	InstancedVertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader,"#version 300 es\n#define INSTANCED\n");

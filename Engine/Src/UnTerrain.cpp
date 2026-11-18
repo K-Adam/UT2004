@@ -3649,7 +3649,8 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 			// Bail out if sector too far away.
 			const FVector&	SectorLocation	= DecoLayerData(LayerIndex).Sectors(SectorIndices[s]).Location;
 			const FLOAT&	SectorRadius	= DecoLayerData(LayerIndex).Sectors(SectorIndices[s]).Radius;
-			if ( FDistSquared( Origin, SectorLocation ) > Square(DecoLayer.FadeoutRadius.Max + MaxMeshExtent + SectorRadius) )
+			const FLOAT		FadeMax			= DecoLayer.FadeoutRadius.Max * FFoliage::FadeScale(this,LayerIndex,SceneNode);
+			if ( FDistSquared( Origin, SectorLocation ) > Square(FadeMax + MaxMeshExtent + SectorRadius) )
 				continue;
 
 			FLOAT RMaxMin = 1.f;
@@ -3665,7 +3666,7 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
                 DecoInfo->TempScale.Y	= Distance; // sjs
 								
 				// Don't render if too far away.
-				if ( Distance > DecoLayer.FadeoutRadius.Max )
+				if ( Distance > FadeMax )
 				{
 					DecoInfo->TempScale.X = -1.f;
 					DecoInfo++;

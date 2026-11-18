@@ -133,6 +133,10 @@ const ANSICHAR* OpenGLVertexShader =
 
 const ANSICHAR* OpenGLFragmentPrologue =
 	"#version 300 es\n"
+	// For the foliage fade's sample mask, WebGL 2 lacks it.
+	"#ifdef GL_OES_sample_variables\n"
+	"#extension GL_OES_sample_variables : enable\n"
+	"#endif\n"
 	"precision highp float;\n"
 	OGL_SCENE_BLOCK
 	"in vec3 vWorldPos;\n"

@@ -211,7 +211,7 @@ struct FOpenGLSceneBlock
 			Fog,
 			FogColor,
 			Ambient,
-			Options,		// X dynamic lights, Y static lighting, Z 2x lighting, W mip bias.
+			Options,		// X dynamic lights, Y static lighting, Z 2x lighting, W the frame's seed of the foliage fade noise.
 			FogUp;			// World up in camera space, for the volumetric fog's height. W is 1 in the world framebuffer.
 	FPlane	LightPosition[OGL_MAX_LIGHTS],
 			LightDirection[OGL_MAX_LIGHTS],

@@ -613,7 +613,18 @@ public:
 		K(FogMode);
 		K(State.AlphaTest);
 		if( State.AlphaTest )
+		{
+			// Multisampling smooths triangle edges, not the outline a plant's texture cuts. Its alpha becomes how
+			// much of the pixel the outline covers. A tree's leaves that only drop their clear texels blend
+			// softly from zero and have no outline to sharpen.
+			if( State.AlphaRef > 0.f && S->Instanced && State.SrcBlend == GL_SRC_ALPHA && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA )
+			{
+				K(appRound(State.AlphaRef * 255.f));
+				Emit(TEXT("\tr%i.a = clamp((r%i.a - %f) / max(fwidth(r%i.a), 0.0001) + 0.5, 0.0, 1.0);\n"),C,C,State.AlphaRef,C);
+				State.AlphaRef = 0.f;
+			}
 			Emit(TEXT("\tif (r%i.a <= AlphaRef) discard;\n"),C);
+		}
 		Emit(TEXT("\tFragColor = vec4(ApplyFog(r%i.rgb, %s), r%i.a);\n"),C,FogTarget(),C);
 		// Blended draws leave the reflection of the surface below. Modulating and darkening scale it like
 		// the colour, other blends keep it whole, as attachments share the blend and the alpha cannot
@@ -1278,10 +1289,30 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	FOpenGLCompiler Writer(this,State,Unused,&Body,ErrorString,ErrorMaterial);
 	Writer.Compile(Material);
 
-	// Interleaved gradient noise. Two detail levels that hand over keep exactly one of them per pixel.
+	// Two detail levels that hand over keep exactly one of them per sample. Each multisample gets its own
+	// threshold, which the resolve averages into a smooth fade. With a single sample the noise is new
+	// every frame instead, so the eye does the averaging. A hash, as gradient noise shifted per frame keeps a visible pattern.
 	const TCHAR* Fade = CurrentState->Instanced ? TEXT("in vec2 vFade;\n") : TEXT("");
 	const TCHAR* Dissolve = CurrentState->Instanced
-		? TEXT("\tfloat Dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));\n\tif (vFade.x <= Dither || vFade.y < 1.0 - Dither) discard;\n")
+		? TEXT("\tfloat Samples = 1.0;\n")
+		  TEXT("#ifdef GL_OES_sample_variables\n")
+		  TEXT("\tSamples = float(gl_NumSamples);\n")
+		  TEXT("#endif\n")
+		  TEXT("\tuvec3 At = uvec3(gl_FragCoord.xy, Samples > 1.0 ? 0.0 : Options.w);\n")
+		  TEXT("\tuint H = At.x * 1973u + At.y * 9277u + At.z * 26699u;\n")
+		  TEXT("\tH = (H ^ (H >> 16)) * 0x7feb352du;\n")
+		  TEXT("\tH = (H ^ (H >> 15)) * 0x846ca68bu;\n")
+		  TEXT("\tfloat Dither = float(H ^ (H >> 16)) / 4294967296.0;\n")
+		  TEXT("\tint Mask = 0;\n")
+		  TEXT("\tfor (int i = 0; i < int(Samples); i++)\n")
+		  TEXT("\t{\n")
+		  TEXT("\t\tfloat T = fract(Dither + float(i) / Samples);\n")
+		  TEXT("\t\tif (vFade.x > T && vFade.y >= 1.0 - T) Mask |= 1 << i;\n")
+		  TEXT("\t}\n")
+		  TEXT("\tif (Mask == 0) discard;\n")
+		  TEXT("#ifdef GL_OES_sample_variables\n")
+		  TEXT("\tgl_SampleMask[0] = Mask;\n")
+		  TEXT("#endif\n")
 		: TEXT("");
 	FString Fragment = FString(OpenGLFragmentPrologue) + Fade + Writer.Declarations() + TEXT("void main()\n{\n") + Dissolve + Body + TEXT("}\n");
 	FOpenGLProgram* Program = new FOpenGLProgram;

@@ -603,7 +603,7 @@ void FOpenGLRenderInterface::Commit()
 	Scene.ClipAdjust		= FPlane(Flip,0.f,1.f / Max(GL.Viewport[2],1),-Flip / Max(GL.Viewport[3],1));
 	Scene.Fog				= FPlane(S->FogStart,S->FogEnd,S->FogEnabled ? 1.f : 0.f,RenDev->VolumetricFog ? 1.f : 0.f);
 	Scene.FogColor			= S->FogColor.Plane();
-	Scene.Options			= FPlane(S->UseDynamicLighting ? 1.f : 0.f,S->UseStaticLighting ? 1.f : 0.f,S->LightingModulate2X ? 1.f : 0.f,0.f);
+	Scene.Options			= FPlane(S->UseDynamicLighting ? 1.f : 0.f,S->UseStaticLighting ? 1.f : 0.f,S->LightingModulate2X ? 1.f : 0.f,RenDev->FrameCount & 1023);
 	// Particles pass camera space vertices with no view transform, they keep the up of the view before them.
 	if( S->WorldToCamera != FMatrix::Identity )
 		FogUp = S->WorldToCamera.TransformNormal(FVector(0,0,1)).SafeNormal();
