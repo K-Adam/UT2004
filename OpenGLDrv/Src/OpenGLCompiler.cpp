@@ -284,7 +284,7 @@ public:
 		}
 		else if( Source == TCS_WorldCoords || Source == TCS_ProjectorCoords )
 		{
-			Emit(TEXT("\tvec4 r%i = vec4(vWorldPos, 1.0);\n"),T);
+			Emit(TEXT("\tvec4 r%i = vec4(vRestPos, 1.0);\n"),T);
 			UseMatrix = Mod.Matrix != FMatrix::Identity || Mod.TexCoordProjected;
 		}
 		else if( Source == TCS_CameraCoords )
@@ -341,8 +341,37 @@ public:
 		return T;
 	}
 
+	// Three samples along the world axes, weighted by how squarely the surface faces each.
+	INT SampleTriplanar(UTriplanarBitmapMaterial* Bitmap)
+	{
+		if( State.NumTextures >= OGL_MAX_TEXTURES )
+			return Fail(TEXT("Too many textures"),NULL);
+		INT Unit = State.NumTextures++;
+		State.Textures[Unit] = RI->CacheTexture(Bitmap->GetRenderInterface());
+		Cube[Unit] = 0;
+		State.SamplerFlags[Unit] = 0;
+		K(Cube[Unit]);
+
+		INT Scale = Constant(FPlane(Bitmap->WorldScale,0.f,0.f,0.f));
+		INT Mean = Constant(Bitmap->Mean);
+		if( Scale == INDEX_NONE || Mean == INDEX_NONE )
+			return INDEX_NONE;
+		INT P = NewTemp(), W = NewTemp(), T = NewTemp();
+		Emit(TEXT("\tvec3 r%i = vRestPos * r%i.x;\n"),P,Scale);
+		Emit(TEXT("\tvec3 r%i = abs(normalize(vWorldNormal));\n"),W);
+		Emit(TEXT("\tr%i *= r%i; r%i *= r%i; r%i *= r%i;\n"),W,W,W,W,W,W);
+		Emit(TEXT("\tr%i /= r%i.x + r%i.y + r%i.z;\n"),W,W,W,W);
+		Emit(TEXT("\tvec4 r%i = texture(s%i, r%i.yz, -0.5) * r%i.x;\n"),T,Unit,P,W);
+		Emit(TEXT("\tr%i += texture(s%i, r%i.xz, -0.5) * r%i.y;\n"),T,Unit,P,W);
+		Emit(TEXT("\tr%i += texture(s%i, r%i.xy, -0.5) * r%i.z;\n"),T,Unit,P,W);
+		Emit(TEXT("\tr%i.rgb = r%i.rgb + (r%i.rgb - r%i.rgb) * inversesqrt(dot(r%i, r%i));\n"),T,Mean,T,Mean,W,W);
+		return T;
+	}
+
 	INT Sample(UBitmapMaterial* Bitmap,const FOpenGLModifierInfo& Mod,UBOOL Detail=0)
 	{
+		if( UTriplanarBitmapMaterial* Triplanar = Cast<UTriplanarBitmapMaterial>(Bitmap) )
+			return SampleTriplanar(Triplanar);
 		UBitmapMaterial* Current = Bitmap->Get(RI->Viewport->CurrentTime,RI->Viewport);
 		FBaseTexture* Base = Current ? Current->GetRenderInterface() : NULL;
 		return SampleTexture(Base ? RI->CacheTexture(Base) : NULL,Bitmap->UClampMode,Bitmap->VClampMode,Mod,Detail);

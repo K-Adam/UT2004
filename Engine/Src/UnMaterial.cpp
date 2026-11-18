@@ -90,6 +90,7 @@ IMPLEMENT_CLASS(UMaterial);
 
 IMPLEMENT_CLASS(UBitmapMaterial);
 IMPLEMENT_CLASS(UProxyBitmapMaterial);
+IMPLEMENT_CLASS(UTriplanarBitmapMaterial);
 IMPLEMENT_CLASS(URenderedMaterial);
 IMPLEMENT_CLASS(UTexCoordMaterial);
 IMPLEMENT_CLASS(UColorModifier);

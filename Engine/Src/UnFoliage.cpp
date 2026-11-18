@@ -4,112 +4,13 @@
 
 #include "EnginePrivate.h"
 #include "UnFoliage.h"
+#include "UnFoliagePrivate.h"
 
-#define FOLIAGE_DIR		TEXT("../Foliage/")
-#define FOLIAGE_INI		TEXT("../Foliage/foliage.ini")
 #define FOLIAGE_LODS	3
 
 /*-----------------------------------------------------------------------------
 	Resources.
 -----------------------------------------------------------------------------*/
-
-// One record of the instance stream, see FRenderInterface::SetInstanceStream.
-struct FFoliageInstance
-{
-	FVector	Position;
-	FLOAT	FadeEnd;
-	FQuat	Rotation;
-	FVector	Scale;
-	FLOAT	FadeStart;
-	FColor	Color;
-};
-
-class FFoliageInstanceStream : public FVertexStream
-{
-public:
-	TArray<FFoliageInstance>	Instances;
-	QWORD						CacheId;
-	INT							Revision;
-	UBOOL						Dynamic;
-
-	// Revision 0 is what a render device takes for already cached.
-	FFoliageInstanceStream() : CacheId(MakeCacheID(CID_RenderVertices)), Revision(1), Dynamic(0) {}
-
-	virtual QWORD GetCacheId() { return CacheId; }
-	virtual INT GetRevision() { return Revision; }
-	virtual INT GetStride() { return sizeof(FFoliageInstance); }
-	virtual INT GetSize() { return Instances.Num() * sizeof(FFoliageInstance); }
-	virtual UBOOL HintDynamic() { return Dynamic; }
-	virtual INT GetComponents(FVertexComponent* Components)
-	{
-		Components[0] = FVertexComponent(CT_Float4,FVF_Instance0);
-		Components[1] = FVertexComponent(CT_Float4,FVF_Instance1);
-		Components[2] = FVertexComponent(CT_Float4,FVF_Instance2);
-		Components[3] = FVertexComponent(CT_Color,FVF_Instance3);
-		return 4;
-	}
-	virtual void GetStreamData(void* Dest) { appMemcpy(Dest,&Instances(0),GetSize()); }
-	virtual void GetRawStreamData(void** Dest,INT FirstVertex) { *Dest = &Instances(FirstVertex); }
-};
-
-// A DDS file's DXT mip chain.
-class FFoliageTexture : public FTexture
-{
-public:
-	TArray<BYTE>	File;
-	TArray<INT>		MipOffsets,
-					MipSizes;
-	INT				Width,
-					Height;
-	ETextureFormat	Format;
-	QWORD			CacheId;
-
-	FFoliageTexture() : Width(0), Height(0), Format(TEXF_DXT5), CacheId(MakeCacheID(CID_RenderTexture)) {}
-
-	UBOOL Load(const TCHAR* Filename)
-	{
-		if( !appLoadFileToArray(File,Filename) || File.Num() < 128 || appMemcmp(&File(0),"DDS ",4) != 0 )
-			return 0;
-		Height	= *(INT*)&File(12);
-		Width	= *(INT*)&File(16);
-		INT NumMips = Max(*(INT*)&File(28),1);
-		if( Width < 1 || Width > 8192 || Height < 1 || Height > 8192 || NumMips > 14 )
-			return 0;
-		if( appMemcmp(&File(84),"DXT1",4) == 0 )
-			Format = TEXF_DXT1;
-		else if( appMemcmp(&File(84),"DXT5",4) != 0 )
-			return 0;
-		INT Offset = 128;
-		for( INT i=0; i<NumMips; i++ )
-		{
-			INT Size = Max((Width >> i) + 3,4) / 4 * (Max((Height >> i) + 3,4) / 4) * (Format == TEXF_DXT1 ? 8 : 16);
-			if( Offset + Size > File.Num() )
-				return 0;
-			MipOffsets.AddItem(Offset);
-			MipSizes.AddItem(Size);
-			Offset += Size;
-		}
-		return 1;
-	}
-
-	virtual QWORD GetCacheId() { return CacheId; }
-	virtual INT GetRevision() { return 1; }
-	virtual INT GetWidth() { return Width; }
-	virtual INT GetHeight() { return Height; }
-	virtual INT GetFirstMip() { return 0; }
-	virtual INT GetNumMips() { return MipOffsets.Num(); }
-	virtual ETextureFormat GetFormat() { return Format; }
-	virtual ETexClampMode GetUClamp() { return TC_Clamp; }
-	virtual ETexClampMode GetVClamp() { return TC_Clamp; }
-	virtual void* GetRawTextureData(INT MipIndex) { return &File(MipOffsets(MipIndex)); }
-	virtual void UnloadRawTextureData(INT MipIndex) {}
-	virtual void GetTextureData(INT MipIndex,void* Dest,INT DestStride,ETextureFormat DestFormat,UBOOL ColoredMips)
-	{
-		if( DestFormat == Format )
-			appMemcpy(Dest,&File(MipOffsets(MipIndex)),MipSizes(MipIndex));
-	}
-	virtual UTexture* GetUTexture() { return NULL; }
-};
 
 // The light baked onto a terrain's heightmap samples. Filtered, it is what the terrain shows between them.
 class FFoliageLightTexture : public FTexture
@@ -295,6 +196,8 @@ struct FFoliageLibrary
 	ULevel*									WindLevel;		// The level WindDirection was found for, checked against the name like Meshes.
 	FName									WindLevelName;
 	FVector									WindDirection;
+	FLOAT									WindStrength;
+	UBOOL									TreesSway;		// The level moves the shadows of its trees, so its mapper meant them to stand in wind.
 };
 
 /*-----------------------------------------------------------------------------
@@ -316,11 +219,11 @@ static FFoliageLibrary* LoadLibrary()
 	TMap<FString,FFoliageMaterial*>	Materials;
 	TMap<FString,FFoliageVariant*>	Variants;
 	TMap<FString,INT>				SetNames;
-	FLOAT							WindStrength = 1.f;
 	Library->WindYaw	= 0.f;
 	Library->WindLevel	= NULL;
+	Library->WindStrength = 1.f;
 	GConfig->GetFloat(TEXT("Wind"),TEXT("Direction"),Library->WindYaw,FOLIAGE_INI);
-	GConfig->GetFloat(TEXT("Wind"),TEXT("Strength"),WindStrength,FOLIAGE_INI);
+	GConfig->GetFloat(TEXT("Wind"),TEXT("Strength"),Library->WindStrength,FOLIAGE_INI);
 
 	for( INT i=0; i<Sections.Num(); i++ )
 	{
@@ -394,7 +297,7 @@ static FFoliageLibrary* LoadLibrary()
 		GConfig->GetFloat(Section,TEXT("MaxRelief"),Set->MaxRelief,FOLIAGE_INI);
 		Set->Bend			= 0.3f;
 		GConfig->GetFloat(Section,TEXT("Bend"),Set->Bend,FOLIAGE_INI);
-		Set->Bend			*= WindStrength;
+		Set->Bend			*= Library->WindStrength;
 		Set->Tallest		= 0.f;
 
 		// Variant=<mesh>:<weight>
@@ -455,8 +358,7 @@ static FFoliageLibrary* GLibrary = NULL;
 
 static FFoliageLibrary* GetEnabledLibrary(FLevelSceneNode* SceneNode)
 {
-	UViewport* Viewport = SceneNode->Viewport;
-	if( GIsEditor || Viewport->HitTesting || Viewport->IsWire() || !Viewport->RenDev->GetRenderCaps()->ImprovedFoliage )
+	if( !FoliageEnabled(SceneNode) )
 		return NULL;
 	static UBOOL Tried = 0;
 	if( !Tried )
@@ -490,23 +392,6 @@ static FFoliageMeshEntry& FindMesh(FFoliageLibrary* Library,UStaticMesh* StaticM
 /*-----------------------------------------------------------------------------
 	Variety and placement.
 -----------------------------------------------------------------------------*/
-
-// The engine's seeded random stream belongs to the retail scatter, taking numbers from it would move every plant.
-struct FFoliageRandom
-{
-	DWORD State;
-
-	FFoliageRandom(DWORD A,DWORD B,DWORD C) : State(A * 0x9E3779B1 ^ B * 0x85EBCA77 ^ C * 0xC2B2AE3D) {}
-	FLOAT Next()
-	{
-		State ^= State >> 15;
-		State *= 0x2C1B3C6D;
-		State ^= State >> 12;
-		State *= 0x297A2D39;
-		State ^= State >> 15;
-		return (State >> 8) * (1.f / 16777216.f);
-	}
-};
 
 static INT PickVariant(FFoliageSet* Set,FLOAT Random,UBOOL NarrowOnly)
 {
@@ -642,6 +527,19 @@ static void TakeFlow(UMaterial* Material,const FVector& PerU,const FVector& PerV
 		TakeFlow(Modifier->Material,PerU,PerV,Fastest,Depth + 1);
 }
 
+static UBOOL Oscillates(UMaterial* Material,INT Depth = 0)
+{
+	if( !Material || Depth > 8 )
+		return 0;
+	UShader*	Shader = Cast<UShader>(Material);
+	UCombiner*	Combiner = Cast<UCombiner>(Material);
+	UModifier*	Modifier = Cast<UModifier>(Material);
+	return Material->IsA(UTexOscillator::StaticClass())
+		|| (Shader && (Oscillates(Shader->Diffuse,Depth + 1) || Oscillates(Shader->Opacity,Depth + 1) || Oscillates(Shader->SelfIllumination,Depth + 1)))
+		|| (Combiner && (Oscillates(Combiner->Material1,Depth + 1) || Oscillates(Combiner->Material2,Depth + 1) || Oscillates(Combiner->Mask,Depth + 1)))
+		|| (Modifier && Oscillates(Modifier->Material,Depth + 1));
+}
+
 // Where the clouds of a sky drift, in the sky's own space. Zero for a sky that stands still.
 static FVector SkyFlow(ULevel* Level,ASkyZoneInfo* Sky)
 {
@@ -774,8 +672,25 @@ static const FVector& LevelWind(FFoliageLibrary* Library,ULevel* Level)
 		Library->WindLevel		= Level;
 		Library->WindLevelName	= Level->GetOuter()->GetFName();
 		Library->WindDirection	= FindWind(Library,Level);
+		Library->TreesSway		= 0;
+		for( INT a=0; !Library->TreesSway && a<Level->Actors.Num(); a++ )
+		{
+			AProjector* Projector = Cast<AProjector>(Level->Actors(a));
+			Library->TreesSway = Projector && Oscillates(Projector->ProjTexture);
+		}
+		if( Library->TreesSway )
+			debugf(TEXT("Foliage: the level sways the shadows of its trees, so the trees sway"));
 	}
 	return Library->WindDirection;
+}
+
+FVector FoliageTreeWind(FLevelSceneNode* SceneNode)
+{
+	FFoliageLibrary* Library = GetEnabledLibrary(SceneNode);
+	if( !Library )
+		return FVector(0,0,0);
+	FVector Wind = LevelWind(Library,SceneNode->Level);
+	return Library->TreesSway ? Wind * Library->WindStrength : FVector(0,0,0);
 }
 
 /*-----------------------------------------------------------------------------

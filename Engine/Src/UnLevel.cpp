@@ -9,6 +9,7 @@
 #include "EnginePrivate.h"
 #include "UnNet.h"
 #include "UnLinker.h"
+#include "UnFoliage.h"
 extern FCoronaRender GCoronaRender; 
 /*-----------------------------------------------------------------------------
 	ULevelBase implementation.
@@ -467,6 +468,8 @@ void ULevel::Serialize( FArchive& Ar )
 void ULevel::Destroy()
 {
 	guard(ULevel::Destroy);
+
+	FFoliage::ForgetLevel(this);
 
 	// Free allocated stuff.
 	if( Hash )

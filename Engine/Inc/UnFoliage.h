@@ -15,6 +15,11 @@ public:
 	static void ForgetTerrain(ATerrainInfo* Terrain,INT SectorIndex = INDEX_NONE);
 
 	static UBOOL ReplacesActor(FLevelSceneNode* SceneNode,AActor* Actor);
+	// Draws the sections of a batched tree that have a rounder trunk and returns a bit for each, which the caller
+	// then leaves out. LightsSet says the tree is drawn on its own with its lights and Projectors already set up.
+	static DWORD RenderTrunks(FLevelSceneNode* SceneNode,FDynamicActor* Owner,TList<FProjectorRenderInfo*>* Projectors,UBOOL LightsSet,FRenderInterface* RI);
+	// Drops what was built for the trees of a level.
+	static void ForgetLevel(ULevel* Level);
 	// Draws the replacements of the collected actors and empties the list.
 	static void RenderActors(TArray<FDynamicActor*>& Actors,FLevelSceneNode* SceneNode,FRenderInterface* RI);
 };

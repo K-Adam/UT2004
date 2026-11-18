@@ -10354,6 +10354,7 @@ DECLARE_NATIVE_TYPE(Engine,AFileLog);
 	UColorModifier::StaticClass(); \
 	UTexCoordMaterial::StaticClass(); \
 	UProxyBitmapMaterial::StaticClass(); \
+	UTriplanarBitmapMaterial::StaticClass(); \
 	ULevel::StaticClass(); \
 	ULevelBase::StaticClass(); \
 	UInteractionMaster::StaticClass(); \

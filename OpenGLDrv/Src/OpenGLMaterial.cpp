@@ -33,6 +33,7 @@ const ANSICHAR* OpenGLVertexShader =
 	"in vec4 aSpecular;\n"
 	"in vec4 aTexCoord0, aTexCoord1, aTexCoord2, aTexCoord3, aTexCoord4, aTexCoord5, aTexCoord6, aTexCoord7;\n"
 	"out vec3 vWorldPos;\n"
+	"out vec3 vRestPos;\n"
 	"out vec3 vWorldNormal;\n"
 	"out vec3 vCameraPos;\n"
 	"out vec4 vDiffuse;\n"
@@ -83,12 +84,12 @@ const ANSICHAR* OpenGLVertexShader =
 	"		float Tall = aPosition.z * aInstance2.z;\n"
 	// The angle grows with height, which curves the plant. Leaning each vertex from the point of the stem below
 	// it instead of turning the whole plant about its root keeps the blades of a wide clump at their length.
-	"		float Angle = Strength * aPosition.z * Wind.w * (0.25 + Gust + 0.2 * (W.z - 0.5));\n"
+	"		float Angle = Strength * aPosition.z * abs(Wind.w) * (0.25 + Gust + 0.2 * (W.z - 0.5));\n"
 	"		Offset += (Dir * sin(Angle) + Up * (cos(Angle) - 1.0)) * Tall;\n"
 	"		Normal += (Dir * dot(Normal, Up) - Up * dot(Normal, Dir)) * (2.0 * Angle);\n"
 	// The colour is how open to the sky a vertex is, so the outer leaves flutter and the inside holds still.
 	// One direction for every vertex, along the normal the two sides of a twig would move apart and it would swell.
-	"		Offset += vec3(-Dir.y, Dir.x, 0.35) * ((W.w - 0.5) * Strength * 0.1 * Tall * (0.3 + Gust) * smoothstep(0.55, 0.9, aDiffuse.r));\n"
+	"		Offset += vec3(-Dir.y, Dir.x, 0.35) * (step(0.0, Wind.w) * (W.w - 0.5) * Strength * 0.1 * Tall * (0.3 + Gust) * smoothstep(0.55, 0.9, aDiffuse.r));\n"
 	"	}\n"
 	"	vec4 WorldPos = vec4(Base + mat3(LocalToWorld) * Offset, 1.0);\n"
 	"	vec4 Diffuse = aInstance3 * aDiffuse;\n"
@@ -112,6 +113,12 @@ const ANSICHAR* OpenGLVertexShader =
 	"	gl_Position = P;\n"
 	"	gl_PointSize = 1.0;\n"
 	"	vWorldPos = WorldPos.xyz;\n"
+	// Where the vertex is without wind, for what has to stay on a surface that sways.
+	"#ifdef INSTANCED\n"
+	"	vRestPos = Rest;\n"
+	"#else\n"
+	"	vRestPos = WorldPos.xyz;\n"
+	"#endif\n"
 	"	vWorldNormal = NormalToWorld * Normal;\n"
 	"	vCameraPos = CameraPos.xyz;\n"
 	"	vDiffuse = Diffuse.bgra;\n"
@@ -129,6 +136,7 @@ const ANSICHAR* OpenGLFragmentPrologue =
 	"precision highp float;\n"
 	OGL_SCENE_BLOCK
 	"in vec3 vWorldPos;\n"
+	"in vec3 vRestPos;\n"
 	"in vec3 vWorldNormal;\n"
 	"in vec3 vCameraPos;\n"
 	"in vec4 vDiffuse;\n"

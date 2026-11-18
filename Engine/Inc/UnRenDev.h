@@ -187,7 +187,9 @@ public:
 	// far end and W before the near end, one against the other where two ranges meet, which is how detail
 	// levels hand over.
 	// Wind bends the instances along its XY in the stream's local space, by up to its length in radians at the
-	// height of 1 / W over the instance's origin, further above. Z is the level time in seconds.
+	// height of 1 / W over the instance's origin, further above. Z is the level time in seconds. A negative W
+	// is the same height without the flutter of leaves, for meshes whose vertex colour is not how open to the
+	// sky each vertex is.
 	virtual UBOOL SetInstanceStream(FVertexStream* Instances,const FMatrix* WorldToLightmap = NULL,const FPlane* Range = NULL,const FPlane* Wind = NULL) { return 0; }
 	virtual void DrawInstanced(EPrimitiveType PrimitiveType,INT FirstIndex,INT NumPrimitives,INT NumInstances) {}
 

@@ -158,6 +158,22 @@ public:
 };
 
 /*-----------------------------------------------------------------------------
+	UTriplanarBitmapMaterial
+-----------------------------------------------------------------------------*/
+
+// A bitmap laid over surfaces along the three world axes instead of by texture coordinates and blended by
+// the way a surface faces, so it runs through whatever the mapping of a mesh is.
+class ENGINE_API UTriplanarBitmapMaterial : public UProxyBitmapMaterial
+{
+	DECLARE_CLASS(UTriplanarBitmapMaterial,UProxyBitmapMaterial,0,Engine);
+
+public:
+
+	FLOAT	WorldScale;	// Repeats per world unit.
+	FPlane	Mean;		// The bitmap's average colour. A blend of three samples is flatter than each, the contrast is restored around this.
+};
+
+/*-----------------------------------------------------------------------------
 	UTexCoordMaterial
 -----------------------------------------------------------------------------*/
 class ENGINE_API UTexCoordMaterial : public URenderedMaterial

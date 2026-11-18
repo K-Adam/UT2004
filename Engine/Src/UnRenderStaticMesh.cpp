@@ -8,115 +8,7 @@
 
 #include "EnginePrivate.h"
 #include "UnRenderPrivate.h"
-
-//
-// FSortedIndexBuffer
-//
-
-class FSortedIndexBuffer : public FIndexBuffer
-{
-public:
-
-	struct FTriangleSortInfo
-	{
-        INT		SortKey;
-		INT		Indices[3];
-
-		friend INT Compare(FTriangleSortInfo& A,FTriangleSortInfo& B)
-		{
-			return (INT)(B.SortKey - A.SortKey);
-		}
-	};
-
-	UStaticMesh*	StaticMesh;
-	INT				SectionIndex;
-	FVector			ViewOrigin;
-    FPlane          ViewPlane;
-	_WORD			MinVertexIndex;
-	UBOOL			ReverseVertexOrder;
-
-	QWORD			CacheId;
-
-	// Constructor.
-
-	FSortedIndexBuffer(UStaticMesh* InStaticMesh,INT InSectionIndex,FVector InViewOrigin,_WORD InMinVertexIndex,UBOOL InReverseVertexOrder = 0)
-	{
-		StaticMesh = InStaticMesh;
-		SectionIndex = InSectionIndex;
-		ViewOrigin = InViewOrigin;
-		MinVertexIndex = InMinVertexIndex;
-		ReverseVertexOrder = InReverseVertexOrder;
-	}
-
-	// FRenderResource interface.
-
-	virtual QWORD GetCacheId() { return CacheId; }
-	virtual INT GetRevision() { return 1; }
-
-	// FIndexBuffer interface.
-
-	virtual INT GetSize()
-	{
-		return StaticMesh->Sections(SectionIndex).NumTriangles * 3 * sizeof(_WORD);
-	}
-	
-	virtual INT GetIndexSize()
-	{
-		return sizeof(_WORD);
-	}
-
-	virtual void GetContents(void* VoidDest)
-	{
-		guard(FSortedIndexBuffer::GetContents);
-
-		_WORD* Dest = (_WORD*)VoidDest;
-
-		FMemMark					MemMark(GSceneMem);
-		FStaticMeshSection*			Section = &StaticMesh->Sections(SectionIndex);
-		_WORD*						Indices = &StaticMesh->IndexBuffer.Indices(Section->FirstIndex);
-		FStaticMeshVertex*			Vertices = &StaticMesh->VertexStream.Vertices(0);
-		FTriangleSortInfo*			SortedTriangles = New<FTriangleSortInfo>(GSceneMem,Section->NumTriangles);
-		_WORD						Offset = -Section->MinVertexIndex + MinVertexIndex;
-
-		for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)
-		{
-			SortedTriangles[TriangleIndex].Indices[0] = Indices[TriangleIndex * 3 + 0] + Offset;
-			SortedTriangles[TriangleIndex].Indices[1] = Indices[TriangleIndex * 3 + 1] + Offset;
-			SortedTriangles[TriangleIndex].Indices[2] = Indices[TriangleIndex * 3 + 2] + Offset;
-
-			FLOAT Distance =( 
-				Vertices[Indices[TriangleIndex * 3 + 0]].Position + 
-				Vertices[Indices[TriangleIndex * 3 + 1]].Position + 
-				Vertices[Indices[TriangleIndex * 3 + 2]].Position -
-				ViewOrigin * 3
-				).SizeSquared();
-
-			SortedTriangles[TriangleIndex].SortKey = appTrunc( Distance );
-		}
-
-		Sort(SortedTriangles,Section->NumTriangles);
-
-		for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)
-		{
-			if(ReverseVertexOrder)
-			{
-				*Dest++ = SortedTriangles[TriangleIndex].Indices[2];
-				*Dest++ = SortedTriangles[TriangleIndex].Indices[1];
-				*Dest++ = SortedTriangles[TriangleIndex].Indices[0];
-			}
-			else
-			{
-				*Dest++ = SortedTriangles[TriangleIndex].Indices[0];
-				*Dest++ = SortedTriangles[TriangleIndex].Indices[1];
-				*Dest++ = SortedTriangles[TriangleIndex].Indices[2];
-			}
-		}
-
-		MemMark.Pop();
-
-		unguard;
-	}
-};
+#include "UnFoliage.h"
 
 //
 //	CalculateStaticMeshLighting
@@ -415,6 +307,11 @@ void RenderStaticMesh(FDynamicActor* Owner,FLevelSceneNode* SceneNode,TList<FDyn
 	if(!StaticMesh->VertexStream.Vertices.Num())
 		return;
 
+	// The sections FFoliage::RenderTrunks drew. Where that is all of them it also projected the decals, the ones
+	// cut out of the retail triangles would show a second time.
+	DWORD	Trunks = 0,
+			AllSections = (1u << Min(StaticMesh->Sections.Num(),31)) - 1;
+
 	if(Actor->bSelected && (SceneNode->Viewport->Actor->ShowFlags & SHOW_SelectionHighlight))
 	{
 		// Highlight the static mesh.
@@ -583,6 +480,8 @@ void RenderStaticMesh(FDynamicActor* Owner,FLevelSceneNode* SceneNode,TList<FDyn
 
 		if(Owner->Actor->StaticSectionBatches.Num() == StaticMesh->Sections.Num())
 		{
+			Trunks = FFoliage::RenderTrunks(SceneNode,Owner,Projectors,1,RI);
+
 			RI->SetCullMode(CM_CW);
 
 			for(INT Pass = 0;Pass < 2;Pass++)
@@ -591,7 +490,7 @@ void RenderStaticMesh(FDynamicActor* Owner,FLevelSceneNode* SceneNode,TList<FDyn
 				{
 					FBatchReference&	Ref = Owner->Actor->StaticSectionBatches(SectionIndex);
 
-					if(Ref.ElementIndex != INDEX_NONE)
+					if(Ref.ElementIndex != INDEX_NONE && !(Trunks & (1u << Min(SectionIndex,31))))
 					{
 						FStaticMeshBatch&	Batch = SceneNode->Level->StaticMeshBatches(Ref.BatchIndex);
 
@@ -883,7 +782,7 @@ void RenderStaticMesh(FDynamicActor* Owner,FLevelSceneNode* SceneNode,TList<FDyn
 
 	// Batch projectors on this static mesh.
 
-	if(!SceneNode->Viewport->IsWire() && (SceneNode->Viewport->Actor->ShowFlags & SHOW_Projectors))
+	if(!SceneNode->Viewport->IsWire() && (SceneNode->Viewport->Actor->ShowFlags & SHOW_Projectors) && !(Trunks && Trunks == AllSections))
 	{
 		for(INT ProjectorIndex = 0;ProjectorIndex < Actor->StaticMeshProjectors.Num();ProjectorIndex++)
 		{
@@ -1052,15 +951,20 @@ void RenderBatchedStaticMesh(FStaticMeshBatchList& BatchList,FDynamicActor* Dyna
 	if( !StaticMesh ) 
 		return;
 
+	DWORD	Trunks = 0,
+			AllSections = (1u << Min(StaticMesh->Sections.Num(),31)) - 1;
+
 	// Batch the static mesh's sections for rendering.
 
 	if(Actor->StaticSectionBatches.Num() == StaticMesh->Sections.Num())
 	{
+		Trunks = FFoliage::RenderTrunks(SceneNode,DynamicActor,NULL,0,RI);
+
 		for(INT SectionIndex = 0;SectionIndex < StaticMesh->Sections.Num();SectionIndex++)
 		{
 			FBatchReference&	Ref = Actor->StaticSectionBatches(SectionIndex);
 
-			if(Ref.ElementIndex != INDEX_NONE)
+			if(Ref.ElementIndex != INDEX_NONE && !(Trunks & (1u << Min(SectionIndex,31))))
 			{
 				if(!BatchList.VisibleBatchElements[Ref.BatchIndex])
 				{
@@ -1076,7 +980,7 @@ void RenderBatchedStaticMesh(FStaticMeshBatchList& BatchList,FDynamicActor* Dyna
 
 	// Batch projectors on this static mesh.
 
-	if(!SceneNode->Viewport->IsWire() && (SceneNode->Viewport->Actor->ShowFlags & SHOW_Projectors))
+	if(!SceneNode->Viewport->IsWire() && (SceneNode->Viewport->Actor->ShowFlags & SHOW_Projectors) && !(Trunks && Trunks == AllSections))
 	{
 		AActor* ProjectorBase = Actor->GetProjectorBase();
 
