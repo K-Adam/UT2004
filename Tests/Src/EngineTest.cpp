@@ -8,7 +8,7 @@ static const TCHAR* DeathmatchURL = TEXT("DM-Rankin?game=XGame.xDeathMatch?MinPl
 static const TCHAR* OnslaughtURL = TEXT("ONS-RedPlanet?game=Onslaught.ONSOnslaughtGame?MinPlayers=8?QuickStart=true");
 
 // The test owns the clock, so game time passes as fast as the machine ticks.
-static void RunGame( FLOAT Seconds )
+void RunGame( FLOAT Seconds )
 {
 	const FLOAT Step = 1.f/30.f;
 	for( FLOAT Time=0.f; Time<Seconds; Time+=Step )

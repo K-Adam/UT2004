@@ -20,3 +20,4 @@
 
 // The dedicated server every test runs against, booted once because the engine cannot start twice in a process.
 extern UGameEngine* GTestEngine;
+void RunGame( FLOAT Seconds );

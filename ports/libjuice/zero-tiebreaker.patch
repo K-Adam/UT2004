@@ -1,0 +1,249 @@
+diff --git a/src/agent.c b/src/agent.c
+index 6d1dcf29..036f7cf4 100644
+--- a/src/agent.c
++++ b/src/agent.c
+@@ -1437,7 +1437,7 @@ int agent_process_stun_binding(juice_agent_t *agent, const stun_message_t *msg,
+ 			return -1;
+ 
+ 		ice_candidate_pair_t *pair = entry->pair;
+-		if (msg->ice_controlling == msg->ice_controlled) {
++		if (msg->has_ice_controlling == msg->has_ice_controlled) {
+ 			JLOG_WARN("Controlling and controlled attributes mismatch in request");
+ 			agent_send_stun_binding(agent, entry, STUN_CLASS_RESP_ERROR, 400, msg->transaction_id,
+ 			                        NULL);
+@@ -1451,7 +1451,7 @@ int agent_process_stun_binding(juice_agent_t *agent, const stun_message_t *msg,
+ 		//  ERROR-CODE attribute with a value of 487 (Role Conflict) but retains its role.
+ 		//  * If the agent's tiebreaker value is less than the contents of the ICE-CONTROLLING
+ 		//  attribute, the agent switches to the controlled role.
+-		if (agent->mode == AGENT_MODE_CONTROLLING && msg->ice_controlling) {
++		if (agent->mode == AGENT_MODE_CONTROLLING && msg->has_ice_controlling) {
+ 			JLOG_WARN("ICE role conflict (both controlling)");
+ 			if (agent->ice_tiebreaker >= msg->ice_controlling) {
+ 				JLOG_DEBUG("Asking remote peer to switch roles");
+@@ -1471,9 +1471,9 @@ int agent_process_stun_binding(juice_agent_t *agent, const stun_message_t *msg,
+ 		//  * If the agent's tiebreaker value is less than the contents of the ICE-CONTROLLED
+ 		//  attribute, the agent generates a Binding error response and includes an ERROR-CODE
+ 		//  attribute with a value of 487 (Role Conflict) but retains its role.
+-		if (agent->mode == AGENT_MODE_CONTROLLED && msg->ice_controlled) {
++		if (agent->mode == AGENT_MODE_CONTROLLED && msg->has_ice_controlled) {
+ 			JLOG_WARN("ICE role conflict (both controlled)");
+-			if (agent->ice_tiebreaker >= msg->ice_controlling) {
++			if (agent->ice_tiebreaker >= msg->ice_controlled) {
+ 				JLOG_DEBUG("Switching to controlling role");
+ 				agent->mode = AGENT_MODE_CONTROLLING;
+ 				agent_update_candidate_pairs(agent);
+@@ -1485,7 +1485,7 @@ int agent_process_stun_binding(juice_agent_t *agent, const stun_message_t *msg,
+ 			break;
+ 		}
+ 		if (msg->use_candidate) {
+-			if (!msg->ice_controlling) {
++			if (!msg->has_ice_controlling) {
+ 				JLOG_WARN("STUN message use_candidate missing ice_controlling attribute");
+ 				agent_send_stun_binding(agent, entry, STUN_CLASS_RESP_ERROR, 400,
+ 				                        msg->transaction_id, NULL);
+@@ -1713,8 +1713,13 @@ int agent_send_stun_binding(juice_agent_t *agent, agent_stun_entry_t *entry, stu
+ 			snprintf(msg.credentials.username, STUN_MAX_USERNAME_LEN, "%s:%s",
+ 			         agent->remote.ice_ufrag, agent->local.ice_ufrag);
+ 			password = agent->remote.ice_pwd;
+-			msg.ice_controlling = agent->mode == AGENT_MODE_CONTROLLING ? agent->ice_tiebreaker : 0;
+-			msg.ice_controlled = agent->mode == AGENT_MODE_CONTROLLED ? agent->ice_tiebreaker : 0;
++			if (agent->mode == AGENT_MODE_CONTROLLING) {
++			    msg.has_ice_controlling = true;
++			    msg.ice_controlling = agent->ice_tiebreaker;
++			} else if (agent->mode == AGENT_MODE_CONTROLLED) {
++			    msg.has_ice_controlled = true;
++			    msg.ice_controlled = agent->ice_tiebreaker;
++			}
+ 
+ 			// RFC 8445 7.1.1. PRIORITY
+ 			// The PRIORITY attribute MUST be included in a Binding request and be set to the value
+diff --git a/src/stun.c b/src/stun.c
+index e6d46d08..9c61b501 100644
+--- a/src/stun.c
++++ b/src/stun.c
+@@ -157,14 +157,14 @@ int stun_write(void *buf, size_t size, const stun_message_t *msg, const char *pa
+ 			goto overflow;
+ 		pos += len;
+ 	}
+-	if (msg->ice_controlling) {
++	if (msg->has_ice_controlling) {
+ 		uint64_t ice_controlling = htonll(msg->ice_controlling);
+ 		len = stun_write_attr(pos, end - pos, STUN_ATTR_ICE_CONTROLLING, &ice_controlling, 8);
+ 		if (len <= 0)
+ 			goto overflow;
+ 		pos += len;
+ 	}
+-	if (msg->ice_controlled) {
++	if (msg->has_ice_controlled) {
+ 		uint64_t ice_controlled = htonll(msg->ice_controlled);
+ 		len = stun_write_attr(pos, end - pos, STUN_ATTR_ICE_CONTROLLED, &ice_controlled, 8);
+ 		if (len <= 0)
+@@ -916,6 +916,7 @@ int stun_read_attr(const void *data, size_t size, stun_message_t *msg, uint8_t *
+ 		}
+ 		uint32_t *value32 = (uint32_t *)attr->value;
+ 		msg->ice_controlling = ((uint64_t)ntohl(value32[0]) << 32) | ntohl(value32[1]);
++		msg->has_ice_controlling = true;
+ 		break;
+ 	}
+ 	case STUN_ATTR_ICE_CONTROLLED: {
+@@ -926,6 +927,7 @@ int stun_read_attr(const void *data, size_t size, stun_message_t *msg, uint8_t *
+ 		}
+ 		uint32_t *value32 = (uint32_t *)attr->value;
+ 		msg->ice_controlled = ((uint64_t)ntohl(value32[0]) << 32) | ntohl(value32[1]);
++		msg->has_ice_controlled = true;
+ 		break;
+ 	}
+ 	case STUN_ATTR_CHANNEL_NUMBER: {
+diff --git a/src/stun.h b/src/stun.h
+index 398bfb05..61f42468 100644
+--- a/src/stun.h
++++ b/src/stun.h
+@@ -319,6 +319,8 @@ typedef struct stun_message {
+ 	uint32_t priority;
+ 	uint64_t ice_controlling;
+ 	uint64_t ice_controlled;
++	bool has_ice_controlling;
++	bool has_ice_controlled;
+ 	bool use_candidate;
+ 	addr_record_t mapped;
+ 
+diff --git a/test/conflict.c b/test/conflict.c
+index 7b341804..ab1e617b 100644
+--- a/test/conflict.c
++++ b/test/conflict.c
+@@ -8,6 +8,8 @@
+ 
+ #include "juice/juice.h"
+ 
++#include "agent.h"
++
+ #include <stdbool.h>
+ #include <stdint.h>
+ #include <stdio.h>
+@@ -37,7 +39,8 @@ static void on_gathering_done2(juice_agent_t *agent, void *user_ptr);
+ static void on_recv1(juice_agent_t *agent, const char *data, size_t size, void *user_ptr);
+ static void on_recv2(juice_agent_t *agent, const char *data, size_t size, void *user_ptr);
+ 
+-int test_conflict() {
++static int test_conflict_with_roles(agent_mode_t mode1, agent_mode_t mode2,
++                                   uint64_t tiebreaker1, uint64_t tiebreaker2) {
+ 	juice_set_log_level(JUICE_LOG_LEVEL_DEBUG);
+ 
+ 	// Agent 1: Create agent
+@@ -81,6 +84,15 @@ int test_conflict() {
+ 	// Agent 2: Receive description from agent 1
+ 	juice_set_remote_description(agent2, sdp1);
+ 
++	if (mode1 != AGENT_MODE_UNKNOWN) {
++		agent1->mode = mode1;
++		agent1->ice_tiebreaker = tiebreaker1;
++	}
++	if (mode2 != AGENT_MODE_UNKNOWN) {
++		agent2->mode = mode2;
++		agent2->ice_tiebreaker = tiebreaker2;
++	}
++
+ 	// Agent 1: Gather candidates (and send them to agent 2)
+ 	juice_gather_candidates(agent1);
+ 	sleep(2);
+@@ -133,6 +145,20 @@ int test_conflict() {
+ 	}
+ }
+ 
++int test_conflict(void) {
++	if (test_conflict_with_roles(AGENT_MODE_UNKNOWN, AGENT_MODE_UNKNOWN, 0, 0))
++		return -1;
++
++	const agent_mode_t modes[] = {AGENT_MODE_CONTROLLING, AGENT_MODE_CONTROLLED};
++	for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); ++i) {
++		if (test_conflict_with_roles(modes[i], modes[i], 0, 1) ||
++		    test_conflict_with_roles(modes[i], modes[i], 1, 0) ||
++		    test_conflict_with_roles(modes[i], modes[1 - i], 0, 1))
++			return -1;
++	}
++	return 0;
++}
++
+ // Agent 1: on state changed
+ static void on_state_changed1(juice_agent_t *agent, juice_state_t state, void *user_ptr) {
+ 	printf("State 1: %s\n", juice_state_to_string(state));
+diff --git a/test/stun.c b/test/stun.c
+index 361da0bc..73d0a9da 100644
+--- a/test/stun.c
++++ b/test/stun.c
+@@ -58,7 +58,8 @@ int test_stun(void) {
+ 	if (msg.priority != 0x6e0001ff)
+ 		return -1;
+ 
+-	if (msg.ice_controlled != 0x932ff9b151263b36LL)
++	if (!msg.has_ice_controlled || msg.has_ice_controlling ||
++	    msg.ice_controlled != 0x932ff9b151263b36LL)
+ 		return -1;
+ 
+ 	if (!msg.has_integrity)
+@@ -151,5 +152,52 @@ int test_stun(void) {
+ 	if(msg.error_code != STUN_ERROR_INTERNAL_VALIDATION_FAILED)
+ 		return -1;
+ 
++	uint8_t role_message[] = {
++	    0x00, 0x01, 0x00, 0x0c,
++	    0x21, 0x12, 0xa4, 0x42,
++	    0x00, 0x00, 0x00, 0x00,
++	    0x00, 0x00, 0x00, 0x00,
++	    0x00, 0x00, 0x00, 0x00,
++	    0x80, 0x29, 0x00, 0x08,
++	    0x00, 0x00, 0x00, 0x00,
++	    0x00, 0x00, 0x00, 0x00,
++	};
++	for (int controlling = 0; controlling < 2; ++controlling) {
++		role_message[21] = controlling ? 0x2a : 0x29;
++		memset(&msg, 0, sizeof(msg));
++		if (_juice_stun_read(role_message, sizeof(role_message), &msg) <= 0 ||
++		    msg.has_ice_controlling != (bool)controlling ||
++		    msg.has_ice_controlled != !controlling || msg.ice_controlling || msg.ice_controlled)
++			return -1;
++	}
++
++	const uint64_t tiebreakers[] = {0, 1, UINT64_MAX};
++	for (unsigned int roles = 0; roles < 4; ++roles) {
++		for (size_t i = 0; i < sizeof(tiebreakers) / sizeof(tiebreakers[0]); ++i) {
++			memset(&msg, 0, sizeof(msg));
++			msg.msg_class = STUN_CLASS_REQUEST;
++			msg.msg_method = STUN_METHOD_BINDING;
++			msg.has_ice_controlling = (roles & 1) != 0;
++			msg.has_ice_controlled = (roles & 2) != 0;
++			msg.ice_controlling = tiebreakers[i];
++			msg.ice_controlled = tiebreakers[i];
++
++			uint8_t buffer[256];
++			int len = _juice_stun_write(buffer, sizeof(buffer), &msg, "password");
++			if (len <= 0)
++				return -1;
++
++			stun_message_t parsed;
++			memset(&parsed, 0, sizeof(parsed));
++			if (_juice_stun_read(buffer, len, &parsed) <= 0 ||
++			    parsed.has_ice_controlling != msg.has_ice_controlling ||
++			    parsed.has_ice_controlled != msg.has_ice_controlled ||
++			    parsed.ice_controlling != (msg.has_ice_controlling ? tiebreakers[i] : 0) ||
++			    parsed.ice_controlled != (msg.has_ice_controlled ? tiebreakers[i] : 0) ||
++			    !_juice_stun_check_integrity(buffer, len, &parsed, "password"))
++				return -1;
++		}
++	}
++
+ 	return 0;
+ }
+diff --git a/test/tcp.c b/test/tcp.c
+index adafc773..d93e0707 100644
+--- a/test/tcp.c
++++ b/test/tcp.c
+@@ -94,7 +94,7 @@ void run_passive_ice_tcp(socket_t server_socket) {
+ 		msg.msg_class = STUN_CLASS_RESP_SUCCESS;
+ 		msg.msg_method = STUN_METHOD_BINDING;
+ 		msg.priority = 0;
+-		msg.ice_controlling = 0;
++		msg.has_ice_controlling = false;
+ 
+ 		char buffer[STUN_WRITE_BUFFER_SIZE];
+ 		if ((len = _juice_stun_write(buffer, STUN_WRITE_BUFFER_SIZE, &msg, ICE_PWD)) < 0)

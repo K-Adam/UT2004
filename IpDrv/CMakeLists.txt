@@ -29,9 +29,12 @@ if(NOT EMSCRIPTEN)
     set(NO_WEBSOCKET ON)
     set(NO_EXAMPLES ON)
     set(NO_TESTS ON)
-    # The same patch as the vcpkg port. A changed patch gets a fresh source dir, since patching an already patched tree fails.
+    # The same patches as the vcpkg ports, libjuice is a submodule here. A changed patch gets a fresh source dir, since patching an already patched tree fails.
     set(DATACHANNEL_PATCH ${CMAKE_SOURCE_DIR}/ports/libdatachannel/stopped-flag.patch)
+    set(JUICE_PATCH ${CMAKE_SOURCE_DIR}/ports/libjuice/zero-tiebreaker.patch)
     file(SHA256 ${DATACHANNEL_PATCH} DATACHANNEL_HASH)
+    file(SHA256 ${JUICE_PATCH} JUICE_HASH)
+    string(SHA256 DATACHANNEL_HASH "${DATACHANNEL_HASH}${JUICE_HASH}")
     string(SUBSTRING ${DATACHANNEL_HASH} 0 12 DATACHANNEL_HASH)
     FetchContent_Declare(libdatachannel
       SOURCE_DIR ${CMAKE_BINARY_DIR}/_deps/libdatachannel-src-${DATACHANNEL_HASH}
@@ -40,7 +43,8 @@ if(NOT EMSCRIPTEN)
       GIT_TAG 6b1e2e620f1e37f0eafeee702eaea0043cb305fd
       # A git source updates on every configure, which would patch the tree again and fail
       UPDATE_DISCONNECTED ON
-      PATCH_COMMAND patch -p1 -i ${DATACHANNEL_PATCH})
+      PATCH_COMMAND patch -p1 -i ${DATACHANNEL_PATCH}
+      COMMAND patch -p1 -d deps/libjuice -i ${JUICE_PATCH})
     FetchContent_MakeAvailable(libdatachannel)
     set(IPDRV_DATACHANNEL datachannel)
   endif()
