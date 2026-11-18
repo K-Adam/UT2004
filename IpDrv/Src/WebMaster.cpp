@@ -177,6 +177,15 @@ FString WebMasterURL()
 	return Url;
 }
 
+// The ini is written once from Default.ini, so one from before the key has none and keeps the default. An emptied key means no server.
+FString WebMasterStun()
+{
+	FString Stun;
+	if( !GConfig->GetString( TEXT("IpDrv.MasterServerLink"), TEXT("StunServer"), Stun ) )
+		Stun = TEXT("stun.cloudflare.com:3478");
+	return Stun;
+}
+
 void WebMasterAdvertise( const FServerResponseLine& Server )
 {
 	FString Base = WebMasterURL();
@@ -265,6 +274,20 @@ FWebMasterRequest* WebMasterList()
 	return WebMasterRequest( TEXT("/"), std::string() );
 }
 
+// The server browser builds the join URL from these, so nothing that could start another URL part may pass.
+static UBOOL IsDottedQuad( const TCHAR* S )
+{
+	for( INT Part=0; Part<4; Part++ )
+	{
+		INT Value = 0, Digits = 0;
+		for( ; *S>='0' && *S<='9' && Digits<3; S++, Digits++ )
+			Value = Value*10 + (*S-'0');
+		if( !Digits || Value>255 || (Digits>1 && S[-Digits]=='0') || *S++ != (Part<3 ? '.' : 0) )
+			return 0;
+	}
+	return 1;
+}
+
 #if !__EMSCRIPTEN__
 FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp )
 {
@@ -283,44 +306,62 @@ UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp )
 	return 1;
 }
 
-// The first UDP relay of the list, the only kind the game's ICE library can use
-static void ParseTurn( const std::string& Body, std::string& Host, INT& Port, std::string& Username, std::string& Password )
+// Standard strings, these outlive the engine's allocator
+#pragma pack(push, 8)
+struct FIceAnswer
+{
+	std::string Host, Username, Password, Ip, StunHost;
+	INT Port = 0, StunPort = 0;
+};
+#pragma pack(pop)
+
+// The first STUN server and the first UDP relay of the list, the only kind of relay the game's ICE library can use
+static void ParseIce( const std::string& Body, FIceAnswer& Out )
 {
 	nlohmann::json Root = nlohmann::json::parse( Body, nullptr, false );
 	if( !Root.is_object() || !Root.contains("iceServers") || !Root["iceServers"].is_array() )
 		return;
+	// The server connects to this address, so a name the resolver would look up must not pass
+	if( Root.contains("ip") && Root["ip"].is_string() && IsDottedQuad( *FString( Root["ip"].get<std::string>().c_str() ) ) )
+		Out.Ip = Root["ip"].get<std::string>();
 	for( const auto& Server : Root["iceServers"] )
 	{
-		if( !Server.is_object() || !Server.contains("urls") || !Server["urls"].is_array()
-		||	!Server.contains("username") || !Server["username"].is_string()
-		||	!Server.contains("credential") || !Server["credential"].is_string() )
+		if( !Server.is_object() || !Server.contains("urls") || !Server["urls"].is_array() )
 			continue;
+		bool Credential = Server.contains("username") && Server["username"].is_string()
+			&& Server.contains("credential") && Server["credential"].is_string();
 		for( const auto& Item : Server["urls"] )
 		{
 			if( !Item.is_string() )
 				continue;
 			std::string Url = Item.get<std::string>();
+			bool Stun = Url.compare( 0, 5, "stun:" ) == 0;
 			size_t Colon = Url.find( ':', 5 );
-			if( Url.compare( 0, 5, "turn:" ) != 0 || Colon == std::string::npos || Url.find("transport=tcp") != std::string::npos )
+			if( (!Stun && Url.compare( 0, 5, "turn:" ) != 0) || Colon == std::string::npos || Colon == 5 )
 				continue;
 			INT UrlPort = atoi( Url.c_str() + Colon + 1 );
-			if( Colon == 5 || UrlPort < 1 || UrlPort > 65535 )
+			if( UrlPort < 1 || UrlPort > 65535 )
 				continue;
-			Host = Url.substr( 5, Colon - 5 );
-			Port = UrlPort;
-			Username = Server["username"].get<std::string>();
-			Password = Server["credential"].get<std::string>();
-			return;
+			if( Stun && Out.StunHost.empty() )
+			{
+				Out.StunHost = Url.substr( 5, Colon - 5 );
+				Out.StunPort = UrlPort;
+			}
+			else if( !Stun && Credential && Out.Host.empty() && Url.find("transport=tcp") == std::string::npos )
+			{
+				Out.Host = Url.substr( 5, Colon - 5 );
+				Out.Port = UrlPort;
+				Out.Username = Server["username"].get<std::string>();
+				Out.Password = Server["credential"].get<std::string>();
+			}
 		}
 	}
 }
 
 UBOOL WebMasterTurn( FWebMasterTurn& Out )
 {
-	// Standard strings, these outlive the engine's allocator
 	static FWebMasterRequest* Request;
-	static std::string Host, Username, Password;
-	static INT Port;
+	static FIceAnswer Ice;
 	static DOUBLE NextTime;
 	if( Request )
 	{
@@ -330,37 +371,34 @@ UBOOL WebMasterTurn( FWebMasterTurn& Out )
 			return 0;
 		WebMasterRequestFree( Request );
 		Request = nullptr;
-		Host.clear();
+		Ice = FIceAnswer();
 		if( Ok )
-			ParseTurn( Body, Host, Port, Username, Password );
-		NextTime = appSeconds() + (Host.empty() ? TURN_RETRY_TIME : TURN_REFRESH_TIME);
+			ParseIce( Body, Ice );
+		NextTime = appSeconds() + (Ice.Host.empty() ? TURN_RETRY_TIME : TURN_REFRESH_TIME);
+		if( Ice.StunHost.empty() )
+		{
+			// Without a port the ICE library takes the standard one
+			FString Stun = WebMasterStun(), Host = Stun, Port;
+			Stun.Split( TEXT(":"), &Host, &Port );
+			Ice.StunHost = TCHAR_TO_ANSI( *Host );
+			Ice.StunPort = Clamp( appAtoi( *Port ), 0, 65535 );
+		}
 	}
 	else if( appSeconds() >= NextTime )
 	{
 		Request = WebMasterRequest( TEXT("/ice"), std::string() );
 		return 0;
 	}
-	Out.Host = Host.c_str();
-	Out.Username = Username.c_str();
-	Out.Password = Password.c_str();
-	Out.Port = Port;
+	Out.Host = Ice.Host.c_str();
+	Out.Username = Ice.Username.c_str();
+	Out.Password = Ice.Password.c_str();
+	Out.Ip = Ice.Ip.c_str();
+	Out.StunHost = Ice.StunHost.c_str();
+	Out.Port = Ice.Port;
+	Out.StunPort = Ice.StunPort;
 	return 1;
 }
 #endif
-
-// The server browser builds the join URL from these, so nothing that could start another URL part may pass.
-static UBOOL IsDottedQuad( const TCHAR* S )
-{
-	for( INT Part=0; Part<4; Part++ )
-	{
-		INT Value = 0, Digits = 0;
-		for( ; *S>='0' && *S<='9' && Digits<3; S++, Digits++ )
-			Value = Value*10 + (*S-'0');
-		if( !Digits || Value>255 || (Digits>1 && S[-Digits]=='0') || *S++ != (Part<3 ? '.' : 0) )
-			return 0;
-	}
-	return 1;
-}
 
 UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News )
 {

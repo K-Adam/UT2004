@@ -360,6 +360,8 @@ inline UBOOL WebRtcOnly()
 }
 
 FString WebMasterURL();
+// The STUN server to gather with when the web master names none, "<host>[:<port>]" or empty
+FString WebMasterStun();
 void WebMasterAdvertise( const FServerResponseLine& Server );
 // The Done functions return false while the request is running
 struct FWebMasterRequest* WebMasterList();
@@ -368,12 +370,12 @@ UBOOL WebMasterListDone( struct FWebMasterRequest* Request, UBOOL& Ok, TArray<FS
 struct FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp );
 UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp );
 void WebMasterRequestFree( struct FWebMasterRequest* Request );
-// The relay for joining a browser host that can't be reached directly, an empty Host when the web master gives none.
-// The strings are valid until the next call.
+// The web master's ICE answer: its UDP relay (Host), the caller's public address (Ip) and a STUN server, the ini's
+// StunServer when it names none. Empty when not given. The strings are valid until the next call.
 struct FWebMasterTurn
 {
-	const ANSICHAR *Host, *Username, *Password;
-	INT Port;
+	const ANSICHAR *Host, *Username, *Password, *Ip, *StunHost;
+	INT Port, StunPort;
 };
 // Returns false while the web master is being asked
 UBOOL WebMasterTurn( FWebMasterTurn& Out );

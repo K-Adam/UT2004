@@ -14,8 +14,11 @@
 
 extern "C"
 {
-	int ut_webrtc_connect( const char* Answer, const char* Ufrag, int MaxInbox );
+	// Both joins take their STUN and relay servers from the web master at Url.
+	int ut_webrtc_connect( const char* Url, const char* Answer, const char* Ufrag, int MaxInbox );
 	int ut_webrtc_connect_signal( const char* Url, const char* HostId, int MaxInbox );
+	// "<host>:<port>" to gather with when the web master names no STUN server, empty for none.
+	void ut_webrtc_fallback_stun( const char* Server );
 	void ut_webrtc_host( const char* Url, int MaxInbox );
 	void ut_webrtc_host_stop();
 	int ut_webrtc_host_id( char* Id, int Max );
@@ -73,13 +76,14 @@ static DWORD WebRtcPeerIp( const char* Text )
 // The script's peer for the WebRTC details in the URL, 0 with Error set when they are unusable
 static INT ConnectPeer( FURL& ConnectURL, FString& Error, sockaddr_in& Addr )
 {
+	ut_webrtc_fallback_stun( TCHAR_TO_ANSI(*WebMasterStun()) );
 	FString SignalId;
 	if( WebRtcSignalSetup( ConnectURL, SignalId, Addr ) )
 		return ut_webrtc_connect_signal( TCHAR_TO_ANSI(*WebMasterURL()), TCHAR_TO_ANSI(*SignalId), WEBRTC_MAX_INBOX );
 	std::string Ufrag, Answer;
 	if( !WebRtcClientSetup( ConnectURL, Error, Addr, Ufrag, Answer ) )
 		return 0;
-	return ut_webrtc_connect( Answer.c_str(), Ufrag.c_str(), WEBRTC_MAX_INBOX );
+	return ut_webrtc_connect( TCHAR_TO_ANSI(*WebMasterURL()), Answer.c_str(), Ufrag.c_str(), WEBRTC_MAX_INBOX );
 }
 
 void UTcpNetDriver::WebRtcListen()
@@ -94,6 +98,7 @@ void UTcpNetDriver::WebRtcListen()
 	checkSlow(WebRtcPeerIp("2001:db8:1:2::1")==WebRtcPeerIp("2001:db8:1:2:ffff::9"));
 	checkSlow(WebRtcPeerIp("2001:db8:1:2::1")!=WebRtcPeerIp("2001:db8:1:3::1"));
 	checkSlow((ntohl(WebRtcPeerIp("2001:db8:1:2::1"))>>28)==15 && WebRtcPeerIp("")==htonl(0xF0000000) && WebRtcPeerIp("1.2.3.4")==inet_addr("1.2.3.4"));
+	ut_webrtc_fallback_stun( TCHAR_TO_ANSI(*WebMasterStun()) );
 	ut_webrtc_host( TCHAR_TO_ANSI(*Url), WEBRTC_MAX_INBOX );
 	WebRtc = new FWebRtcHost;
 	unguard;

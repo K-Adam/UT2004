@@ -79,9 +79,7 @@ The game only connects when you use an online feature. These are the defaults in
 | What | Where | When |
 |---|---|---|
 | Community master servers | `utmaster.openspy.net`, `ut2004master.333networks.com` (port 28902) | The server browser is open, or you host an advertised server |
-| Web master | `master.ut2004.dev` | The same, for servers and clients that use WebRTC |
-| STUN | `stun.cloudflare.com` | Joining or hosting a browser hosted game |
-| TURN relay | `turn.cloudflare.com`, with a credential from the web master | Joining a browser hosted game. The game data goes through it only when the host can't be reached directly |
+| Web master | `master.ut2004.dev`, and the STUN and relay servers it names. When the web master names none, the STUN server is `StunServer` in the ini | The same, for servers and clients that use WebRTC. Game data goes through the relay only when a browser host can't be reached directly. An advertised server tests its WebRTC port through the relay at start |
 | Content host | `assets.ut2004.dev` | First launch on Android and on the web |
 | Internet Archive | `archive.org` | First start, if you pick the download of the full game |
 | Game servers | The server you pick | Joining a game |

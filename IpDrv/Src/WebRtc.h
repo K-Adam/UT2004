@@ -23,8 +23,14 @@
 // A server browser's peer asks a few times within seconds of connecting and is done
 #define WEBRTC_MAX_QUERIES 8
 #define WEBRTC_QUERY_TIMEOUT 8.0
-#define WEBRTC_STUN_HOST "stun.cloudflare.com"
-#define WEBRTC_STUN_PORT 3478
+// How long the relay gets to reach the server's own port. ICE resends its request five times in that time
+#define WEBRTC_PROBE_TIME 10.0
+// Windows asks about the firewall at the first start, so the test is repeated for about as long as answering that takes
+#if _WIN32
+#define WEBRTC_PROBE_TRIES 6
+#else
+#define WEBRTC_PROBE_TRIES 1
+#endif
 // Sending what was gathered so far beats waiting out slow interfaces, the host has to answer within 8 seconds
 #define WEBRTC_GATHER_TIME 3.0
 
