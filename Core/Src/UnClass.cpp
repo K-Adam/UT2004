@@ -1230,15 +1230,23 @@ CORE_API FArchive& operator<<( FArchive& Ar, FLabelEntry &Label )
 
 #if SERIAL_POINTER_INDEX
 void *GSerializedPointers[MAX_SERIALIZED_POINTERS];
-INT GTotalSerializedPointers = 0;
+CORE_API INT GTotalSerializedPointers = 0;
 
 // Linear search, so this gets slow with many pointers.
 INT SerialPointerIndex(void *ptr)
 {
+    INT Free = INDEX_NONE;
     for (INT i = 0; i < GTotalSerializedPointers; i++)
     {
         if (GSerializedPointers[i] == ptr)
             return(i);
+        if (Free == INDEX_NONE && GSerializedPointers[i] == FREE_SERIALIZED_POINTER)
+            Free = i;
+    }
+    if (Free != INDEX_NONE)
+    {
+        GSerializedPointers[Free] = ptr;
+        return(Free);
     }
 
     check(GTotalSerializedPointers < MAX_SERIALIZED_POINTERS);

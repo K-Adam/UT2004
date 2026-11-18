@@ -6,7 +6,7 @@ export DEBIAN_FRONTEND=noninteractive
 $SUDO apt-get update
 $SUDO apt-get install -y --no-install-recommends ca-certificates git cmake patch \
   build-essential ninja-build pkg-config zlib1g-dev libvorbis-dev libopenal-dev libbullet-dev \
-  libbullet-extras-dev libgles-dev libsquish-dev libssl-dev libcurl4-openssl-dev nlohmann-json3-dev libspeexdsp-dev \
+  libbullet-extras-dev libgles-dev libsquish-dev libssl-dev libcurl4-openssl-dev nlohmann-json3-dev libspeexdsp-dev libgtest-dev \
   libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \
   libwayland-dev libxkbcommon-dev wayland-protocols libdecor-0-dev libegl-dev libdrm-dev libgbm-dev \
   libpulse-dev libasound2-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev "$@"

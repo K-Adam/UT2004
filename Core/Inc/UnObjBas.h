@@ -15,9 +15,11 @@
 
 #if SERIAL_POINTER_INDEX
 #define MAX_SERIALIZED_POINTERS (1024 * 128)
+// Marks a slot whose object was purged. The table's own address is a value no stored pointer can have.
+#define FREE_SERIALIZED_POINTER ((void*)GSerializedPointers)
 extern "C" {
     extern void *GSerializedPointers[MAX_SERIALIZED_POINTERS];
-    extern INT GTotalSerializedPointers;
+    CORE_API extern INT GTotalSerializedPointers;
     CORE_API INT SerialPointerIndex(void *ptr);
 }
 #endif

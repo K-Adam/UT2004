@@ -5101,6 +5101,11 @@ void UObject::PurgeGarbage()
 	// Purge all unreachable objects.
 	//warning: Can't use FObjectIterator here because classes may be destroyed before objects.
 	FName DeleteName=NAME_None;
+#if SERIAL_POINTER_INDEX
+	// Keyed by address, the hash of an object pointer would read the deleted object. Allocations are 16 byte aligned.
+	#define PURGED_KEY(Ptr) ((QWORD)(size_t)(Ptr)>>4)
+	TMap<QWORD,INT> Purged;
+#endif
 	guard(DeleteGarbage);
 	for( INT i=0; i<GObjObjects.Num(); i++ )
 	{
@@ -5111,11 +5116,24 @@ void UObject::PurgeGarbage()
 		&& !(GObjObjects(i)->GetFlags() & RF_Native) )
 		{
 			DeleteName = GObjObjects(i)->GetFName();
+#if SERIAL_POINTER_INDEX
+			Purged.Set( PURGED_KEY(GObjObjects(i)), 0 );
+#endif
 			delete GObjObjects(i);
 		}
 		unguardf(( TEXT("(%i)"), i ));
 	}
 	unguardf(( TEXT("(%s)"), *DeleteName ));
+
+#if SERIAL_POINTER_INDEX
+	// Bytecode names objects by their slot in GSerializedPointers. The bytecode that survives a purge only refers to
+	// reachable objects, so the slots of the purged ones are free. Without this the table fills up over the map
+	// changes of a long running server.
+	for( INT i=0; i<GTotalSerializedPointers; i++ )
+		if( Purged.Find( PURGED_KEY(GSerializedPointers[i]) ) )
+			GSerializedPointers[i] = FREE_SERIALIZED_POINTER;
+	#undef PURGED_KEY
+#endif
 
 	GIsGarbageCollecting = 0; // Unset flag
 

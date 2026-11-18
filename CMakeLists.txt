@@ -325,11 +325,29 @@ if(TARGET UCC)
   set_tests_properties(content PROPERTIES ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${UT_SYSTEM_DIR}")
   add_test(NAME foliage_pack
     COMMAND ${CMAKE_COMMAND} -DDIR=${CMAKE_SOURCE_DIR}/Foliage -P ${CMAKE_SOURCE_DIR}/Tools/FoliagePack.cmake)
+  find_package(GTest CONFIG QUIET)
+  if(GTest_FOUND)
+    add_subdirectory(Tests)
+  endif()
 endif()
 if(UT_ASSETS_DIR AND TARGET UCC)
-  add_test(NAME server_smoke
-    COMMAND ${CMAKE_COMMAND} -DUCC=$<TARGET_FILE:UCC> -DINI_DIR=${CMAKE_SOURCE_DIR}/DevIni -P ${CMAKE_SOURCE_DIR}/Tools/ServerSmoke.cmake
+  add_test(NAME test_ini
+    COMMAND ${CMAKE_COMMAND} -DINI_DIR=${CMAKE_SOURCE_DIR}/DevIni -P ${CMAKE_SOURCE_DIR}/Tools/TestIni.cmake
     WORKING_DIRECTORY ${UT_SYSTEM_DIR})
+  set_tests_properties(test_ini PROPERTIES FIXTURES_SETUP ini)
+  add_test(NAME server_smoke
+    COMMAND ${CMAKE_COMMAND} -DUCC=$<TARGET_FILE:UCC> -P ${CMAKE_SOURCE_DIR}/Tools/ServerSmoke.cmake
+    WORKING_DIRECTORY ${UT_SYSTEM_DIR})
+  set(UT_SERVER_TESTS server_smoke)
+  if(TARGET ut_tests)
+    add_test(NAME engine
+      COMMAND ut_tests DM-Rankin?game=XGame.xDeathMatch?MinPlayers=4?QuickStart=true -INI=Smoke.ini -USERINI=SmokeUser.ini -nohomedir -multihome=127.0.0.1
+      WORKING_DIRECTORY ${UT_SYSTEM_DIR})
+    list(APPEND UT_SERVER_TESTS engine)
+  endif()
+  # They share the inis and the server port. Both listen on loopback only, which keeps the Windows firewall
+  # from asking about network access.
+  set_tests_properties(${UT_SERVER_TESTS} PROPERTIES FIXTURES_REQUIRED ini RESOURCE_LOCK server)
 endif()
 
 # cpack -G ZIP -C Release gives the game folder a player unpacks and runs. It has no shared Scripts
@@ -341,7 +359,8 @@ if(TARGET UCC)
   include(InstallRequiredSystemLibraries)
   install(DIRECTORY System Help KarmaData Web Foliage DESTINATION .)
   install(DIRECTORY ${UT_SYSTEM_DIR}/ DESTINATION System USE_SOURCE_PERMISSIONS
-    FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll" PATTERN "*.so" PATTERN "*.so.*" PATTERN "*-bin")
+    FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll" PATTERN "*.so" PATTERN "*.so.*" PATTERN "*-bin"
+    PATTERN "ut_tests*" EXCLUDE)
   install(DIRECTORY Scripts/ DESTINATION System)
   install(CODE [[
     set(ini "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/System/Default.ini")
