@@ -485,6 +485,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			DepthOfFieldProgram,
 			VolumetricProgram,
 			ResolveProgram,
+			OcclusionResolveProgram,
 			OverlayProgram,
 			IndirectProgram,
 			ShadowAtlas,		// Distance maps of static lights, as fractions of their radius.
@@ -498,6 +499,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	FOpenGLFramebuffer	Scene,
 						World,
 						Occlusion,				// Ambient occlusion and contact shadow at half the world size.
+						OcclusionHistory[2],	// Occlusion averaged over frames, alternating.
 						Focus,					// The lit world with its signed circle of confusion in alpha.
 						Scattering,				// Light scattered by the fog at half the world size.
 						ScatterHistory[2],		// Scattering averaged over frames, alternating.
@@ -527,6 +529,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	FPlane				PrevProj;
 	UBOOL				PrevViewValid,
 						FrameViewValid,
+						OcclusionHistoryValid,
 						ScatterHistoryValid,
 						IndirectHistoryValid;
 
@@ -601,7 +604,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog,const FPlane* Blasts);
 	void FlushShadows();
 	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,INT Extra = 0);
-	GLuint Accumulate(FOpenGLFramebuffer& Input,FOpenGLFramebuffer History[2],UBOOL& Valid,GLenum Format,const FPlane& Proj,const FMatrix& Reproject);
+	GLuint Accumulate(GLuint Program,FOpenGLFramebuffer& Input,FOpenGLFramebuffer History[2],UBOOL& Valid,GLenum Format,const FPlane& Proj,const FMatrix& Reproject);
 
 private:
 	UBOOL InitContext();

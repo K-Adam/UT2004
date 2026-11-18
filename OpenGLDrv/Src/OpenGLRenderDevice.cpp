@@ -14,7 +14,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	LockedViewport	= NULL;
 	ContextReady	= 0;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = InstancedVertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = OcclusionResolveProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
 	ShadowLight = NULL;
@@ -470,6 +470,8 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	DestroyFramebuffer(Scene);
 	DestroyFramebuffer(World);
 	DestroyFramebuffer(Occlusion);
+	DestroyFramebuffer(OcclusionHistory[0]);
+	DestroyFramebuffer(OcclusionHistory[1]);
 	DestroyFramebuffer(Focus);
 	DestroyFramebuffer(Scattering);
 	DestroyFramebuffer(ScatterHistory[0]);
@@ -484,7 +486,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	if( SceneBuffer )			glDeleteBuffers(1,&SceneBuffer);
 	if( VertexArray )			glDeleteVertexArrays(1,&VertexArray);
 	if( EmptyVertexArray )		glDeleteVertexArrays(1,&EmptyVertexArray);
-	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram };
+	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, OcclusionResolveProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram };
 	for( INT i=0; i<ARRAY_COUNT(PostPrograms); i++ )
 		glDeleteProgram(PostPrograms[i]);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
@@ -495,7 +497,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	FlushShadows();
 	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = InstancedVertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = OcclusionResolveProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
 }
 
 void UOpenGLRenderDevice::Exit(UViewport* Viewport)

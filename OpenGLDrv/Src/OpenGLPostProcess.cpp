@@ -97,6 +97,7 @@ static const ANSICHAR* OcclusionFragmentShader =
 	POST_COMMON
 	"uniform vec4 Light;\n"
 	"uniform vec2 Strength;\n"
+	"uniform float FrameIndex;\n"
 	"void main()\n"
 	"{\n"
 	"	ivec2 P = ivec2(gl_FragCoord.xy) * 2;\n"
@@ -109,7 +110,7 @@ static const ANSICHAR* OcclusionFragmentShader =
 	"	bool Weapon = D < Split;\n"
 	"	vec3 C = PosAt(P);\n"
 	"	vec3 N = NormalAt(P, C);\n"
-	"	float Noise = Jitter();\n"
+	"	float Noise = fract(Jitter() + FrameIndex * 0.618034);\n"
 	"	float Height = float(textureSize(Depth, 0).y);\n"
 	"	float AO = 1.0;\n"
 	"	if (Strength.x > 0.0)\n"
@@ -593,6 +594,44 @@ static const ANSICHAR* ResolveFragmentShader =
 	"	FragColor = vec4(mix(C, clamp(texture(History, UV0).rgb, Lo, Hi), W), 1.0);\n"
 	"}\n";
 
+// The occlusion history is kept wherever the depth stored beside it in B still matches. Limiting it to the current neighbourhood would discard a thin shadow that only
+// some of the frames hit. The weapon stays in place on the screen. A half size texel is centred half
+// a pixel past the pixel it was traced for.
+static const ANSICHAR* OcclusionResolveFragmentShader =
+	POST_COMMON
+	"uniform sampler2D Frame, History;\n"
+	"uniform mat4 Reproject;\n"
+	"uniform vec4 PrevProj;\n"
+	"uniform float HistoryWeight;\n"
+	"float Encode(float Z)\n"
+	"{\n"
+	"	return clamp(log2(max(Z, 1.0)) / 16.0, 0.0, 1.0);\n"
+	"}\n"
+	"void main()\n"
+	"{\n"
+	"	ivec2 Q = ivec2(gl_FragCoord.xy), P = Q * 2;\n"
+	"	vec2 C = texelFetch(Frame, Q, 0).rg;\n"
+	"	float D = DepthAt(P);\n"
+	"	if (D >= 1.0)\n"
+	"	{\n"
+	"		FragColor = vec4(C, 1.0, 1.0);\n"
+	"		return;\n"
+	"	}\n"
+	"	vec3 Pos = PosAt(P);\n"
+	"	vec4 Prev = vec4(Pos, 1.0);\n"
+	"	vec2 UV0 = ToUV(Pos);\n"
+	"	if (D >= Split)\n"
+	"	{\n"
+	"		Prev = Reproject * Prev;\n"
+	"		UV0 = Prev.xy / (Prev.z * PrevProj.xy) * 0.5 + 0.5;\n"
+	"	}\n"
+	"	UV0 = (UV0 * vec2(textureSize(Depth, 0)) + 0.5) / (2.0 * vec2(textureSize(History, 0)));\n"
+	"	vec3 H = texture(History, UV0).rgb;\n"
+	"	bool Inside = Prev.z > 0.0 && all(greaterThan(UV0, vec2(0.0))) && all(lessThan(UV0, vec2(1.0)));\n"
+	"	float W = Inside ? HistoryWeight * (1.0 - smoothstep(0.008, 0.016, abs(H.b - Encode(Prev.z)))) : 0.0;\n"
+	"	FragColor = vec4(mix(C, H.rg, W), Encode(Pos.z), 1.0);\n"
+	"}\n";
+
 UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 {
 	CopyProgram			= CompileProgram(VertexShader,CopyFragmentShader);
@@ -603,8 +642,9 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 	ResolveProgram		= CompileProgram(VertexShader,ResolveFragmentShader);
 	OverlayProgram		= CompileProgram(VertexShader,OverlayFragmentShader);
 	IndirectProgram		= CompileProgram(VertexShader,IndirectFragmentShader);
+	OcclusionResolveProgram	= CompileProgram(VertexShader,OcclusionResolveFragmentShader);
 
-	GLuint Programs[] = { CopyProgram, OcclusionProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram };
+	GLuint Programs[] = { CopyProgram, OcclusionProgram, OcclusionResolveProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram };
 	for( INT i=0; i<ARRAY_COUNT(Programs); i++ )
 	{
 		if( !Programs[i] )
@@ -638,6 +678,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	FPlane	ViewFog = RenderInterface.ViewFog;
 	ViewFog.W = VolumetricFog ? 1.f : 0.f;
 
+	GLuint OcclusionTexture = World.Texture;
 	if( DepthPasses )
 	{
 		CreateFramebuffer(Occlusion,(World.Width + 1) / 2,(World.Height + 1) / 2,0,GL_RG8,0);
@@ -645,8 +686,12 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		glUniform4fv(glGetUniformLocation(OcclusionProgram,"Proj"),1,&Proj.X);
 		glUniform4fv(glGetUniformLocation(OcclusionProgram,"Light"),1,&Light.X);
 		glUniform2f(glGetUniformLocation(OcclusionProgram,"Strength"),AmbientOcclusion ? 1.f : 0.f,ContactShadows ? 0.6f : 0.f);
+		glUniform1f(glGetUniformLocation(OcclusionProgram,"FrameIndex"),(FLOAT)(FrameCount & 1023));
 		DrawFullscreen(OcclusionProgram,Occlusion.Framebuffer,Occlusion.Width,Occlusion.Height,0,0,World.DepthTexture);
+		OcclusionTexture = Accumulate(OcclusionResolveProgram,Occlusion,OcclusionHistory,OcclusionHistoryValid,GL_RGBA8,Proj,Reproject);
 	}
+	else
+		OcclusionHistoryValid = 0;
 
 	GLuint IndirectTexture = World.Texture;
 	if( Bounce )
@@ -659,7 +704,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		glUniform4fv(glGetUniformLocation(IndirectProgram,"Fog"),1,&ViewFog.X);
 		glUniform3fv(glGetUniformLocation(IndirectProgram,"FogColor"),1,&RenderInterface.ViewFogColor.X);
 		DrawFullscreen(IndirectProgram,Indirect.Framebuffer,Indirect.Width,Indirect.Height,World.Texture,0,World.DepthTexture);
-		IndirectTexture = Accumulate(Indirect,IndirectHistory,IndirectHistoryValid,HalfFormat,Proj,Reproject);
+		IndirectTexture = Accumulate(ResolveProgram,Indirect,IndirectHistory,IndirectHistoryValid,HalfFormat,Proj,Reproject);
 	}
 	else
 		IndirectHistoryValid = 0;
@@ -682,7 +727,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	}
 	else
 		ScatterHistoryValid = 0;
-	GLuint ScatterTexture = Fog ? Accumulate(Scattering,ScatterHistory,ScatterHistoryValid,HalfFormat,Proj,Reproject) : World.Texture;
+	GLuint ScatterTexture = Fog ? Accumulate(ResolveProgram,Scattering,ScatterHistory,ScatterHistoryValid,HalfFormat,Proj,Reproject) : World.Texture;
 	FrameViewValid = ViewValid;
 
 	// A thin lens in front of a 24 mm high frame at f/1.4, which at this wide view blurs only gently.
@@ -715,7 +760,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 		CreateFramebuffer(Focus,World.Width,World.Height,0,GL_RGBA8,0);
 	FOpenGLFramebuffer& Target = Defocus ? Focus : Scene;
 	DrawFullscreen(CompositeProgram,Target.DrawFramebuffer(),Target.Width,Target.Height,World.Texture,
-		DepthPasses ? Occlusion.Texture : World.Texture,World.DepthTexture,0,World.ExtraTextures[EXTRA_Reflection],ScatterTexture,
+		OcclusionTexture,World.DepthTexture,0,World.ExtraTextures[EXTRA_Reflection],ScatterTexture,
 		IndirectTexture,World.ExtraTextures[EXTRA_Albedo]);
 	if( ViewValid )
 	{
@@ -733,7 +778,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	}
 }
 
-GLuint UOpenGLRenderDevice::Accumulate(FOpenGLFramebuffer& Input,FOpenGLFramebuffer History[2],UBOOL& Valid,GLenum Format,const FPlane& Proj,const FMatrix& Reproject)
+GLuint UOpenGLRenderDevice::Accumulate(GLuint Program,FOpenGLFramebuffer& Input,FOpenGLFramebuffer History[2],UBOOL& Valid,GLenum Format,const FPlane& Proj,const FMatrix& Reproject)
 {
 	FOpenGLFramebuffer &Resolved = History[FrameCount & 1], &Previous = History[~FrameCount & 1];
 	for( INT i=0; i<2; i++ )
@@ -742,12 +787,12 @@ GLuint UOpenGLRenderDevice::Accumulate(FOpenGLFramebuffer& Input,FOpenGLFramebuf
 			CreateFramebuffer(History[i],Input.Width,Input.Height,0,Format,0);
 			Valid = 0;
 		}
-	UseProgram(ResolveProgram);
-	glUniform4fv(glGetUniformLocation(ResolveProgram,"Proj"),1,&Proj.X);
-	glUniform4fv(glGetUniformLocation(ResolveProgram,"PrevProj"),1,&PrevProj.X);
-	glUniformMatrix4fv(glGetUniformLocation(ResolveProgram,"Reproject"),1,GL_FALSE,&Reproject.M[0][0]);
-	glUniform1f(glGetUniformLocation(ResolveProgram,"HistoryWeight"),Valid ? 0.9f : 0.f);
-	DrawFullscreen(ResolveProgram,Resolved.Framebuffer,Resolved.Width,Resolved.Height,Input.Texture,Previous.Texture,World.DepthTexture);
+	UseProgram(Program);
+	glUniform4fv(glGetUniformLocation(Program,"Proj"),1,&Proj.X);
+	glUniform4fv(glGetUniformLocation(Program,"PrevProj"),1,&PrevProj.X);
+	glUniformMatrix4fv(glGetUniformLocation(Program,"Reproject"),1,GL_FALSE,&Reproject.M[0][0]);
+	glUniform1f(glGetUniformLocation(Program,"HistoryWeight"),Valid ? 0.9f : 0.f);
+	DrawFullscreen(Program,Resolved.Framebuffer,Resolved.Width,Resolved.Height,Input.Texture,Previous.Texture,World.DepthTexture);
 	Valid = 1;
 	return Resolved.Texture;
 }
