@@ -421,6 +421,13 @@ UBOOL UOpenGLRenderDevice::SetRes(UViewport* Viewport,INT NewX,INT NewY,UBOOL Fu
 
 	// On Windows this makes SDL use ANGLE's EGL instead of a native ES context from the driver.
 	SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER,"1");
+#if UT_UWP
+	// SDL's UWP backend looks for the Linux library names by default, and it loads them by their path from the package root.
+	const char* PackageRoot = SDL_GetBasePath();
+	FString SystemDir = FString(appBaseDir()).Mid( PackageRoot ? SDL_utf8strlen(PackageRoot) : 0 );
+	SDL_SetHint(SDL_HINT_EGL_LIBRARY,appToAnsi(*(SystemDir + TEXT("libEGL.dll"))));
+	SDL_SetHint(SDL_HINT_OPENGL_LIBRARY,appToAnsi(*(SystemDir + TEXT("libGLESv2.dll"))));
+#endif
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,0);

@@ -3,7 +3,7 @@ if(WIN32 OR EMSCRIPTEN)
 else()
   set(SDLLAUNCH_OUTPUT ut2004-bin)
 endif()
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT UT_UWP)
   set(SDLLAUNCH_CONTENT SDLLaunchContent.cpp HttpFile.cpp)
 endif()
 ut_module(SDLLaunch WIN32 OUTPUT ${SDLLAUNCH_OUTPUT} SOURCES SDLLaunch.cpp ${SDLLAUNCH_CONTENT} DEPS Engine SDL3::SDL3 ZLIB::ZLIB)
@@ -12,7 +12,17 @@ if(UT_STATIC_LINK)
   # UnNullRenderDevice.h includes EnginePrivate.h.
   target_include_directories(SDLLaunch PRIVATE ${CMAKE_SOURCE_DIR}/Engine/Src ${CMAKE_SOURCE_DIR}/OpenGLDrv/Src)
 endif()
-if(WIN32)
+if(UT_UWP)
+  # An object file, so the entry point pulls the C++/CX runtime in before the C runtime's startup code asks for the same symbols.
+  add_library(SDLLaunchUwp OBJECT Src/SDLLaunchUwp.cpp)
+  target_compile_options(SDLLaunchUwp PRIVATE /ZW)
+  target_link_libraries(SDLLaunchUwp PRIVATE SDL3::SDL3)
+  target_sources(SDLLaunch PRIVATE $<TARGET_OBJECTS:SDLLaunchUwp>)
+  # The engine's objects name the C runtime first, the C++/CX runtime has to be searched before it.
+  target_link_options(SDLLaunch PRIVATE /NODEFAULTLIB:vccorlib /NODEFAULTLIB:msvcrt vccorlib.lib msvcrt.lib)
+  # The layout in Uwp/ is the package, not what the Visual Studio project would make of the executable.
+  set_target_properties(SDLLaunch PROPERTIES VS_GLOBAL_AppxPackage false)
+elseif(WIN32)
   target_sources(SDLLaunch PRIVATE Src/SDLLaunch.rc)
   # A GUI subsystem exe that still enters through main.
   target_link_options(SDLLaunch PRIVATE /ENTRY:mainCRTStartup)

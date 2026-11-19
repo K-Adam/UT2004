@@ -10,7 +10,7 @@ ut_module(IpDrv SHARED
           UdpLink.cpp UnIpDrvNative.cpp UnSocket.cpp WebMaster.cpp WebRtcCommon.cpp ${IPDRV_WEBRTC}
   PCH UnIpDrv.h IpDrv.cpp
   NOPCH WebMaster.cpp WebRtcCommon.cpp ${IPDRV_WEBRTC}
-  DEPS Engine $<$<PLATFORM_ID:Windows>:wsock32>)
+  DEPS Engine $<$<BOOL:${WIN32}>:ws2_32>)
 find_package(nlohmann_json CONFIG REQUIRED)
 target_link_libraries(IpDrv PRIVATE nlohmann_json::nlohmann_json)
 set_target_properties(IpDrv PROPERTIES CXX_STANDARD 17)

@@ -14,6 +14,9 @@
 #include <fstream>
 #include <sstream>
 #endif
+#if UT_UWP
+#include <wincrypt.h>
+#endif
 #include <nlohmann/json.hpp>
 #include <functional>
 #include <memory>
@@ -95,7 +98,7 @@ static size_t AppendResponse( char* Data, size_t Size, size_t Count, void* Respo
 
 #if __ANDROID__
 // OpenSSL has no CA store on Android. The files are PEM, the text around each certificate is skipped.
-const std::string& AndroidCaCerts()
+const std::string& CaCerts()
 {
 	static const std::string Certs = []()
 	{
@@ -118,6 +121,31 @@ const std::string& AndroidCaCerts()
 	}();
 	return Certs;
 }
+#elif UT_UWP
+// curl is built on OpenSSL for packaged apps and does not read the Windows certificate store there.
+const std::string& CaCerts()
+{
+	static const std::string Certs = []()
+	{
+		std::string All;
+		if( HCERTSTORE Store = CertOpenSystemStoreW( 0, L"ROOT" ) )
+		{
+			for( PCCERT_CONTEXT Cert = NULL; (Cert = CertEnumCertificatesInStore( Store, Cert )) != NULL; )
+			{
+				DWORD Size = 0;
+				if( CryptBinaryToStringA( Cert->pbCertEncoded, Cert->cbCertEncoded, CRYPT_STRING_BASE64HEADER, NULL, &Size ) )
+				{
+					std::string Pem( Size, 0 );
+					if( CryptBinaryToStringA( Cert->pbCertEncoded, Cert->cbCertEncoded, CRYPT_STRING_BASE64HEADER, &Pem[0], &Size ) )
+						All.append( Pem, 0, Size );
+				}
+			}
+			CertCloseStore( Store, 0 );
+		}
+		return All;
+	}();
+	return Certs;
+}
 #endif
 
 // Runs on a worker thread, so it only touches standard types.
@@ -136,8 +164,8 @@ static bool HttpRequest( const std::string& Url, const std::string& Body, std::s
 	curl_easy_setopt( Curl, CURLOPT_TIMEOUT, 10L );
 	// Schannel otherwise fails when the CA's revocation server is unreachable, WinHTTP never checked it.
 	curl_easy_setopt( Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT );
-#if __ANDROID__
-	curl_blob Ca = { (void*)AndroidCaCerts().data(), AndroidCaCerts().size(), CURL_BLOB_NOCOPY };
+#if __ANDROID__ || UT_UWP
+	curl_blob Ca = { (void*)CaCerts().data(), CaCerts().size(), CURL_BLOB_NOCOPY };
 	curl_easy_setopt( Curl, CURLOPT_CAINFO_BLOB, &Ca );
 #endif
 	curl_easy_setopt( Curl, CURLOPT_WRITEFUNCTION, AppendResponse );

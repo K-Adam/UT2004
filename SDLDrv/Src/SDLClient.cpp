@@ -124,6 +124,19 @@ static void SDLRumble( FLOAT Low, FLOAT High, INT Milliseconds )
 		SDL_PlayHapticRumble( DeviceHaptic, Clamp( Max(Low, High), 0.f, 1.f ), Milliseconds );
 }
 
+#if UT_UWP
+// The system ends a suspended app without telling it, and SDL only hands this event over in time through a watch.
+static bool SDLCALL SaveOnSuspend( void*, SDL_Event* Event )
+{
+	if( Event->type == SDL_EVENT_WILL_ENTER_BACKGROUND )
+	{
+		GConfig->Flush( 0 );
+		GLog->Flush();
+	}
+	return true;
+}
+#endif
+
 static void sdl_atexit_handler(void)
 {
     static bool already_called = false;
@@ -149,6 +162,11 @@ void USDLClient::Init( UEngine* InEngine )
 	// Init base.
 	UClient::Init( InEngine );
 
+#if UT_UWP
+	// The only gamepad backend a packaged app can use, and SDL keeps it off unless asked.
+	SDL_SetHint( SDL_HINT_JOYSTICK_WGI, "1" );
+	SDL_AddEventWatch( SaveOnSuspend, NULL );
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
     {
         const TCHAR *err = appFromAnsi(SDL_GetError());

@@ -25,9 +25,8 @@ Revision history:
 // WinSock includes.
 #if __WINSOCK__
 #pragma pack(push,8)
+	#include <winsock2.h>
 	#include <windows.h>
-	#include <winsock.h>
-	#include <conio.h>
 #pragma pack(pop)
 #endif
 

@@ -13,6 +13,41 @@
 
 #define DETAILED_STATS 0
 
+#if UT_UWP
+// The Windows headers hide these calls from packaged apps, which only get the newer forms of them.
+inline HANDLE CreateFileW( const WCHAR* Name, DWORD Access, DWORD Share, void*, DWORD Create, DWORD Flags, HANDLE )
+{
+	CREATEFILE2_EXTENDED_PARAMETERS Params = { sizeof(Params) };
+	Params.dwFileAttributes = Flags & 0xFFFF;
+	Params.dwFileFlags      = Flags & 0xFFFF0000;
+	return CreateFile2( Name, Access, Share, Create, &Params );
+}
+// The first log line is written before the engine knows the system is Unicode, so the ANSI forms are still called.
+inline HANDLE CreateFileA( const char* Name, DWORD Access, DWORD Share, void*, DWORD Create, DWORD Flags, HANDLE )
+{
+	WCHAR Wide[MAX_PATH] = L"";
+	if( !MultiByteToWideChar( CP_ACP, 0, Name, -1, Wide, MAX_PATH ) )
+		return INVALID_HANDLE_VALUE;
+	return CreateFileW( Wide, Access, Share, NULL, Create, Flags, NULL );
+}
+inline DWORD GetFileSize( HANDLE Handle, DWORD* )
+{
+	LARGE_INTEGER Size;
+	return GetFileSizeEx( Handle, &Size ) ? Size.LowPart : INVALID_FILE_SIZE;
+}
+inline BOOL MoveFileW( const WCHAR* Src, const WCHAR* Dest )
+{
+	return MoveFileExW( Src, Dest, MOVEFILE_COPY_ALLOWED );
+}
+inline BOOL MoveFileA( const char* Src, const char* Dest )
+{
+	WCHAR WideSrc[MAX_PATH] = L"", WideDest[MAX_PATH] = L"";
+	return MultiByteToWideChar( CP_ACP, 0, Src, -1, WideSrc, MAX_PATH )
+		&& MultiByteToWideChar( CP_ACP, 0, Dest, -1, WideDest, MAX_PATH )
+		&& MoveFileW( WideSrc, WideDest );
+}
+#endif
+
 /*-----------------------------------------------------------------------------
     File Manager.
 -----------------------------------------------------------------------------*/

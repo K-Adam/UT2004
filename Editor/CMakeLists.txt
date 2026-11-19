@@ -1,5 +1,5 @@
 # TrueType import rasterizes through GDI.
-if(WIN32)
+if(WIN32 AND NOT UT_UWP)
   set(EDITOR_PLATFORM_SRC TTFontImport.cpp)
 endif()
 ut_module(Editor SHARED

@@ -184,7 +184,7 @@ public:
 		for( FMemDebug** Link = &GFirstDebug; *Link; Link=&(*Link)->Next )
 			check(GIsCriticalError||*(*Link)->PrevLink==*Link);
         // gam ---
-#if defined _MSC_VER
+#if defined _MSC_VER && !UT_UWP
 		INT Result = _heapchk();
 		check(Result!=_HEAPBADBEGIN);
 		check(Result!=_HEAPBADNODE);

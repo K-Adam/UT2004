@@ -6,6 +6,15 @@ endif()
 
 if(WIN32)
   enable_language(RC)
+  if(CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
+    if(NOT UT_STATIC_LINK)
+      message(FATAL_ERROR "The UWP build is a single executable: cmake --preset uwp")
+    endif()
+    set(UT_UWP ON)
+    # Store projects turn the SDL checks on, which make errors of the C runtime calls the old code is full of.
+    add_compile_options(/sdl-)
+    add_compile_definitions(UT_UWP=1)
+  endif()
 elseif(ANDROID)
   if(NOT UT_STATIC_LINK)
     message(FATAL_ERROR "Android needs UT_STATIC_LINK, the app is a single libmain.so: cmake --preset android-arm64")
@@ -34,7 +43,7 @@ if(NOT EXISTS ${UT_SCRIPTS_DIR}/CacheRecords.ucl)
   file(COPY ${CMAKE_SOURCE_DIR}/System/CacheRecords.ucl DESTINATION ${UT_SCRIPTS_DIR})
 endif()
 # The game rewrites the ini it runs on, so development runs get their own copies of the tracked templates.
-if(NOT EMSCRIPTEN AND NOT ANDROID)
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT UT_UWP)
   foreach(ini Dev.ini DevUser.ini)
     if(NOT EXISTS ${UT_SYSTEM_DIR}/${ini})
       file(COPY ${CMAKE_SOURCE_DIR}/DevIni/${ini} DESTINATION ${UT_SYSTEM_DIR})
@@ -61,7 +70,8 @@ foreach(dir Help Web KarmaData)
 endforeach()
 # Dev.ini and the web page served from build/web read the content through this link.
 set(UT_ASSETS_DIR "$ENV{UT_ASSETS_DIR}" CACHE PATH "Content set for development runs, with the packages in src and the packed web files in build/web")
-if(UT_ASSETS_DIR AND NOT ANDROID)
+# The UWP layout gets a copy instead.
+if(UT_ASSETS_DIR AND NOT ANDROID AND NOT UT_UWP)
   ut_link(assets ${UT_ASSETS_DIR})
 endif()
 # The tracked script packages are copied, because the game writes CacheRecords.ucl next to them.
@@ -91,7 +101,7 @@ if(MSVC)
     /Zp4 /W3 /MP /guard:cf
     /wd4005 /wd4244 /wd4267 /wd4305 /wd4996 /wd4595 /wd4291 /wd4838 /wd4311 /wd4312 /wd4302)
   target_compile_definitions(ut_common INTERFACE
-    _WIN32_IE=0x0200 _WIN32_WINNT=0x0601
+    _WIN32_IE=0x0200 _WIN32_WINNT=$<IF:$<BOOL:${UT_UWP}>,0x0A00,0x0601>
     _CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS _WINSOCK_DEPRECATED_NO_WARNINGS
     WINDOWS_IGNORE_PACKING_MISMATCH)  # original code includes windows.h under /Zp4 too
   target_link_libraries(ut_common INTERFACE legacy_stdio_definitions)
@@ -251,7 +261,25 @@ else()
   pkg_check_modules(SPEEXDSP REQUIRED IMPORTED_TARGET GLOBAL speexdsp)
   target_link_libraries(speex PUBLIC PkgConfig::SPEEXDSP)
 endif()
-find_package(SDL3 3.2 CONFIG REQUIRED)
+if(UT_UWP)
+  # SDL dropped UWP after SDL2, this fork carries the backend on.
+  include(FetchContent)
+  set(SDL_SHARED ON)
+  set(SDL_STATIC OFF)
+  set(SDL_TEST_LIBRARY OFF)
+  FetchContent_Declare(SDL3
+    GIT_REPOSITORY https://github.com/XboxEmulationHub/SDL3-uwp.git
+    # Branch uwp-3.4.20, by hash so a moved branch cannot change what gets built
+    GIT_TAG ec2e0e7c77ec9a04437eb3ae884d62ae0e6129b4
+    # A git source updates on every configure, which would patch the tree again and fail
+    UPDATE_DISCONNECTED ON
+    # The fork's CMake build leaves the DLL loader out, without which SDL cannot load ANGLE.
+    PATCH_COMMAND git apply ${CMAKE_SOURCE_DIR}/Uwp/sdl3-loadso.patch
+    EXCLUDE_FROM_ALL)
+  FetchContent_MakeAvailable(SDL3)
+else()
+  find_package(SDL3 3.2 CONFIG REQUIRED)
+endif()
 add_subdirectory(Tools/NVTriStrip)
 # Static, but linked into Engine.so.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -266,8 +294,8 @@ endif()
 
 set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
     XGame XInterface Onslaught SDLDrv SDLLaunch)
-# Nothing built for Android or the web runs on the host, so UCC is left out there.
-if(NOT ANDROID AND NOT EMSCRIPTEN)
+# Nothing built for Android, the web or UWP runs from a host shell, so UCC is left out there.
+if(NOT ANDROID AND NOT EMSCRIPTEN AND NOT UT_UWP)
   list(APPEND UT_MODULES UCC)
 endif()
 # UTV2004 has its own copies of IpDrv's net driver classes, so it only works as a loaded module.
@@ -283,6 +311,10 @@ if(ANDROID)
 endif()
 if(EMSCRIPTEN)
   add_subdirectory(Emscripten)
+  return()
+endif()
+if(UT_UWP)
+  add_subdirectory(Uwp)
   return()
 endif()
 

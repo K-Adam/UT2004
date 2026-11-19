@@ -12,8 +12,9 @@
 
 #pragma pack(push,8)
 #include <windows.h>
-#include <shlobj.h>
+#if !UT_UWP
 #include <shlwapi.h>
+#endif
 #pragma pack(pop)
 
 #include <stdio.h>
@@ -96,7 +97,9 @@ CORE_API void appRequestExit( UBOOL Force )
 	else
 	{
 		// Tell the platform specific code we want to exit cleanly from the main loop.
+#if !UT_UWP
 		PostQuitMessage( 0 );
+#endif
 		GIsRequestingExit = 1;
 	}
 	unguard;
@@ -196,9 +199,9 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 {
 	if( ParseCommand(&Cmd,TEXT("MEMSTAT")) )
 	{
-		MEMORYSTATUS B; B.dwLength = sizeof(B);
-		GlobalMemoryStatus(&B);
-		Ar.Logf( TEXT("Memory available: Phys=%iK/%iK Pagef=%iK/%iK Virt=%iK/%iK"), B.dwAvailPhys/1024, B.dwTotalPhys/1024, B.dwAvailPageFile/1024, B.dwTotalPageFile/1024, B.dwAvailVirtual/1024, B.dwTotalVirtual/1024 );
+		MEMORYSTATUSEX B; B.dwLength = sizeof(B);
+		GlobalMemoryStatusEx(&B);
+		Ar.Logf( TEXT("Memory available: Phys=%iK/%iK Pagef=%iK/%iK Virt=%iK/%iK"), (INT)(B.ullAvailPhys/1024), (INT)(B.ullTotalPhys/1024), (INT)(B.ullAvailPageFile/1024), (INT)(B.ullTotalPageFile/1024), (INT)(B.ullAvailVirtual/1024), (INT)(B.ullTotalVirtual/1024) );
 		Ar.Logf( TEXT("Memory load = %i%%"), B.dwMemoryLoad );
 		return 1;
 	}
@@ -210,6 +213,10 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	else if( ParseCommand( &Cmd, TEXT("RELAUNCH") ) )
 	{
 		debugf( TEXT("Relaunch: %s"), Cmd );
+#if UT_UWP
+		// A packaged app cannot start a second copy of itself.
+		Ar.Logf( TEXT("Relaunch is not available here") );
+#else
 		GConfig->Flush( 0 );
 		UBOOL Params = 1;
 		if ( *Cmd )
@@ -238,6 +245,7 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		}
 		debugf(TEXT("ShellExecute result: %i"),(INT) Result);
 		appRequestExit( 0 );
+#endif
 		return 1;
 	}
 	else if( ParseCommand( &Cmd, TEXT("DEBUG") ) )
@@ -407,7 +415,11 @@ CORE_API const void appDebugMessagef( const TCHAR* Fmt, ... )
 	TCHAR TempStr[4096]=TEXT("");
 	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
 	guard(appDebugMessagef);
+#if UT_UWP
+	debugf( TEXT("%s"), TempStr );
+#else
 	MessageBox(NULL,TempStr,TEXT("appDebugMessagef"),MB_OK);
+#endif
 	unguard;
 }
 
@@ -417,6 +429,11 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 	guard(appMsgf);
 	TCHAR TempStr[4096]=TEXT("");
 	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
+#if UT_UWP
+	// Packaged apps have no message box. The text is logged and a question counts as declined.
+	debugf( TEXT("%s"), TempStr );
+	return Type!=1 && Type!=2;
+#else
 	switch( Type )
 	{
 		case 1:
@@ -430,6 +447,7 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 			break;
 	}
 	return 1;
+#endif
 	unguard;
 }
 
@@ -439,7 +457,11 @@ CORE_API const void appGetLastError( void )
 	TCHAR TempStr[4096]=TEXT("");
 	appSprintf( TempStr, TEXT("GetLastError : %d\n\n%s"),
 		GetLastError(), appGetSystemErrorMessage() );
+#if UT_UWP
+	debugf( TEXT("%s"), TempStr );
+#else
 	MessageBox( NULL, TempStr, TEXT("System Error"), MB_OK );
+#endif
 	unguard;
 }
 
@@ -478,24 +500,7 @@ void appDebugBreak()
 //
 UBOOL appIsDebuggerPresent()
 {
-	UBOOL Result = 0;
-    OSVERSIONINFO WinVersion;
-    WinVersion.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-    // IsDebuggerPresent doesn't exist under 95, so we will only test for it under NT+
-    if( GetVersionEx(&WinVersion) && WinVersion.dwPlatformId == VER_PLATFORM_WIN32_NT)
-    {
-        HINSTANCE KernLib =  LoadLibraryEx( TEXT("kernel32.dll"), NULL, 0);
-        if( KernLib )
-        {
-            FARPROC lIsDebuggerPresent = GetProcAddress( KernLib, "IsDebuggerPresent" );
-            if( lIsDebuggerPresent && lIsDebuggerPresent() )
-                Result = 1;
-
-            FreeLibrary( KernLib ); // gam
-        }
-    }
-	return Result;
+	return IsDebuggerPresent();
 }
 
 
@@ -578,7 +583,11 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 {
 	guard(appLaunchURL);
 
+#if UT_UWP
+	PTRINT Code = 0;
+#else
 	PTRINT Code = (PTRINT)TCHAR_CALL_OS(ShellExecuteW(NULL,TEXT("open"),URL,Parms?Parms:TEXT(""),TEXT(""),SW_SHOWNORMAL),ShellExecuteA(NULL,"open",TCHAR_TO_ANSI(URL),Parms?TCHAR_TO_ANSI(Parms):"","",SW_SHOWNORMAL));
+#endif
 	if( Error )
 		*Error = Code<=32 ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
 	unguard;
@@ -837,6 +846,10 @@ CORE_API const TCHAR* appUserName()
 	static TCHAR Result[256]=TEXT("");
 	if( !Result[0] )
 	{
+#if UT_UWP
+		// The account name is not available to packaged apps.
+		appStrcpy( Result, TEXT("Player") );
+#else
 		DWORD Size=ARRAY_COUNT(Result);
 #if UNICODE
 		if( GUnicode && !GUnicodeOS )
@@ -850,6 +863,7 @@ CORE_API const TCHAR* appUserName()
 		{
 			GetUserName( Result, &Size );
 		}
+#endif
 		TCHAR *c, *d;
 		for( c=Result, d=Result; *c!=0; c++ )
 			if( appIsAlnum(*c) )
@@ -908,7 +922,9 @@ void appPlatformPreInit()
 	guard(appPlatformPreInit);
 
 	// This also has the undocumented side effect of affecting sleep granularity on current versions of Windows.
+#if !UT_UWP
 	timeBeginPeriod( 1 );
+#endif
 
 	// Check Windows version.
 	guard(GetWindowsVersion);
@@ -987,7 +1003,9 @@ BOOL WINAPI CtrlCHandler( DWORD dwCtrlType )
 {
 	if( !GIsRequestingExit )
 	{
+#if !UT_UWP
 		PostQuitMessage( 0 );
+#endif
 		GIsRequestingExit = 1;
 	}
 	else
@@ -1007,14 +1025,17 @@ void appPlatformInit()
 	GSys = new USystem;
 	GSys->AddToRoot();
 	TCHAR CacheRoot[MAX_PATH+1] = TEXT("");
-	if( FAILED(SHGetFolderPathW( NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, CacheRoot )) )
+	DWORD CacheRootLen = GetEnvironmentVariableW( TEXT("LOCALAPPDATA"), CacheRoot, ARRAY_COUNT(CacheRoot) );
+	if( CacheRootLen==0 || CacheRootLen>=ARRAY_COUNT(CacheRoot) )
 		GetTempPathW( ARRAY_COUNT(CacheRoot), CacheRoot );
 	GSys->CachePath = FString(CacheRoot) * TEXT("UT2004") * TEXT("Cache");
 	// Old mods such as AntiTCC 1.19 locate package files by the ".." that starts a retail relative path.
 	// Relative to the file manager's home dir, because that is where it resolves writes.
+#if !UT_UWP
 	TCHAR Relative[MAX_PATH+1];
 	if( PathRelativePathToW( Relative, GFileManager->CalcHomeDir(), FILE_ATTRIBUTE_DIRECTORY, *GSys->CachePath, FILE_ATTRIBUTE_DIRECTORY ) )
 		GSys->CachePath = Relative;
+#endif
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );
 
@@ -1049,19 +1070,21 @@ void appPlatformInit()
 
 	// Get memory.
 	guard(GetMemory);
-	MEMORYSTATUS M;
-	GlobalMemoryStatus(&M);
-	GPhysicalMemory=M.dwTotalPhys;
-	debugf( NAME_Init, TEXT("Memory total: Phys=%iK Pagef=%iK Virt=%iK"), M.dwTotalPhys/1024, M.dwTotalPageFile/1024, M.dwTotalVirtual/1024 );
-    appStrcat( GMachineCPU, *FString::Printf(TEXT(" with %dMB RAM"), M.dwTotalPhys/(1024 * 1024) ) ); // gam
+	MEMORYSTATUSEX M; M.dwLength = sizeof(M);
+	GlobalMemoryStatusEx(&M);
+	GPhysicalMemory=M.ullTotalPhys;
+	debugf( NAME_Init, TEXT("Memory total: Phys=%iK Pagef=%iK Virt=%iK"), (INT)(M.ullTotalPhys/1024), (INT)(M.ullTotalPageFile/1024), (INT)(M.ullTotalVirtual/1024) );
+    appStrcat( GMachineCPU, *FString::Printf(TEXT(" with %dMB RAM"), (INT)(M.ullTotalPhys/(1024 * 1024)) ) ); // gam
 	unguard;
 
 	// Working set.
+#if !UT_UWP
 	guard(GetWorkingSet);
 	SIZE_T WsMin=0, WsMax=0;
 	GetProcessWorkingSetSize( GetCurrentProcess(), &WsMin, &WsMax );
 	debugf( NAME_Init, TEXT("Working set: %X / %X"), WsMin, WsMax );
 	unguard;
+#endif
 
 	unguard;
 }
@@ -1077,7 +1100,9 @@ void appPlatformPreExit()
 void appPlatformExit()
 {
 	guard(appPlatformExit);
+#if !UT_UWP
 	timeEndPeriod( 1 );
+#endif
 	unguard;
 }
 

@@ -76,6 +76,17 @@
       }
     },
     {
+      "name": "uwp",
+      "inherits": "win64",
+      "binaryDir": "${sourceDir}/build/uwp",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "WindowsStore",
+        "CMAKE_SYSTEM_VERSION": "10.0",
+        "VCPKG_TARGET_TRIPLET": "x64-uwp-static-md",
+        "UT_STATIC_LINK": "ON"
+      }
+    },
+    {
       "name": "win32-static",
       "inherits": "win32",
       "binaryDir": "${sourceDir}/build/win32-static",
@@ -158,6 +169,12 @@
       "name": "web-release",
       "configurePreset": "web",
       "targets": ["ut_web"]
+    },
+    {
+      "name": "uwp-release",
+      "configurePreset": "uwp",
+      "configuration": "Release",
+      "targets": ["ut_uwp"]
     },
     {
       "name": "win32-static-debug",

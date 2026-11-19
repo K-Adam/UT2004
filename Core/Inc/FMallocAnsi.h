@@ -69,7 +69,7 @@ if ((PTRINT) Ptr < 0x1000) Ptr = NULL;
 	void HeapCheck()
 	{
 		guard(FMallocAnsi::HeapCheck);
-#if defined _MSC_VER && DO_CHECK
+#if defined _MSC_VER && DO_CHECK && !UT_UWP
 		INT Result = _heapchk();
 		check(Result!=_HEAPBADBEGIN);
 		check(Result!=_HEAPBADNODE);

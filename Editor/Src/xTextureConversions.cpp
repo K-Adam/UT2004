@@ -20,7 +20,7 @@
 // !! Changes 'FileName' to a converted ref a .dds if conversion is successful
 UBOOL UEditorEngine::DDSConversion( TCHAR* FileName, const TCHAR* Str, FOutputDevice& Ar )
 {
-#if !WIN32
+#if !WIN32 || UT_UWP
     debugf(TEXT("Error: This is unsupported on non-Win32 systems at the moment."));
 #else
     FString Util = TEXT("xDxTex.exe"); // must be in ./System

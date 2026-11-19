@@ -2,7 +2,7 @@
   "dependencies": [
     "zlib",
     "libvorbis",
-    "sdl3",
+    { "name": "sdl3", "platform": "!uwp" },
     { "name": "openal-soft", "platform": "!emscripten" },
     "bullet3",
     "libsquish",

@@ -163,6 +163,10 @@ public:
 					WriteRaw( Data );
 					WriteRaw( LINE_TERMINATOR );
 #endif
+#if UT_UWP
+					// The system ends a packaged app without notice, and on the console the log is all there is to go by.
+					LogAr->Flush();
+#endif
 #ifdef _DEBUG
 #if _MSC_VER
 					TCHAR Temp[1024];

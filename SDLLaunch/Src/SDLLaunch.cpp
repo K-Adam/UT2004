@@ -87,8 +87,9 @@ FFileManagerUnix FileManager;
 
 #ifdef __ANDROID__
 static void ExitSplash(void) {}
-#elif __EMSCRIPTEN__
+#elif __EMSCRIPTEN__ || UT_UWP
 // The page shows the loading progress, and a 2D context would keep SDLDrv from getting WebGL on the same canvas.
+// A packaged app has a single window, which SDLDrv needs for the game.
 static void InitSplash(const TCHAR *filename) {}
 static void ExitSplash(void) {}
 #else
@@ -130,7 +131,7 @@ static void ExitSplash(void)
 }
 #endif
 
-#if defined(__ANDROID__) || __EMSCRIPTEN__
+#if defined(__ANDROID__) || __EMSCRIPTEN__ || UT_UWP
 static void InitServerTray(void) {}
 static void PumpServerTray(void) {}
 static void ExitServerTray(void) {}
@@ -326,6 +327,12 @@ static bool FindContent(void)
 // Emscripten/content.js
 extern "C" int ut_next_frame();
 extern "C" void ut_exit(const char* ServerCmd);
+#endif
+
+#if UT_UWP
+// SDLLaunchUwp.cpp holds the WinRT entry point, which calls this as SDL_main.
+extern "C" int SDL_main(int argc, char **argv);
+#define main SDL_main
 #endif
 
 #ifdef __ANDROID__
@@ -771,9 +778,20 @@ int main(int argc, char **argv)
 	SDL_SetHint( SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas" );
 	// SDL would yield on every swap under JSPI, the main loop already waits for each animation frame.
 	SDL_SetHint( SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0" );
+#elif UT_UWP
+	// Windows closes a packaged app whose window does not come up in time, and it only comes up once SDL handles events.
+	SDL_Init( SDL_INIT_VIDEO );
+	SDL_PumpEvents();
+	// OpenAL Soft takes the executable's folder from the wide argument list, which the C runtime leaves empty behind SDL's narrow WinMain.
+	static WCHAR ExePath[MAX_PATH];
+	static WCHAR* WideArgs[] = { ExePath, NULL };
+	GetModuleFileNameW( NULL, ExePath, ARRAY_COUNT(ExePath) );
+	__wargv = WideArgs;
 #endif
 	TCHAR CmdLine[1024] = TEXT("");
-#ifdef WIN32
+#if UT_UWP
+	// Windows starts packaged apps with a -ServerName: activation argument, which the engine would take for its -server switch.
+#elif defined(WIN32)
 	// appInit skips the executable name on Windows, as GetCommandLine starts with it.
 	appStrncpy( CmdLine, GetCommandLine(), ARRAY_COUNT(CmdLine) );
 #else

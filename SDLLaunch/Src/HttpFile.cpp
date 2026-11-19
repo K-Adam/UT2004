@@ -14,7 +14,7 @@
 
 #if __ANDROID__
 // IpDrv/Src/WebMaster.cpp
-const std::string& AndroidCaCerts();
+const std::string& CaCerts();
 #endif
 
 // The download as a file, kept between attempts and launches so several gigabytes go on where they stopped.
@@ -57,7 +57,7 @@ static bool Download(const char* Url, Sint64 ResumeFrom, FPartFile& Part, char* 
     // Schannel otherwise fails when the CA's revocation server is unreachable.
     curl_easy_setopt(Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT);
 #if __ANDROID__
-    curl_blob Ca = { (void*)AndroidCaCerts().data(), AndroidCaCerts().size(), CURL_BLOB_NOCOPY };
+    curl_blob Ca = { (void*)CaCerts().data(), CaCerts().size(), CURL_BLOB_NOCOPY };
     curl_easy_setopt(Curl, CURLOPT_CAINFO_BLOB, &Ca);
 #endif
     curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, WritePart);

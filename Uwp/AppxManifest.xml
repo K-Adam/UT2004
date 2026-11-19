@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         IgnorableNamespaces="uap">
+  <!-- Publisher has to match the subject of the certificate that signs the package. -->
+  <Identity Name="UT2004" Publisher="CN=UT2004" Version="1.0.0.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>UT2004</DisplayName>
+    <PublisherDisplayName>UT2004</PublisherDisplayName>
+    <Logo>Logo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.18362.0" MaxVersionTested="10.0.26100.0" />
+    <PackageDependency Name="Microsoft.VCLibs.140.00" MinVersion="14.0.30704.0" Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="App" Executable="Game\System\UT2004.exe" EntryPoint="UT2004.App">
+      <uap:VisualElements DisplayName="UT2004" Description="Unreal Tournament 2004" BackgroundColor="#000000"
+                          Square150x150Logo="Logo.png" Square44x44Logo="Logo.png">
+        <uap:SplashScreen Image="Logo.png" BackgroundColor="#000000" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer" />
+  </Capabilities>
+</Package>
