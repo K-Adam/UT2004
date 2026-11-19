@@ -9,11 +9,17 @@ static SDL_Renderer* SetupRenderer = NULL;
 bool SetupQuit = false;
 
 #ifdef __ANDROID__
-static const int SetupWidth = 0, SetupHeight = 0, SetupTextRows = 270;
+static const int SetupWidth = 0, SetupHeight = 0;
 static const SDL_WindowFlags SetupFlags = SDL_WINDOW_FULLSCREEN;
 #else
-static const int SetupWidth = 800, SetupHeight = 180, SetupTextRows = 90;
+static const int SetupWidth = 800, SetupHeight = 180;
 static const SDL_WindowFlags SetupFlags = 0;
+#endif
+#if defined(__ANDROID__) || UT_UWP
+// An app's one window fills the screen whatever size it asks for.
+static const int SetupTextRows = 270;
+#else
+static const int SetupTextRows = 90;
 #endif
 
 void PumpSetup()

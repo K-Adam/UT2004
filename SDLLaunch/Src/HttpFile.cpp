@@ -1,4 +1,4 @@
-// The download of the full game content. It runs before the engine is up on Android, so it touches no engine types.
+// The downloads of the game content. They run before the engine is up on Android, so they touch no engine types.
 
 #include "SDLLaunchContent.h"
 
@@ -12,7 +12,7 @@
 #endif
 #pragma pack(pop)
 
-#if __ANDROID__
+#if __ANDROID__ || UT_UWP
 // IpDrv/Src/WebMaster.cpp
 const std::string& CaCerts();
 #endif
@@ -22,6 +22,7 @@ struct FPartFile
 {
     SDL_IOStream* File;
     FInstall* I;
+    Sint64 From;
 };
 
 static size_t WritePart(char* Data, size_t Size, size_t Count, void* User)
@@ -32,8 +33,12 @@ static size_t WritePart(char* Data, size_t Size, size_t Count, void* User)
 }
 
 // Called while no data arrives too, so the window answers and closing it stops the transfer.
-static int WhileWaiting(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
+static int WhileWaiting(void* User, curl_off_t Total, curl_off_t, curl_off_t, curl_off_t)
 {
+    FPartFile* Part = (FPartFile*)User;
+    // A source that publishes no size shows the one the server reports, which leaves out what an earlier attempt got.
+    if (!Part->I->Size && Total > 0)
+        Part->I->Size = Part->From + Total;
     PumpSetup();
     return SetupQuit;
 }
@@ -56,13 +61,14 @@ static bool Download(const char* Url, Sint64 ResumeFrom, FPartFile& Part, char* 
     curl_easy_setopt(Curl, CURLOPT_ERRORBUFFER, Reason);
     // Schannel otherwise fails when the CA's revocation server is unreachable.
     curl_easy_setopt(Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT);
-#if __ANDROID__
+#if __ANDROID__ || UT_UWP
     curl_blob Ca = { (void*)CaCerts().data(), CaCerts().size(), CURL_BLOB_NOCOPY };
     curl_easy_setopt(Curl, CURLOPT_CAINFO_BLOB, &Ca);
 #endif
     curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, WritePart);
     curl_easy_setopt(Curl, CURLOPT_WRITEDATA, &Part);
     curl_easy_setopt(Curl, CURLOPT_XFERINFOFUNCTION, WhileWaiting);
+    curl_easy_setopt(Curl, CURLOPT_XFERINFODATA, &Part);
     curl_easy_setopt(Curl, CURLOPT_NOPROGRESS, 0L);
     CURLcode Code = curl_easy_perform(Curl);
     long Status = 0;
@@ -118,20 +124,35 @@ static Sint64 FileSize(const std::string& Path)
     return SDL_GetPathInfo(Path.c_str(), &Info) ? (Sint64)Info.size : 0;
 }
 
-// UT_FULL_SIZE, UT_FULL_UNPACKED and UT_FULL_SHA256 are zero and empty for a test URL, which then goes unchecked.
-bool InstallFull(FInstall& I)
+static const char* PartNames[] = { "UT2004.zip.part", "assets.tar.xz.part" };
+
+bool PendingInstall(const char* Root, bool Forget)
+{
+    bool Pending = false;
+    for (const char* Name : PartNames)
+    {
+        std::string Path = std::string(Root) + "/" + Name;
+        Pending |= SDL_GetPathInfo(Path.c_str(), NULL);
+        if (Forget)
+            SDL_RemovePath(Path.c_str());
+    }
+    return Pending;
+}
+
+// Size, Unpacked and Sha256 are zero and empty for a source that publishes none, which then goes unchecked.
+static bool InstallArchive(FInstall& I, const char* PartName, Sint64 Size, Sint64 Unpacked, const char* Sha256, bool (*Unpack)(SDL_IOStream*, FInstall&))
 {
     SDL_CreateDirectory(I.Root);
-    std::string Path = std::string(I.Root) + "/UT2004.zip.part";
+    std::string Path = std::string(I.Root) + "/" + PartName;
     Sint64 Have = FileSize(Path);
-    if (UT_FULL_SIZE && Have > UT_FULL_SIZE)
+    if (Size && Have > Size)
     {
         SDL_RemovePath(Path.c_str());
         Have = 0;
     }
-    Sint64 Need = UT_FULL_SIZE - Have + UT_FULL_UNPACKED, Free = FreeSpace(I.Root);
+    Sint64 Need = Size - Have + Unpacked, Free = FreeSpace(I.Root);
     // A complete download was unpacking before, and what that left on the disk gets overwritten.
-    if (Free >= 0 && Free < Need && (!UT_FULL_SIZE || Have < UT_FULL_SIZE))
+    if (Free >= 0 && Free < Need && (!Size || Have < Size))
     {
         SDL_snprintf(I.Err, sizeof(I.Err), "The game content needs %d GB of free space in %s, there are %d GB.",
             (int)((Need >> 30) + 1), I.Root, (int)(Free >> 30));
@@ -139,12 +160,12 @@ bool InstallFull(FInstall& I)
     }
 
     I.Verb = "Downloading the game content";
-    I.Size = UT_FULL_SIZE;
+    I.Size = Size;
     I.Done = I.Drawn = Have;
     I.Draw();
-    for (int Stalled = 0; !UT_FULL_SIZE || Have < UT_FULL_SIZE; )
+    for (int Stalled = 0; !Size || Have < Size; )
     {
-        FPartFile Part = { SDL_IOFromFile(Path.c_str(), "ab"), &I };
+        FPartFile Part = { SDL_IOFromFile(Path.c_str(), "ab"), &I, Have };
         if (!Part.File)
             return I.Fail("Couldn't write the download of %s. Is the device out of storage?");
         char Why[256] = "";
@@ -177,21 +198,25 @@ bool InstallFull(FInstall& I)
         return I.Fail("Couldn't read the download of %s.");
     I.Size = Have;
     I.Done = I.Drawn = 0;
-    bool Ok = !UT_FULL_SIZE || Have == UT_FULL_SIZE;
-    if (Ok && UT_FULL_SHA256[0])
+    bool Ok = !Size || Have == Size;
+    if (Ok && Sha256[0])
     {
         I.Verb = "Checking the download";
-        Ok = Sha256Matches(Part, UT_FULL_SHA256);
+        Ok = Sha256Matches(Part, Sha256);
+        Ok = Ok && SDL_SeekIO(Part.File, 0, SDL_IO_SEEK_SET) == 0;
         I.Done = I.Drawn = 0;
     }
     if (Ok)
     {
         I.Verb = "Unpacking the game content";
-        Ok = Unzip(Part.File, I);
+        Ok = Unpack(Part.File, I);
         SDL_CloseIO(Part.File);
-        // A failed unpack keeps a checked download, as it is the disk that ran out.
-        if (Ok || !UT_FULL_SHA256[0])
+        // A failed unpack keeps a checked download, as it is the disk that ran out. An unchecked one may be damaged,
+        // so it is emptied and stays behind as the mark of an unfinished install.
+        if (Ok)
             SDL_RemovePath(Path.c_str());
+        else if (!Sha256[0] && !SetupQuit)
+            SDL_CloseIO(SDL_IOFromFile(Path.c_str(), "wb"));
         return Ok;
     }
     SDL_CloseIO(Part.File);
@@ -201,3 +226,27 @@ bool InstallFull(FInstall& I)
     SDL_RemovePath(Path.c_str());
     return I.Fail("%s is not the published game content, its size or SHA-256 does not match.");
 }
+
+bool InstallFull(FInstall& I)
+{
+    return InstallArchive(I, PartNames[0], UT_FULL_SIZE, UT_FULL_UNPACKED, UT_FULL_SHA256, Unzip);
+}
+
+#if UT_UWP
+static bool UnpackAssets(SDL_IOStream* In, FInstall& I)
+{
+    bool Zip = false;
+    bool Ok = Untar(In, I, Zip);
+    if (!Zip)
+        return Ok;
+    // Unzip counts what it reads itself.
+    I.Done = I.Drawn = 0;
+    return Unzip(In, I);
+}
+
+// Android unpacks this one while it arrives. Here the archive fits beside its content, and a file can be resumed.
+bool InstallAssets(FInstall& I)
+{
+    return InstallArchive(I, PartNames[1], 0, 0, UT_ASSETS_SHA256, UnpackAssets);
+}
+#endif

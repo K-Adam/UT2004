@@ -135,7 +135,6 @@ static void ExitSplash(void)
 static void InitServerTray(void) {}
 static void PumpServerTray(void) {}
 static void ExitServerTray(void) {}
-static bool FindContent(void) { return true; }
 #else
 // A dedicated server has no window, the tray icon is where it can be seen and stopped.
 // It lives on its own thread, because Windows blocks the thread that pumps the tray for as long as its menu is open.
@@ -247,26 +246,42 @@ static bool ContentFolderFits(const FString& Folder)
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "UT2004", &appToUtf8(*Message)(0), NULL);
     return false;
 }
+#endif
 
-static void DownloadContent(void)
+#if defined(__ANDROID__) || __EMSCRIPTEN__
+static bool FindContent(void) { return true; }
+#else
+// Where downloads put the content: beside the settings, so it is the game folder unless that one is read-only.
+// The default paths look there.
+static TArray<ANSICHAR> ContentRoot(void)
 {
-    // Beside the settings, so it is the game folder unless that one is read-only. The default paths look there.
     FString Folder = GFileManager->CalcHomeDir();
     INT End = Folder.Len() - 1;
     while (End > 0 && Folder[End - 1] != '/' && Folder[End - 1] != '\\')
         End--;
-    TArray<ANSICHAR> Root = appToUtf8(*Folder.Left(Max(End - 1, 0)));
+    return appToUtf8(*Folder.Left(Max(End - 1, 0)));
+}
+
+static bool DownloadContent(const char* Src, bool (*Install)(FInstall&))
+{
+    TArray<ANSICHAR> Root = ContentRoot();
     FInstall I = {};
     I.Root = &Root(0);
-    I.Src = UT_FULL_URL;
-    bool Ok = InstallFull(I);
+    I.Src = Src;
+    bool Ok = Install(I);
     CloseSetupScreen();
     if (!Ok && !SetupQuit)
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "UT2004", I.Err, NULL);
+    // The other download may have been given up earlier, and would keep the game asking.
+    if (Ok)
+        PendingInstall(I.Root, true);
+    return Ok;
 }
 
 static bool ContentFound(void)
 {
+    if (PendingInstall(&ContentRoot()(0), false))
+        return false;
     for (INT i = 0; i < GSys->Paths.Num(); i++)
         if (GSys->Paths(i).Right(4) == TEXT(".ut2") && GFileManager->FindFiles(*GSys->Paths(i), 1, 0).Num())
             return true;
@@ -274,26 +289,38 @@ static bool ContentFound(void)
 }
 
 // The build ships without the game content, so the player downloads it or points at a retail install, which is used in place.
+// A packaged app can't read a folder outside its own, so it offers the ten maps in place of browsing.
 // Returns false when the player gives up.
 static bool FindContent(void)
 {
     if (ContentFound())
         return true;
 
+#if !UT_UWP
     static const TCHAR* Wildcards[] = { TEXT("Maps/*.ut2"), TEXT("Textures/*.utx"), TEXT("Sounds/*.uax"), TEXT("Music/*.umx"), TEXT("StaticMeshes/*.usx"), TEXT("Animations/*.ukx") };
+#endif
     // Without video there is no dialog to ask with, and the engine reports that failure itself.
     if (!SDL_Init(SDL_INIT_VIDEO))
         return true;
-    enum { Quit, Download, Browse };
+    enum { Quit, Download, Other };
     static const SDL_MessageBoxButtonData Buttons[] = {
         { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, Quit, "Quit" },
-        { 0, Browse, "Browse..." },
+#if UT_UWP
+        { 0, Download, "Full game" },
+        { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, Other, "Ten maps" },
+#else
+        { 0, Other, "Browse..." },
         { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, Download, "Download" },
+#endif
     };
     static const SDL_MessageBoxData Box = { SDL_MESSAGEBOX_INFORMATION, NULL, "UT2004",
         "The game content was not found.\n\n"
+#if UT_UWP
+        "Download ten maps (1 GB, needs 3 GB of free space), or the full game from the Internet Archive (3.8 GB, needs 13 GB of free space).",
+#else
         "Download it from the Internet Archive (3.8 GB, needs 13 GB of free space), "
         "or browse to the folder of a UT2004 install, the one that holds Maps and Textures.",
+#endif
         SDL_arraysize(Buttons), Buttons, NULL };
     bool Found = false;
     while (!Found && !SetupQuit)
@@ -303,10 +330,12 @@ static bool FindContent(void)
             break;
         if (Choice == Download)
         {
-            DownloadContent();
-            Found = ContentFound();
+            Found = DownloadContent(UT_FULL_URL, InstallFull) && ContentFound();
             continue;
         }
+#if UT_UWP
+        Found = DownloadContent(UT_ASSETS_URL, InstallAssets) && ContentFound();
+#else
         FString Folder = BrowseContent();
         if (!Folder.Len() || !ContentFolderFits(Folder) || !GFileManager->FindFiles(*(Folder * Wildcards[0]), 1, 0).Num())
             continue;
@@ -314,7 +343,10 @@ static bool FindContent(void)
             new(GSys->Paths) FString(Folder * Wildcard);
         new(GSys->MusicPath) FString(Folder * TEXT("Music"));
         GSys->SaveConfig();
+        // The folder takes the place of a download that was given up, which would otherwise keep the game asking.
+        PendingInstall(&ContentRoot()(0), true);
         Found = true;
+#endif
     }
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     return Found;
@@ -782,6 +814,11 @@ int main(int argc, char **argv)
 	// Windows closes a packaged app whose window does not come up in time, and it only comes up once SDL handles events.
 	SDL_Init( SDL_INIT_VIDEO );
 	SDL_PumpEvents();
+	// The package folder is read-only, and the app's data folder is the one place every device lets it write.
+	// The file manager and the download cache look it up under this name.
+	WCHAR DataDir[MAX_PATH];
+	if( MultiByteToWideChar( CP_UTF8, 0, SDL_GetWinRTFSPath(SDL_WINRT_PATH_LOCAL_FOLDER), -1, DataDir, ARRAY_COUNT(DataDir) ) )
+		SetEnvironmentVariableW( L"LOCALAPPDATA", DataDir );
 	// OpenAL Soft takes the executable's folder from the wide argument list, which the C runtime leaves empty behind SDL's narrow WinMain.
 	static WCHAR ExePath[MAX_PATH];
 	static WCHAR* WideArgs[] = { ExePath, NULL };

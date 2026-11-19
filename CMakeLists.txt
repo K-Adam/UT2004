@@ -215,6 +215,9 @@ if(WIN32 OR ANDROID OR EMSCRIPTEN)
     find_library(GLES_TARGET GLESv3 REQUIRED)
     find_package(LibLZMA REQUIRED)
   elseif(WIN32)
+    if(UT_UWP)
+      find_package(LibLZMA REQUIRED)
+    endif()
     find_package(OpenAL CONFIG REQUIRED)
     find_package(unofficial-angle CONFIG REQUIRED)
     set(GLES_TARGET unofficial::angle::libGLESv2)
@@ -273,8 +276,8 @@ if(UT_UWP)
     GIT_TAG ec2e0e7c77ec9a04437eb3ae884d62ae0e6129b4
     # A git source updates on every configure, which would patch the tree again and fail
     UPDATE_DISCONNECTED ON
-    # The fork's CMake build leaves the DLL loader out, without which SDL cannot load ANGLE.
-    PATCH_COMMAND git apply ${CMAKE_SOURCE_DIR}/Uwp/sdl3-loadso.patch
+    # The fork's CMake build leaves the DLL loader out, without which SDL cannot load ANGLE, and it reports fullscreen it did not get.
+    PATCH_COMMAND git apply ${CMAKE_SOURCE_DIR}/Uwp/sdl3-uwp.patch
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(SDL3)
 else()

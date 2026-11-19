@@ -1,0 +1,31 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4025ee623..22127f4db 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2481,10 +2481,8 @@ endif()
+   set(HAVE_SDL_TIMERS TRUE)
+ 
+   set(SDL_LOADSO_WINDOWS 1)
+-  if(NOT WINDOWS_STORE)
+-    sdl_glob_sources("${SDL3_SOURCE_DIR}/src/loadso/windows/*.c")
+-    set(HAVE_SDL_LOADSO TRUE)
+-  endif()
++  sdl_glob_sources("${SDL3_SOURCE_DIR}/src/loadso/windows/*.c")
++  set(HAVE_SDL_LOADSO TRUE)
+ 
+   if(NOT WINDOWS_STORE)
+     sdl_glob_sources(
+diff --git a/src/video/winrt/SDL_winrtvideo.cpp b/src/video/winrt/SDL_winrtvideo.cpp
+index 5e832c9cb..8bc480541 100644
+--- a/src/video/winrt/SDL_winrtvideo.cpp
++++ b/src/video/winrt/SDL_winrtvideo.cpp
+@@ -1071,6 +1071,9 @@ SDL_FullscreenResult WINRT_SetWindowFullscreen(SDL_VideoDevice *_this, SDL_Windo
+                 data->appView->ExitFullScreenMode();
+             }
+         }
++    } else if (fullscreen) {
++        // Windows only lets the active view go fullscreen, and reporting success would size the SDL window to a display it does not fill.
++        return SDL_FULLSCREEN_FAILED;
+     }
+ #endif
+ 

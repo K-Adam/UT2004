@@ -43,5 +43,13 @@ SDL_IOStream* CreateContentFile(const char* Dest);
 // Zip keeps its index at the end, so the stream has to seek.
 bool Unzip(SDL_IOStream* Zip, FInstall& I);
 
-// HttpFile.cpp. Downloads UT_FULL_URL next to the content folders, resuming an earlier attempt, checks it and unpacks it.
+// SDLLaunchTar.cpp. Unpacks a .tar or .tar.xz stream. A zip archive is left alone and sets Zip, as it needs a stream that seeks.
+bool Untar(SDL_IOStream* In, FInstall& I, bool& Zip);
+
+// HttpFile.cpp. Each downloads its archive next to the content folders, resuming an earlier attempt, checks it and unpacks it.
+// UT_FULL_URL is the whole game, UT_ASSETS_URL the ten maps, which only packaged apps get this way.
 bool InstallFull(FInstall& I);
+bool InstallAssets(FInstall& I);
+// A download stays in Root until it is unpacked, so one found there means the content beside it is incomplete.
+// Forget removes them, for when the content came another way.
+bool PendingInstall(const char* Root, bool Forget);

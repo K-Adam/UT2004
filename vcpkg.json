@@ -8,7 +8,7 @@
     "libsquish",
     { "name": "speex", "platform": "windows | android | emscripten" },
     { "name": "speexdsp", "platform": "windows | android | emscripten" },
-    { "name": "liblzma", "platform": "android" },
+    { "name": "liblzma", "platform": "android | uwp" },
     { "name": "angle", "platform": "windows" },
     { "name": "libdatachannel", "default-features": false, "platform": "windows | android" },
     { "name": "nlohmann-json", "platform": "windows | android | emscripten" },

@@ -1615,7 +1615,12 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 		{
 			// Borderless at the desktop size, so switching away is instant.
 			SDL_SetWindowFullscreenMode( Window, NULL );
-			SDL_SetWindowFullscreen( Window, true );
+			// A system that refuses leaves a window, which has to keep following its size.
+			if( !SDL_SetWindowFullscreen( Window, true ) )
+			{
+				NewBlitFlags &= ~BLIT_Fullscreen;
+				BlitFlags &= ~BLIT_Fullscreen;
+			}
 		}
 		else
 		{
