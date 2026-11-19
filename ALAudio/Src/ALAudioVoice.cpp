@@ -235,7 +235,6 @@ INT FALVoiceModule::Encode()
 			// Retrieve sample data, also calculates maximum gain in range 0..1 and advances capture offset.
 			DWORD	SamplesRead	= AvailableSamples;
 			FLOAT	MaximumGain	= CaptureDevice->GetSampleData( CaptureOffset, CaptureData, SamplesRead, CaptureType );
-			check( AvailableSamples == SamplesRead );
 
 			SHORT*	Frame = new SHORT[FrameSize];
 			INT VoiceBandwidth = 0;

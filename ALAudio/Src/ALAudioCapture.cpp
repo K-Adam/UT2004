@@ -135,7 +135,8 @@ DWORD FALAudioCaptureDevice::GetAvailableSamples( DWORD Offset, EAudioCaptureTyp
 
 	if( ALCaptureDevice )
 	{
-		ALint samples;
+		// A failed query, as on the web with a refused microphone, leaves the result unwritten.
+		ALint samples = 0;
 		UALAudioSubsystem::alcGetIntegerv(ALCaptureDevice, alc_capture_samples, sizeof (ALint), &samples);
 
 		switch( Type )
