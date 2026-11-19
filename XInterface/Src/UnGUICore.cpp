@@ -1308,17 +1308,9 @@ void UGUIController::execGetProfileList(FFrame& Stack, RESULT_DECL )
 		{
 			if( appStrstr( *GSys->Paths(i), Wildcard ) )
 			{
-				TCHAR Tmp[256]=TEXT("");
-				if( DoCD )
-				{
-					appStrcat( Tmp, GCdPath );
-					appStrcat( Tmp, TEXT("System") PATH_SEPARATOR );
-				}
-				appStrcat( Tmp, *GSys->Paths(i) ); 
-				*appStrstr( Tmp, Wildcard )=0;
-				appStrcat( Tmp, *Prefix );
-				appStrcat( Tmp, Wildcard );
-				TArray<FString>	TheseNames = GFileManager->FindFiles(Tmp,1,0);
+				FString Dir = DoCD ? FString(GCdPath) + TEXT("System") PATH_SEPARATOR : FString();
+				Dir += GSys->Paths(i).Left( GSys->Paths(i).InStr(Wildcard) );
+				TArray<FString>	TheseNames = GFileManager->FindFiles(*(Dir + Prefix + Wildcard),1,0);
 				for( INT j=0; j<TheseNames.Num(); j++ )
 				{
 					INT k=ProfileNames->AddZeroed();

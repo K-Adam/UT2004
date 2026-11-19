@@ -157,57 +157,9 @@ void AActor::execMoveCacheEntry( FFrame& Stack, RESULT_DECL )
 	P_GET_STR_OPTX(NewFilename,TEXT(""));
 	P_FINISH;
 
+	// Moving a downloaded package into a Paths folder lets a server replace or install packages that load at every
+	// start, so the cache keeps its files.
 	*(UBOOL*)Result = 0;
-	TCHAR IniName[256], OrigFilename[256];
-	FConfigCacheIni CacheIni;
-	appSprintf( IniName, TEXT("%s") PATH_SEPARATOR TEXT("cache.ini"), *GSys->CachePath );
-	if( !CacheIni.GetString( TEXT("Cache"), *GUID, OrigFilename, ARRAY_COUNT(OrigFilename), IniName ) )
-		return;
-	if( !*(*NewFilename) )
-		NewFilename = OrigFilename;
-	INT i;
-	while( (i=NewFilename.InStr(TEXT("/"))) != -1 )
-		NewFilename = NewFilename.Mid(i+1);
-	while( (i=NewFilename.InStr(TEXT("\\"))) != -1 )
-		NewFilename = NewFilename.Mid(i+1);
-	while( (i=NewFilename.InStr(TEXT(":"))) != -1 )
-		NewFilename = NewFilename.Mid(i+1);
-
-	// get file extension
-	FString FileExt = NewFilename;
-	i = FileExt.InStr( TEXT(".") );
-	if( i == -1 )
-	{
-		debugf(TEXT("MoveCacheEntry: No extension: %s"), *NewFilename);
-		return;
-	}
-	while( i != -1 )
-	{
-		FileExt = FileExt.Mid( i + 1 );
-		i = FileExt.InStr( TEXT(".") );
-	}
-	FileExt = FString(TEXT(".")) + FileExt;
-	
-	// get the destination path from a Paths array entry such as ../Maps/*.unr
-	for( i=0; i<GSys->Paths.Num(); i++ )
-	{
-		if( GSys->Paths(i).Right( FileExt.Len() ) == FileExt )
-		{
-			const TCHAR* p;
-			for( p = *GSys->Paths(i) + GSys->Paths(i).Len() - 1; p >= *GSys->Paths(i); p-- )
-				if( *p=='/' || *p=='\\' || *p==':' )
-					break;
-
-			FString DestPath = GSys->Paths(i).Left( p - *GSys->Paths(i) + 1 );
-			debugf( TEXT("MoveCacheEntry: %s -> %s"), *(GSys->CachePath + FString(PATH_SEPARATOR) + GUID + GSys->CacheExt), *(DestPath + NewFilename) );
-			if( GFileManager->Move( *(DestPath + NewFilename), *(GSys->CachePath + FString(PATH_SEPARATOR) + GUID + GSys->CacheExt) ) )
-			{
-				CacheIni.SetString( TEXT("Cache"), *GUID, TEXT(""), IniName );
-				*(UBOOL*)Result = 1;
-			}
-			return;
-		}
-	}
 	unguardexec;
 }
 

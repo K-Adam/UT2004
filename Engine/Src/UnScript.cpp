@@ -2922,7 +2922,7 @@ void AActor::ProcessState( FLOAT DeltaSeconds )
 		INT NumCode=0;
 		while( !bDeleteMe && GetStateFrame()->Code && !GetStateFrame()->LatentAction && !bBadStateCode )
 		{
-			BYTE Buffer[MAX_CONST_SIZE];
+			BYTE Buffer[MAX_STRING_CONST_SIZE];
 			GetStateFrame()->Step( this, Buffer );
 			if ( NumCode++ > 1000000 )
 			{

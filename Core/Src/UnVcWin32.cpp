@@ -12,8 +12,6 @@
 
 #pragma pack(push,8)
 #include <windows.h>
-#include <shlobj.h>
-#include <shlwapi.h>
 #pragma pack(pop)
 
 #include <stdio.h>
@@ -669,7 +667,7 @@ CORE_API void appCleanFileCache()
 		for( INT i=0; i<Found.Num(); i++ )
 		{
 			FString Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("%s"), *GSys->CachePath, *Found(i) );
-			INT DiffDays = GetFileAgeDays( *Temp );
+			INT DiffDays = GetFileAgeDays( *GFileManager->ExpandPath(*Temp) );
 			if( DiffDays > GSys->PurgeCacheDays )
 			{
 				debugf( TEXT("Purging outdated file from cache: %s (%i days old)"), *Temp, DiffDays );
@@ -985,15 +983,9 @@ void appPlatformInit()
 	// System initialization.
 	GSys = new USystem;
 	GSys->AddToRoot();
-	TCHAR CacheRoot[MAX_PATH+1] = TEXT("");
-	if( FAILED(SHGetFolderPathW( NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, CacheRoot )) )
-		GetTempPathW( ARRAY_COUNT(CacheRoot), CacheRoot );
-	GSys->CachePath = FString(CacheRoot) * TEXT("UT2004") * TEXT("Cache");
-	// Old mods such as AntiTCC 1.19 locate package files by the ".." that starts a retail relative path.
-	// Relative to the file manager's home dir, because that is where it resolves writes.
-	TCHAR Relative[MAX_PATH+1];
-	if( PathRelativePathToW( Relative, GFileManager->CalcHomeDir(), FILE_ATTRIBUTE_DIRECTORY, *GSys->CachePath, FILE_ATTRIBUTE_DIRECTORY ) )
-		GSys->CachePath = Relative;
+	// The retail path, which server packages look for. The file manager keeps the files in the player's local
+	// application data.
+	GSys->CachePath = TEXT("..\\Cache");
 	for( INT i=0; i<GSys->Suppress.Num(); i++ )
 		GSys->Suppress(i).SetFlags( RF_Suppress );
 

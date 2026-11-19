@@ -20,6 +20,24 @@ Revision history:
 CORE_API void (UObject::*GNatives[EX_Max])( FFrame &Stack, RESULT_DECL );
 CORE_API INT GNativeDuplicate=0;
 
+static UClass* (*GNativeClasses[EX_Max])();
+static Native GRawNatives[EX_Max];
+enum { NATIVE_Unknown, NATIVE_AnyObject, NATIVE_OwnClass };
+static BYTE GNativeCheck[EX_Max];
+// Filled during static initialization, before the allocator exists.
+struct FNamedNative { Native Func; UClass* (*Class)(); };
+static FNamedNative GNamedNatives[8192];
+static INT GNumNamedNatives;
+
+// Natives cast the object to their C++ class, so a context switch must not hand them another kind of object.
+static UBOOL NativeAllowed( UObject* Object, INT iNative )
+{
+	UClass* Class = GNativeClass( iNative );
+	if( !GNativeCheck[iNative] )
+		GNativeCheck[iNative] = Class==UObject::StaticClass() ? NATIVE_AnyObject : NATIVE_OwnClass;
+	return GNativeCheck[iNative]==NATIVE_AnyObject || (Class && Object->IsA(Class));
+}
+
 // The cast token is a byte, so every value needs an entry.
 CORE_API void (UObject::*GCasts[256])( FFrame &Stack, RESULT_DECL );
 CORE_API INT GCastDuplicate=0;
@@ -366,6 +384,50 @@ static void SkipNullContext( FFrame& Stack, RESULT_DECL )
 		appMemzero( Result, Size );
 }
 
+static inline UBOOL IsDynArray()
+{
+	return GProperty && GProperty->IsA(UArrayProperty::StaticClass());
+}
+
+// The array opcodes use the variable's memory as an array, so any other variable fails like an access through None.
+static inline void DropNonArray( FFrame& Stack )
+{
+	if( GPropAddr && !IsDynArray() )
+	{
+		Stack.Logf( NAME_Warning, TEXT("'%s' is not a dynamic array"), GProperty ? GProperty->GetName() : TEXT("None") );
+		GPropAddr = NULL;
+		GPropObject = NULL;
+	}
+}
+
+// Package code names its fields freely, one of another class would read and write outside the object. Retail
+// packages do this on purpose, so it fails like an access through None.
+static inline UBOOL HasField( UObject* Object, FFrame& Stack, UProperty* Property, RESULT_DECL )
+{
+	if( Object->IsA((UClass*)Property->GetOuter()) )
+		return 1;
+	Stack.Logf( NAME_Warning, TEXT("%s is not a member of %s"), Property->GetFullName(), Object->GetClass()->GetName() );
+	GPropAddr = NULL;
+	GPropObject = NULL;
+	if( Result )
+		appMemzero( Result, Property->GetSize() );
+	return 0;
+}
+
+// Evaluates the arguments of a call that is not made.
+static void SkipCall( FFrame& Stack, UFunction* Function )
+{
+	BYTE* Frame = (BYTE*)appAlloca(Function->PropertiesSize+1);
+	appMemzero( Frame, Function->PropertiesSize );
+	for( UProperty* Property=(UProperty*)Function->Children; *Stack.Code!=EX_EndFunctionParms; Property=(UProperty*)Property->Next )
+		Stack.Step( Stack.Object, Frame + Property->Offset );
+	Stack.Code++;
+	if( *Stack.Code==EX_DebugInfo )
+		Stack.Step( Stack.Object, NULL );
+	for( UProperty* Destruct=Function->ConstructorLink; Destruct; Destruct=Destruct->ConstructorLinkNext )
+		Destruct->DestroyValue( Frame + Destruct->Offset );
+}
+
 ///////////////
 // Variables //
 ///////////////
@@ -392,6 +454,8 @@ void UObject::execInstanceVariable( FFrame& Stack, RESULT_DECL)
 	guardSlow(UObject::execInstanceVariable);
 
 	GProperty = (UProperty*)Stack.ReadObject();
+	if( !HasField(this,Stack,GProperty,Result) )
+		return;
 	GPropAddr = (BYTE*)this + GProperty->Offset;
 	GPropObject = this;
 
@@ -407,6 +471,8 @@ void UObject::execDefaultVariable( FFrame& Stack, RESULT_DECL )
 	guardSlow(UObject::execDefaultVariable);
 
 	GProperty = (UProperty*)Stack.ReadObject();
+	if( !HasField(this,Stack,GProperty,Result) )
+		return;
 	GPropAddr = &GetClass()->Defaults(GProperty->Offset);
 	GPropObject = NULL;
 	if( Result )
@@ -427,6 +493,8 @@ void UObject::execClassContext( FFrame& Stack, RESULT_DECL )
 	// Execute expression in class context.
 	if( ClassContext )
 	{
+		if( !((UObject*)ClassContext)->IsA(UClass::StaticClass()) )
+			Stack.Logf( NAME_Critical, TEXT("Class context %s is not a class"), ClassContext->GetFullName() );
 		Stack.Code += 3;
 		Stack.Step( ClassContext->GetDefaultObject(), Result );
 	}
@@ -517,16 +585,10 @@ void UObject::execDynArrayElement( FFrame& Stack, RESULT_DECL )
 	Stack.Step( this, NULL );
 	GPropObject = this;
 
-#if DO_CHECK_SLOW
-	if( !GProperty )
-		Stack.Logf( NAME_Error, TEXT("Accessed dynamic array through None") );
-	else
-	if( !GProperty->IsA(UArrayProperty::StaticClass()))
-		Stack.Logf( NAME_Error, TEXT("Accessed dynamic array through non-ArrayProperty") );
-#endif
+	DropNonArray( Stack );
 
 	// Add scaled offset to base pointer.
-	if( GProperty && GPropAddr )
+	if( GPropAddr )
 	{
 		FArray* Array=(FArray*)GPropAddr;
 		UArrayProperty* ArrayProp = (UArrayProperty*)GProperty;
@@ -569,6 +631,7 @@ void UObject::execDynArrayLength( FFrame& Stack, RESULT_DECL )
 	Stack.Step( this, NULL );
 	GPropObject = this;
 
+	DropNonArray( Stack );
 	if (GPropAddr)
 	{
 		FArray* Array=(FArray*)GPropAddr;
@@ -588,6 +651,7 @@ void UObject::execDynArrayInsert( FFrame& Stack, RESULT_DECL )
 	GPropObject = this;
 	GProperty = NULL;
 	Stack.Step( this, NULL );
+	DropNonArray( Stack );
 	UArrayProperty* ArrayProperty = Cast<UArrayProperty>(GProperty);
 	FArray* Array=(FArray*)GPropAddr;
 
@@ -618,6 +682,7 @@ void UObject::execDynArrayRemove( FFrame& Stack, RESULT_DECL )
 	GProperty = NULL;
 	GPropObject = this;
 	Stack.Step( this, NULL );
+	DropNonArray( Stack );
 	UArrayProperty* ArrayProperty = Cast<UArrayProperty>(GProperty);
 	FArray* Array=(FArray*)GPropAddr;
 
@@ -935,8 +1000,9 @@ void UObject::execLet( FFrame& Stack, RESULT_DECL )
 	guardSlow(UObject::execLet);
 	checkSlow(!IsA(UBoolProperty::StaticClass()));
 
-	// Get variable address.
+	// Get variable address. Only a length read in this target may mark the assignment as a length set.
 	GPropAddr = NULL;
+	GRuntimeUCFlags &= ~RUC_ArrayLengthSet;
 	Stack.Step( Stack.Object, NULL ); // Evaluate variable.
 	if( !GPropAddr )
 	{
@@ -950,13 +1016,15 @@ void UObject::execLet( FFrame& Stack, RESULT_DECL )
 	else if ( GPropObject && GProperty && (GProperty->PropertyFlags & CPF_Net) )
 		GPropObject->NetDirty(GProperty); // Using the object property instead would be faster
 
-	if (GRuntimeUCFlags & RUC_ArrayLengthSet)
+	UBOOL SetLength = (GRuntimeUCFlags & RUC_ArrayLengthSet) && IsDynArray();
+	GRuntimeUCFlags &= ~RUC_ArrayLengthSet;
+	if( SetLength )
 	{
-		GRuntimeUCFlags &= ~RUC_ArrayLengthSet;
 		FArray* Array=(FArray*)GPropAddr;
 		UArrayProperty* ArrayProp = (UArrayProperty*)GProperty;
 		INT NewSize = 0;
 		Stack.Step( Stack.Object, &NewSize); // Evaluate expression into variable.
+		NewSize = Max( NewSize, 0 );
 		if (NewSize > Array->Num())
 		{
 			Array->AddZeroed(ArrayProp->Inner->ElementSize, NewSize-Array->Num());
@@ -1066,7 +1134,16 @@ void UObject::execFinalFunction( FFrame& Stack, RESULT_DECL )
 	guardSlow(UObject::execFinalFunction);
 
 	// Call the final function.
-	CallFunction( Stack, Result, (UFunction*)Stack.ReadObject() );
+	// Script of another class runs with its own variables guarded. A native of another class uses the object as its
+	// C++ class, so it only runs where it was registered for this object's class.
+	UFunction* Function = (UFunction*)Stack.ReadObject();
+	if( (Function->FunctionFlags & FUNC_Native) && !IsA(Function->GetOwnerClass()) && !GIsNativeOf(Function->Func,GetClass()) )
+	{
+		Stack.Logf( NAME_Warning, TEXT("%s is not a function of %s"), Function->GetFullName(), GetClass()->GetName() );
+		SkipCall( Stack, Function );
+	}
+	else
+		CallFunction( Stack, Result, Function );
 
 	unguardexecSlow;
 }
@@ -1093,8 +1170,16 @@ void UObject::execDelegateFunction( FFrame& Stack, RESULT_DECL )
 
 	// Look up delegate property
 	UProperty* DelegateProperty = (UProperty*)Stack.ReadObject();
-	FScriptDelegate* Delegate = (FScriptDelegate*)((BYTE*)this + DelegateProperty->Offset);
 	FName DelegateName = Stack.ReadName();
+	if( !HasField(this,Stack,DelegateProperty,NULL) )
+	{
+		UDelegateProperty* Signature = Cast<UDelegateProperty>( DelegateProperty );
+		if( !Signature || !Signature->Function )
+			Stack.Logf( NAME_Critical, TEXT("%s is not a delegate"), DelegateProperty->GetFullName() );
+		SkipCall( Stack, Signature->Function );
+		return;
+	}
+	FScriptDelegate* Delegate = (FScriptDelegate*)((BYTE*)this + DelegateProperty->Offset);
 	if( Delegate->Object && Delegate->Object->IsPendingKill() )
 	{
 		Delegate->Object = NULL;
@@ -4221,8 +4306,13 @@ IMPLEMENT_FUNCTION( UObject, INDEX_NONE, execLocalize );
 void UObject::execHighNative##n( FFrame& Stack, RESULT_DECL ) \
 { \
 	guardSlow(UObject::execHighNative##n); \
-	BYTE B = *Stack.Code++; \
-	(this->*GNatives[ n*0x100 + B ])( Stack, Result ); \
+	INT iNative = n*0x100 + *Stack.Code++; \
+	if( iNative<0x100 ) \
+		(this->*GNatives[iNative])( Stack, Result ); \
+	else if( NativeAllowed(this,iNative) ) \
+		(this->*GRawNatives[iNative])( Stack, Result ); \
+	else \
+		Stack.Logf( NAME_Critical, TEXT("Native %i called on %s"), iNative, GetFullName() ); \
 	unguardexecSlow; \
 } \
 IMPLEMENT_FUNCTION( UObject, 0x60 + n, execHighNative##n );
@@ -4417,7 +4507,8 @@ void UObject::execSetPropertyText( FFrame& Stack, RESULT_DECL )
 	if
 	(	(Property)
 	&&	(Property->GetFlags() & RF_Public)
-	&&	!(Property->PropertyFlags & (CPF_Const|CPF_Native)) )
+	&&	!(Property->PropertyFlags & CPF_Const)
+	&&	Property->IsTextWritable() )
     {
 		Property->ImportText( *PropValue, (BYTE*)this + Property->Offset, PPF_Localized );
         *(DWORD*)Result = 1; //amb: return success
@@ -4623,8 +4714,19 @@ IMPLEMENT_FUNCTION(UObject,303,execIsA);
 	Native iterator functions.
 -----------------------------------------------------------------------------*/
 
+CORE_API INT GIteratorRuns = 0;
+
+// When the iterator's context is None the native never reads the end offset, so skip it and the loop here instead
+// of running the offset bytes as code.
 void UObject::execIterator( FFrame& Stack, RESULT_DECL )
-{}
+{
+	guardSlow(UObject::execIterator);
+	INT Runs = GIteratorRuns;
+	Stack.Step( Stack.Object, NULL );
+	if( GIteratorRuns==Runs )
+		Stack.Code = &Stack.Node->Script( Stack.ReadWord() + 1 );
+	unguardexecSlow;
+}
 IMPLEMENT_FUNCTION( UObject, EX_Iterator, execIterator );
 
 // amb ---
@@ -4785,7 +4887,7 @@ IMPLEMENT_FUNCTION( UObject, INDEX_NONE, execIsSoaking );
 // Register a native function.
 // Warning: Called at startup time, before engine initialization.
 //
-BYTE CORE_API GRegisterNative( INT iNative, const Native& Func )
+BYTE CORE_API GRegisterNative( INT iNative, const Native& Func, UClass* (*Class)() )
 {
 	static int Initialized = 0;
 	if( !Initialized )
@@ -4802,10 +4904,48 @@ BYTE CORE_API GRegisterNative( INT iNative, const Native& Func )
 		{
 			if( GNatives[iNative]!=&UObject::execUndefined )
 				GNativeDuplicate = iNative;
-			GNatives[iNative] = Func;
+			GNativeClasses[iNative] = Class;
+			GRawNatives[iNative] = Func;
+			GNatives[iNative] = iNative>=EX_FirstNative && iNative<0x100 ? &UObject::execCheckedNative : Func;
 		}
 	}
+	// Script may bind a numbered native by name too.
+	if( GNumNamedNatives<ARRAY_COUNT(GNamedNatives) )
+	{
+		GNamedNatives[GNumNamedNatives].Func = Func;
+		GNamedNatives[GNumNamedNatives++].Class = Class;
+	}
 	return 0;
+}
+
+UClass* GNativeClass( INT iNative )
+{
+	return iNative>=0 && iNative<EX_Max && GNativeClasses[iNative] ? GNativeClasses[iNative]() : NULL;
+}
+
+// The linker may fold natives with identical code into one, so any class registered for it counts.
+UBOOL GIsNativeOf( const Native& Func, UClass* Class )
+{
+	for( INT i=0; i<GNumNamedNatives; i++ )
+		if( GNamedNatives[i].Func==Func && Class->IsChildOf(GNamedNatives[i].Class()) )
+			return 1;
+	return 0;
+}
+
+Native GUncheckedNative( INT iNative )
+{
+	return GRawNatives[iNative];
+}
+
+void UObject::execCheckedNative( FFrame& Stack, RESULT_DECL )
+{
+	INT iNative = Stack.Code[-1];
+	if( !NativeAllowed(this,iNative) )
+		Stack.Logf( NAME_Critical, TEXT("Native %i called on %s"), iNative, GetFullName() );
+	// Object natives take any object, so they no longer need this detour.
+	if( GNativeCheck[iNative]==NATIVE_AnyObject )
+		GNatives[iNative] = GRawNatives[iNative];
+	(this->*GRawNatives[iNative])( Stack, Result );
 }
 
 BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func )

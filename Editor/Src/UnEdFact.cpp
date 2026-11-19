@@ -3225,8 +3225,9 @@ void UMaterialFactory::execConsoleCommand( FFrame& Stack, RESULT_DECL )
 {
 	guard(UMaterialFactory::execConsoleCommand);
 	P_GET_STR(Cmd);
-	GEditor->Exec( *Cmd );
 	P_FINISH;
+	if( GEditor )
+		GEditor->Exec( *Cmd );
 	unguard;
 }
 IMPLEMENT_CLASS(UMaterialFactory);

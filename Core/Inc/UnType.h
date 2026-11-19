@@ -71,6 +71,8 @@ class CORE_API UProperty : public UField
 	// Localization
 	virtual UBOOL IsLocalized() const; // rjp
 
+	UBOOL IsTextWritable();
+
 	// Inlines.
 	UBOOL Matches( const void* A, const void* B, INT ArrayIndex ) const
 	{
@@ -276,6 +278,10 @@ class CORE_API UFloatProperty : public UProperty
 /*-----------------------------------------------------------------------------
 	UObjectProperty.
 -----------------------------------------------------------------------------*/
+
+// Retail lets text put an object into a reference of any class. A module can offer an object of the wanted class
+// to use in its place, otherwise the reference becomes None.
+extern CORE_API UObject* (*GImportStandIn)( UObject* Object, UClass* Wanted );
 
 //
 // Describes a reference variable to another object which may be nil.

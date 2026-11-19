@@ -3369,6 +3369,16 @@ void UGameEngine::Tick( FLOAT DeltaSeconds )
     if( DeltaSeconds < 0.0f )
         appErrorf(TEXT("Negative delta time!"));
 
+	if( GRefusedScript.Len() )
+	{
+		if( Client && Client->Viewports.Num() )
+		{
+			SetClientTravel( Client->Viewports(0), TEXT("?failed"), 0, TRAVEL_Absolute );
+			SetProgress( *FString::Printf(TEXT("menu:%s"),*DisconnectMenuClass), LocalizeError(TEXT("ConnectionFailed"),TEXT("Engine")), *GRefusedScript );
+		}
+		GRefusedScript = TEXT("");
+	}
+
 	// If all viewports closed, time to exit.
 	if( Client && Client->Viewports.Num()==0 )
 	{

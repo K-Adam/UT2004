@@ -1988,8 +1988,7 @@ void UObject::GlobalSetProperty( const TCHAR* Value, UClass* Class, UProperty* P
 {
 	guard(UObject::GlobalSetProperty);
 
-	// Native properties hold raw pointers and containers that text must not overwrite.
-	if( Property->PropertyFlags & CPF_Native )
+	if( !Property->IsTextWritable() )
 		return;
 
 	// Apply to existing objects of the class, with notification.
@@ -2930,9 +2929,9 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 			return 1;
 	    }
 
-		if( Property->PropertyFlags & CPF_Native )
+		if( !Property->IsTextWritable() )
 		{
-			Ar.Logf( NAME_ExecWarning, TEXT("Property %s is native"), PropertyName );
+			Ar.Logf( NAME_ExecWarning, TEXT("Property %s cannot be set"), PropertyName );
 			return 1;
 		}
 
@@ -5477,6 +5476,13 @@ void UCommandlet::execMain( FFrame& Stack, RESULT_DECL )
 	P_GET_STR(Parms);
 	P_FINISH;
 
+	// Native commandlets write and delete files at any path, so a downloaded package must not run them in the game.
+	if( !GIsUCC )
+	{
+		Stack.Logf( NAME_Warning, TEXT("Commandlets only run from UCC") );
+		*(INT*)Result = 1;
+		return;
+	}
 	*(INT*)Result = Main( *Parms );
 
 	unguardexecSlow;

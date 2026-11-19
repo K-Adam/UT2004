@@ -1673,6 +1673,15 @@ UProperty* UFunction::GetReturnProperty()
 	unguard;
 }
 CORE_API void (*GBindScriptFunction)( UFunction* Function ) = NULL;
+CORE_API FString GRefusedScript;
+
+// The function ends the game if it is still called before the engine leaves the level.
+static void RefuseNative( UFunction* Function )
+{
+	debugf( NAME_Warning, TEXT("Native %s does not belong to its class"), Function->GetFullName() );
+	GRefusedScript = Function->GetPathName();
+	Function->Func = &UObject::execUndefined;
+}
 
 void UFunction::Bind()
 {
@@ -1687,20 +1696,28 @@ void UFunction::Bind()
 	}
 	else if( iNative != 0 )
 	{
-		// Find hardcoded native.
-		check(iNative<EX_Max);
-		check(GNatives[iNative]!=0);
-		Func = GNatives[iNative];
+		// The package picks the number, so it must name a native of this class, not an opcode or another class's
+		// native. A number without a native stays bound to the unknown code handler.
+		UClass* NativeClass = iNative>=EX_FirstNative ? GNativeClass(iNative) : NULL;
+		if( NativeClass && GetOwnerClass()->IsChildOf(NativeClass) )
+			Func = GUncheckedNative(iNative);
+		else if( iNative>=EX_FirstNative && !NativeClass )
+			Func = &UObject::execUndefined;
+		else
+			RefuseNative( this );
 	}
 	else
 	{
-		// Find dynamic native.
+		// Static builds look natives up by name alone, so a package class named like a native class would bind
+		// its code.
 		TCHAR Proc[256];
 		appSprintf( Proc, TEXT("int%sexec%s"), GetOwnerClass()->GetNameCPP(), GetName() );
 		UPackage* ClassPackage = GetOwnerClass()->GetOuterUPackage();
 		Native* Ptr = (Native*)ClassPackage->GetDllExport( Proc, 1 );
-		if( Ptr )
+		if( Ptr && GIsNativeOf(*Ptr,GetOwnerClass()) )
 			Func = *Ptr;
+		else if( Ptr )
+			RefuseNative( this );
 	}
 	unguard;
 }

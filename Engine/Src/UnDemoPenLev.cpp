@@ -46,6 +46,9 @@ void UDemoPlayPendingLevel::NotifyReceivedText( UNetConnection* Connection, cons
 	guard(UDemoPlayPendingLevel::NotifyReceivedText);
 	if( ParseCommand( &Text, TEXT("USES") ) )
 	{
+		// A download keeps a pointer into the package list.
+		if( Connection->Download )
+			return;
 		// Dependency information.
 		FPackageInfo& Info = *new(Connection->PackageMap->List)FPackageInfo(NULL);
 		TCHAR PackageName[NAME_SIZE]=TEXT("");

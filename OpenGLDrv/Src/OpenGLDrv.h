@@ -464,6 +464,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			ImprovedFoliage,
 			DetectSettings;
 	INT		ResolutionScale;	// Percent of the window the world renders at.
+	FLOAT	DefaultTexMipBias;
 
 	UBOOL	SupportsDXT1,
 			SupportsDXT35,

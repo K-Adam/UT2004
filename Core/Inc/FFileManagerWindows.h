@@ -628,6 +628,9 @@ public:
 	}
 	TArray<FString> FindFiles( const TCHAR* Filename, UBOOL Files, UBOOL Directories )
 	{
+		FString Cache = InCache( Filename );
+		if( Cache.Len() )
+			return FFileManagerWindows::FindFiles( *Cache, Files, Directories );
 		TArray<FString> Result = FFileManagerWindows::FindFiles( Filename, Files, Directories );
 		if( IsOverlaid(Filename) )
 		{
@@ -670,9 +673,26 @@ private:
 		CalcHomeDir();
 		return Overlaid && Path[0] && Path[0]!='\\' && Path[0]!='/' && Path[1]!=':';
 	}
+	// The download cache shows as ..\Cache, where retail has it, and lives in the player's local application data.
+	FString InCache( const TCHAR* Path )
+	{
+		const INT Len = ARRAY_COUNT(TEXT("..\\Cache")) - 1;
+		TCHAR Local[MAX_PATH - 64];
+		if( appStrnicmp( Path, TEXT("..\\Cache"), Len )!=0 && appStrnicmp( Path, TEXT("../Cache"), Len )!=0 )
+			return FString();
+		if( Path[Len] && Path[Len]!='\\' && Path[Len]!='/' )
+			return FString();
+		DWORD Got = GetEnvironmentVariableW( TEXT("LOCALAPPDATA"), Local, ARRAY_COUNT(Local) );
+		if( Got==0 || Got>=ARRAY_COUNT(Local) )
+			return FString();
+		return FString(Local) + TEXT("\\UT2004\\Cache") + (Path+Len);
+	}
 	// Where the player's copy of a file is or would be.
 	FString InHome( const TCHAR* Path )
 	{
+		FString Cache = InCache( Path );
+		if( Cache.Len() )
+			return Cache;
 		if( !IsOverlaid(Path) )
 			return Path;
 		// Paths like ..\Save leave the System folder, and the directory functions need them without the dots.

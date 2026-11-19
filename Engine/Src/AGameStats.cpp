@@ -11,6 +11,10 @@
 
 IMPLEMENT_CLASS(AGameStats);
 
+// Retail packages call these two on actors of other classes. They use nothing a GameStats adds.
+static BYTE MapFileNameForActors = GRegisterNative( INDEX_NONE, (Native)&AGameStats::execGetMapFileName, &AActor::StaticClass );
+static BYTE StatsIdentifierForActors = GRegisterNative( INDEX_NONE, (Native)&AGameStats::execGetStatsIdentifier, &AActor::StaticClass );
+
 void AGameStats::execGetMapFileName( FFrame& Stack, RESULT_DECL )
 {
 	guard(AGameStats::execGetMapFileName);

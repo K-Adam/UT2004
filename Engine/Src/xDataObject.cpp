@@ -22,6 +22,10 @@ static void RemoveFileExt(const FString& fileName, TCHAR* noExtFileName)
 static UPackage* CheckPackageLoaded(const FString& packageName, UBOOL bCreateIfNotFound, UManifest* manifest)
 {
 	guard(CheckPackageLoaded);
+	// Script names the package, and the name becomes a path under ..\Saves.
+	if( !appIsBareFileName(*packageName) )
+		return NULL;
+
     // remove the file extension
     TCHAR Temp[256];
     RemoveFileExt(packageName, Temp);
@@ -106,7 +110,7 @@ void AGameInfo::execCreateDataObject( FFrame& Stack, RESULT_DECL )
         SaveGameManifest = CreateManifest();
 
     UPackage* pkg = CheckPackageLoaded(packageName, 1, SaveGameManifest);
-    UObject* obj = StaticConstructObject(objClass, pkg, *objName, RF_Public | RF_Standalone, NULL, GError);
+    UObject* obj = pkg ? StaticConstructObject(objClass, pkg, *objName, RF_Public | RF_Standalone, NULL, GError) : NULL;
 
     if (obj)
     {
@@ -282,6 +286,8 @@ void AGameInfo::execDeletePackage( FFrame& Stack, RESULT_DECL )
     checkSlow( packageName.Len() );
 
     *(DWORD*) Result = 0;
+	if( !appIsBareFileName(*packageName) )
+		return;
 
 	UBOOL success = true;
 

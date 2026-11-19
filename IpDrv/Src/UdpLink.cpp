@@ -133,7 +133,9 @@ void AUdpLink::execSendText( FFrame& Stack, RESULT_DECL )
 		Addr.sin_family      = AF_INET;
 		Addr.sin_port        = htons(IpAddr.Port);
 		Addr.sin_addr.s_addr = htonl(IpAddr.Addr);
-		INT SentBytes = sendto( Socket, (char*)appToAnsi(*Str), sizeof(ANSICHAR)*Str.Len(), MSG_NOSIGNAL, (sockaddr*)&Addr, sizeof(Addr) );
+		// appToAnsi truncates long strings, so its length is not Str.Len().
+		const ANSICHAR* Ansi = appToAnsi(*Str);
+		INT SentBytes = sendto( Socket, (char*)Ansi, strlen(Ansi), MSG_NOSIGNAL, (sockaddr*)&Addr, sizeof(Addr) );
 		if ( SentBytes == SOCKET_ERROR )
 		{
             TCHAR* error = SocketError(WSAGetLastError());
@@ -311,7 +313,7 @@ void AUdpLink::execReadBinary( FFrame& Stack, RESULT_DECL )
 	{
 		sockaddr_in FromAddr;
 		SOCKLEN FromSize = sizeof(FromAddr);
-		INT BytesReceived = recvfrom( (SOCKET) Socket, (char*)B, Min(Count,255), MSG_NOSIGNAL, (sockaddr*)&FromAddr, &FromSize );
+		INT BytesReceived = recvfrom( (SOCKET) Socket, (char*)B, Clamp(Count,0,255), MSG_NOSIGNAL, (sockaddr*)&FromAddr, &FromSize );
 		if( BytesReceived != SOCKET_ERROR )
 		{
 			Addr->Addr = ntohl( FromAddr.sin_addr.s_addr );

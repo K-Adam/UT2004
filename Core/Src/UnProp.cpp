@@ -254,6 +254,13 @@ UBOOL UProperty::IsLocalized() const // rjp
 	return PropertyFlags & CPF_Localized;
 }
 
+// Native properties hold raw pointers and containers. The System paths decide where packages load from and
+// size fixed path buffers, so script must not set them.
+UBOOL UProperty::IsTextWritable()
+{
+	return !(PropertyFlags & CPF_Native) && !GetOwnerClass()->IsChildOf(USystem::StaticClass());
+}
+
 //
 // Return whether the property should be exported.
 //
@@ -1205,6 +1212,8 @@ void UObjectProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BY
 		ValueStr += TEXT("None");
 	unguardobj;
 }
+CORE_API UObject* (*GImportStandIn)( UObject* Object, UClass* Wanted ) = NULL;
+
 const TCHAR* UObjectProperty::ImportText( const TCHAR* InBuffer, BYTE* Data, INT PortFlags ) const
 {
 	guard(UObjectProperty::ImportText);
@@ -1265,7 +1274,7 @@ const TCHAR* UObjectProperty::ImportText( const TCHAR* InBuffer, BYTE* Data, INT
 			{
 				if( PortFlags & PPF_CheckReferences )
 					GWarn->Logf( NAME_Error, TEXT("%s: bad cast in '%s'"), GetFullName(), InBuffer );
-				*(UObject**)Data = NULL;
+				*(UObject**)Data = GImportStandIn ? GImportStandIn( *(UObject**)Data, PropertyClass ) : NULL;
 			}
             // --- gam
 

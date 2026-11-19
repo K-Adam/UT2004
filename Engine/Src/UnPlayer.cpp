@@ -92,6 +92,38 @@ UBOOL UPlayer::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 }
 IMPLEMENT_CLASS(UPlayer);
 
+// Packages reach the native fields of the 32-bit retail Player through a text-assigned reference of their own
+// Player subclass. Other builds have other fields there, so the reference gets a blank object of that subclass. Its
+// zeroes match network play, where the engine refuses the debug render modes those fields hold.
+class UPlayerStandIn : public UPlayer
+{
+	DECLARE_CLASS(UPlayerStandIn,UPlayer,CLASS_Transient,Engine)
+	void ReadInput( FLOAT DeltaSeconds ) {}
+	void Serialize( const TCHAR* V, EName Event ) {}
+	using UPlayer::Serialize;
+};
+IMPLEMENT_CLASS(UPlayerStandIn);
+
+static UObject* PlayerStandIn( UObject* Object, UClass* Wanted )
+{
+	UObject* Outer = Object->GetOuter();
+	if( !Object->IsA(UPlayer::StaticClass()) || Wanted->GetSuperClass()!=UPlayer::StaticClass() || !Outer->IsA(Wanted->ClassWithin) )
+		return NULL;
+	FString Name = FString(Wanted->GetName()) + TEXT("StandIn");
+	UObject* StandIn = UObject::StaticFindObject( Wanted, Outer, *Name );
+	if( !StandIn )
+	{
+		// The class inherits Player's abstract flag, the stand-in brings the concrete native part.
+		DWORD Flags = Wanted->ClassFlags;
+		Wanted->ClassFlags &= ~CLASS_Abstract;
+		StandIn = UObject::StaticAllocateObject( Wanted, Outer, FName(*Name), 0 );
+		Wanted->ClassFlags = Flags;
+		UPlayerStandIn::InternalConstructor( StandIn );
+	}
+	return StandIn;
+}
+static INT InstallPlayerStandIn = (GImportStandIn = PlayerStandIn, 0);
+
 /*-----------------------------------------------------------------------------
 	The End.
 -----------------------------------------------------------------------------*/

@@ -17,7 +17,13 @@ typedef void (UObject::*Native)( FFrame& TheStack, RESULT_DECL );
 extern CORE_API Native GNatives[];
 // Called for every script function as it binds, so a module can wrap one natively without changing its package.
 extern CORE_API void (*GBindScriptFunction)( UFunction* Function );
-BYTE CORE_API GRegisterNative( INT iNative, const Native& Func );
+BYTE CORE_API GRegisterNative( INT iNative, const Native& Func, UClass* (*Class)() );
+// The C++ class a native was written for, so script can only bind and call it on objects of that class.
+CORE_API UClass* GNativeClass( INT iNative );
+CORE_API UBOOL GIsNativeOf( const Native& Func, UClass* Class );
+CORE_API Native GUncheckedNative( INT iNative );
+// Path of script the loader refused, the engine leaves the level that brought it.
+extern CORE_API FString GRefusedScript;
 
 extern CORE_API Native GCasts[];
 BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
@@ -29,11 +35,11 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 #if _MSC_VER
 	#define IMPLEMENT_FUNCTION(cls,num,func) \
 		extern "C" DLL_EXPORT Native int##cls##func = (Native)&cls::func; \
-		static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func );
+		static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func, &cls::StaticClass );
 #else
 	#define IMPLEMENT_FUNCTION(cls,num,func) \
 		extern "C" DLL_EXPORT { Native int##cls##func = (Native)&cls::func; } \
-		static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func );
+		static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func, &cls::StaticClass );
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -43,6 +49,8 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 //
 // Macros for grabbing parameters for native functions.
 //
+// Script only checks an object's class when it is used as a context, so natives check their object parameters.
+#define P_CHECK_OBJECT(cls,var)       if( var && !((UObject*)var)->IsA(cls::StaticClass()) ) var=NULL;
 #define P_GET_UBOOL(var)              DWORD var=0;                         Stack.Step( Stack.Object, &var    );
 #define P_GET_UBOOL_OPTX(var,def)     DWORD var=def;                       Stack.Step( Stack.Object, &var    );
 #define P_GET_STRUCT(typ,var)         typ   var;                           Stack.Step( Stack.Object, &var    );
@@ -63,9 +71,9 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 #define P_GET_STR(var)                FString var;                         Stack.Step( Stack.Object, &var    );
 #define P_GET_STR_OPTX(var,def)       FString var(def);                    Stack.Step( Stack.Object, &var    );
 #define P_GET_STR_REF(var)            FString var##T; GPropAddr=0;         Stack.Step( Stack.Object, &var##T ); if( GPropObject )GPropObject->NetDirty(GProperty); FString* var = GPropAddr ? (FString*)GPropAddr:&var##T;
-#define P_GET_OBJECT(cls,var)         cls*  var=NULL;                      Stack.Step( Stack.Object, &var    );
-#define P_GET_OBJECT_OPTX(cls,var,def)cls*  var=def;                       Stack.Step( Stack.Object, &var    );
-#define P_GET_OBJECT_REF(cls,var)     cls*  var##T=NULL; GPropAddr=0;      Stack.Step( Stack.Object, &var##T ); if( GPropObject )GPropObject->NetDirty(GProperty); cls**    var = GPropAddr ? (cls   **)GPropAddr:&var##T;
+#define P_GET_OBJECT(cls,var)         cls*  var=NULL;                      Stack.Step( Stack.Object, &var    ); P_CHECK_OBJECT(cls,var);
+#define P_GET_OBJECT_OPTX(cls,var,def)cls*  var=def;                       Stack.Step( Stack.Object, &var    ); P_CHECK_OBJECT(cls,var);
+#define P_GET_OBJECT_REF(cls,var)     cls*  var##T=NULL; GPropAddr=0;      Stack.Step( Stack.Object, &var##T ); if( GPropObject )GPropObject->NetDirty(GProperty); cls**    var = GPropAddr ? (cls   **)GPropAddr:&var##T; P_CHECK_OBJECT(cls,*var);
 #define P_GET_ARRAY_REF(typ,var)      typ   var##T[256]; GPropAddr=0;      Stack.Step( Stack.Object,  var##T ); if( GPropObject )GPropObject->NetDirty(GProperty); typ*     var = GPropAddr ? (typ    *)GPropAddr: var##T;
 // rjp --
 #define P_GET_TARRAY(var,typ)         TArray<typ> var;                     Stack.Step( Stack.Object, &var    );
@@ -93,9 +101,11 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 //
 // Iterator macros.
 //
+extern CORE_API INT GIteratorRuns;
 #define PRE_ITERATOR \
+	GIteratorRuns++; \
 	INT wEndOffset = Stack.ReadWord(); \
-	BYTE B=0, Buffer[MAX_CONST_SIZE]; \
+	BYTE B=0, Buffer[MAX_STRING_CONST_SIZE]; \
 	BYTE *StartCode = Stack.Code; \
 	do {
 #define POST_ITERATOR \

@@ -46,6 +46,9 @@ void UClient::StaticConstructor()
 	new(GetClass(),TEXT("ScreenFlashes"),		RF_Public)UBoolProperty (CPP_PROPERTY(ScreenFlashes			), TEXT("Display"), CPF_Config );
 	new(GetClass(),TEXT("ReportDynamicUploads"),RF_Public)UBoolProperty (CPP_PROPERTY(ReportDynamicUploads	), TEXT("Display"), CPF_Config );
 	new(GetClass(),TEXT("ScaleHUDX"),			RF_Public)UFloatProperty(CPP_PROPERTY(ScaleHUDX				), TEXT("Display"), CPF_Config );
+	// Retail has this setting and server packages read it. This renderer always draws the full distance.
+	new(GetClass(),TEXT("DrawDistanceLOD"),		RF_Public)UFloatProperty(CPP_PROPERTY(DrawDistanceLOD		), TEXT("Display"), 0 );
+	DrawDistanceLOD = 1.f;
 
 	unguard;
 }

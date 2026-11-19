@@ -440,6 +440,11 @@ UBOOL UViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		GConfig->GetInt(TEXT("Screenshots"),TEXT("ShotCount"),ShotCount,TEXT("User.ini"));
 
 		ShotName = ShotName.Replace(TEXT("%c"), *FString::Printf(TEXT("%05i"),ShotCount));
+
+		// Script runs SHOT with its own name, and servers choose the map title and player name.
+		for( INT i=0; i<ShotName.Len(); i++ )
+			if( ShotName[i]=='/' || ShotName[i]=='\\' || ShotName[i]==':' )
+				ShotName[i] = '_';
 		ShotName = FString::Printf(TEXT("%s\\%s"),*ShotDir,*ShotName);
 
 		appCreateBitmap( *ShotName, SizeX, SizeY, (DWORD*) Buf, GFileManager );

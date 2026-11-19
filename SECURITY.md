@@ -4,7 +4,7 @@ The game talks to master servers, game servers and other players, and a dedicate
 
 ## What a server can do to a player
 
-Joining a server runs that server's UnrealScript on the player's machine, as the retail game does. On Windows, Linux and Android that script runs with the game's own rights. It can read and write the game's ini files and logs. It cannot load native code or start programs. A web page it wants to open is shown to the player first, who can say no. The web build is confined by the browser's sandbox.
+Joining a server runs that server's UnrealScript on the player's machine, as the retail game does. On Windows, Linux and Android that script runs with the game's own rights. It can change the game's settings and write logs, saves, screenshots and demos in the game's folders. It is not meant to reach other files, load native code or start programs, and anything that lets it is a bug to report. A web page it wants to open is shown to the player first, who can say no. The web build is confined by the browser's sandbox.
 
 `AllowDownloads=False` in `[IpDrv.TcpNetDriver]` keeps new packages from being downloaded. Packages already in the game folders or in the cache are still used. Join servers you trust.
 

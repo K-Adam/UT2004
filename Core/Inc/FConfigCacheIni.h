@@ -197,6 +197,15 @@ public:
 		}
 		unguard;
 	}
+	// Script and servers set config strings, a line break in one would add sections and keys of their choosing.
+	static FString SingleLine( const FString& S )
+	{
+		FString Out;
+		for( const TCHAR* P=*S; *P; P++ )
+			if( *P!='\r' && *P!='\n' )
+				Out += FString::Chr( *P );
+		return Out;
+	}
 	UBOOL Write( const TCHAR* Filename )
 	{
 		guard(FConfigFile::Write);
@@ -211,9 +220,9 @@ public:
             #else
                 TCHAR *newline = TEXT("\n");
             #endif
-			Text += FString::Printf( TEXT("[%s]%s"), *It.Key(), newline );
+			Text += FString::Printf( TEXT("[%s]%s"), *SingleLine(It.Key()), newline );
 			for( FConfigSection::TIterator It2(It.Value()); It2; ++It2 )
-				Text += FString::Printf( TEXT("%s=%s%s%s%s"), *It2.Key(), Quotes ? TEXT("\"") : TEXT(""), *It2.Value(), Quotes ? TEXT("\"") : TEXT(""), newline );
+				Text += FString::Printf( TEXT("%s=%s%s%s%s"), *SingleLine(It2.Key()), Quotes ? TEXT("\"") : TEXT(""), *SingleLine(It2.Value()), Quotes ? TEXT("\"") : TEXT(""), newline );
 			Text += FString::Printf( newline );
 		}
 		return appSaveStringToFile( Text, Filename, GFileManager, 0, 1 );

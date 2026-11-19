@@ -40,6 +40,8 @@ void UOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(),TEXT("ImprovedFoliage"),	RF_Public)UBoolProperty(CPP_PROPERTY(ImprovedFoliage),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("ResolutionScale"),	RF_Public)UIntProperty(CPP_PROPERTY(ResolutionScale),	TEXT("Options"),CPF_Config);
 	new(GetClass(),TEXT("DetectSettings"),	RF_Public)UBoolProperty(CPP_PROPERTY(DetectSettings),	TEXT("Options"),CPF_Config);
+	// Retail render devices have this setting and server packages read it. This renderer applies no bias.
+	new(GetClass(),TEXT("DefaultTexMipBias"),RF_Public)UFloatProperty(CPP_PROPERTY(DefaultTexMipBias),TEXT("Options"),0);
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
 	Antialiasing = AmbientOcclusion = ContactShadows = ScreenSpaceReflections = DepthOfField = VolumetricFog = GlobalIllumination = HeatHaze = SmoothTerrain = ImprovedFoliage = 1;

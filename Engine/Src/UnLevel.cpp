@@ -663,6 +663,9 @@ UBOOL ULevel::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		while ( DemoName.InStr( TEXT(".") ) != -1 )
 			DemoName = DemoName.Replace( TEXT("."),TEXT("_") );
 
+		while ( DemoName.InStr( TEXT(":") ) != -1 )
+			DemoName = DemoName.Replace( TEXT(":"),TEXT("_") );
+
 		while ( DemoName.InStr( TEXT(" ") ) != -1 )
 			DemoName = DemoName.Replace( TEXT(" "),TEXT("_") );
 

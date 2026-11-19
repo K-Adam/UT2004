@@ -490,6 +490,7 @@ class ENGINE_API UClient : public UObject
 	FLOAT		Gamma;
 	UViewport*	LastCurrent;		// The viewport that was last current
 	FLOAT		ScaleHUDX;
+	FLOAT		DrawDistanceLOD;
 
 	class UInteractionMaster* InteractionMaster;	// Input router
 

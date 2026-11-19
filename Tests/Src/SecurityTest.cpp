@@ -130,6 +130,44 @@ TEST( Security, ImportTextKeepsTypes )
 	Delegate->ImportText( *(Repeat( TEXT("o"), 300 ) + TEXT(".") + Repeat( TEXT("f"), 300 )), Storage, 0 );
 }
 
+TEST( Security, ConfigValuesStayOnOneLine )
+{
+	const TCHAR* File = TEXT("SecurityTest.ini");
+	GConfig->SetString( TEXT("Section\r\n[Forged]"), TEXT("Key\r\nForgedKey"), TEXT("Value\r\n[Forged]\r\nForgedKey=1"), File );
+	GConfig->Flush( 0, File );
+	FString Text;
+	ASSERT_TRUE( appLoadFileToString( Text, File ) );
+	EXPECT_EQ( -1, Text.InStr( TEXT("\n[Forged]") ) );
+	EXPECT_EQ( -1, Text.InStr( TEXT("\nForgedKey") ) );
+	GConfig->UnloadFile( File );
+	GFileManager->Delete( File );
+}
+
+TEST( Security, ScriptCannotSetSystemPaths )
+{
+	FString Old = GSys->SavePath;
+	UObject::StaticExec( TEXT("SET System SavePath Forged") );
+	UObject::StaticExec( *FString::Printf( TEXT("POKE System %s SavePath Forged"), GSys->GetPathName() ) );
+	EXPECT_STREQ( TCHAR_TO_ANSI(*Old), TCHAR_TO_ANSI(*GSys->SavePath) );
+}
+
+// A package picks its natives by number or name, which must not reach code written for another class.
+TEST( Security, NativeOfAnotherClassIsRefused )
+{
+	UFunction* ActorNative = NULL;
+	for( TFieldIterator<UFunction> It(AActor::StaticClass()); It && !ActorNative; ++It )
+		if( It->iNative>=256 && It->GetOwnerClass()==AActor::StaticClass() )
+			ActorNative = *It;
+	ASSERT_TRUE( ActorNative );
+	UFunction* Forged = new( UCommandlet::StaticClass(), TEXT("SecurityForged") )UFunction( NULL );
+	Forged->FunctionFlags = FUNC_Native;
+	Forged->iNative = ActorNative->iNative;
+	Forged->Bind();
+	EXPECT_TRUE( Forged->Func==(Native)&UObject::execUndefined );
+	EXPECT_TRUE( GRefusedScript.Len()>0 );
+	GRefusedScript = TEXT("");
+}
+
 // The query script answers each request in a datagram, the engine caps what one datagram can set off.
 TEST( Security, GamespyQueryReplyLimit )
 {

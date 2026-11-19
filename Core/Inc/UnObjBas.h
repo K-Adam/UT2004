@@ -847,6 +847,7 @@ public:
 	// UnrealScript intrinsics.
 	#define DECLARE_FUNCTION(func) void func( FFrame& TheStack, RESULT_DECL );
 	DECLARE_FUNCTION(execUndefined)
+	DECLARE_FUNCTION(execCheckedNative)
 	DECLARE_FUNCTION(execLocalVariable)
 	DECLARE_FUNCTION(execInstanceVariable)
 	DECLARE_FUNCTION(execDefaultVariable)
