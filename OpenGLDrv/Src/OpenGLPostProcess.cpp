@@ -247,7 +247,8 @@ static const ANSICHAR* IndirectFragmentShader =
 // grows with depth. The frame's alpha holds how hot each pixel looks. Heat rises, so the air shimmers
 // at and above it, less far away where the waves would be larger than what they bend. Haze holds the
 // strength and the time. Blasts holds the camera space centres of explosions with their age from 0 to
-// 1 in W, then their final radius in X. Each bends the view along the rim of its growing sphere.
+// 1 in W, then their final radius in X. Each bends the view along the rim of its growing sphere,
+// less far away where a ring that only shrinks with distance would still stand out against its small explosion.
 // Motion is the part of the frame the shutter stays open, zero turns the blur off. Each pixel is
 // smeared along the way it moved on screen since last frame, which follows the camera only. The
 // length is limited so a teleport does not streak the whole view.
@@ -294,7 +295,7 @@ static const ANSICHAR* CompositeFragmentShader =
 	"			if (B.w <= 0.0 || B.z < 1.0 || Along < 1.0 || Along - R > Reach)\n"
 	"				continue;\n"
 	"			float Rim = max(1.0 - abs(length(B.xyz - Ray * Along) - R) / (0.15 * R + 16.0), 0.0);\n"
-	"			Bent -= normalize(UV - ToUV(B.xyz) + 1e-6) * Rim * Rim * (1.0 - B.w) * min(0.027 * Blasts[i + " STRINGIFY(HEAT_BLASTS) "].x / (Along * Proj.y), 0.03) * Haze.x;\n"
+	"			Bent -= normalize(UV - ToUV(B.xyz) + 1e-6) * Rim * Rim * (1.0 - B.w) * min(0.027 * Blasts[i + " STRINGIFY(HEAT_BLASTS) "].x / (Along * Proj.y), 0.03) * min(1.0, 1000.0 / Along) * Haze.x;\n"
 	"		}\n"
 	"	}\n"
 	"	vec3 Color = texture(Frame, Bent).rgb;\n"
@@ -820,7 +821,7 @@ static FLOAT BlastRadius(UClass* ActorClass)
 		return 1000.f;
 	if( appStrstr(Name,TEXT("Redeemer")) )
 		return 2500.f;
-	return 600.f;
+	return 300.f;
 }
 
 // Explosions are told by their class names, several effects of one explosion make one wave.
