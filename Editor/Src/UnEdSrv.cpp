@@ -2823,7 +2823,7 @@ UBOOL UEditorEngine::Exec_Map( const TCHAR* Str, FOutputDevice& Ar )
 							UProperty* Property=FindField<UProperty>(Actor->GetClass(), TEXT("SetupName"));
 							if(Property)
 							{
-								TCHAR Temp[1024]=TEXT("");
+								FString Temp;
 								Property->ExportText(0, Temp, (BYTE*)Actor, (BYTE*)Actor, PPF_Localized);
 
 								//convert spaces to underscores

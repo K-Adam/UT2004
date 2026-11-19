@@ -1276,7 +1276,12 @@ UBOOL UGameEngine::Browse( FURL URL, const TMap<FString,FString>* TravelInfo, FS
 	{
 		// External URL.
 		guard(ExternalURL);
-		appLaunchURL( *URL.String(), TEXT(""), &Error );
+		// A server and the script it sends can travel the player here, so only web pages open, and from a server only when the player agrees.
+		if( URL.Protocol!=TEXT("http") && URL.Protocol!=TEXT("https") )
+			Error = LocalizeError(TEXT("ServerOpen"),TEXT("Engine"));
+		else if( !(GPendingLevel || (GLevel && GLevel->GetLevelInfo()->NetMode==NM_Client))
+		||	GWarn->YesNof( TEXT("Open this page in your browser?\n\n%s"), *URL.String() ) )
+			appLaunchURL( *URL.String(), TEXT(""), &Error );
 		unguard;
 		return 0;
 	}
@@ -3064,7 +3069,7 @@ static void ExportTravel( FOutputDevice& Out, AActor* Actor )
 	{
 		for( INT Index=0; Index<It->ArrayDim; Index++ )
 		{
-			TCHAR Value[1024];
+			FString Value;
 			if
 			(	(It->PropertyFlags & CPF_Travel)
 			&&	It->ExportText( Index, Value, (BYTE*)Actor, &Actor->GetClass()->Defaults(0), 0 ) )
@@ -3079,7 +3084,7 @@ static void ExportTravel( FOutputDevice& Out, AActor* Actor )
 					UObject* Obj = *(UObject**)( (BYTE*)Actor + It->Offset + Index*It->ElementSize );
 					Out.Logf( TEXT("%s\r\n"), Obj ? Obj->GetName() : TEXT("None") );
 				}
-				Out.Logf( TEXT("%s\r\n"), Value );
+				Out.Logf( TEXT("%s\r\n"), *Value );
 			}
 		}
 	}

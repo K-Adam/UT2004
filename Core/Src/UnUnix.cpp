@@ -1157,10 +1157,7 @@ void* appGetDllHandle( const TCHAR* Filename )
 	Result = (void*)dlopen( appToAnsi(Filename), RTLD_NOW | RTLD_GLOBAL );
 	if( Result == NULL )
 	{
-		TCHAR Temp[256];
-		appStrcpy( Temp, Filename );
-		appStrcat( Temp, DLLEXT );
-		Result = (void*)dlopen( appToAnsi(Temp), RTLD_NOW | RTLD_GLOBAL );
+		Result = (void*)dlopen( appToAnsi(*(FString(Filename) + DLLEXT)), RTLD_NOW | RTLD_GLOBAL );
         #ifdef LOOKING_FOR_UNDEFINED_SYMBOLS
     		Error = dlerror();
     		if( Error != NULL )

@@ -4390,7 +4390,7 @@ void UObject::execGetPropertyText( FFrame& Stack, RESULT_DECL )
 	UProperty* Property=FindField<UProperty>( Class, *PropName );
 	if( Property && (Property->GetFlags() & RF_Public) )
 	{
-		TCHAR Temp[1024]=TEXT("");//!!
+		FString Temp;
         for( INT i=0; i<Property->ArrayDim; i++ )
         {
 		    Property->ExportText( i, Temp, (BYTE*)this, (BYTE*)this, PPF_Localized );
@@ -4417,7 +4417,7 @@ void UObject::execSetPropertyText( FFrame& Stack, RESULT_DECL )
 	if
 	(	(Property)
 	&&	(Property->GetFlags() & RF_Public)
-	&&	!(Property->PropertyFlags & CPF_Const) )
+	&&	!(Property->PropertyFlags & (CPF_Const|CPF_Native)) )
     {
 		Property->ImportText( *PropValue, (BYTE*)this + Property->Offset, PPF_Localized );
         *(DWORD*)Result = 1; //amb: return success

@@ -91,6 +91,7 @@ class ENGINE_API UNetConnection : public UPlayer
 	INT				QueuedBytes;			// Bytes assumed to be queued up.
 	INT				TickCount;				// Count of ticks.
 	UBOOL			PassedChallenge;		// Whether client has passed the challenge/response mechanism.
+	UBOOL			ChallengeSent;			// Until then Challenge is zero and its response a known constant.
 
 	// Merge info.
 	FBitWriterMark  LastStart;				// Most recently sent bunch start.
@@ -211,6 +212,7 @@ class ENGINE_API UNetConnection : public UPlayer
 	UNetDriver* GetDriver() {return Driver;}
 	class UControlChannel* GetControlChannel();
 	UChannel* CreateChannel( enum EChannelType Type, UBOOL bOpenedLocally, INT ChannelIndex=INDEX_NONE );
+	UBOOL HasActiveFileChannel( UChannel* Except );
 	void ReceivedPacket( FBitReader& Reader );
 	void ReceivedNak( INT NakPacketId );
 	void ReceiveFile( INT PackageIndex, INT Attempt );

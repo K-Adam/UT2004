@@ -454,44 +454,11 @@ void UPlayInfo::execAddSetting( FFrame& Stack, RESULT_DECL )
 	if ( PID.Description == TEXT("") )
 		debugf(NAME_MenuText, TEXT("No description configured for property '%s'"), *PropertyName);
 
-	TCHAR* TempStr = NULL;
+	FString TempStr;
+	PID.ArrayDim = Prop->ArrayDim == 1 ? (Prop->IsA(UArrayProperty::StaticClass()) ? 0 : INDEX_NONE) : Prop->ArrayDim;
+	if ( Prop->ArrayDim == 1 && Prop->IsA(UStructProperty::StaticClass()) )
+		PID.bStruct = 1;
 
-	// Allocate a much larger buffer for arrays, strings, and structs
-	if ( Prop->ArrayDim == 1 )
-	{
-		PID.ArrayDim = INDEX_NONE;
-        if ( Prop->IsA(UStrProperty::StaticClass()) )
-			TempStr = new TCHAR [1024];
-
-		else if ( Prop->IsA(UArrayProperty::StaticClass()) )
-		{
-			PID.ArrayDim = 0;
-			TempStr = new TCHAR [4096];
-		}
-
-		else if ( Prop->IsA(UStructProperty::StaticClass()) )
-		{
-			PID.bStruct = 1;
-			TempStr = new TCHAR [4096];
-		}
-
-		else TempStr = new TCHAR [128];
-	}
-	else
-	{
-		PID.ArrayDim = Prop->ArrayDim;
-		TempStr = new TCHAR [4096];
-	}
-
-
-	if ( !TempStr )
-	{
-		PLAYINFOERROR(AddSetting,Prop->GetFullName(),TEXT("Property value too large for internal buffer!"));
-		debugf(NAME_Warning, TEXT("Memory allocation failure while adding property '%s' to PlayInfo!  Property couldn't be added!"), *PropertyName);
-		return;
-	}
-
-	*TempStr = 0;
 	if ( Prop->ArrayDim == 1 )
 	{
 		if ( Prop->ExportText( 0, TempStr, (BYTE*)Class->GetDefaultObject(), &Class->Defaults(0), PPF_Localized) )
@@ -503,7 +470,7 @@ void UPlayInfo::execAddSetting( FFrame& Stack, RESULT_DECL )
 		{
 			if ( PID.Value == TEXT("") )
 				PID.Value = TEXT("(");
-			else if (*TempStr)
+			else if ( TempStr.Len() )
 				PID.Value += TEXT(",");
 
 			if ( Prop->ExportText( i, TempStr, (BYTE*)Class->GetDefaultObject(), &Class->Defaults(0), PPF_Localized | PPF_Delimited) )
@@ -512,9 +479,6 @@ void UPlayInfo::execAddSetting( FFrame& Stack, RESULT_DECL )
 
 		PID.Value += TEXT(")");
 	}
-
-	delete TempStr;
-	TempStr = NULL;
 
 	PID.ThisProp = Prop;
 	PID.ClassFrom = Class;

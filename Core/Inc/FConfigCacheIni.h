@@ -241,18 +241,18 @@ public:
 
 		// If filename not specified, use default.
 		TCHAR Filename[256];
-		appStrcpy( Filename, InFilename ? InFilename : *SystemIni );
+		appStrncpy( Filename, InFilename ? InFilename : *SystemIni, ARRAY_COUNT(Filename) );
 
 		// Add .ini extension.
 		INT Len = appStrlen(Filename);
 		if( Len<5 || (Filename[Len-4]!='.' && Filename[Len-5]!='.') )
-			appStrcat( Filename, TEXT(".ini") );
+			appStrncat( Filename, TEXT(".ini"), ARRAY_COUNT(Filename) );
 
 		// Automatically translate generic filenames.
 		if( appStricmp(Filename,TEXT("User.ini"))==0 )
-			appStrcpy( Filename, *UserIni );
+			appStrncpy( Filename, *UserIni, ARRAY_COUNT(Filename) );
 		else if( appStricmp(Filename,TEXT("System.ini"))==0 )
-			appStrcpy(Filename,*SystemIni);
+			appStrncpy( Filename, *SystemIni, ARRAY_COUNT(Filename) );
 
 		// Get file.
 		FConfigFile* Result = TMap<FString,FConfigFile>::Find( Filename );
@@ -380,12 +380,12 @@ public:
 
 		// If filename not specified, use default.
 		TCHAR Filename[256];
-		appStrcpy( Filename, InFilename ? InFilename : *SystemIni );
+		appStrncpy( Filename, InFilename ? InFilename : *SystemIni, ARRAY_COUNT(Filename) );
 
 		// Add .ini extension.
 		INT Len = appStrlen(Filename);
 		if( Len<5 || (Filename[Len-4]!='.' && Filename[Len-5]!='.') )
-			appStrcat( Filename, TEXT(".ini") );
+			appStrncat( Filename, TEXT(".ini"), ARRAY_COUNT(Filename) );
 
 		FConfigFile* File = Find( Filename, 0 );
 		if( File )

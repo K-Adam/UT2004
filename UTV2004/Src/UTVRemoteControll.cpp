@@ -1,3 +1,7 @@
+// Before the engine headers, which define clock as a macro.
+#pragma pack(push,8)
+#include <random>
+#pragma pack(pop)
 #include "UTVRemoteControll.h"
 #include "BunchDelayer.h"
 #include "UTVPackageMap.h"
@@ -28,10 +32,11 @@ void UTVRemoteControll::Tick(void)
 
 void UTVRemoteControll::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 {
-	if(Data[0]==255 && Data[1]==255 && Data[2]==255 && Data[3]==255){
+	if(Count>=4 && Data[0]==255 && Data[1]==255 && Data[2]==255 && Data[3]==255){
 
-		if(Count>=14 && memcmp(&Data[4],"challenge rcon\n",14)==0){
-			DWORD Challenge=rand();		//fix?
+		if(Count>=18 && memcmp(&Data[4],"challenge rcon\n",14)==0){
+			// The reply is parsed as a signed number.
+			DWORD Challenge=std::random_device()() & 0x7fffffff;
 
 			WaitingClient wc;
 			wc.address=SrcAddr;
@@ -51,7 +56,7 @@ void UTVRemoteControll::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 
 			INT pos;
 			FString Challenge;
-			for(pos=0;pos<Count-9;++pos){
+			for(pos=0;pos<s.Len();++pos){
 				if(s[pos]==TEXT(' '))
 					break;
 				Challenge+=s.Mid(pos,1);
@@ -70,43 +75,37 @@ void UTVRemoteControll::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 				return;
 			}
 			FString password;
-			if(s[++pos]!='\"')
+			if(++pos>=s.Len() || s[pos]!='\"')
 				return;
-			for(++pos;pos<Count-9;++pos){
+			for(++pos;pos<s.Len();++pos){
 				if(s[pos]==TEXT('\"'))
 					break;
 				password+=s.Mid(pos,1);
 			}
-			if(password!=UtvEngine->PrimaryPassword) {
-				debugf(TEXT("Rcon: Client %s sent bad password (%s)"), *SrcAddr.GetString(false), *password);
+			if(!PasswordMatches(UtvEngine->PrimaryPassword,password)) {
+				debugf(TEXT("Rcon: Client %s sent bad password"), *SrcAddr.GetString(false));
 				return;
 			}
 
 			FString command=s.Mid(pos + 2);
-			debugf(TEXT("Rcon: Client %s sent command: %s"), *SrcAddr.GetString(false), *command);
+			if(!command.Len())
+				return;
+			// A set command may carry new passwords.
+			debugf(TEXT("Rcon: Client %s sent a command"), *SrcAddr.GetString(false));
 
 			//Check if the command is a special remotecommand and not a regular update url
-			//is fstring overflow safe? probably
-			if ((command[0] == 'g') && (command[1] == 'e') && (command[2] == 't')) {
+			if (appStrncmp(*command,TEXT("get"),3)==0) {
 				//Need to convert the string values to non unicode
 				char ServerAddr[100];
-				char PrimaryPass[100];
-				char NormalPass[100];
-				char VipPass[100];
-				char JoinPass[100];
 				FToChar(UtvEngine->ServerAdress, ServerAddr, 100);
-				FToChar(UtvEngine->PrimaryPassword, PrimaryPass, 100);
-				FToChar(UtvEngine->NormalPassword, NormalPass, 100);
-				FToChar(UtvEngine->VipPassword, VipPass, 100);
-				FToChar(UtvEngine->JoinPassword, JoinPass, 100);
 
-				//Construct the reply
+				// The password fields stay for the tools that parse this, empty. The reply is not encrypted.
 				char Response[1000];
 				sprintf(Response,"xxxxstatus serveraddress=%s?serverport=%i?listenport=%i?delay=%f?"
-					"maxclients=%i?primarypassword=%s?normalpassword=%s?vippassword=%s?joinpassword=%s?"
+					"maxclients=%i?primarypassword=?normalpassword=?vippassword=?joinpassword=?"
 					"seeall=%i?noprimary=%i?ignorechainedchat=%i?state=%i?count=%i",
 					ServerAddr, UtvEngine->ServerPort, UtvEngine->ListenPort, Delayer->DelayTime,
-					UtvEngine->MaxClients, PrimaryPass, NormalPass, VipPass, JoinPass,
+					UtvEngine->MaxClients,
 					UtvEngine->SeeAll, UtvEngine->NoPrimary, UtvEngine->IgnoreChainedChat, 
 					UtvEngine->ConnectStatus, UtvEngine->TotalClientsLocal);
 				*(DWORD*)Response=0xffffffff;
@@ -114,7 +113,7 @@ void UTVRemoteControll::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 				//pass it on
 				SendTo(SrcAddr,(BYTE*)Response,istrlen(Response));
 			}
-			else if ((command[0] == 'v') && (command[1] == 'e') && (command[2] == 'r')) {
+			else if (appStrncmp(*command,TEXT("ver"),3)==0) {
 				FString v(UTVVERSION);
 				char Ver[100];
 				FToChar(v, Ver, 100);
@@ -124,7 +123,7 @@ void UTVRemoteControll::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 				*(DWORD*)Response=0xffffffff;
 				SendTo(SrcAddr,(BYTE*)Response,istrlen(Response));
 			}
-			else if ((command[0] == 'c') && (command[1] == 'u') && (command[2] == 'r')) {
+			else if (appStrncmp(*command,TEXT("cur"),3)==0) {
 				char Response[1000];
 				sprintf(Response,"xxxxstate %i %i", UtvEngine->ConnectStatus, UtvEngine->TotalClientsLocal);
 				*(DWORD*)Response=0xffffffff;

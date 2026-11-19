@@ -1272,24 +1272,8 @@ void AMasterServerClient::execStop( FFrame& Stack, RESULT_DECL )
 
 void AMasterServerClient::execLaunchAutoUpdate( FFrame& Stack, RESULT_DECL )
 {
-	guard(AMasterServerClient::execLaunchAutoUpdate);
+	// Epic's patch server is gone, and any script could run the updater and quit the game through this.
 	P_FINISH;
-
-	// Verify that we have a download location before closing this process
-	if ( GFileManager->FileSize( DOWNLOADLISTFILE ) <= 0 )
-	{
-		debugf(NAME_Error, TEXT("Failed to launch auto-updater! No valid download locations could be found!"));
-		return;
-	}
-
-#if (defined WIN32)
-    appLaunchURL( TEXT("Setup.exe"), TEXT("autopatch") );
-#elif (defined __linux__)
-    GUnixSpawnOnExit = TEXT("../updater/update");
-#endif
-
-	appRequestExit(0);
-	unguard;
 }
 
 IMPLEMENT_CLASS(AMasterServerClient);

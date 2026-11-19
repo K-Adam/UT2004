@@ -128,7 +128,8 @@ static bool MakeCertificate( std::string& CertPem, std::string& KeyPem, std::str
 	return true;
 }
 
-static void WireCallbacks( const std::shared_ptr<FWebRtcPeer>& Peer )
+// Longer messages are dropped on arrival, queued they would hold memory until the game thread got to them.
+static void WireCallbacks( const std::shared_ptr<FWebRtcPeer>& Peer, size_t MaxMessage )
 {
 	std::weak_ptr<FWebRtcPeer> Weak = Peer;
 	auto MarkClosed = [Weak]()
@@ -140,12 +141,12 @@ static void WireCallbacks( const std::shared_ptr<FWebRtcPeer>& Peer )
 		}
 	};
 	Peer->Dc->onMessage(
-		[Weak]( rtc::binary Data )
+		[Weak, MaxMessage]( rtc::binary Data )
 		{
 			if( auto P = Weak.lock() )
 			{
 				std::lock_guard<std::mutex> Guard( P->Lock );
-				if( P->Inbox.size() < WEBRTC_MAX_INBOX )
+				if( Data.size() <= MaxMessage && P->Inbox.size() < WEBRTC_MAX_INBOX )
 					P->Inbox.push_back( std::move(Data) );
 			}
 		},
@@ -179,7 +180,7 @@ static void MakeClientPeer( const std::shared_ptr<FWebRtcPeer>& Peer, rtc::Confi
 	Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
 	// The channel has to exist before the offer, or the offer has no application section
 	Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
-	WireCallbacks( Peer );
+	WireCallbacks( Peer, WEBRTC_MAX_QUERY_REPLY );
 }
 
 static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
@@ -513,7 +514,7 @@ void UTcpNetDriver::WebRtcTick()
 			Config.keyPemFile = Host->KeyPem;
 			Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
 			Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
-			WireCallbacks( Peer );
+			WireCallbacks( Peer, WEBRTC_MAX_PACKET );
 			Peer->Pc->setRemoteDescription( rtc::Description( Offer, rtc::Description::Type::Offer ) );
 			Peer->Pc->setLocalDescription( rtc::Description::Type::Answer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
 		}

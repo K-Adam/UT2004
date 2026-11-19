@@ -1459,12 +1459,12 @@ CORE_API const TCHAR* Localize( const TCHAR* Section, const TCHAR* Key, const TC
 
 	if ( appStrlen(GModPath)>0 )
 	{
-		appSprintf( Filename, TEXT("%s%ssystem%s%s.%s"),GModPath, PATH_SEPARATOR, PATH_SEPARATOR, Package, LangExt);
+		appSnprintf( Filename, ARRAY_COUNT(Filename), TEXT("%s%ssystem%s%s.%s"),GModPath, PATH_SEPARATOR, PATH_SEPARATOR, Package, LangExt);
 		if( !GConfig->GetString( Section, Key, Result, STATICSTRINGLENGTH, Filename ) )
 		{
 			if ( appStricmp(LangExt, TEXT("int")) )
 			{
-				appSprintf( Filename, TEXT("%s%ssystem%s%s.int"), GModPath, PATH_SEPARATOR, PATH_SEPARATOR, Package);
+				appSnprintf( Filename, ARRAY_COUNT(Filename), TEXT("%s%ssystem%s%s.int"), GModPath, PATH_SEPARATOR, PATH_SEPARATOR, Package);
 
 				// If it doesn't exist in the english version either, just ignore it -- rjp
 				if ( GConfig->GetString( Section, Key, Result, STATICSTRINGLENGTH, Filename ) )
@@ -1474,13 +1474,13 @@ CORE_API const TCHAR* Localize( const TCHAR* Section, const TCHAR* Key, const TC
 		else return Result;
 	}
 
-	appSprintf( Filename, TEXT("%s.%s"), Package, LangExt );
+	appSnprintf( Filename, ARRAY_COUNT(Filename), TEXT("%s.%s"), Package, LangExt );
 
 	if( !GConfig->GetString( Section, Key, Result, STATICSTRINGLENGTH, Filename ) )
 	{
 		if ( appStricmp(LangExt, TEXT("int")) )
 		{
-			appSprintf( Filename, TEXT("%s.int"), Package );
+			appSnprintf( Filename, ARRAY_COUNT(Filename), TEXT("%s.int"), Package );
 
 			// If it doesn't exist in the english version either, just ignore it -- rjp
 			if ( !GConfig->GetString( Section, Key, Result, STATICSTRINGLENGTH, Filename ) )
@@ -1908,15 +1908,43 @@ static UBOOL CheckPotentialFileGuid( const TCHAR* InFilename, const FGuid* InGui
 }
 
 
+// Callers pass this many characters.
+#define PACKAGE_FILE_PATH 256
+
+static UBOOL PackageFileFound( const FString& Path, const FGuid* Guid, TCHAR* Out )
+{
+	if( Path.Len()>=PACKAGE_FILE_PATH || GFileManager->FileSize(*Path)<0 || !CheckPotentialFileGuid(*Path,Guid) )
+		return 0;
+	appStrcpy( Out, *Path );
+	return 1;
+}
+
+// The directory of a search path or of the cache, and whether it names an extension.
+static UBOOL PackageSearchDir( UBOOL DoCd, INT i, FString& Dir, FString& Ext )
+{
+	Dir = DoCd ? FString(GCdPath) + TEXT("System") + PATH_SEPARATOR : FString();
+	if( i>=GSys->Paths.Num() )
+	{
+		Dir += GSys->CachePath + PATH_SEPARATOR;
+		Ext = GSys->CacheExt;
+		return 1;
+	}
+	Dir += GSys->Paths(i);
+	INT Star = Dir.InStr( TEXT("*") );
+	Ext = Star>=0 ? Dir.Mid(Star+1) : FString();
+	if( Star>=0 )
+		Dir = Dir.Left(Star);
+	return Star>=0;
+}
+
 //
 // Find a file.
 //
 UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT GenerationLevel )
 {
 	guard(appFindPackageFile);
-	TCHAR Temp[256];
 	TCHAR In[200];
-	appStrncpy( In, InIn, ARRAY_COUNT(In) );	// only 200 chars, allow room for extra path stuff appened to filename.
+	appStrncpy( In, InIn, ARRAY_COUNT(In) );
 
 	// Don't return it if it's a library.
 	if( appStrlen(In)>appStrlen(DLLEXT) && appStricmp( In + appStrlen(In)-appStrlen(DLLEXT), DLLEXT )==0 )
@@ -1938,58 +1966,30 @@ UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT 
 		{
 			for( INT j=0; j<International+1; j++ )
 			{
-				// Get directory only.
-				const TCHAR* Ext;
-				*Temp = 0;
-				if( DoCd )
-				{
-					appStrcat( Temp, GCdPath );
-					appStrcat( Temp, TEXT("System") );
-                    appStrcat( Temp, PATH_SEPARATOR );
-				}
+				FString Dir, Ext;
+				UBOOL HasExt = PackageSearchDir( DoCd, i, Dir, Ext );
+				FString Path = Dir;
 				if( i<GSys->Paths.Num() )
-				{
-					appStrcat( Temp, *GSys->Paths(i) );
-					TCHAR* Ext2 = appStrstr(Temp,TEXT("*"));
-					if( Ext2 )
-						*Ext2++ = 0;
-					Ext = Ext2;
-					appStrcpy( Out, Temp );
-					appStrcat( Out, In );
-				}
+					Path += In;
 				else
 				{
-					appStrcat( Temp, *GSys->CachePath );
-					appStrcat( Temp, PATH_SEPARATOR );
-					Ext = *GSys->CacheExt;
-					appStrcpy( Out, Temp );
-					appStrcat( Out, Guid->String() );
-
-					if (GenerationLevel>0)
+					Path += Guid->String();
+					if( GenerationLevel>0 )
 					{
-						appStrcat(Out,TEXT("-"));
-						appStrcat(Out,appItoa(GenerationLevel));
+						Path += TEXT("-");
+						Path += appItoa(GenerationLevel);
 					}
-
 				}
+
 				// Check for file which includes the extension.
-				UBOOL Found = 0;
-				Found = (
-							(!Ext||appStrlen(Out)>appStrlen(Ext)) &&
-							(!Ext||!appStricmp(Ext, &Out[appStrlen(Out)-appStrlen(Ext)])) &&
-							 GFileManager->FileSize(Out)>=0 &&
-							 CheckPotentialFileGuid(Out, Guid)
-						);
-				if( !Found && Ext )
+				UBOOL Found = (!HasExt || (Path.Len()>Ext.Len() && Path.Right(Ext.Len())==Ext)) && PackageFileFound( Path, Guid, Out );
+				if( !Found && HasExt )
 				{
-					appStrcat( Out, TEXT(".") );
+					Path += TEXT(".");
 					if( International-j )
-					{
-						appStrcat( Out, UObject::GetLanguage() );
-						appStrcat( Out, TEXT("_") );
-					}
-					appStrcat( Out, Ext+1 );
-					Found = (GFileManager->FileSize( Out )>=0 && CheckPotentialFileGuid(Out, Guid));
+						Path += FString(UObject::GetLanguage()) + TEXT("_");
+					Path += Ext.Mid(1);
+					Found = PackageFileFound( Path, Guid, Out );
 				}
 				if( Found )
 				{
@@ -2006,65 +2006,16 @@ UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT 
 	{
 		for( INT i=0; i<GSys->Paths.Num()+(Guid!=NULL); i++ )
 		{
-			// Get directory only.
-			const TCHAR* Ext;
-			*Temp = 0;
-			if( DoCd )
-			{
-				appStrcat( Temp, GCdPath );
-				appStrcat( Temp, TEXT("System") );
-                appStrcat( Temp, PATH_SEPARATOR );
-			}
-			if( i<GSys->Paths.Num() )
-			{
-				appStrcat( Temp, *GSys->Paths(i) );
-				TCHAR* Ext2 = appStrstr(Temp,TEXT("*"));
-				if( Ext2 )
-					*Ext2++ = 0;
-				Ext = Ext2;
-				appStrcpy( Out, Temp );
-				appStrcat( Out, In );
-			}
-			else
-			{
-				appStrcat( Temp, *GSys->CachePath );
-				appStrcat( Temp, PATH_SEPARATOR );
-				Ext = *GSys->CacheExt;
-				appStrcpy( Out, Temp );
-				appStrcat( Out, Guid->String() );
-				appStrcat(Out,TEXT("-"));
-				appStrcat(Out,appItoa(GenerationLevel));
-			}
-
-			// Find files.
-			TCHAR Spec[256];
-			*Spec = 0;
-			TArray<FString> Files;
-			appStrcpy( Spec, Temp );
-			appStrcat( Spec, TEXT("*") );
-			if( Ext )
-				appStrcat( Spec, Ext );
-			Files = GFileManager->FindFiles( Spec, 1, 0 );
+			FString Dir, Ext;
+			UBOOL HasExt = PackageSearchDir( DoCd, i, Dir, Ext );
+			TArray<FString> Files = GFileManager->FindFiles( *(Dir + TEXT("*") + Ext), 1, 0 );
 
 			// Check for match.
 			UBOOL Found = 0;
-			TCHAR InExt[256];
-			*InExt = 0;
-			if( Ext )
-			{
-				appStrcpy( InExt, In );
-				appStrcat( InExt, Ext );
-			}
+			FString InExt = HasExt ? FString(In) + Ext : FString();
 			for( INT j=0; Files.IsValidIndex(j); j++ )
-			{
-				if( (appStricmp( *(Files(j)), In )==0) ||
-					(appStricmp( *(Files(j)), InExt)==0) )
-				{
-					appStrcpy( Out, Temp );
-					appStrcat( Out, *(Files(j)));
-					Found = (GFileManager->FileSize( Out )>=0 && CheckPotentialFileGuid(Out, Guid));
-				}
-			}
+				if( Files(j)==In || Files(j)==InExt )
+					Found = PackageFileFound( Dir + Files(j), Guid, Out );
 			if( Found )
 			{
 				debugf( TEXT("Case-insensitive search: %s -> %s"), In, Out );
@@ -2083,11 +2034,12 @@ UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT 
 		INT Best = -1;
 		for( INT i=0; i<Files.Num(); i++ )
 		{
-			INT Size = GFileManager->FileSize( *(GSys->CachePath * Files(i)) );
-			if( Size > Best )
+			FString Path = GSys->CachePath * Files(i);
+			INT Size = GFileManager->FileSize( *Path );
+			if( Size > Best && Path.Len() < PACKAGE_FILE_PATH )
 			{
 				Best = Size;
-				appStrcpy( Out, *(GSys->CachePath * Files(i)) );
+				appStrcpy( Out, *Path );
 			}
 		}
 		if( Best >= 0 )

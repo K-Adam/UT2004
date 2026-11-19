@@ -88,14 +88,11 @@ void AFileLog::execLogf( FFrame& Stack, RESULT_DECL )
 
 	FString LogString = Data + TEXT("\r\n");
 	
-	ANSICHAR AnsiStr[1024];
+	TArray<ANSICHAR> AnsiStr( LogString.Len() );
+	for( INT i=0; i<LogString.Len(); i++ )
+		AnsiStr(i) = ToAnsi((*LogString)[i] );
 
-	INT i;
-	for( i=0; i<LogString.Len(); i++ )
-		AnsiStr[i] = ToAnsi((*LogString)[i] );
-
-	AnsiStr[i] = 0;
-	((FArchive*)LogAr)->Serialize( AnsiStr, i );
+	((FArchive*)LogAr)->Serialize( &AnsiStr(0), AnsiStr.Num() );
 
 	unguardexec;
 }

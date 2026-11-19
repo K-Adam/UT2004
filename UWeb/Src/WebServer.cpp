@@ -225,7 +225,7 @@ FString olddir(GFileManager->GetDefaultDirectory());
 
 	// Never, ever allow a ini file to be sent
 
-	if ( Filename.InStr(".ini")>=0 )
+	if ( Filename.Caps().InStr(TEXT(".INI"))>=0 )
 		return false;
 
 	if( IncludePath == TEXT("") )
@@ -263,7 +263,11 @@ FString olddir(GFileManager->GetDefaultDirectory());
 	FString fullpath(GFileManager->GetDefaultDirectory());
 	GFileManager->SetDefaultDirectory(*olddir);
 
-	if (fullpath.Len() < WebRootRealPath.Len() || fullpath.Left(WebRootRealPath.Len()) != WebRootRealPath)
+	// A sibling folder whose name only starts like the web root's is not under it.
+	INT Root = WebRootRealPath.Len();
+	TCHAR Next = fullpath.Len()>Root ? fullpath[Root] : 0;
+	TCHAR Last = Root ? WebRootRealPath[Root-1] : 0;
+	if (fullpath.Left(Root) != WebRootRealPath || !(Next==0 || Next=='/' || Next=='\\' || Last=='/' || Last=='\\'))
 	{
 		debugf( NAME_Log, TEXT("WebServer: Filename not under web root: %s <-> %s"), *fullpath, *WebRootRealPath );
 		return false;

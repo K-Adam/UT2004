@@ -279,38 +279,17 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 	}
 	else if( ParseCommand(&Cmd,TEXT("DIR")) )		// DIR [path\pattern]
 	{
-		TArray<FString> Files = GFileManager->FindFiles( Cmd, 1, 0 );
-		TArray<FString> Directories = GFileManager->FindFiles( Cmd, 0, 1 );
-
-		FString* Buffer[512];
-		INT Count;
-
-		//
-		// DIRECTORIES
-		//
-
-		// Sort
-		Count = Directories.Num();
-		INT x;
-		for( x = 0 ; x < Directories.Num() ; ++x )
-			Buffer[x] = &Directories(x);
-		appQsort( &Buffer[0], Count, sizeof(FString*), StringCompare );
-		// Display
-		for( INT x = 0 ; x < Count ; x++ )
-			Ar.Logf( TEXT("[%s]"), *Buffer[x] );
-
-		//
-		// FILES
-		//
-
-		// Sort
-		Count = Files.Num();
-		for( INT x = 0 ; x < Files.Num() ; ++x )
-			Buffer[x] = &Files(x);
-		appQsort( &Buffer[0], Count, sizeof(FString*), StringCompare );
-		// Display
-		for( INT x = 0 ; x < Count ; x++ )
-			Ar.Logf( TEXT("%s"), *Buffer[x] );
+		for( INT Pass=0; Pass<2; Pass++ )
+		{
+			TArray<FString> Names = GFileManager->FindFiles( Cmd, Pass, !Pass );
+			TArray<FString*> Sorted;
+			for( INT x=0; x<Names.Num(); x++ )
+				Sorted.AddItem( &Names(x) );
+			if( Sorted.Num() )
+				appQsort( &Sorted(0), Sorted.Num(), sizeof(FString*), StringCompare );
+			for( INT x=0; x<Sorted.Num(); x++ )
+				Ar.Logf( Pass ? TEXT("%s") : TEXT("[%s]"), **Sorted(x) );
+		}
 		return 1;
 	}
 	else return 0;

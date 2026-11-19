@@ -4,6 +4,12 @@
 #include "UtvChannel.h"
 #include "UTVUplink.h"
 
+// An unset password matches nothing, and the engine's string compare ignores case.
+inline UBOOL PasswordMatches( const FString& Set, const FString& Given )
+{
+	return Set.Len() && appStrcmp( *Set, *Given )==0;
+}
+
 class UUTVPackageMap;
 class UtvChannel;
 class UNetConnection;

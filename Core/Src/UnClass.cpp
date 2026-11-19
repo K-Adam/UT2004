@@ -1012,7 +1012,12 @@ void UClass::Serialize( FArchive& Ar )
 	Ar << ClassFlags << ClassGuid;
 	Ar << Dependencies << PackageImports;
 	if( Ar.Ver()>=62 )
+	{
 		Ar << ClassWithin << ClassConfigName;
+		// The name becomes an ini path, and the class may come from a downloaded package.
+		if( Ar.IsLoading() && !appIsBareFileName(*ClassConfigName) )
+			ClassConfigName = FName(TEXT("System"));
+	}
 	else
 		ClassConfigName = FName(TEXT("System"));
 

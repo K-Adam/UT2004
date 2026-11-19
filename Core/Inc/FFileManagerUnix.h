@@ -369,6 +369,10 @@ public:
     // Used by the Ogg file stream.
     FILE *fopenReadRespectHomeDir(const TCHAR *FakeFilename)
     {
+        if ( (FakeFilename == NULL) ||
+             (appStrlen(FakeFilename) + appStrlen(BaseDir) >= PATH_MAX) )
+            return NULL;
+
         char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 		FILE* File = NULL;

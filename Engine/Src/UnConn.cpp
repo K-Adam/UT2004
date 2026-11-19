@@ -747,6 +747,15 @@ INT UNetConnection::SendRawBunch( FOutBunch& Bunch, UBOOL InAllowMerge )
 //
 // Create a channel.
 //
+// Clients download one file at a time. A finished channel stays open, closing, until its last bunch is acked.
+UBOOL UNetConnection::HasActiveFileChannel( UChannel* Except )
+{
+	for( INT i=0; i<OpenChannels.Num(); i++ )
+		if( OpenChannels(i)!=Except && OpenChannels(i)->ChType==CHTYPE_File && !OpenChannels(i)->Closing )
+			return 1;
+	return 0;
+}
+
 UChannel* UNetConnection::CreateChannel( EChannelType ChType, UBOOL bOpenedLocally, INT ChIndex )
 {
 	guard(UNetConnection::CreateChannel);

@@ -885,9 +885,31 @@ UBOOL FMasterServerUplinkLink::SendStatLine( const TCHAR* StatLine )
 
 #define MAX_QUERY_PACKET_THRESHOLD 450
 
+// A one byte query gets a reply of hundreds, sent to whatever address the packet claims. Addresses share 256 buckets,
+// and a bucket answers this many queries a second, which a server browser refreshing its list stays far under.
+#define QUERIES_PER_BUCKET 10
+
+static UBOOL QueryAllowed( const FIpAddr& Addr )
+{
+	static BYTE Counts[256];
+	static DOUBLE Reset;
+	if( GCurrentTime-Reset >= 1.0 )
+	{
+		appMemzero( Counts, sizeof(Counts) );
+		Reset = GCurrentTime;
+	}
+	BYTE& Count = Counts[ (Addr.Addr ^ (Addr.Addr>>8) ^ (Addr.Addr>>16) ^ (Addr.Addr>>24)) & 255 ];
+	if( Count>=QUERIES_PER_BUCKET )
+		return 0;
+	Count++;
+	return 1;
+}
+
 void FServerQueryInterface::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 {
 	guard(FServerQueryInterface::OnReceivedData);
+	if( !QueryAllowed(SrcAddr) )
+		return;
 
 	FArchiveUdpReader ArRecv( Data, Count );
 	FArchiveUdpWriter ArSend( this, SrcAddr );
@@ -1010,7 +1032,13 @@ FServerLANInterface::FServerLANInterface( INT InPort, class FMasterServerUplinkL
 void FServerLANInterface::OnReceivedData( FIpAddr SrcAddr, BYTE* Data, INT Count )
 {
 	guard(FServerLANInterface::OnReceivedData);
-	Uplink->Actor->eventRefresh();
+	// The refresh runs script over every player, once a second keeps the answers current.
+	static DOUBLE LastRefresh;
+	if( GCurrentTime-LastRefresh >= 1.0 )
+	{
+		LastRefresh = GCurrentTime;
+		Uplink->Actor->eventRefresh();
+	}
 	ReplyInterface->OnReceivedData( SrcAddr, Data, Count );
 	unguard;
 }

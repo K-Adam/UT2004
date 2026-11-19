@@ -102,7 +102,7 @@ static void IntExportProp( UClass* Class, UClass* SuperClass, UClass* OuterClass
 		}
 	}
 
-	TCHAR RealValue[256 * 1024] = TEXT("");
+	FString RealValue;
 
 	// rjp 2/25/04 -
 	/* By passing in DefaultData for the Default param of ExportTextItem, we cause the exporter to only export properties that have been changed
@@ -132,10 +132,10 @@ static void IntExportProp( UClass* Class, UClass* SuperClass, UClass* OuterClass
 	   -- rjp */
 	Prop->ExportTextItem( RealValue, DataBase + DataOffset,  NULL, PPF_Delimited|PPF_LocalizedOnly );
 
-	if ( appStrlen(RealValue) == 0 || !appStricmp(RealValue,TEXT("\"\"")) )
+	if ( RealValue.Len() == 0 || RealValue == TEXT("\"\"") )
 		return;
 
-	GConfig->SetString( SectionName, KeyPrefix, RealValue, IntName );
+	GConfig->SetString( SectionName, KeyPrefix, *RealValue, IntName );
     GPropertyCount++;
 }
 

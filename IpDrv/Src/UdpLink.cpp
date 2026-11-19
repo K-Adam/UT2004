@@ -90,6 +90,19 @@ void AUdpLink::execBindPort( FFrame& Stack, RESULT_DECL )
 	unguard;
 }
 
+// The GameSpy query script answers every request in a datagram in full, so one small spoofed packet could send a flood
+// to its victim. The script is in the retail package, the limit is here. A full status of a full server fits.
+#define GAMESPY_REPLIES_PER_DATAGRAM 16
+static INT GGamespyReplies = MAXINT;
+
+static UBOOL IsGamespyQuery( AActor* Actor )
+{
+	for( UClass* C=Actor->GetClass(); C; C=C->GetSuperClass() )
+		if( appStricmp( C->GetPathName(), TEXT("IpDrv.UdpGamespyQuery") )==0 )
+			return 1;
+	return 0;
+}
+
 //
 // Send text in a UDP packet.
 //
@@ -99,6 +112,11 @@ void AUdpLink::execSendText( FFrame& Stack, RESULT_DECL )
 	P_GET_STRUCT(FIpAddr,IpAddr);
 	P_GET_STR(Str);
 	P_FINISH;
+	if( GGamespyReplies!=MAXINT && --GGamespyReplies < 0 )
+	{
+		*(DWORD*)Result = 0;
+		return;
+	}
 	if( GetSocket() != INVALID_SOCKET )
 	{
 		if( LinkMode == MODE_Line )
@@ -182,7 +200,10 @@ UBOOL AUdpLink::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 				if( LinkMode == MODE_Text )
 				{
 					Buffer[Count]=0;
+					if( IsGamespyQuery(this) )
+						GGamespyReplies = GAMESPY_REPLIES_PER_DATAGRAM;
 					eventReceivedText( Addr, appFromAnsi((ANSICHAR*)Buffer) );
+					GGamespyReplies = MAXINT;
 				}
 				else if ( LinkMode == MODE_Line )
 				{

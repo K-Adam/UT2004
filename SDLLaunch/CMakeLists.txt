@@ -69,6 +69,8 @@ if(EMSCRIPTEN)
   target_link_options(SDLLaunch PRIVATE
     # Garbage collection and script recursion need far more than the 64 KB default.
     -sSTACK_SIZE=8MB
+    # Reports a stack overflow, which otherwise corrupts memory without a sign.
+    -sSTACK_OVERFLOW_CHECK=1
     -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=512MB -sMAXIMUM_MEMORY=4GB
     # Without FULL_ES3 only what WebGL 2 offers natively links.
     -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sGL_ENABLE_GET_PROC_ADDRESS

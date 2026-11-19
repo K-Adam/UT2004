@@ -641,7 +641,7 @@ void UObject::ExportProperties
 			ThisName = It->GetName();			
 			for( INT j=0; j<It->ArrayDim; j++ )
 			{
-				TCHAR Value[4096];
+				FString Value;
 				if( It->IsA(ArrPropClass) ) 
 				{
 					// Export dynamic array.
@@ -670,7 +670,7 @@ void UObject::ExportProperties
 								}
 							}
 		
-							Out.Logf( TEXT("%s%s(%i)=%s\r\n%s"), Indent >= 0 ? appSpc(Indent + 1) : TEXT(""), ThisName, k, Value, ExportObject ? TEXT("\r\n") : TEXT("") );
+							Out.Logf( TEXT("%s%s(%i)=%s\r\n%s"), Indent >= 0 ? appSpc(Indent + 1) : TEXT(""), ThisName, k, *Value, ExportObject ? TEXT("\r\n") : TEXT("") );
 						}
 					}
 				}
@@ -701,9 +701,9 @@ void UObject::ExportProperties
 							*appStrchr(ThisName,'_')=0;
 						}
 						if( It->ArrayDim == 1 )
-							Out.Logf( TEXT("%s%s=%s\r\n%s"), Indent >= 0 ? appSpc(Indent + 1) : TEXT(""), ThisName, Value, ExportObject ? TEXT("\r\n") : TEXT("") );
+							Out.Logf( TEXT("%s%s=%s\r\n%s"), Indent >= 0 ? appSpc(Indent + 1) : TEXT(""), ThisName, *Value, ExportObject ? TEXT("\r\n") : TEXT("") );
 						else
-							Out.Logf( TEXT("%s%s(%i)=%s\r\n%s"), Indent >= 0 ? appSpc(Indent + 1) : TEXT(""), ThisName, j, Value, ExportObject ? TEXT("\r\n") : TEXT("") );
+							Out.Logf( TEXT("%s%s(%i)=%s\r\n%s"), Indent >= 0 ? appSpc(Indent + 1) : TEXT(""), ThisName, j, *Value, ExportObject ? TEXT("\r\n") : TEXT("") );
 					}
 				}
 			}
@@ -848,6 +848,12 @@ IMPLEMENT_CLASS(UObject);
 /*-----------------------------------------------------------------------------
 	UObject configuration.
 -----------------------------------------------------------------------------*/
+
+// A per object config object is saved in the ini named after its outer, a name its package chose.
+static const TCHAR* ConfigFileName( const TCHAR* Name )
+{
+	return appIsBareFileName(Name) ? Name : NULL;
+}
 
 //
 // Load configuration.
@@ -1038,8 +1044,10 @@ void UObject::LoadConfig( UBOOL Propagate, UClass* Class, const TCHAR* InFilenam
 	=	InFilename
 	?	InFilename
 	:	(PerObject && Outer!=GObjTransientPkg)
-	?	(Class->ClassWithin==UObject::StaticClass() && GetOuter()->GetOuter()) ? GetOuter()->GetOuter()->GetName() : GetOuter()->GetName()
+	?	ConfigFileName( (Class->ClassWithin==UObject::StaticClass() && GetOuter()->GetOuter()) ? GetOuter()->GetOuter()->GetName() : GetOuter()->GetName() )
 	:	*GetClass()->ClassConfigName;
+	if( !Filename )
+		return;
 
 	// If any of my properties are class variables, then LoadConfig() would also be called for each one of those classes.
 	// Since OrigClass is a static variable, if the value of a class variable is a class different from the current class, 
@@ -1416,8 +1424,10 @@ void UObject::SaveConfig( DWORD Flags, const TCHAR* InFilename )
 	=	InFilename
 	?	InFilename
 	:	(PerObject && Outer!=GObjTransientPkg)
-	?	(Class->ClassWithin==UObject::StaticClass() && GetOuter()->GetOuter()) ? GetOuter()->GetOuter()->GetName() : GetOuter()->GetName()
+	?	ConfigFileName( (Class->ClassWithin==UObject::StaticClass() && GetOuter()->GetOuter()) ? GetOuter()->GetOuter()->GetName() : GetOuter()->GetName() )
 	:	*GetClass()->ClassConfigName;
+	if( !Filename )
+		return;
 
 	if ( GDemoPlayback )	// Don't allow save configs when a demo is being replayed
 		return;
@@ -1452,7 +1462,8 @@ void UObject::SaveConfig( DWORD Flags, const TCHAR* InFilename )
 					Propagate = 1;
 			}
 
-			TCHAR TempKey[256], Value[STATICSTRINGLENGTH]=TEXT("");
+			TCHAR TempKey[256];
+			FString Value;
 			const TCHAR*    Key     = It->GetName();
 			if ( !PerObject )
 				appStrncpy(Section, BaseClass->GetPathName(), MaxNameSize );
@@ -1465,34 +1476,12 @@ void UObject::SaveConfig( DWORD Flags, const TCHAR* InFilename )
 				Sec->Remove( Key );
 				FArray* Ptr  = (FArray*)((BYTE*)this + It->Offset);
 				INT     Size = Array->Inner->ElementSize;
-				if (Array->Inner->IsA(UStructProperty::StaticClass()))
+				for( INT i=0; i<Ptr->Num(); i++ )
 				{
-					// UStructProperty::ExportText() has been adjusted to allow a much larger buffer...
-					// so match it here to make sure we play nicely -- rjp
-					TCHAR* Buffer = new TCHAR[256 * STATICSTRINGLENGTH];
-					if (Buffer)
-					{
-						for (INT i = 0; i < Ptr->Num(); i++)
-						{
-							BYTE* Dest = (BYTE*)Ptr->GetData() + i*Size;
-							Array->Inner->ExportTextItem( Buffer, Dest, Dest, 0 );
-							Sec->Add( Key, Buffer );
-						}
-
-						delete [] Buffer;
-					}
-
-					else debugf(NAME_Warning, TEXT("Error allocating space for property '%s' while saving to ini!!"), Array->GetName());
-				}
-				else
-				{
-					for( INT i=0; i<Ptr->Num(); i++ )
-					{
-						TCHAR Buffer[STATICSTRINGLENGTH]=TEXT("");
-						BYTE* Dest = (BYTE*)Ptr->GetData() + i*Size;
-						Array->Inner->ExportTextItem( Buffer, Dest, Dest, 0 );
-						Sec->Add( Key, Buffer );
-					}
+					FString Buffer;
+					BYTE* Dest = (BYTE*)Ptr->GetData() + i*Size;
+					Array->Inner->ExportTextItem( Buffer, Dest, Dest, 0 );
+					Sec->Add( Key, *Buffer );
 				}
 			}
 			else if( Map )
@@ -1509,7 +1498,7 @@ void UObject::SaveConfig( DWORD Flags, const TCHAR* InFilename )
 					Key = TempKey;
 				}
 				It->ExportText( Index, Value, (BYTE*)this, (BYTE*)this, 0 );
-				GConfig->SetString( Section, Key, Value, Filename );
+				GConfig->SetString( Section, Key, *Value, Filename );
 			}
 		}
 	}
@@ -1658,7 +1647,9 @@ void UObject::ClearConfig( UClass* Class, const TCHAR* PropName )
 
 	const INT MaxNameSize = NAME_SIZE * 2;
 	TCHAR Section[MaxNameSize];
-	const TCHAR* InFilename = (PerObject && Outer!=GObjTransientPkg) ? (Class->ClassWithin==UObject::StaticClass() && GetOuter()->GetOuter()) ? GetOuter()->GetOuter()->GetName() : GetOuter()->GetName() : *Class->ClassConfigName;
+	const TCHAR* InFilename = (PerObject && Outer!=GObjTransientPkg) ? ConfigFileName( (Class->ClassWithin==UObject::StaticClass() && GetOuter()->GetOuter()) ? GetOuter()->GetOuter()->GetName() : GetOuter()->GetName() ) : *Class->ClassConfigName;
+	if( !InFilename )
+		return;
 	// If PerObject, section headers for native classes will look like:
 	//  [ObjectName] ; old way - compatibility with installer
 	// Otherwise, section headers will look like: [ObjectName ClassName]
@@ -1689,7 +1680,7 @@ void UObject::ClearConfig( UClass* Class, const TCHAR* PropName )
 
 	INT Len = appStrlen(Filename);
 	if( Len<5 || (Filename[Len-4]!='.' && Filename[Len-5]!='.') )
-		appStrcat( Filename, TEXT(".ini") );
+		appStrncat( Filename, TEXT(".ini"), ARRAY_COUNT(Filename) );
 
 	if ( PropName && *PropName )
 	{
@@ -1997,6 +1988,10 @@ void UObject::GlobalSetProperty( const TCHAR* Value, UClass* Class, UProperty* P
 {
 	guard(UObject::GlobalSetProperty);
 
+	// Native properties hold raw pointers and containers that text must not overwrite.
+	if( Property->PropertyFlags & CPF_Native )
+		return;
+
 	// Apply to existing objects of the class, with notification.
 	if( Immediate )
 	{
@@ -2291,7 +2286,11 @@ void UObject::StaticShutdownAfterError()
 void UObject::BindPackage( UPackage* Pkg )
 {
 	guard(UPackage::BindPackage);
-	if( !Pkg->DllHandle && !Pkg->GetOuter() && !Pkg->AttemptedBind )
+	// The name becomes a library path, and a server names the packages its clients create. Module names are plain words.
+	const TCHAR* C = Pkg->GetName();
+	while( appIsAlnum(*C) || *C=='_' )
+		C++;
+	if( !*C && !Pkg->DllHandle && !Pkg->GetOuter() && !Pkg->AttemptedBind )
 	{
 		TCHAR PathName[1024];
 		appSprintf( PathName, TEXT("%s%s"), appBaseDir(), Pkg->GetName() );
@@ -2798,10 +2797,10 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 			(	ParseToken( Str, PropertyName, ARRAY_COUNT(PropertyName), 1 )
 			&&	(Property=FindField<UProperty>( Class, PropertyName))!=NULL )
 			{
-				TCHAR Temp[256]=TEXT("");
+				FString Temp;
 				if( Class->Defaults.Num() )
 					Property->ExportText( 0, Temp, &Class->Defaults(0), &Class->Defaults(0), PPF_Localized );
-				Ar.Log( Temp );
+				Ar.Log( *Temp );
 			}
 			else Ar.Logf( NAME_ExecWarning, TEXT("Unrecognized property %s"), PropertyName );
 		}
@@ -2825,66 +2824,26 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 				UBOOL bNoClasses = ParseCommand(&Str,TEXT("HIDECLASSES"));
 				for ( TObjectIterator<UObject> It; It; ++It )
 				{
-					static TCHAR Temp [256*256] = TEXT("");
-					Temp[0] = 0;
-
+					// A class shows its defaults, an instance its own values.
 					UClass* ClsIt = Cast<UClass>(*It);
+					BYTE* Data = NULL;
 					if ( !bNoClasses && ClsIt && (ClsIt == Class || ClsIt->IsChildOf(Class)) )
-					{
-						if ( ClsIt->Defaults.Num() )
-						{
-							TCHAR* c = Temp;
-
-							if ( Property->ArrayDim > 1 )
-								*c++ = '(';
-
-							for ( INT i = 0; i < Property->ArrayDim; i++ )
-							{
-								if ( i > 0 )
-								{
-									c += appStrlen(c);
-									appStrcat(c++,TEXT(","));
-								}
-
-								Property->ExportText( i, c, &ClsIt->Defaults(0), &ClsIt->Defaults(0), PPF_Localized );
-							}
-
-							if ( Property->ArrayDim > 0 && c > Temp )
-							{
-								c += appStrlen(c);
-								*c++ = ')';
-								*c++ = 0;
-							}
-
-							Ar.Logf(TEXT("%i) %s.%s = %s"), cnt++, ClsIt->GetFullName(), Property->GetName(), Temp);
-						}
-					}
+						Data = ClsIt->Defaults.Num() ? &ClsIt->Defaults(0) : NULL;
 					else if ( It->IsA(Class) )
+						Data = (BYTE*)*It;
+					if ( !Data )
+						continue;
+
+					FString Temp, Item;
+					for ( INT i = 0; i < Property->ArrayDim; i++ )
 					{
-						TCHAR* c = Temp;
-						if ( Property->ArrayDim > 1 )
-							*c++ = '(';
-
-						for ( INT i = 0; i < Property->ArrayDim; i++ )
-						{
-							if ( i > 0 )
-							{
-								c += appStrlen(c);
-								appStrcat(c++,TEXT(","));
-							}
-
-							Property->ExportText( i, c, (BYTE*)*It, (BYTE*)*It, PPF_Localized );
-						}
-
-						if ( Property->ArrayDim > 1 && c > Temp )
-						{
-							c += appStrlen(c);
-							*c++ = ')';
-							*c++ = 0;
-						}
-
-						Ar.Logf(TEXT("%i) %s.%s = %s"), cnt++, It->GetFullName(), Property->GetName(), Temp);
+						Property->ExportText( i, Item, Data, Data, PPF_Localized );
+						Temp += FString(i > 0 ? TEXT(",") : TEXT("")) + Item;
 					}
+					if ( Property->ArrayDim > 1 )
+						Temp = FString(TEXT("(")) + Temp + TEXT(")");
+
+					Ar.Logf(TEXT("%i) %s.%s = %s"), cnt++, It->GetFullName(), Property->GetName(), *Temp);
 				}
 			}
 			else Ar.Logf( NAME_ExecWarning, TEXT("Unrecognized property %s"), PropertyName );
@@ -2970,6 +2929,12 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 			Ar.Logf( NAME_ExecWarning, TEXT("Unrecognized property %s"), PropertyName );
 			return 1;
 	    }
+
+		if( Property->PropertyFlags & CPF_Native )
+		{
+			Ar.Logf( NAME_ExecWarning, TEXT("Property %s is native"), PropertyName );
+			return 1;
+		}
 
 		while( *Str==' ' )
 			Str++;
@@ -3262,22 +3227,23 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 
 			if ( Obj )
 			{
-				TCHAR* Value = new TCHAR [256 * 1024];
+				FString Value;
+				TCHAR Categories[1024];
 
 				Ar.Logf(TEXT(""));
 
-				UBOOL Recurse = Parse(Str, TEXT("RECURSE=TRUE"), Value, 15);
+				UBOOL Recurse = Parse(Str, TEXT("RECURSE=TRUE"), Categories, 15);
 				Ar.Logf(TEXT("*** Property dump for object %s'%s' ***"), Recurse ? TEXT("(Recursive) ") : TEXT(""), Obj->GetFullName() );
 
 				if ( Recurse )
 					ExportProperties(Ar,Obj->GetClass(), (BYTE*)Obj, 0, NULL, NULL);
 				else
 				{
-					if ( Parse(Str, TEXT("HIDE="), Value, 1024, TEXT(",")) )
-						FString(Value).ParseIntoArray(TEXT(","), &HiddenCategories);
+					if ( Parse(Str, TEXT("HIDE="), Categories, 1024, TEXT(",")) )
+						FString(Categories).ParseIntoArray(TEXT(","), &HiddenCategories);
 
-					else if ( Parse(Str, TEXT("SHOW="), Value, 1024, TEXT(",")) )
-						FString(Value).ParseIntoArray(TEXT(","), &ShowingCategories);
+					else if ( Parse(Str, TEXT("SHOW="), Categories, 1024, TEXT(",")) )
+						FString(Categories).ParseIntoArray(TEXT(","), &ShowingCategories);
 
 					for ( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(Obj->GetClass()); It; ++It )
 					{
@@ -3320,8 +3286,7 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 								for ( INT i = 0; i < It->ArrayDim; i++ )
 								{
 									It->ExportText(i, Value, (BYTE*)Obj, (BYTE*)Obj, PPF_Localized);
-									Value[960] = 0;
-									Ar.Logf(TEXT("  %s[%i]=%s"), It->GetName(), i, Value);
+									Ar.Logf(TEXT("  %s[%i]=%s"), It->GetName(), i, *Value.Left(960));
 								}
 							}
 							else
@@ -3333,24 +3298,21 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 									INT     ElementSize = ArrayProp->Inner->ElementSize;
 									for( INT i=0; i<Array->Num(); i++ )
 									{
+										Value.Empty();
 										ArrayProp->Inner->ExportTextItem( Value, (BYTE*)Array->GetData() + i * ElementSize, NULL, PPF_Localized );
-										Value[960] = 0;
-										Ar.Logf(TEXT("  %s(%i)=%s"), ArrayProp->GetName(), i, Value);
+										Ar.Logf(TEXT("  %s(%i)=%s"), ArrayProp->GetName(), i, *Value.Left(960));
 									}
 								}
 
 								else
 								{
 									It->ExportText(0, Value, (BYTE*)Obj, (BYTE*)Obj, PPF_Localized);
-									Value[960] = 0;
-									Ar.Logf(TEXT("  %s=%s"), It->GetName(), Value);
+									Ar.Logf(TEXT("  %s=%s"), It->GetName(), *Value.Left(960));
 								}
 							}
 						}
 					}
 				}
-				delete [] Value;
-
 			}
 			else Ar.Logf(NAME_ExecWarning, TEXT("No objects found using command '%s'"), *Str);
 

@@ -331,6 +331,14 @@ inline UBOOL appIsAlnum( TCHAR c )
 {
 	return (c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9');
 }
+// Whether a name taken from a package can only mean a file in the current folder.
+inline UBOOL appIsBareFileName( const TCHAR* Name )
+{
+	for( ; *Name; Name++ )
+		if( *Name=='/' || *Name=='\\' || *Name==':' || *Name=='.' )
+			return 0;
+	return 1;
+}
 // gam ---
 #include <ctype.h>
 inline UBOOL appIsSpace( TCHAR c )

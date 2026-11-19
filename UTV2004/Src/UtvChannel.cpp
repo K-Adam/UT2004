@@ -89,6 +89,7 @@ void UtvChannel::ReceivedBunch( FInBunch& Bunch )
 	//Handle things that goes over the communication actor channel
 	if (ChIndex == UNetConnection::MAX_CHANNELS-1) {
 		UtvEngine->ParseReplicationBunch (Connection, tempBunch);
+		delete tempBunch;
 		return;		//Don't need to try to send it anywhere
 	}
 

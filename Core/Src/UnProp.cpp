@@ -193,14 +193,14 @@ void UProperty::ExportCpp( FOutputDevice& Out, UBOOL IsLocal, UBOOL IsParm, UBOO
 UBOOL UProperty::ExportText
 (
 	INT		Index,
-	TCHAR*	ValueStr,
+	FString&	ValueStr,
 	BYTE*	Data,
 	BYTE*	Delta,
 	INT		PortFlags
 ) const
 {
 	guard(UProperty::ExportText);
-	ValueStr[0]=0;
+	ValueStr.Empty();
 
 	// rjp --
 	if ( (PortFlags & PPF_LocalizedOnly) && !IsLocalized() )
@@ -352,13 +352,13 @@ void UByteProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("BYTE") );
 	unguardobj;
 }
-void UByteProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UByteProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UByteProperty::ExportTextItem);
 	if( Enum )
-		appSprintf( ValueStr, TEXT("%s"), *PropertyValue < Enum->Names.Num() ? *Enum->Names(*PropertyValue) : TEXT("(INVALID)") );
+		ValueStr += *PropertyValue < Enum->Names.Num() ? *Enum->Names(*PropertyValue) : TEXT("(INVALID)");
 	else
-		appSprintf( ValueStr, TEXT("%i"), *PropertyValue );
+		ValueStr += FString::Printf( TEXT("%i"), *PropertyValue );
 	unguardobj;
 }
 const TCHAR* UByteProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -467,10 +467,10 @@ void UIntProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("INT") );
 	unguardobj;
 }
-void UIntProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UIntProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UIntProperty::ExportTextItem);
-	appSprintf( ValueStr, TEXT("%i"), *(INT *)PropertyValue );
+	ValueStr += FString::Printf( TEXT("%i"), *(INT *)PropertyValue );
 	unguardobj;
 }
 const TCHAR* UIntProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -556,17 +556,16 @@ void UPointerProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("PTRINT") );
 	unguardobj;
 }
-void UPointerProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UPointerProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UPointerProperty::ExportTextItem);
-	appSprintf( ValueStr, TEXT("%I64u"), (QWORD)*(PTRINT*)PropertyValue );
+	ValueStr += FString::Printf( TEXT("%I64u"), (QWORD)*(PTRINT*)PropertyValue );
 	unguardobj;
 }
 const TCHAR* UPointerProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
 {
 	guard(UPointerProperty::ImportText);
-	if( *Buffer=='-' || (*Buffer>='0' && *Buffer<='9') )
-		*(PTRINT*)Data = appAtoi( Buffer );
+	// A pointer taken from text would let script and the console aim native code anywhere.
 	while( *Buffer=='-' || (*Buffer>='0' && *Buffer<='9') )
 		Buffer++;
 	return Buffer;
@@ -766,12 +765,13 @@ void UDelegateProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("FScriptDelegate") );
 	unguardobj;
 }
-void UDelegateProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UDelegateProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UDelegateProperty::ExportTextItem);
 	UObject* Obj = (*(FScriptDelegate*)PropertyValue).Object;
-	appSprintf( ValueStr, TEXT("%s.%s"), Obj ? Obj->GetName() : TEXT("None"), Obj ? *(*(FScriptDelegate*)PropertyValue).FunctionName : TEXT("None"));
-	Obj = NULL;
+	ValueStr += Obj ? Obj->GetName() : TEXT("None");
+	ValueStr += TEXT(".");
+	ValueStr += Obj ? *(*(FScriptDelegate*)PropertyValue).FunctionName : TEXT("None");
 	unguardobj;
 }
 const TCHAR* UDelegateProperty::ImportText( const TCHAR* Buffer, BYTE* PropertyValue, INT PortFlags ) const
@@ -782,14 +782,16 @@ const TCHAR* UDelegateProperty::ImportText( const TCHAR* Buffer, BYTE* PropertyV
 	// Get object name
 	INT i;
 	for( i=0; *Buffer && *Buffer != '.'; Buffer++ )
-		ObjName[i++] = *Buffer;
+		if( i<NAME_SIZE-1 )
+			ObjName[i++] = *Buffer;
 	ObjName[i] = '\0';
 	// Get function name
 	if( *Buffer )
 	{
 		Buffer++;
 		for( i=0; *Buffer; Buffer++ )
-			FuncName[i++] = *Buffer;
+			if( i<NAME_SIZE-1 )
+				FuncName[i++] = *Buffer;
 		FuncName[i] = '\0';                
 	}
 	else
@@ -916,14 +918,14 @@ void UBoolProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("BITFIELD") );
 	unguardobj;
 }
-void UBoolProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UBoolProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UBoolProperty::ExportTextItem);
 	TCHAR* Temp
 	=	(TCHAR*) ((PortFlags & PPF_Localized)
 	?	(((*(BITFIELD*)PropertyValue) & BitMask) ? GTrue  : GFalse )
 	:	(((*(BITFIELD*)PropertyValue) & BitMask) ? TEXT("True") : TEXT("False")));
-	appSprintf( ValueStr, TEXT("%s"), Temp );
+	ValueStr += Temp;
 	unguardobj;
 }
 const TCHAR* UBoolProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -1050,10 +1052,10 @@ void UFloatProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("FLOAT") );
 	unguardobj;
 }
-void UFloatProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UFloatProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UFloatProperty::ExportTextItem);
-	appSprintf( ValueStr, TEXT("%f"), *(FLOAT*)PropertyValue );
+	ValueStr += FString::Printf( TEXT("%f"), *(FLOAT*)PropertyValue );
 	unguardobj;
 }
 const TCHAR* UFloatProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -1187,17 +1189,20 @@ void UObjectProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Logf( TEXT("class %s*"), PropertyClass->GetNameCPP() );
 	unguardobj;
 }
-void UObjectProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UObjectProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UObjectProperty::ExportTextItem);
 	UObject* Temp = *(UObject **)PropertyValue;
 	if( Temp != NULL )
 	{
 		// Always includes the class, because ImportText() won't load an object that isn't in memory without it.
-			appSprintf( ValueStr, TEXT("%s'%s'"), Temp->GetClass()->GetName(), Temp->GetPathName() );
+		ValueStr += Temp->GetClass()->GetName();
+		ValueStr += TEXT("'");
+		ValueStr += Temp->GetPathName();
+		ValueStr += TEXT("'");
 	}
 	else
-		appStrcpy( ValueStr, TEXT("None") );
+		ValueStr += TEXT("None");
 	unguardobj;
 }
 const TCHAR* UObjectProperty::ImportText( const TCHAR* InBuffer, BYTE* Data, INT PortFlags ) const
@@ -1256,8 +1261,12 @@ const TCHAR* UObjectProperty::ImportText( const TCHAR* InBuffer, BYTE* Data, INT
 				*(UObject**)Data = StaticLoadObject( ObjectClass, NULL, Other, NULL, LOAD_NoWarn, NULL );
 
             // gam --- 
-            if( *(UObject**)Data && (PortFlags & PPF_CheckReferences) && !(*(UObject**)Data)->GetClass()->IsChildOf(PropertyClass) )
-				GWarn->Logf( NAME_Error, TEXT("%s: bad cast in '%s'"), GetFullName(), InBuffer );
+            if( *(UObject**)Data && !(*(UObject**)Data)->IsA(PropertyClass) )
+			{
+				if( PortFlags & PPF_CheckReferences )
+					GWarn->Logf( NAME_Error, TEXT("%s: bad cast in '%s'"), GetFullName(), InBuffer );
+				*(UObject**)Data = NULL;
+			}
             // --- gam
 
 			// If we couldn't find it or load it, we'll have to do without it.
@@ -1310,7 +1319,7 @@ const TCHAR* UClassProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Po
 	{
 		// Validate metaclass.
 		UClass*& C = *(UClass**)Data;
-		if( C && C->GetClass()!=UClass::StaticClass() || !C->IsChildOf(MetaClass) )
+		if( C && (C->GetClass()!=UClass::StaticClass() || !C->IsChildOf(MetaClass)) )
 			C = NULL;
 	}
 	return Result;
@@ -1389,14 +1398,14 @@ void UNameProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("FName") );
 	unguardobj;
 }
-void UNameProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UNameProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UNameProperty::ExportTextItem);
 	FName Temp = *(FName*)PropertyValue;
 	if( !(PortFlags & PPF_Delimited) )
-		appStrcpy( ValueStr, *Temp );
+		ValueStr += *Temp;
 	else if ( HasValue(PropertyValue) ) // rjp
-		appSprintf( ValueStr, TEXT("\"%s\""), *Temp );
+		ValueStr += FString(TEXT("\"")) + *Temp + TEXT("\"");
 	unguardobj;
 }
 const TCHAR* UNameProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -1407,8 +1416,9 @@ const TCHAR* UNameProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT Por
 #if PLATFORM_64BITS && (defined __GNUC__)
     // Works around gcc on 64-bit Linux corrupting memory in ReadToken unless the input is copied first.
     TCHAR x[1024];
-    appStrcpy(x, Buffer);
-	Buffer = ReadToken( x, Temp, ARRAY_COUNT(Temp) );
+    appStrncpy( x, Buffer, ARRAY_COUNT(x) );
+	const TCHAR* End = ReadToken( x, Temp, ARRAY_COUNT(Temp) );
+	Buffer = End ? Buffer + (End - x) : NULL;
 #else
 	Buffer = ReadToken( Buffer, Temp, ARRAY_COUNT(Temp) );
 #endif
@@ -1473,14 +1483,13 @@ void UStrProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT("FString") );
 	unguardobj;
 }
-void UStrProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UStrProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UStrProperty::ExportTextItem);
-	*ValueStr=0;
 	if( !(PortFlags & PPF_Delimited) )
-		appStrcpy( ValueStr, **(FString*)PropertyValue );
+		ValueStr += *(FString*)PropertyValue;
 	else if ( HasValue(PropertyValue) )  // rjp
-		appSprintf( ValueStr, TEXT("\"%s\""), **(FString*)PropertyValue );
+		ValueStr += FString(TEXT("\"")) + *(FString*)PropertyValue + TEXT("\"");
 	unguardobj;
 }
 const TCHAR* UStrProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -1602,20 +1611,18 @@ void UFixedArrayProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) con
 	Out.Logf( TEXT("[%i]"), Count );
 	unguardobj;
 }
-void UFixedArrayProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UFixedArrayProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UFixedArrayProperty::ExportTextItem);
 	checkSlow(Inner);
-	*ValueStr++ = '(';
+	ValueStr += TEXT("(");
 	for( INT i=0; i<Count; i++ )
 	{
 		if( i>0 )
-			*ValueStr++ = ',';
+			ValueStr += TEXT(",");
 		Inner->ExportTextItem( ValueStr, PropertyValue + i*Inner->ElementSize, DefaultValue ? (DefaultValue + i*Inner->ElementSize) : NULL, PortFlags|PPF_Delimited );
-		ValueStr += appStrlen(ValueStr);
 	}
-	*ValueStr++ = ')';
-	*ValueStr++ = 0;
+	ValueStr += TEXT(")");
 	unguardobj;
 }
 const TCHAR* UFixedArrayProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -1786,7 +1793,7 @@ void UArrayProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT(">") );
 	unguardobj;
 }
-void UArrayProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UArrayProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UArrayProperty::ExportTextItem);
 	checkSlow(Inner);
@@ -1798,10 +1805,7 @@ void UArrayProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE*
 	INT Count(0);
 	for( INT i=0; i<Array->Num(); i++ )
 	{
-		if( ++Count == 1 )
-			*ValueStr++ = '(';
-		else
-			*ValueStr++ = ',';
+		ValueStr += ++Count == 1 ? TEXT("(") : TEXT(",");
 
 		BYTE* PropData = (BYTE*)Array->GetData() + i*ElementSize;
 		BYTE* PropDefault = (Default && Default->Num()>i) ? (BYTE*)Default->GetData() + i*ElementSize : NULL;
@@ -1811,12 +1815,9 @@ void UArrayProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE*
 			continue;
 
 		Inner->ExportTextItem( ValueStr, PropData, PropDefault, PortFlags|PPF_Delimited );
-		ValueStr += appStrlen(ValueStr);
 	}
 	if( Count > 0 )
-		*ValueStr++ = ')';
-
-	*ValueStr = 0;
+		ValueStr += TEXT(")");
 	unguardobj;
 }
 const TCHAR* UArrayProperty::ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const
@@ -2032,7 +2033,7 @@ void UMapProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	Out.Log( TEXT(">") );
 	unguardobj;
 }
-void UMapProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UMapProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UMapProperty::ExportTextItem);
 	checkSlow(Key);
@@ -2256,34 +2257,11 @@ void UStructProperty::ExportCppItem( FOutputDevice& Out, UBOOL IsParam ) const
 	unguardobj;
 }
 // gam ---
-void UStructProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
+void UStructProperty::ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const
 {
 	guard(UStructProperty::ExportTextItem);
     
-    TCHAR StaticValue[256];
-    TCHAR* Value = NULL;
-	TCHAR* DynamicValue = NULL;
-
-	switch( Struct->GetFName().GetIndex() )
-	{
-	    case NAME_Vector:
-	    case NAME_Color:
-	    case NAME_Rotator:
-	    case NAME_Plane:
-	        Value = StaticValue;
-	        break;
-	}
-    
-    if (!Value)
-        if (Struct->GetFName() == TEXT("LookPreset"))
-	        Value = StaticValue;
-
-    if (!Value)
-    {
-        DynamicValue = new TCHAR[256 * 1024];
-        Value = DynamicValue;
-    }
-
+	FString Value;
 	INT Count=0;
 	for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(Struct); It; ++It )
 	{
@@ -2293,25 +2271,18 @@ void UStructProperty::ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE
 			{
 				if( It->ExportText(Index,Value,PropertyValue,DefaultValue,PPF_Delimited|PortFlags) )
 				{
-					Count++;
-					if( Count == 1 )
-						*ValueStr++ = '(';
-					else
-						*ValueStr++ = ',';
-					if( It->ArrayDim == 1 )
-						ValueStr += appSprintf( ValueStr, TEXT("%s="), It->GetName() );
-					else
-						ValueStr += appSprintf( ValueStr, TEXT("%s[%i]="), It->GetName(), Index );
-					ValueStr += appSprintf( ValueStr, TEXT("%s"), Value );
+					ValueStr += ++Count == 1 ? TEXT("(") : TEXT(",");
+					ValueStr += It->GetName();
+					if( It->ArrayDim != 1 )
+						ValueStr += FString::Printf( TEXT("[%i]"), Index );
+					ValueStr += TEXT("=");
+					ValueStr += Value;
 				}
 			}
 		}
 	}
 	if( Count > 0 )
-		*ValueStr++ = ')';
-
-	*ValueStr = 0;
-	delete[] DynamicValue;
+		ValueStr += TEXT(")");
 	unguardf(( TEXT("(%s/%s)"), GetFullName(), Struct->GetFullName() ));
 }
 // --- gam

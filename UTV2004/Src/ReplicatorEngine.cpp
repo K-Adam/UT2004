@@ -116,6 +116,10 @@ void UReplicatorEngine::Init(FString IniFileName)
 
 	INT RemoteControllPort = 0;
 	CacheIni.GetInt(TEXT("UTV2004"),TEXT("RemoteControlPort"),RemoteControllPort,*iniFile);
+	if(RemoteControllPort && PrimaryPassword==""){
+		debugf(TEXT("Remote control stays off without a PrimaryPassword"));
+		RemoteControllPort=0;
+	}
 	if(RemoteControllPort){
 		RemoteController=new UTVRemoteControll(RemoteControllPort);
 	} else {
@@ -788,7 +792,12 @@ void UReplicatorEngine::NotifyAcceptedConnection( class UNetConnection* Connecti
 
 UBOOL UReplicatorEngine::NotifyAcceptingChannel( class UChannel* Channel )
 {
-	return true;
+	UNetConnection* Connection = Channel->Connection;
+	// The game server opens what it needs. A viewer opens its control channel and, once logged in, one download at a time.
+	if( Connection->Driver->ServerConnection || (Channel->ChIndex==0 && Channel->ChType==CHTYPE_Control) )
+		return true;
+	OpenConnection* Open = OpenConnections.Find(Connection);
+	return Channel->ChType==CHTYPE_File && Open && Open->loggedIn && !Connection->HasActiveFileChannel(Channel);
 }
 
 ULevel* UReplicatorEngine::NotifyGetLevel() 
@@ -1036,6 +1045,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			Connection->NegotiatedVer = Min(RemoteVer,ENGINE_VERSION);
 
 			Connection->Challenge = appCycles();
+			Connection->ChallengeSent = 1;
 			Connection->Logf( TEXT("CHALLENGE VER=%i CHALLENGE=%i STATS=%i"), Connection->NegotiatedVer, Connection->Challenge, needStats );
 			Connection->FlushNet();
 		}
@@ -1046,7 +1056,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			Connection->Logf( TEXT("UTVPROXY SEEALL=%i NOPRIMARY=%i"),SeeAll, NoPrimary );
 			Connection->FlushNet();			
 		}
-		else if( ParseCommand(&Text,TEXT("UTV")) )
+		else if( ParseCommand(&Text,TEXT("UTV")) && OpenConnections.Find(Connection)->loggedIn )
 		{
 			Parse( Text, TEXT("TOTALCLIENTS="), OpenConnections.Find(Connection)->TotalSubClients );
 		}
@@ -1064,7 +1074,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			if(Connection==PrimaryConnection)
 				debugf( TEXT("Primary netspeed is %i"), Connection->CurrentNetSpeed );
 		}
-		else if( ParseCommand(&Text,TEXT("LOGIN")) )
+		else if( ParseCommand(&Text,TEXT("LOGIN")) && Connection->ChallengeSent && !OpenConnections.Find(Connection)->loggedIn )
 		{
 			INT Response=0;
 			if(	!Parse(Text,TEXT("RESPONSE="),Response) || ChallengeResponse(Connection->Challenge)!=Response )
@@ -1105,7 +1115,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			//Determine what kind of connection this is (primary, vip, normal)
 			int ctype=0;
 
-			if(!PrimaryConnection && DoRestartIn<0 && !OpenConnections.Find(Connection)->utvProxy && !ConnectedToUtvProxy && (PrimaryPassword=="" || PrimaryPassword==Password) && ConnectStatus!=6){
+			if(!PrimaryConnection && DoRestartIn<0 && !OpenConnections.Find(Connection)->utvProxy && !ConnectedToUtvProxy && PasswordMatches(PrimaryPassword,Password) && ConnectStatus!=6){
 				debugf (TEXT ("Got primary client"));
 				PrimaryConnection=Connection;
 				OpenConnections.Find(Connection)->primaryConnection=true;
@@ -1114,13 +1124,13 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			}
 			else {
 				//If vip password is not set, do not use this
-				if ((VipPassword != "") && (VipPassword == Password)) {
+				if (PasswordMatches(VipPassword,Password)) {
 					debugf (TEXT ("Got VIP client"));
 					OpenConnections.Find(Connection)->vipConnection=true;
 					ctype = 2;
 				}
 				else {
-					if((PrimaryPassword=="" || PrimaryPassword==Password) || (NormalPassword=="" || NormalPassword==Password)){
+					if(PasswordMatches(PrimaryPassword,Password) || NormalPassword=="" || PasswordMatches(NormalPassword,Password)){
 						ctype = 3;
 						debugf (TEXT ("Got normal client"));
 					}
@@ -1170,7 +1180,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 			LoggedInPlayers++;
 			debugf (TEXT ("New connection opened %i/%i") ,LoggedInPlayers,MaxClients);
 		}
-		else if( ParseCommand(&Text,TEXT("JOIN")) )
+		else if( ParseCommand(&Text,TEXT("JOIN")) && OpenConnections.Find(Connection)->loggedIn )
 		{
 			OpenConnections.Find(Connection)->isReady=true;
 
@@ -1237,7 +1247,7 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 				}
 			}
 		}
-		else if ( ParseCommand(&Text,TEXT("OPENVOICE")) )
+		else if ( ParseCommand(&Text,TEXT("OPENVOICE")) && OpenConnections.Find(Connection)->loggedIn )
 		{
 
 			if((appStrcmp(Text,TEXT("")) != 0) )
@@ -1255,7 +1265,8 @@ void UReplicatorEngine::NotifyReceivedText( UNetConnection* Connection, const TC
 						if( Connection->Driver->VoiceInfos[i] == NULL )
 							break;
 
-					if(i>=VOICE_MAX_CHATTERS){
+					// A download may sit on the voice channel's index, clients pick theirs.
+					if(i>=VOICE_MAX_CHATTERS || Connection->Channels[UNetConnection::MAX_CHANNELS-2]){
 						debugf(TEXT("Out of voice channels"));
 						return;
 					}

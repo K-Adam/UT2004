@@ -124,9 +124,11 @@ else()
     # x87 math loads maps three times slower. MSVC uses SSE2 for Win32 too.
     target_compile_options(ut_common INTERFACE -msse2 -mfpmath=sse)
   endif()
-  if(NOT ANDROID AND NOT EMSCRIPTEN)
-    # Ubuntu's GCC turns these on by itself, other distributions do not. The NDK always does.
+  if(NOT ANDROID)
+    # Ubuntu's GCC turns this on by itself, other distributions and Emscripten do not. The NDK always does.
     target_compile_options(ut_common INTERFACE -fstack-protector-strong)
+  endif()
+  if(NOT ANDROID AND NOT EMSCRIPTEN)
     target_compile_options(ut_common INTERFACE $<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=2>)
     target_link_options(ut_common INTERFACE -Wl,-z,relro,-z,now)
   endif()

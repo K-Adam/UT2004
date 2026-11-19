@@ -1078,14 +1078,12 @@ UBOOL ULevel::NotifyAcceptingChannel( UChannel* Channel )
 		}
 		else if( Channel->ChType==CHTYPE_File )
 		{
-			// Clients download one file at a time, and each send holds an open file.
-			UNetConnection* Connection = Channel->Connection;
-			for( INT i=0; i<Connection->OpenChannels.Num(); i++ )
-				if( Connection->OpenChannels(i)->ChType==CHTYPE_File && ((UFileChannel*)Connection->OpenChannels(i))->SendFileAr )
-				{
-					debugf( NAME_DevNet, TEXT("NotifyAcceptingChannel File %i server %s: Refused, already sending"), Channel->ChIndex, GetFullName() );
-					return 0;
-				}
+			// Downloads start after the login.
+			if( !Channel->Connection->PassedChallenge || Channel->Connection->HasActiveFileChannel(Channel) )
+			{
+				debugf( NAME_DevNet, TEXT("NotifyAcceptingChannel File %i server %s: Refused"), Channel->ChIndex, GetFullName() );
+				return 0;
+			}
 			// The client is going to request a file.
 			debugf( NAME_DevNet, TEXT("NotifyAcceptingChannel File %i server %s: Accepted"), Channel->ChIndex, GetFullName() );
 			return 1;
@@ -1288,6 +1286,7 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 			// Get byte limit.
 			INT Stats = GetLevelInfo()->Game->bEnableStatLogging;
 			Connection->Challenge = appCycles();
+			Connection->ChallengeSent = 1;
 
 			Connection->Gozer = (appFrand() * 127)+1;	// Create the key
 			Connection->Logf( TEXT("CHALLENGE VER=%i CHALLENGE=%i STATS=%i SEC=%i GZ=%i"), Connection->NegotiatedVer, Connection->Challenge, Stats, Sec, Connection->Gozer );
@@ -1355,7 +1354,7 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 					}
 			}
 		}
-		else if( ParseCommand(&Text,TEXT("LOGIN")) )
+		else if( ParseCommand(&Text,TEXT("LOGIN")) && Connection->ChallengeSent && !Connection->PassedChallenge )
 		{
 			// Admit or deny the player here.
 			INT Response=0;
@@ -1371,7 +1370,6 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 				Connection->State = USOCK_Closed;
 				return;
 			}
-			Connection->PassedChallenge = 1;
 			TCHAR Str[1024]=TEXT("");
 			FString Error, FailCode;
 			Parse( Text, TEXT("URL="), Str, ARRAY_COUNT(Str) );
@@ -1403,6 +1401,7 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 				Connection->State = USOCK_Closed;
 				return;
 			}
+			Connection->PassedChallenge = 1;
 			WelcomePlayer( Connection );
 		}
 		else if( ParseCommand(&Text,TEXT("JOIN")) && !Connection->Actor && Connection->PassedChallenge )

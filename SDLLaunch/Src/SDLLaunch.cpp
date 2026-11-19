@@ -62,7 +62,6 @@ FOutputDeviceAnsiError Error;
 
 // Feedback.
 #include "FFeedbackContextAnsi.h"
-FFeedbackContextAnsi Warn;
 
 // File manager.
 #ifdef WIN32
@@ -84,6 +83,34 @@ FFileManagerUnix FileManager;
 #pragma pack(push,8)
 #include <SDL3/SDL.h>
 #pragma pack(pop)
+#if __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
+// The base class asks on stdin, which the game has none of.
+class FFeedbackContextSDL : public FFeedbackContextAnsi
+{
+public:
+	UBOOL YesNof( const TCHAR* Fmt, ... )
+	{
+		TCHAR TempStr[4096];
+		GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
+#if __EMSCRIPTEN__
+		return EM_ASM_INT( { return confirm(UTF8ToString($0)) ? 1 : 0; }, appToAnsi(TempStr) );
+#else
+		enum { No, Yes };
+		// Both keys answer No, a player in the middle of a match is pressing keys.
+		static const SDL_MessageBoxButtonData Buttons[] = {
+			{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, No, "No" },
+			{ 0, Yes, "Yes" },
+		};
+		const SDL_MessageBoxData Box = { SDL_MESSAGEBOX_WARNING, SDL_GetKeyboardFocus(), "UT2004", appToAnsi(TempStr), SDL_arraysize(Buttons), Buttons, NULL };
+		int Choice = No;
+		return SDL_ShowMessageBox( &Box, &Choice ) && Choice==Yes;
+#endif
+	}
+};
+FFeedbackContextSDL Warn;
 
 #ifdef __ANDROID__
 static void ExitSplash(void) {}

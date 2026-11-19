@@ -56,9 +56,9 @@ class CORE_API UProperty : public UField
 	virtual void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const=0;
 	virtual void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes=0 ) const=0;
 	virtual UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
-	virtual void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const=0;
+	virtual void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const=0;
 	virtual const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const=0;
-	virtual UBOOL ExportText( INT ArrayElement, TCHAR* ValueStr, BYTE* Data, BYTE* Delta, INT PortFlags ) const;
+	virtual UBOOL ExportText( INT ArrayElement, FString& ValueStr, BYTE* Data, BYTE* Delta, INT PortFlags ) const;
 	virtual void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	virtual void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	virtual void ClearValue( BYTE* Data ) const =0;
@@ -128,7 +128,7 @@ class CORE_API UByteProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
@@ -160,7 +160,7 @@ class CORE_API UIntProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
@@ -195,7 +195,7 @@ class CORE_API UPointerProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
@@ -234,7 +234,7 @@ class CORE_API UBoolProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	UBOOL HasValue( const BYTE* Data ) const; // rjp
@@ -265,7 +265,7 @@ class CORE_API UFloatProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
@@ -305,7 +305,7 @@ class CORE_API UObjectProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
@@ -372,7 +372,7 @@ class CORE_API UNameProperty : public UProperty
 	UBOOL Identical( const void* A, const void* B ) const;
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
@@ -406,7 +406,7 @@ class CORE_API UStrProperty : public UProperty
 	UBOOL Identical( const void* A, const void* B ) const;
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void DestroyValue( void* Dest ) const;
@@ -446,7 +446,7 @@ class CORE_API UFixedArrayProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void DestroyValue( void* Dest ) const;
@@ -488,7 +488,7 @@ class CORE_API UArrayProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void ClearValue( BYTE* Data ) const;
@@ -531,7 +531,7 @@ class CORE_API UMapProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void DestroyValue( void* Dest ) const;
@@ -572,7 +572,7 @@ class CORE_API UStructProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void ClearValue( BYTE* Data ) const;
@@ -611,7 +611,7 @@ class CORE_API UDelegateProperty : public UProperty
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
 	void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const;
-	void ExportTextItem( TCHAR* ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
+	void ExportTextItem( FString& ValueStr, BYTE* PropertyValue, BYTE* DefaultValue, INT PortFlags ) const;
 	const TCHAR* ImportText( const TCHAR* Buffer, BYTE* Data, INT PortFlags ) const;
 	void CopySingleValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;
 	void CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject=NULL, UBOOL InstanceSubobjects=1 ) const;

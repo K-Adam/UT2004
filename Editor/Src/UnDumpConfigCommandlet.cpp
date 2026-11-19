@@ -136,7 +136,8 @@ void UDumpConfigCommandlet::DumpClass( UClass* Cls )
 	else
 		appSprintf(Filename,TEXT("Dump%s.ini"),*Cls->ClassConfigName);
 
-	TCHAR TempKey[256], Value[256*STATICSTRINGLENGTH]=TEXT("");
+	TCHAR TempKey[256];
+	FString Value;
 	for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(Cls); It; ++It )
 	{
 		if ( !(It->PropertyFlags & CPF_Config) && !(It->PropertyFlags & CPF_GlobalConfig) )
@@ -165,8 +166,9 @@ void UDumpConfigCommandlet::DumpClass( UClass* Cls )
 				for( INT i=0; i<Ptr->Num(); i++ )
 				{
 					BYTE* Dest = (BYTE*)Ptr->GetData() + i*Size;
+					Value.Empty();
 					Array->Inner->ExportTextItem( Value, Dest, Dest, 0 );
-					Sec->Add( Key, Value );
+					Sec->Add( Key, *Value );
 				}
 			}
 			else GWarn->Logf(TEXT("Skipping %s because it didn't already exist in %s"), Section, Filename);
@@ -184,7 +186,7 @@ void UDumpConfigCommandlet::DumpClass( UClass* Cls )
 						Key = TempKey;
 					}
 					It->ExportText( Index, Value, &Cls->Defaults(0), &Cls->Defaults(0), 0 );
-					GConfig->SetString( Section, Key, Value, Filename );
+					GConfig->SetString( Section, Key, *Value, Filename );
 				}
 			}
 			else GWarn->Logf(TEXT("Skipping %s because it didn't already exist in %s"), Section, Filename);

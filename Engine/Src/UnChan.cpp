@@ -349,7 +349,7 @@ void UChannel::ReceivedRawBunch( FInBunch& Bunch )
 
 		// Dispatch any waiting bunches.
 		guard(ReleaseQueued);
-		while( InRec )
+		while( InRec && Connection->State!=USOCK_Closed )
 		{
 			if( InRec->ChSequence!=Connection->InReliable[ChIndex]+1 )
 				break;
@@ -562,7 +562,8 @@ void UControlChannel::ReceivedBunch( FInBunch& Bunch )
 
 	clock(GStats.DWORDStats(GEngineStats.STATS_Net_ControlTime));
 
-	for( ; ; )
+	// A refused login closes the connection, what follows it in the bunch must not run.
+	while( Connection->State!=USOCK_Closed )
 	{
 		FString Text;
 		Bunch << Text;
