@@ -90,4 +90,8 @@ addToLibrary({
     const server = UTF8ToString(cmd);
     FS.syncfs(false, () => Module.gameExit(server));
   },
+
+  ut_error__deps: ['$UTF8ToString'],
+  ut_error__sig: 'vp',
+  ut_error: (text) => Module.gameError(UTF8ToString(text)),
 });

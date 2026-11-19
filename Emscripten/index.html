@@ -20,6 +20,7 @@
   #status { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; }
   #status[hidden], #status [hidden] { display: none; }
   #details { max-width: 560px; color: #999; font-size: 14px; line-height: 1.5; white-space: pre-line; }
+  #details a { color: #ddd; }
   progress { width: min(480px, 80vw); }
   button { font: inherit; padding: 8px 20px; }
   canvas[hidden], #server[hidden] { display: none; }
@@ -94,6 +95,7 @@ const ZIP_KEY = 'ut2004-content-zip';
 // Set while the stored content matches the last content list, so the game can start when the list cannot be fetched.
 const SYNCED_KEY = 'ut2004-content-synced';
 const WELCOME_KEY = 'ut2004-welcome';
+const BLOCKED = 'This browser blocks storage for this page. The game keeps its content there, so allow cookies and site data for this site.';
 const CONTENT_DIRS = ['Animations', 'Maps', 'Music', 'Sounds', 'StaticMeshes', 'Textures'];
 
 let db, files, warning = '';
@@ -104,13 +106,19 @@ function show(text, info = '') {
   status.hidden = false;
 }
 
-function stop(text, retry) {
-  show(text);
+function stop(text, retry, info) {
+  show(text, info);
   progress.hidden = true;
   action.textContent = 'Retry';
   action.onclick = () => location.reload();
   action.hidden = !retry;
   forget.hidden = !retry;
+}
+
+// The game's last frame, or a lost context, would show through the message.
+function crash(text, info) {
+  canvas.hidden = true;
+  stop(text, true, info);
 }
 
 forget.onclick = async () => {
@@ -369,8 +377,7 @@ async function importZip(file) {
 // Like the Android launcher, the page takes the content of a retail install when the asset host fails.
 async function zipFallback(error) {
   for (;;) {
-    stop(error.message, true);
-    details.textContent = 'The game content could not be downloaded. The game also runs on the content of a retail UT2004 install: zip its folder and pick the zip here.';
+    stop(error.message, true, 'The game content could not be downloaded. The game also runs on the content of a retail UT2004 install: zip its folder and pick the zip here.');
     pick.hidden = false;
     pick.onclick = () => zipInput.click();
     const file = await new Promise((resolve) => (zipInput.onchange = () => zipInput.files[0] && resolve(zipInput.files[0])));
@@ -449,6 +456,7 @@ var Module = {
       .then(() => Module.removeRunDependency('content'), (e) => stop(e.message, true));
   }],
   onAbort: (what) => stop(`The game stopped: ${what}`),
+  gameError: (text) => crash('The game stopped on an error.', text),
   // The engine has shut down, and passes the arguments when it did so to start a server.
   gameExit: (server) => {
     if (server) sessionStorage.setItem(SERVER_KEY, server);
@@ -464,7 +472,11 @@ var Module = {
 // A page cannot start a second process, so a dedicated server takes the place of the game in this tab.
 // The session storage keeps its arguments, so a reload starts the server again and a link cannot pass any.
 const SERVER_KEY = 'ut2004-server';
-const serverCmd = sessionStorage.getItem(SERVER_KEY);
+// Storage can be blocked, then the page only runs the game.
+let serverCmd = null;
+try {
+  serverCmd = sessionStorage.getItem(SERVER_KEY);
+} catch {}
 if (serverCmd) {
   const log = document.getElementById('log');
   const stopServer = document.getElementById('stopServer');
@@ -500,6 +512,8 @@ function load(src) {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', () => canvas.focus());
+// The engine cannot rebuild a lost context.
+canvas.addEventListener('webglcontextlost', () => crash('The browser took the graphics context away from the game.'));
 
 // Chrome's default pointer lock warps the cursor and now and then reports the warp as a huge movement.
 const lockPointer = canvas.requestPointerLock.bind(canvas);
@@ -541,6 +555,8 @@ if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
   ask('mobile').then(() => location.replace('https://github.com/K-Adam/UT2004/releases'));
 } else if (!document.createElement('canvas').getContext('webgl2')) {
   stop('This browser has no WebGL 2.');
+  const href = 'https://get.webgl.org/webgl2/enable.html';
+  details.append('How to turn it on: ', Object.assign(document.createElement('a'), { href, textContent: href }));
 } else if (!('Suspending' in WebAssembly)) {
   stop('This browser cannot pause WebAssembly for storage reads (JSPI). Use Chrome 137, Firefox 153 or newer.');
 } else {
@@ -550,7 +566,8 @@ if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
     .then(() => load('system.js'))
     .then(() => load('UT2004.js'))
     .then(() => canvas.focus())
-    .catch((e) => stop(e.message, true));
+    // A browser that blocks site data throws this from the storage it refuses.
+    .catch((e) => stop(e.name == 'SecurityError' ? BLOCKED : e.message, true));
 }
 </script>
 </body>

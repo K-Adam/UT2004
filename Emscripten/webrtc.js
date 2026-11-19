@@ -29,7 +29,8 @@ addToLibrary({
             relay.until = Date.now() + 24 * 3600 * 1000;
             return config;
           })
-          .catch(() => {
+          .catch((e) => {
+            err(`WebRTC: no relay servers from the web master (${e})`);
             relay.until = Date.now() + 600 * 1000;
             return UTWebRtc.fallback;
           });
@@ -55,7 +56,9 @@ addToLibrary({
         };
         peer.dc.onclose = () => { peer.closed = true; };
         peer.pc.onconnectionstatechange = () => {
-          if (peer.pc.connectionState == 'failed' || peer.pc.connectionState == 'closed') peer.closed = true;
+          const state = peer.pc.connectionState;
+          if (state == 'failed') err(`WebRTC: the connection failed, ICE ${peer.pc.iceConnectionState}`);
+          if (state == 'failed' || state == 'closed') peer.closed = true;
         };
       } catch (e) {
         peer.fail(e);
@@ -136,6 +139,9 @@ addToLibrary({
     server = UTF8ToString(server);
     UTWebRtc.fallback = server ? { iceServers: [{ urls: `stun:${server}` }] } : {};
   },
+
+  ut_webrtc_supported__sig: 'i',
+  ut_webrtc_supported: () => typeof RTCPeerConnection != 'undefined',
 
   ut_webrtc_connect__deps: ['$UTWebRtc'],
   ut_webrtc_connect__sig: 'ipppi',

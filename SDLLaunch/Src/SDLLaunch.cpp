@@ -326,6 +326,7 @@ static bool FindContent(void)
 // Emscripten/content.js
 extern "C" int ut_next_frame();
 extern "C" void ut_exit(const char* ServerCmd);
+extern "C" void ut_error(const char* Message);
 #endif
 
 #ifdef __ANDROID__
@@ -925,8 +926,13 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 			FString Message = GErrorHist;
 			for( INT i; (i=Message.InStr(TEXT(" <- ")))!=-1; )
 				Message = Message.Left(i) + TEXT("\n") + Message.Mid(i+4);
+#if __EMSCRIPTEN__
+			// An alert would leave a black canvas behind, the page shows it with a way to start again.
+			ut_error( appToAnsi(*Message) );
+#else
 			Message += FString::Printf( TEXT("\n\nThe log file is %s"), Log.Filename );
 			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(*Message), NULL );
+#endif
 		}
 	}
 #endif

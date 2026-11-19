@@ -14,6 +14,8 @@
 
 extern "C"
 {
+	// 0 in a browser that has WebRTC turned off.
+	int ut_webrtc_supported();
 	// Both joins take their STUN and relay servers from the web master at Url.
 	int ut_webrtc_connect( const char* Url, const char* Answer, const char* Ufrag, int MaxInbox );
 	int ut_webrtc_connect_signal( const char* Url, const char* HostId, int MaxInbox );
@@ -107,6 +109,12 @@ void UTcpNetDriver::WebRtcListen()
 UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 {
 	guard(UTcpNetDriver::WebRtcConnect);
+	if( !ut_webrtc_supported() )
+	{
+		// The dialog cuts a longer line off at a small window.
+		Error = TEXT("Joining needs WebRTC, which this browser has turned off");
+		return 0;
+	}
 	auto Peer = std::make_shared<FWebRtcPeer>();
 	Peer->Id = ConnectPeer( ConnectURL, Error, Peer->Addr );
 	if( !Peer->Id )
