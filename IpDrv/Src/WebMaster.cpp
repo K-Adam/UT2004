@@ -19,6 +19,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include "SemVer.h"
 #pragma pack(pop)
 
 #include "UnIpDrv.h"
@@ -444,6 +445,11 @@ UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerRe
 						Pair.Value = Str( P, "value" );
 					}
 		}
+#if !__EMSCRIPTEN__
+	// The web page is always the latest build.
+	if( Root.contains("version") && Root["version"].is_string() && SemVerIsNewer( Root["version"].get<std::string>(), UT_VERSION ) )
+		News = FString::Printf( TEXT("Update available: %s\r%s\r\r"), *Str( Root, "version" ), appFromAnsi(UT_UPDATE_URL) );
+#endif
 	INT NewsCount = 0;
 	if( Root.contains("news") && Root["news"].is_array() )
 		for( const nlohmann::json& N : Root["news"] )

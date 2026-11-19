@@ -14,6 +14,13 @@ ut_module(IpDrv SHARED
 find_package(nlohmann_json CONFIG REQUIRED)
 target_link_libraries(IpDrv PRIVATE nlohmann_json::nlohmann_json)
 set_target_properties(IpDrv PROPERTIES CXX_STANDARD 17)
+# Only a build of a release tag has a version to compare with the web master's.
+set(UT_VERSION develop)
+if("$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")
+  string(REGEX REPLACE "^v" "" UT_VERSION "$ENV{GITHUB_REF_NAME}")
+endif()
+set(UT_UPDATE_URL "https://github.com/K-Adam/UT2004/releases" CACHE STRING "Where the update note in the server browser sends the player")
+set_property(SOURCE Src/WebMaster.cpp APPEND PROPERTY COMPILE_DEFINITIONS UT_VERSION="${UT_VERSION}" UT_UPDATE_URL="${UT_UPDATE_URL}")
 if(NOT EMSCRIPTEN)
   find_package(OpenSSL REQUIRED)
   find_package(CURL REQUIRED)
