@@ -266,6 +266,14 @@ static void UnmapWholeBuffer(GLenum Target,INT Size)
 
 void FOpenGLVertexStream::Cache(FVertexStream* Source)
 {
+	// ANGLE keeps a buffer's contents when its size changes, and reads them back from the GPU for that, which waits
+	// for the frames in flight. A new buffer has nothing to keep, and the bound streams may name the old one.
+	if( Buffer && Size != Source->GetSize() )
+	{
+		RenDev->GL.NumStreams = INDEX_NONE;
+		glDeleteBuffers(1,&Buffer);
+		Buffer = 0;
+	}
 	if( !Buffer )
 		glGenBuffers(1,&Buffer);
 	if( BYTE* Dest = MapWholeBuffer(GL_ARRAY_BUFFER,Buffer,Size,Source->GetSize(),Source->HintDynamic() ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW) )

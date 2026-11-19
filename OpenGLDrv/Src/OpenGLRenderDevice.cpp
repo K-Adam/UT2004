@@ -188,6 +188,67 @@ GLuint UOpenGLRenderDevice::StartProgram(GLuint VertexShader,const ANSICHAR* Fra
 	return Program;
 }
 
+static const TCHAR* ProgramBinaryPath = TEXT("..") PATH_SEPARATOR TEXT("ShaderCache");
+// A file starts with the format and the layouts, what the driver gave follows.
+static const INT ProgramBinaryHeader = sizeof(GLenum) + 1;
+
+static QWORD HashText(QWORD Hash,const ANSICHAR* Text)
+{
+	for( ; *Text; Text++ )
+		Hash = (Hash ^ (BYTE)*Text) * 0x100000001B3ull;
+	return Hash;
+}
+
+UBOOL UOpenGLRenderDevice::LoadProgram(FOpenGLProgram* Program,UBOOL Instanced,const ANSICHAR* FragmentSource)
+{
+	if( !ProgramBinaries )
+		return 0;
+	QWORD Hash = HashText(HashText(HashText(0xCBF29CE484222325ull,OpenGLVertexShader),Instanced ? "I" : "P"),FragmentSource);
+	Program->BinaryFile = FString(ProgramBinaryPath) * FString::Printf(TEXT("%08X%08X.bin"),(DWORD)(Hash >> 32),(DWORD)Hash);
+
+	TArray<BYTE> Data;
+	if( !appLoadFileToArray(Data,*Program->BinaryFile) || Data.Num() <= ProgramBinaryHeader )
+		return 0;
+	GLenum	Format;
+	GLint	Status = 0;
+	appMemcpy(&Format,&Data(0),sizeof(Format));
+	GLuint Loaded = glCreateProgram();
+	glProgramBinary(Loaded,Format,&Data(ProgramBinaryHeader),Data.Num() - ProgramBinaryHeader);
+	glGetProgramiv(Loaded,GL_LINK_STATUS,&Status);
+	if( !Status )
+	{
+		// Another driver or another version of it wrote the file.
+		glDeleteProgram(Loaded);
+		while( glGetError() != GL_NO_ERROR );
+		return 0;
+	}
+	Program->Program		= Loaded;
+	Program->FragmentShader	= 0;
+	Program->SavedLayouts	= Data(sizeof(GLenum));
+	return 1;
+}
+
+void UOpenGLRenderDevice::SaveProgram(FOpenGLProgram* Program)
+{
+	if( !Program->BinaryFile.Len() || !Program->Program || Program->Pending || !(Program->Layouts & ~Program->SavedLayouts) )
+		return;
+	GLint		Length = 0;
+	GLsizei		Written = 0;
+	GLenum		Format = 0;
+	glGetProgramiv(Program->Program,GL_PROGRAM_BINARY_LENGTH,&Length);
+	if( Length <= 0 )
+		return;
+	TArray<BYTE> Data;
+	Data.Add(ProgramBinaryHeader + Length);
+	glGetProgramBinary(Program->Program,Length,&Written,&Format,&Data(ProgramBinaryHeader));
+	if( Written <= 0 )
+		return;
+	appMemcpy(&Data(0),&Format,sizeof(Format));
+	Data(sizeof(GLenum)) = Program->Layouts | Program->SavedLayouts;
+	Data.Remove(ProgramBinaryHeader + Written,Data.Num() - ProgramBinaryHeader - Written);
+	appSaveArrayToFile(Data,*Program->BinaryFile);
+}
+
 GLuint UOpenGLRenderDevice::FinishProgram(GLuint Program,GLuint FragmentShader)
 {
 	GLint Status = 0;
@@ -299,6 +360,13 @@ UBOOL UOpenGLRenderDevice::InitContext()
 			MaxShaderCompilerThreads(0xFFFFFFFF);
 	}
 	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i, sample variables %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile,HasExtension("GL_OES_sample_variables"));
+
+	// WebGL has no program binaries.
+	GLint BinaryFormats = 0;
+	glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS,&BinaryFormats);
+	ProgramBinaries = BinaryFormats > 0;
+	if( ProgramBinaries )
+		GFileManager->MakeDirectory(ProgramBinaryPath,1);
 
 	VertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader,"#version 300 es\n");
 	InstancedVertexShaderObject = CompileShader(GL_VERTEX_SHADER,OpenGLVertexShader,"#version 300 es\n#define INSTANCED\n");
@@ -522,13 +590,18 @@ void UOpenGLRenderDevice::Flush(UViewport* Viewport)
 	for( INT i=0; i<All.Num(); i++ )
 		delete All(i);
 
-	for( TMultiMap<DWORD,FOpenGLProgram*>::TIterator It(Programs); It; ++It )
+	for( TMap<DWORD,FOpenGLProgram*>::TIterator It(Programs); It; ++It )
 	{
-		if( It.Value()->Program )
-			glDeleteProgram(It.Value()->Program);
-		if( It.Value()->Pending )
-			glDeleteShader(It.Value()->FragmentShader);
-		delete It.Value();
+		for( FOpenGLProgram* Program = It.Value(), *Next; Program; Program = Next )
+		{
+			Next = Program->NextSameHash;
+			SaveProgram(Program);
+			if( Program->Program )
+				glDeleteProgram(Program->Program);
+			if( Program->Pending )
+				glDeleteShader(Program->FragmentShader);
+			delete Program;
+		}
 	}
 	Programs.Empty();
 	GL.Program = (GLuint)-1;
@@ -593,8 +666,9 @@ void UOpenGLRenderDevice::Unlock(FRenderInterface* RI)
 	RenderInterface.Unlocked();
 	// The loading screen covers the compiles the precache started, so the first frame has the whole level.
 	if( LockedViewport && LockedViewport->Precaching )
-		for( TMultiMap<DWORD,FOpenGLProgram*>::TIterator It(Programs); It; ++It )
-			ProgramReady(It.Value(),1);
+		for( TMap<DWORD,FOpenGLProgram*>::TIterator It(Programs); It; ++It )
+			for( FOpenGLProgram* Program = It.Value(); Program; Program = Program->NextSameHash )
+				ProgramReady(Program,1);
 	LockedViewport = NULL;
 }
 

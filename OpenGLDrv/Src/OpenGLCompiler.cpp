@@ -186,6 +186,7 @@ public:
 	FOpenGLRenderInterface::FSavedState*	S;
 	FOpenGLMaterialState&					State;
 	TArray<BYTE>&						Key;
+	INT									KeyNum;		// Bytes of Key this walk wrote, Key keeps its allocation.
 	FString*							Code;
 	FLOAT								Time;
 	INT									NumTemps;
@@ -205,7 +206,7 @@ public:
 	INT		FogMode;
 
 	FOpenGLCompiler(FOpenGLRenderInterface* InRI,FOpenGLMaterialState& InState,TArray<BYTE>& InKey,FString* InCode,FString* InErrorString,UMaterial** InErrorMaterial)
-	:	RI(InRI), S(InRI->CurrentState), State(InState), Key(InKey), Code(InCode), NumTemps(0)
+	:	RI(InRI), S(InRI->CurrentState), State(InState), Key(InKey), KeyNum(0), Code(InCode), NumTemps(0)
 	,	EnvSampled(0), ReflE(INDEX_NONE), ReflMask(INDEX_NONE), Lit(INDEX_NONE), Light(INDEX_NONE), Beam(0), Heat(HEAT_None)
 	,	ErrorString(InErrorString), ErrorMaterial(InErrorMaterial), FogMode(FOG_Normal)
 	{
@@ -213,15 +214,24 @@ public:
 		appMemzero(Cube,sizeof(Cube));
 	}
 
+	void KeyBytes(const void* Bytes,INT Count)
+	{
+		if( KeyNum + Count > Key.Num() )
+			Key.Add(KeyNum + Count - Key.Num());
+		appMemcpy(&Key(KeyNum),Bytes,Count);
+		KeyNum += Count;
+	}
+
 	void K(INT Value)
 	{
-		Key.AddItem((BYTE)Value);
+		BYTE Byte = (BYTE)Value;
+		KeyBytes(&Byte,1);
 	}
 
 	void Emit(const TCHAR* Fmt,...)
 	{
 		PTRINT Site = (PTRINT)Fmt;
-		appMemcpy(&Key(Key.Add(sizeof(Site))),&Site,sizeof(Site));
+		KeyBytes(&Site,sizeof(Site));
 		if( Code )
 		{
 			TCHAR Line[1024];
@@ -1259,9 +1269,6 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	FOpenGLMaterialState& State = CurrentState->Material;
 	// Kept across calls, this runs for every draw.
 	static TArray<BYTE> Key;
-	static TArray<FOpenGLProgram*> Candidates;
-	Key.Empty(Key.Num());
-	Candidates.Empty(Candidates.Num());
 	State.Reset();
 	FOpenGLCompiler Compiler(this,State,Key,NULL,ErrorString,ErrorMaterial);
 	if( !Compiler.Compile(Material) )
@@ -1271,13 +1278,14 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	Compiler.K(State.NumConstants);
 	Compiler.K(CurrentState->Instanced);
 
-	DWORD Hash = appMemCrc(&Key(0),Key.Num());
-	RenDev->Programs.MultiFind(Hash,Candidates);
-	for( INT i=0; i<Candidates.Num(); i++ )
+	INT KeyNum = Compiler.KeyNum;
+	DWORD Hash = appMemCrc(&Key(0),KeyNum);
+	FOpenGLProgram** Same = RenDev->Programs.Find(Hash);
+	for( FOpenGLProgram* Candidate = Same ? *Same : NULL; Candidate; Candidate = Candidate->NextSameHash )
 	{
-		if( Candidates(i)->Key.Num() == Key.Num() && appMemcmp(&Candidates(i)->Key(0),&Key(0),Key.Num()) == 0 )
+		if( Candidate->Key.Num() == KeyNum && appMemcmp(&Candidate->Key(0),&Key(0),KeyNum) == 0 )
 		{
-			State.Program = Candidates(i);
+			State.Program = Candidate;
 			return 1;
 		}
 	}
@@ -1316,15 +1324,20 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 		: TEXT("");
 	FString Fragment = FString(OpenGLFragmentPrologue) + Fade + Writer.Declarations() + TEXT("void main()\n{\n") + Dissolve + Body + TEXT("}\n");
 	FOpenGLProgram* Program = new FOpenGLProgram;
-	Program->Key = Key;
+	Program->Key.Add(KeyNum);
+	appMemcpy(&Program->Key(0),&Key(0),KeyNum);
 	// No real value has this pattern, so the first draw sends everything.
 	appMemset(&Program->SentLocalToWorld,0xff,sizeof(Program->SentLocalToWorld));
 	appMemset(Program->SentMatrices,0xff,sizeof(Program->SentMatrices));
 	appMemset(Program->SentConstants,0xff,sizeof(Program->SentConstants));
 	appMemset(&Program->SentAlphaRef,0xff,sizeof(Program->SentAlphaRef));
-	Program->Program = RenDev->StartProgram(CurrentState->Instanced ? RenDev->InstancedVertexShaderObject : RenDev->VertexShaderObject,&ToAnsi(Fragment)(0),Program->FragmentShader);
+	Program->Layouts = Program->SavedLayouts = 0;
+	TArray<ANSICHAR> Source = ToAnsi(Fragment);
+	if( !RenDev->LoadProgram(Program,CurrentState->Instanced,&Source(0)) )
+		Program->Program = RenDev->StartProgram(CurrentState->Instanced ? RenDev->InstancedVertexShaderObject : RenDev->VertexShaderObject,&Source(0),Program->FragmentShader);
 	Program->Pending = 1;
-	RenDev->Programs.Add(Hash,Program);
+	Program->NextSameHash = Same ? *Same : NULL;
+	RenDev->Programs.Set(Hash,Program);
 	State.Program = Program;
 	return 1;
 

@@ -119,6 +119,8 @@ static void CommitTarget(FOpenGLRenderInterface* RI,FOpenGLRenderInterface::FSav
 			Far = RI->ViewModel ? VIEW_MODEL_DEPTH : 1.f;
 		}
 	}
+	// Only the world has more than one draw buffer, see SetWorldDrawBuffers.
+	RI->TargetLayout = (Target || ToOverlay || !RI->InWorld) ? 0 : (RenDev->ScreenSpaceReflections ? 1 : 0) + (RenDev->GlobalIllumination ? 2 : 0);
 	UOpenGLRenderDevice::FGLState& GL = RenDev->GL;
 	if( GL.Framebuffer != Framebuffer )
 	{
@@ -873,6 +875,7 @@ void FOpenGLRenderInterface::Draw(EPrimitiveType PrimitiveType,INT FirstIndex,IN
 	}
 
 	Commit();
+	Program->Layouts |= 1 << TargetLayout;
 	UBOOL Indexed = CurrentState->IndexBuffer != 0;
 	// Only the plain base vertex draw call is loaded, instanced draws take the base through the offsets.
 	INT Base = Indexed ? CurrentState->IndexBufferBase : 0, DrawBase = RenDev->DrawElementsBaseVertex && !NumInstances ? Base : 0;
@@ -905,6 +908,7 @@ void FOpenGLRenderInterface::Draw(EPrimitiveType PrimitiveType,INT FirstIndex,IN
 			if( !ReflectivityPass )
 				continue;
 			RenDev->SetWorldDrawBuffers(1);
+			Program->Layouts |= 1 << LAYOUT_ReflectionOnly;
 			glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_TRUE);
 		}
 		if( Pass == 2 )

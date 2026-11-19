@@ -131,6 +131,8 @@ struct FFoliageVariant
 	FLOAT					Weight;
 	UBOOL					Narrow;		// Small enough for ground too broken to carry the wide ones.
 	FFoliageInstanceStream	Placed;		// This frame's hand placed plants.
+	// This frame's decorations of the terrain being drawn, by detail level and by whether its light texture lights them.
+	FFoliageInstanceStream	Merged[FOLIAGE_LODS][2];
 };
 
 struct FFoliageSet
@@ -702,34 +704,49 @@ FVector FoliageTreeWind(FLevelSceneNode* SceneNode)
 	Drawing.
 -----------------------------------------------------------------------------*/
 
+// X start, Y end, Z and W the bands the level dissolves out and in over.
+static FPlane LODRange(FFoliageSet* Set,FFoliageVariant* Variant,INT LOD,FLevelSceneNode* SceneNode)
+{
+	// A narrow view magnifies, so detail has to last longer.
+	FLOAT	FOVBias = Max(SceneNode->Viewport->Actor->FOVBias,0.1f);
+	UBOOL	Last = LOD == Variant->NumLODs - 1;
+	// A handover dissolves over a band that both of its levels take from the distance they share.
+	FLOAT	Start = LOD ? Set->LODDistance[LOD - 1] / FOVBias : 0.f,
+			End = Last ? 1e30f : Set->LODDistance[LOD] / FOVBias;
+	return FPlane(Start,End,End * 0.2f + 1.f,Start * 0.2f + 1.f);
+}
+
+static UBOOL LODReaches(const FPlane& Range,FLOAT Near,FLOAT Far)
+{
+	return Far >= Range.X - Range.W && Near < Range.Y;
+}
+
+// The shader leaves out the instances outside the level's range.
+static UBOOL DrawLOD(FRenderInterface* RI,FLevelSceneNode* SceneNode,FFoliageSet* Set,FFoliageVariant* Variant,INT LOD,const FPlane& Range,FFoliageInstanceStream* Instances,const FVector& WindDirection,const FMatrix* WorldToLight)
+{
+	// The first level's height for all of them, so a plant bends the same on both sides of a handover.
+	FPlane			Wind(WindDirection.X * Set->Bend,WindDirection.Y * Set->Bend,SceneNode->Viewport->Actor->Level->TimeSeconds,1.f / Variant->LODs[0]->Height);
+	FFoliageMesh*	Mesh = Variant->LODs[LOD];
+	FVertexStream*	Streams[3] = { &Mesh->Vertices, &Mesh->Colors, &Mesh->UVs };
+	RI->SetVertexStreams(VS_FixedFunction,Streams,3);
+	RI->SetIndexBuffer(&Mesh->Indices,0);
+	// The instance stream comes before the material, a device builds the material for it.
+	if( !RI->SetInstanceStream(Instances,WorldToLight,&Range,&Wind) )
+		return 0;
+	RI->SetMaterial(Set->Material->Get());
+	RI->DrawInstanced(PT_TriangleList,0,Mesh->Indices.Indices.Num() / 3,Instances->Instances.Num());
+	return 1;
+}
+
 // Draws a variant's instances that lie Near to Far from the viewer, each with the detail level of its own distance.
 // The levels dissolve into each other over the last part of their range.
 static void DrawInstances(FRenderInterface* RI,FLevelSceneNode* SceneNode,FFoliageSet* Set,FFoliageVariant* Variant,FFoliageInstanceStream* Instances,FLOAT Near,FLOAT Far,const FVector& WindDirection,const FMatrix* WorldToLight = NULL)
 {
-	// The first level's height for all of them, so a plant bends the same on both sides of a handover.
-	FPlane Wind(WindDirection.X * Set->Bend,WindDirection.Y * Set->Bend,SceneNode->Viewport->Actor->Level->TimeSeconds,1.f / Variant->LODs[0]->Height);
-	// A narrow view magnifies, so detail has to last longer.
-	FLOAT FOVBias = Max(SceneNode->Viewport->Actor->FOVBias,0.1f);
 	for( INT LOD=0; LOD<Variant->NumLODs; LOD++ )
 	{
-		UBOOL	Last = LOD == Variant->NumLODs - 1;
-		// A handover dissolves over a band that both of its levels take from the distance they share.
-		FLOAT	Start = LOD ? Set->LODDistance[LOD - 1] / FOVBias : 0.f,
-				End = Last ? 1e30f : Set->LODDistance[LOD] / FOVBias,
-				BandIn = Start * 0.2f + 1.f,
-				BandOut = End * 0.2f + 1.f;
-		if( Far < Start - BandIn || Near >= End )
-			continue;
-		FFoliageMesh*	Mesh = Variant->LODs[LOD];
-		FVertexStream*	Streams[3] = { &Mesh->Vertices, &Mesh->Colors, &Mesh->UVs };
-		FPlane			Range(Start,End,BandOut,BandIn);
-		RI->SetVertexStreams(VS_FixedFunction,Streams,3);
-		RI->SetIndexBuffer(&Mesh->Indices,0);
-		// The instance stream comes before the material, a device builds the material for it.
-		if( !RI->SetInstanceStream(Instances,WorldToLight,&Range,&Wind) )
+		FPlane Range = LODRange(Set,Variant,LOD,SceneNode);
+		if( LODReaches(Range,Near,Far) && !DrawLOD(RI,SceneNode,Set,Variant,LOD,Range,Instances,WindDirection,WorldToLight) )
 			return;
-		RI->SetMaterial(Set->Material->Get());
-		RI->DrawInstanced(PT_TriangleList,0,Mesh->Indices.Indices.Num() / 3,Instances->Instances.Num());
 	}
 	RI->SetInstanceStream(NULL);
 }
@@ -773,7 +790,7 @@ static FFoliageGroup* BuildGroup(FFoliageSet* Set,const FFoliageMeshEntry& Entry
 		if( !Group->Streams(VariantIndex) )
 			Group->Streams(VariantIndex) = new FFoliageInstanceStream;
 		FFoliageInstance& Instance = Group->Streams(VariantIndex)->Instances(Group->Streams(VariantIndex)->Instances.Add());
-		Instance.Position	= Base - Up * Set->Sink - Group->Origin;
+		Instance.Position	= Base - Up * Set->Sink;
 		Instance.FadeEnd	= Layer.FadeoutRadius.Max * Set->FadeScale;
 		// Retail thins the alpha over the whole range, often from the viewer's feet. Dissolving does that with holes
 		// in a noise, which shows up close and in the contact shadows, so it waits for the last tenth.
@@ -844,16 +861,70 @@ UBOOL FFoliage::RenderDecorations(ATerrainInfo* Terrain,INT LayerIndex,INT Secto
 	if( !Group )
 		Group = BuildGroup(Set,Entry,Terrain,LayerIndex,SectorIndex);
 
-	FLOAT Distance = FDist(SceneNode->ViewOrigin,Group->Origin);
+	FLOAT Distance = FDist(SceneNode->ViewOrigin,Group->Origin), Near = Distance - Group->Radius, Far = Distance + Group->Radius;
 	const FDecorationLayer& Layer = Terrain->DecoLayers(LayerIndex);
 	UBOOL Lightmapped = Built->Light && UsesTerrainLight(Layer);
-	// Static lighting is what brings the instance colour in, the retail call leaves it off.
-	RI->EnableLighting(Layer.LitDirectional,!Layer.LitDirectional,1,Lightmapped ? Built->Light : NULL,SceneNode->Viewport->Actor->RendMap == REN_LightingOnly);
-	RI->SetTransform(TT_LocalToWorld,FTranslationMatrix(Group->Origin));
+	if( Layer.LitDirectional )
+	{
+		// The caller has set this sector's own sunlights, so it cannot wait for the others.
+		RI->EnableLighting(1,0,1,NULL,SceneNode->Viewport->Actor->RendMap == REN_LightingOnly);
+		RI->SetTransform(TT_LocalToWorld,FMatrix::Identity);
+		for( INT i=0; i<Group->Streams.Num(); i++ )
+			if( Group->Streams(i) )
+				DrawInstances(RI,SceneNode,Set,Set->Variants(i),Group->Streams(i),Near,Far,LevelWind(Library,SceneNode->Level));
+		return 1;
+	}
+	// A draw per sector costs far more than copying its plants, so the sectors of a frame go out together.
 	for( INT i=0; i<Group->Streams.Num(); i++ )
-		if( Group->Streams(i) )
-			DrawInstances(RI,SceneNode,Set,Set->Variants(i),Group->Streams(i),Distance - Group->Radius,Distance + Group->Radius,LevelWind(Library,SceneNode->Level),Lightmapped ? &Built->WorldToLight : NULL);
+	{
+		if( !Group->Streams(i) )
+			continue;
+		const TArray<FFoliageInstance>& Source = Group->Streams(i)->Instances;
+		for( INT LOD=0; LOD<Set->Variants(i)->NumLODs; LOD++ )
+		{
+			if( !LODReaches(LODRange(Set,Set->Variants(i),LOD,SceneNode),Near,Far) )
+				continue;
+			TArray<FFoliageInstance>& Merged = Set->Variants(i)->Merged[LOD][Lightmapped].Instances;
+			appMemcpy(&Merged(Merged.Add(Source.Num())),&Source(0),Source.Num() * sizeof(FFoliageInstance));
+		}
+	}
 	return 1;
+
+	unguard;
+}
+
+void FFoliage::FlushDecorations(ATerrainInfo* Terrain,FLevelSceneNode* SceneNode,FRenderInterface* RI)
+{
+	guard(FFoliage::FlushDecorations);
+
+	FFoliageLibrary*	Library = GetEnabledLibrary(SceneNode);
+	FFoliageTerrain**	Built = Library ? Library->Terrains.Find((QWORD)(PTRINT)Terrain) : NULL;
+	if( !Built )
+		return;
+
+	RI->SetTransform(TT_LocalToWorld,FMatrix::Identity);
+	for( INT Lightmapped=0; Lightmapped<2; Lightmapped++ )
+	{
+		// Static lighting is what brings the instance colour in.
+		RI->EnableLighting(0,1,1,Lightmapped ? (*Built)->Light : NULL,SceneNode->Viewport->Actor->RendMap == REN_LightingOnly);
+		for( INT s=0; s<Library->Sets.Num(); s++ )
+		{
+			FFoliageSet* Set = Library->Sets(s);
+			for( INT v=0; v<Set->Variants.Num(); v++ )
+			{
+				for( INT LOD=0; LOD<Set->Variants(v)->NumLODs; LOD++ )
+				{
+					FFoliageInstanceStream& Merged = Set->Variants(v)->Merged[LOD][Lightmapped];
+					if( !Merged.Instances.Num() )
+						continue;
+					Merged.Revision++;
+					DrawLOD(RI,SceneNode,Set,Set->Variants(v),LOD,LODRange(Set,Set->Variants(v),LOD,SceneNode),&Merged,LevelWind(Library,SceneNode->Level),Lightmapped ? &(*Built)->WorldToLight : NULL);
+					Merged.Instances.Empty(Merged.Instances.Num());
+				}
+			}
+		}
+	}
+	RI->SetInstanceStream(NULL);
 
 	unguard;
 }

@@ -9,3 +9,8 @@ set(VCPKG_PLATFORM_TOOLSET v143)
 if(PORT MATCHES "^(sdl3|openal-soft|angle)$")
   set(VCPKG_LIBRARY_LINKAGE dynamic)
 endif()
+# vcpkg builds ANGLE without program binaries, which the shader cache of OpenGLDrv loads.
+if(PORT STREQUAL "angle")
+  set(VCPKG_C_FLAGS "")
+  set(VCPKG_CXX_FLAGS "/DANGLE_HAS_BINARY_LOADING")
+endif()

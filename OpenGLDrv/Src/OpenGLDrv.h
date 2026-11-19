@@ -141,6 +141,11 @@ struct FOpenGLDynamicBuffer
 struct FOpenGLProgram
 {
 	TArray<BYTE>	Key;
+	FOpenGLProgram*	NextSameHash;
+	FString			BinaryFile;		// Where the linked program is kept between runs.
+	// ANGLE compiles a pixel shader per layout of draw buffers at the first draw into it, so the file is written again after one.
+	BYTE			Layouts,		// Bit per layout drawn into.
+					SavedLayouts;	// Those the file had.
 	GLuint			Program,
 					FragmentShader;	// Kept until the link finishes, for its error log.
 	UBOOL			Pending;
@@ -302,6 +307,9 @@ public:
 						ViewModel,		// Only the first person weapon is left of the world.
 						WorldDrawn,		// The level reached the world framebuffer, a motion blur draws it elsewhere.
 						OverlayUsed;	// 2D drawn within the world went to the overlay this frame.
+	// Which of the world's extra draw buffers the committed target has on, 0 to 3. See FOpenGLProgram::Layouts.
+	BYTE				TargetLayout;
+	enum { LAYOUT_ReflectionOnly = 4 };
 	FMatrix				ViewWorldToCamera,
 						ViewCameraToScreen;
 	TArray<FDynamicLight*>	WorldLights;	// The lights actors in the world were lit by.
@@ -460,7 +468,8 @@ class UOpenGLRenderDevice : public URenderDevice
 	UBOOL	SupportsDXT1,
 			SupportsDXT35,
 			SupportsFloatTargets,
-			ParallelCompile;
+			ParallelCompile,
+			ProgramBinaries;
 	INT		MaxTextureSize,
 			MaxAnisotropy,
 			MaxSamples;
@@ -471,9 +480,10 @@ class UOpenGLRenderDevice : public URenderDevice
 	UBOOL					ContextReady;
 
 	TMap<QWORD,FOpenGLResource*>			Resources;
-	TMultiMap<DWORD,FOpenGLProgram*>		Programs;
+	TMap<DWORD,FOpenGLProgram*>				Programs;	// By key hash, chained through NextSameHash.
 	TMap<DWORD,GLuint>					Samplers;
 	TMap<FName,BYTE>					HeatKinds;	// EOpenGLHeat by material name, the matching is too slow for every draw.
+	TMap<FName,FLOAT>					BlastRadii;	// By actor class name, for the same reason.
 
 	GLuint	VertexArray,
 			EmptyVertexArray,
@@ -596,6 +606,9 @@ class UOpenGLRenderDevice : public URenderDevice
 	// Links without waiting, FinishProgram blocks until the result is known.
 	GLuint StartProgram(GLuint VertexShader,const ANSICHAR* FragmentSource,GLuint& FragmentShader);
 	GLuint FinishProgram(GLuint Program,GLuint FragmentShader);
+	// Takes the program from the file a former run left for these sources. Returns 0 when it has to be built.
+	UBOOL LoadProgram(FOpenGLProgram* Program,UBOOL Instanced,const ANSICHAR* FragmentSource);
+	void SaveProgram(FOpenGLProgram* Program);
 	// Without Wait an unfinished program returns 0 and its draws are skipped.
 	UBOOL ProgramReady(FOpenGLProgram* Program,UBOOL Wait);
 	void ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth = 0);

@@ -7,8 +7,10 @@
 class ENGINE_API FFoliage
 {
 public:
-	// Draws a decoration layer's sector with its replacement. Returns 0 when the retail mesh has to draw.
+	// Takes a decoration layer's sector for its replacement. Returns 0 when the retail mesh has to draw.
 	static UBOOL RenderDecorations(ATerrainInfo* Terrain,INT LayerIndex,INT SectorIndex,FLevelSceneNode* SceneNode,FRenderInterface* RI);
+	// Draws what RenderDecorations took of a terrain, once all of its sectors are through.
+	static void FlushDecorations(ATerrainInfo* Terrain,FLevelSceneNode* SceneNode,FRenderInterface* RI);
 	// How far the wind carries the top of the plant that replaces a mesh, per unit of the layer's scale.
 	static FLOAT WindReach(FLevelSceneNode* SceneNode,UStaticMesh* StaticMesh);
 	// How many times the layer's fadeout radius its replacement is drawn to, 1 when the retail mesh draws.

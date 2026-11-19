@@ -3781,6 +3781,8 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 		}
 	}
 
+	FFoliage::FlushDecorations(this,SceneNode,RI);
+
 	delete [] SectorIndices;
 
 	GStats.DWORDStats( GEngineStats.STATS_DecoLayer_Triangles ) += RenderedTriangles;

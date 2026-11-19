@@ -160,13 +160,14 @@ inline DWORD GetTypeHash( const DWORD A )
 {
 	return A;
 }
+// Cache ids and pointers vary little in their low bits, which pick the bucket.
 inline DWORD GetTypeHash( const QWORD A )
 {
-	return (DWORD)A+((DWORD)(A>>32) * 23);
+	return (DWORD)((A * 0x9E3779B97F4A7C15ull) >> 32);
 }
 inline DWORD GetTypeHash( const SQWORD A )
 {
-	return (DWORD)A+((DWORD)(A>>32) * 23);
+	return GetTypeHash( (QWORD)A );
 }
 inline DWORD GetTypeHash( const TCHAR* S )
 {

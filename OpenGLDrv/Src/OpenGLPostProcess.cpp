@@ -804,6 +804,25 @@ GLuint UOpenGLRenderDevice::Accumulate(GLuint Program,FOpenGLFramebuffer& Input,
 	return Resolved.Texture;
 }
 
+// Minigun shells and the like only pop, and gibs and debris carry the word without any blast.
+// Of the shock rifle only the combo blasts, its beam and ball hits are named explosions too.
+static FLOAT BlastRadius(UClass* ActorClass)
+{
+	UBOOL Blast = 0;
+	for( UClass* Class=ActorClass; Class && !Blast; Class=Class->GetSuperClass() )
+		Blast = appStrstr(Class->GetName(),TEXT("Explosion")) || appStrstr(Class->GetName(),TEXT("VehDeath")) || appStrstr(Class->GetName(),TEXT("ShockCombo")) || appStrstr(Class->GetName(),TEXT("TankHitRock")) || appStrstr(Class->GetName(),TEXT("PRVCombo"));
+	const TCHAR* Name = ActorClass->GetName();
+	if( !Blast || appStrstr(Name,TEXT("Blood")) || appStrstr(Name,TEXT("Crap")) || (appStrstr(Name,TEXT("Shock")) && !appStrstr(Name,TEXT("ShockCombo"))) )
+		return 0.f;
+	if( appStrstr(Name,TEXT("Small")) )
+		return 50.f;
+	if( appStrstr(Name,TEXT("TankHitRock")) )
+		return 1000.f;
+	if( appStrstr(Name,TEXT("Redeemer")) )
+		return 2500.f;
+	return 600.f;
+}
+
 // Explosions are told by their class names, several effects of one explosion make one wave.
 void FOpenGLRenderInterface::PickBlasts(FPlane* Out)
 {
@@ -824,21 +843,11 @@ void FOpenGLRenderInterface::PickBlasts(FPlane* Out)
 		AActor* Actor = Level->Actors(i);
 		if( !Actor || Actor->bDeleteMe || Actor->bNoDelete )
 			continue;
-		FLOAT Radius = 0.f;
-		for( UClass* Class=Actor->GetClass(); Class && !Radius; Class=Class->GetSuperClass() )
-			if( appStrstr(Class->GetName(),TEXT("Explosion")) || appStrstr(Class->GetName(),TEXT("VehDeath")) || appStrstr(Class->GetName(),TEXT("ShockCombo")) || appStrstr(Class->GetName(),TEXT("TankHitRock")) || appStrstr(Class->GetName(),TEXT("PRVCombo")) )
-				Radius = 600.f;
-		// Minigun shells and the like only pop, and gibs and debris carry the word without any blast.
-		// Of the shock rifle only the combo blasts, its beam and ball hits are named explosions too.
-		const TCHAR* Name = Actor->GetClass()->GetName();
-		if( !Radius || appStrstr(Name,TEXT("Blood")) || appStrstr(Name,TEXT("Crap")) || (appStrstr(Name,TEXT("Shock")) && !appStrstr(Name,TEXT("ShockCombo"))) )
+		FName	ClassName = Actor->GetClass()->GetFName();
+		FLOAT*	Known = RenDev->BlastRadii.Find(ClassName);
+		FLOAT	Radius = Known ? *Known : RenDev->BlastRadii.Set(ClassName,BlastRadius(Actor->GetClass()));
+		if( !Radius )
 			continue;
-		if( appStrstr(Name,TEXT("Small")) )
-			Radius = 50.f;
-		else if( appStrstr(Name,TEXT("TankHitRock")) )
-			Radius = 1000.f;
-		else if( appStrstr(Name,TEXT("Redeemer")) )
-			Radius = 2500.f;
 
 		INT Slot = INDEX_NONE, Oldest = 0;
 		for( INT j=0; j<ARRAY_COUNT(Blasts); j++ )
