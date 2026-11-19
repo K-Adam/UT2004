@@ -3,12 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UT2004</title>
-<link rel="icon" href="favicon.ico">
-<meta name="description" content="Unreal Tournament 2004 in the browser, joining WebRTC servers from the web master list.">
+<title>UT2004 - Unreal Tournament 2004 in the browser</title>
+<link rel="icon" href="favicon.ico" sizes="48x48 32x32 16x16">
+<link rel="canonical" href="https://ut2004.dev/">
+<meta name="description" content="Play Unreal Tournament 2004 in your browser. A free, open source port of the game with online multiplayer, no install needed.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="UT2004">
-<meta property="og:description" content="Unreal Tournament 2004 in the browser, joining WebRTC servers from the web master list.">
+<meta property="og:site_name" content="UT2004">
+<meta property="og:url" content="https://ut2004.dev/">
+<meta property="og:title" content="UT2004 - Unreal Tournament 2004 in the browser">
+<meta property="og:description" content="Play Unreal Tournament 2004 in your browser. A free, open source port of the game with online multiplayer, no install needed.">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "name": "UT2004", "url": "https://ut2004.dev/"}</script>
 <meta property="og:image" content="https://assets.ut2004.dev/web/og.jpg">
 <meta property="og:image:width" content="800">
 <meta property="og:image:height" content="420">
@@ -19,7 +23,10 @@
   canvas { display: block; width: 100vw; height: 100vh; outline: none; }
   #status { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; }
   #status[hidden], #status [hidden] { display: none; }
-  #details { max-width: 560px; color: #999; font-size: 14px; line-height: 1.5; white-space: pre-line; }
+  #status h1 { margin: 0; font-size: 20px; }
+  #about { margin: 0; }
+  #about, #details { max-width: 560px; color: #999; font-size: 14px; line-height: 1.5; }
+  #details { white-space: pre-line; }
   #details a { color: #ddd; }
   progress { width: min(480px, 80vw); }
   button { font: inherit; padding: 8px 20px; }
@@ -40,6 +47,8 @@
   <pre id="log"></pre>
 </div>
 <div id="status">
+  <h1>Unreal Tournament 2004 in the browser</h1>
+  <p id="about">A free, open source port of UT2004 that runs in a desktop browser, with online multiplayer and no install.</p>
   <span id="message" aria-live="polite">Loading</span>
   <div id="details"></div>
   <progress id="progress" aria-labelledby="message"></progress>

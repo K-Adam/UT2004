@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ut2004.dev/sitemap.xml
