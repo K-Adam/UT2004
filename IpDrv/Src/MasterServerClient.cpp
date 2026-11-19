@@ -222,6 +222,9 @@ public:
 		OutstandingPings(i).PingSendTime = appSeconds();
 		OutstandingPings(i).QueryAddr = Addr;
 		OutstandingPings(i).CurrentState = CurrentState;
+		// A players query rebuilds the list, the replies only replace entries by number and would keep whoever left or got a new number
+		if( Command==QI_Players || Command==QI_RulesAndPlayers )
+			OutstandingPings(i).CurrentState.PlayerInfo.Empty();
 		OutstandingPings(i).ServerID = ServerID;
 		OutstandingPings(i).PingCause = PingCause;
 		OutstandingPings(i).PingType  = Command;
