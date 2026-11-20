@@ -570,7 +570,8 @@ static const ANSICHAR* VolumetricFragmentShader =
 // Averages the scattering over frames, its sampling changes every frame. The history is found where
 // the point was last frame and limited to the range around it now, so nothing trails behind motion.
 // The range comes from neighbours at the point's own depth, or what a swaying twig left behind would
-// still fit the range of the sky beside it and outline the twig.
+// still fit the range of the sky beside it and outline the twig. A half size texel is centred half a
+// pixel past the pixel it was traced for, read anywhere else the history creeps across the screen.
 static const ANSICHAR* ResolveFragmentShader =
 	POST_COMMON
 	"uniform sampler2D Frame, History;\n"
@@ -599,6 +600,7 @@ static const ANSICHAR* ResolveFragmentShader =
 	"	vec4 Prev = Reproject * (Sky ? vec4(NDC * Proj.xy, 1.0, 0.0) : vec4(PosAt(P), 1.0));\n"
 	"	vec2 UV0 = Prev.xy / (Prev.z * PrevProj.xy) * 0.5 + 0.5;\n"
 	"	float W = Prev.z > 0.0 && all(greaterThan(UV0, vec2(0.0))) && all(lessThan(UV0, vec2(1.0))) ? HistoryWeight : 0.0;\n"
+	"	UV0 = (UV0 * vec2(textureSize(Depth, 0)) + 0.5) / (2.0 * vec2(textureSize(History, 0)));\n"
 	"	FragColor = vec4(mix(C, clamp(texture(History, UV0).rgb, Lo, Hi), W), 1.0);\n"
 	"}\n";
 

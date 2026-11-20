@@ -26,7 +26,7 @@ enum
 };
 
 // Defines, so the volumetric fog shader can be built from them.
-#define FOG_LIGHTS		16
+#define FOG_LIGHTS		32
 #define FOG_TILE		32	// Octahedral distance map of a light, in texels.
 #define FOG_ATLAS_TILES	16	// Tiles across the atlas.
 #define FOG_SUN_SIZE	64

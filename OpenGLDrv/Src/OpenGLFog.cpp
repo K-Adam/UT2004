@@ -183,16 +183,21 @@ const FOpenGLFogLights* FOpenGLRenderInterface::PickFogLights()
 			Visible = Level->Model->Leaves(Region.iLeaf).VisibleZones;
 	}
 
-	FDynamicLight	*Best[FOG_LIGHTS], *Sun = NULL;
-	FLOAT			Scores[FOG_LIGHTS], SunBrightness = 0.f;
+	// One more than the shader takes, the extra one's score is the cut-off.
+	FDynamicLight	*Best[FOG_LIGHTS + 1], *Sun = NULL;
+	FLOAT			Scores[FOG_LIGHTS + 1], SunBrightness = 0.f;
 	INT				Count = 0;
 	for( INT i=0; i<Level->Actors.Num(); i++ )
 	{
 		AActor* Actor = Level->Actors(i);
 		if( !Actor || Actor->bDeleteMe || Actor->LightType == LT_None || Actor->LightEffect == LE_Negative )
 			continue;
+		// A spawned actor only lights while bDynamicLight or bLightChanged is on, a weapon keeps its pulsing flash light set between shots.
+		if( !Actor->bDynamicLight && !Actor->bLightChanged && !Actor->bStatic && !Actor->bNoDelete )
+			continue;
+		// Alpha is not the light's strength, it holds how much of the light reached the last actor lit by it.
 		FDynamicLight*	Light = Actor->GetLightRenderData();
-		FLOAT			Brightness = (Light->Color.X * 0.299f + Light->Color.Y * 0.587f + Light->Color.Z * 0.114f) * Light->Alpha;
+		FLOAT			Brightness = Light->Color.X * 0.299f + Light->Color.Y * 0.587f + Light->Color.Z * 0.114f;
 		if( Brightness <= 0.f )
 			continue;
 		if( Actor->LightEffect == LE_Sunlight )
@@ -212,9 +217,9 @@ const FOpenGLFogLights* FOpenGLRenderInterface::PickFogLights()
 		if( P.Z < -R || Abs(P.X) - P.Z * TanX > R * appSqrt(1.f + TanX * TanX) || Abs(P.Y) - P.Z * TanY > R * appSqrt(1.f + TanY * TanY) )
 			continue;
 		FLOAT Score = Brightness * R * R / (P.SizeSquared() + Square(0.25f * R));
-		if( Count == FOG_LIGHTS && Score <= Scores[FOG_LIGHTS - 1] )
+		if( Count > FOG_LIGHTS && Score <= Scores[FOG_LIGHTS] )
 			continue;
-		INT Slot = Count < FOG_LIGHTS ? Count++ : FOG_LIGHTS - 1;
+		INT Slot = Count <= FOG_LIGHTS ? Count++ : FOG_LIGHTS;
 		for( ; Slot > 0 && Scores[Slot - 1] < Score; Slot-- )
 		{
 			Best[Slot] = Best[Slot - 1];
@@ -227,7 +232,7 @@ const FOpenGLFogLights* FOpenGLRenderInterface::PickFogLights()
 	if( Sun )
 	{
 		Out.Sun = FPlane(ViewWorldToCamera.TransformNormal(-Sun->Direction).SafeNormal(),1.f);
-		Out.SunColor = FPlane(Sun->Color * Sun->Alpha);
+		Out.SunColor = FPlane(Sun->Color);
 		if( RenDev->SunDirection != -Sun->Direction.SafeNormal() )
 		{
 			RenDev->SunDirection = -Sun->Direction.SafeNormal();
@@ -235,6 +240,10 @@ const FOpenGLFogLights* FOpenGLRenderInterface::PickFogLights()
 				RenDev->SunCells[j][0] = NoCell;
 		}
 	}
+
+	// A light dims as it nears the score of the first one left out, so it joins and leaves the list unseen.
+	FLOAT Cut = Count > FOG_LIGHTS ? Scores[FOG_LIGHTS] : 0.f;
+	Count = Min<INT>(Count,FOG_LIGHTS);
 
 	// Static lights get a tile, the one they had or the least recently used.
 	FLOAT				Ease = FogTime > 0.0 ? 1.f - appExp((FogTime - Now) / 0.2) : 1.f;
@@ -271,11 +280,12 @@ const FOpenGLFogLights* FOpenGLRenderInterface::PickFogLights()
 		FLOAT* Last = FogFades.Find(Light->Actor);
 		FLOAT Fade = (Last ? *Last : 0.f) + ((Ready ? 1.f : 0.f) - (Last ? *Last : 0.f)) * Ease;
 		Fades.Set(Light->Actor,Fade);
+		Fade *= Cut > 0.f ? Min(Scores[i] / Cut - 1.f,1.f) : 1.f;
 
 		BYTE Effect = Light->Actor->LightEffect;
 		INT n = Out.NumLights++;
 		Out.Position[n]	= FPlane(ViewWorldToCamera.TransformFVector(Light->Position),Light->Radius);
-		Out.Color[n]	= FPlane(Light->Color * (Light->Alpha * Fade),(FLOAT)Tile);
+		Out.Color[n]	= FPlane(Light->Color * Fade,(FLOAT)Tile);
 		Out.Spot[n]		= FPlane(ViewWorldToCamera.TransformNormal(Light->Direction).SafeNormal(),
 			Effect == LE_Spotlight || Effect == LE_StaticSpot ? 1.f - Light->Actor->LightCone / 256.f : -1.f);
 	}
