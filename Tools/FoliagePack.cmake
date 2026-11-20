@@ -1,5 +1,6 @@
 # Checks that Foliage/foliage.ini only names files and sections that exist and that each mesh file is whole.
 # cmake -DDIR=<Foliage folder> -P FoliagePack.cmake
+cmake_minimum_required(VERSION 3.26)
 file(STRINGS ${DIR}/foliage.ini lines)
 set(section "")
 set(materials "")
