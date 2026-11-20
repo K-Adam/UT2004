@@ -95,6 +95,9 @@ public:
 	{
 		TCHAR TempStr[4096];
 		GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
+		// A server hosted from the launcher has nobody to answer, the base class says yes there too.
+		if( !GIsClient )
+			return 1;
 #if __EMSCRIPTEN__
 		return EM_ASM_INT( { return confirm(UTF8ToString($0)) ? 1 : 0; }, appToAnsi(TempStr) );
 #else

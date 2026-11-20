@@ -117,8 +117,16 @@ void UNetConnection::Destroy()
 	State = USOCK_Closed;
 
 	// Kill all channels.
+	// A channel the collector reaches first routes its Destroy here and is still inside it, so it must not be freed.
+	// The purge frees unreachable channels itself.
 	for( INT i=OpenChannels.Num()-1; i>=0; i-- )
-		delete OpenChannels(i);
+	{
+		UChannel* Channel = OpenChannels(i);
+		if( GIsGarbageCollecting && (Channel->GetFlags() & RF_Unreachable) )
+			Channel->ConditionalDestroy();
+		else
+			delete Channel;
+	}
 
 	// Kill package map.
 	delete PackageMap;
