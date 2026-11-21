@@ -53,6 +53,7 @@
   <div id="details"></div>
   <progress id="progress" aria-labelledby="message"></progress>
   <button id="action" hidden></button>
+  <button id="report" hidden>Send report</button>
   <button id="pick" hidden>Use a retail zip</button>
   <button id="forget" hidden>Delete stored content</button>
   <input id="zip" type="file" accept=".zip" aria-label="Zip of a retail UT2004 install" hidden>
@@ -465,7 +466,18 @@ var Module = {
       .then(() => Module.removeRunDependency('content'), (e) => stop(e.message, true));
   }],
   onAbort: (what) => stop(`The game stopped: ${what}`),
-  gameError: (text) => crash('The game stopped on an error.', text),
+  gameError: (text, reportUrl, log) => {
+    const note = '\n\nSend report sends this text and the end of the log to the developers of this port. Your player name and network addresses are taken out of it.';
+    crash('The game stopped on an error.', text + (reportUrl ? note : ''));
+    const report = document.getElementById('report');
+    report.hidden = !reportUrl;
+    report.onclick = async () => {
+      report.disabled = true;
+      // Plain text, so the browser sends no preflight, which the master does not answer.
+      const sent = await fetch(reportUrl, { method: 'POST', body: text + log }).then((r) => r.ok, () => false);
+      report.textContent = sent ? 'Report sent, thank you' : 'The report could not be sent';
+    };
+  },
   // The engine has shut down, and passes the arguments when it did so to start a server.
   gameExit: (server) => {
     if (server) sessionStorage.setItem(SERVER_KEY, server);

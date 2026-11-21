@@ -276,6 +276,9 @@ endif()
 if(NOT UT_STATIC_LINK)
   list(APPEND UT_MODULES UTV2004)
 endif()
+# Read at configure time, so the log and the crash reports of a build name the commit it was configured at.
+execute_process(COMMAND git describe --always --dirty WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE UT_PORT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 foreach(m ${UT_MODULES})
   add_subdirectory(${m})
 endforeach()

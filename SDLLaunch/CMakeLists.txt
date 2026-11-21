@@ -7,6 +7,7 @@ if(NOT EMSCRIPTEN)
   set(SDLLAUNCH_CONTENT SDLLaunchContent.cpp HttpFile.cpp)
 endif()
 ut_module(SDLLaunch WIN32 OUTPUT ${SDLLAUNCH_OUTPUT} SOURCES SDLLaunch.cpp ${SDLLAUNCH_CONTENT} DEPS Engine SDL3::SDL3 ZLIB::ZLIB)
+set_property(SOURCE Src/SDLLaunch.cpp APPEND PROPERTY COMPILE_DEFINITIONS UT_PORT_VERSION="${UT_PORT_VERSION}")
 if(UT_STATIC_LINK)
   target_link_libraries(SDLLaunch PRIVATE SDLDrv OpenGLDrv ALAudio Fire IpDrv UWeb XGame XInterface Onslaught Editor ${GLES_TARGET})
   # UnNullRenderDevice.h includes EnginePrivate.h.

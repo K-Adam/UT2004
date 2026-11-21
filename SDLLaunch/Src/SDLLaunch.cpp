@@ -356,8 +356,10 @@ static bool FindContent(void)
 // Emscripten/content.js
 extern "C" int ut_next_frame();
 extern "C" void ut_exit(const char* ServerCmd);
-extern "C" void ut_error(const char* Message);
+extern "C" void ut_error(const char* Message, const char* ReportUrl, const char* ReportLog);
 #endif
+
+#include "CrashReport.h"
 
 #ifdef __ANDROID__
 #pragma pack(push,8)
@@ -956,12 +958,74 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 			FString Message = GErrorHist;
 			for( INT i; (i=Message.InStr(TEXT(" <- ")))!=-1; )
 				Message = Message.Left(i) + TEXT("\n") + Message.Mid(i+4);
+			FString Report = FString(TEXT("Port: ")) + appFromAnsi(UT_PORT_VERSION) + TEXT("\nOS: ") + FString(GMachineOS) + TEXT("\n\n") + Message;
+			FString Url, LogText;
+			// A second error in here would end the game without showing the first.
+			try
+			{
+				// An error this early has no ini to read the server from.
+				if( GConfig )
+					GConfig->GetString( TEXT("IpDrv.MasterServerLink"), TEXT("WebMasterServer"), Url );
+				while( Url.Right(1) == TEXT("/") )
+					Url = Url.LeftChop(1);
+				if( Url.Len() )
+				{
+					Url += TEXT("/report");
+					TArray<FString> Names;
+					new(Names) FString( appUserName() );
+					new(Names) FString( appComputerName() );
+#ifndef __ANDROID__
+					// Unix has no login name without a terminal, the home folder carries it there. On Android that folder is the app's.
+					if( const char* Home = SDL_GetUserFolder( SDL_FOLDER_HOME ) )
+					{
+						FString Folder = appFromUtf8( Home );
+						while( Folder.Right(1) == TEXT("/") || Folder.Right(1) == TEXT("\\") )
+							Folder = Folder.LeftChop(1);
+						new(Names) FString( Folder.Mid( Max( Folder.InStr( TEXT("/"), 1 ), Folder.InStr( TEXT("\\"), 1 ) ) + 1 ) );
+					}
+#endif
+					FString Player;
+					// The default name is in every class name of the log and tells nothing.
+					if( GConfig->GetString( TEXT("DefaultPlayer"), TEXT("Name"), Player, GUserIni ) && Player != TEXT("Player") )
+						new(Names) FString( Player );
+					// An error can name a file or an address as well.
+					Report = RedactLog( Report, Names );
+					// Windows refuses to read a file that is open for writing. The next log line opens it again and appends.
+					delete Log.LogAr;
+					Log.LogAr = NULL;
+					// The lines before the error say what the game was doing.
+					if( appLoadFileToString( LogText, Log.Filename ) )
+						LogText = FString(TEXT("\n\nLog:\n")) + RedactLog( LogTail( LogText, 8000 ), Names );
+				}
+			}
+			catch( ... )
+			{
+				Url.Empty();
+				LogText.Empty();
+			}
 #if __EMSCRIPTEN__
 			// An alert would leave a black canvas behind, the page shows it with a way to start again.
-			ut_error( appToAnsi(*Message) );
+			ut_error( &appToUtf8(*Report)(0), &appToUtf8(*Url)(0), &appToUtf8(*LogText)(0) );
 #else
-			Message += FString::Printf( TEXT("\n\nThe log file is %s"), Log.Filename );
-			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "UT2004", appToAnsi(*Message), NULL );
+			FString Shown = Report + TEXT("\n\nThe log file is ") + FString(Log.Filename);
+			if( Url.Len() )
+				Shown += TEXT("\n\nSend report sends the text above the log file line and the end of the log to the developers of this port. ")
+					TEXT("Your user name, player name and network addresses are taken out of it.");
+			enum { Close, Send };
+			// Both keys close, a player in the middle of a match is pressing keys.
+			static const SDL_MessageBoxButtonData Buttons[] = {
+				{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, Close, "Close" },
+				{ 0, Send, "Send report" },
+			};
+			TArray<ANSICHAR> Text = appToUtf8( *Shown );
+			const SDL_MessageBoxData Box = { SDL_MESSAGEBOX_ERROR, NULL, "UT2004", &Text(0), Url.Len() ? 2 : 1, Buttons, NULL };
+			int Choice = Close;
+			if( SDL_ShowMessageBox( &Box, &Choice ) && Choice==Send )
+			{
+				bool Sent = PostReport( &appToUtf8(*Url)(0), &appToUtf8(*(Report + LogText))(0) );
+				SDL_ShowSimpleMessageBox( Sent ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_WARNING, "UT2004",
+					Sent ? "The report was sent. Thank you." : "The report could not be sent.", NULL );
+			}
 #endif
 		}
 	}

@@ -48,7 +48,6 @@ static bool Download(const char* Url, Sint64 ResumeFrom, FPartFile& Part, char* 
     curl_easy_setopt(Curl, CURLOPT_URL, Url);
     curl_easy_setopt(Curl, CURLOPT_FOLLOWLOCATION, 1L);
     // An error page must not end up in the file.
-    curl_easy_setopt(Curl, CURLOPT_FAILONERROR, 1L);
     curl_easy_setopt(Curl, CURLOPT_RESUME_FROM_LARGE, (curl_off_t)ResumeFrom);
     curl_easy_setopt(Curl, CURLOPT_CONNECTTIMEOUT, 20L);
     curl_easy_setopt(Curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);
@@ -73,6 +72,41 @@ static bool Download(const char* Url, Sint64 ResumeFrom, FPartFile& Part, char* 
     NoResume = Code == CURLE_RANGE_ERROR;
     if (!Ok)
         SDL_snprintf(Why, WhySize, "%s", Reason[0] ? Reason : curl_easy_strerror(Code));
+    return Ok;
+}
+
+// curl prints a reply to stdout unless something takes it.
+static size_t Discard(char*, size_t Size, size_t Count, void*)
+{
+    return Size * Count;
+}
+
+bool PostReport(const char* Url, const char* Text)
+{
+    CURL* Curl = curl_easy_init();
+    if (!Curl)
+        return false;
+    curl_slist* Headers = curl_slist_append(NULL, "Content-Type: text/plain");
+    curl_easy_setopt(Curl, CURLOPT_URL, Url);
+    curl_easy_setopt(Curl, CURLOPT_HTTPHEADER, Headers);
+    curl_easy_setopt(Curl, CURLOPT_POSTFIELDS, Text);
+    // The player waits on this with the game already gone.
+    curl_easy_setopt(Curl, CURLOPT_CONNECTTIMEOUT, 5L);
+    curl_easy_setopt(Curl, CURLOPT_TIMEOUT, 10L);
+    // Schannel otherwise fails when the CA's revocation server is unreachable.
+    curl_easy_setopt(Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT);
+#if __ANDROID__
+    curl_blob Ca = { (void*)AndroidCaCerts().data(), AndroidCaCerts().size(), CURL_BLOB_NOCOPY };
+    curl_easy_setopt(Curl, CURLOPT_CAINFO_BLOB, &Ca);
+#endif
+    curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, Discard);
+    // A redirect or an error page is not a stored report.
+    long Status = 0;
+    bool Ok = curl_easy_perform(Curl) == CURLE_OK
+        && curl_easy_getinfo(Curl, CURLINFO_RESPONSE_CODE, &Status) == CURLE_OK
+        && Status >= 200 && Status < 300;
+    curl_slist_free_all(Headers);
+    curl_easy_cleanup(Curl);
     return Ok;
 }
 

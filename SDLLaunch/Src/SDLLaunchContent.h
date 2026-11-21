@@ -45,3 +45,6 @@ bool Unzip(SDL_IOStream* Zip, FInstall& I);
 
 // HttpFile.cpp. Downloads UT_FULL_URL next to the content folders, resuming an earlier attempt, checks it and unpacks it.
 bool InstallFull(FInstall& I);
+
+// HttpFile.cpp. Blocks until the web master took the crash report or ten seconds passed.
+bool PostReport(const char* Url, const char* Text);

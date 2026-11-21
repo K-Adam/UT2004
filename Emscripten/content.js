@@ -92,6 +92,6 @@ addToLibrary({
   },
 
   ut_error__deps: ['$UTF8ToString'],
-  ut_error__sig: 'vp',
-  ut_error: (text) => Module.gameError(UTF8ToString(text)),
+  ut_error__sig: 'vppp',
+  ut_error: (text, reportUrl, log) => Module.gameError(UTF8ToString(text), UTF8ToString(reportUrl), UTF8ToString(log)),
 });
