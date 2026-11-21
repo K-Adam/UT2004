@@ -145,6 +145,7 @@ class ENGINE_API UNetConnection : public UPlayer
 	// File Download
 	UDownload*				Download;
 	TArray<FDownloadInfo>	DownloadInfo;
+	INT						ClientDownloads;	// Leading entries the client added itself, ahead of the server's.
 
 	// Cheat Protection
 

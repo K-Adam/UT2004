@@ -157,7 +157,12 @@ UBOOL UTcpNetDriver::InitConnect( FNetworkNotify* InNotify, FURL& ConnectURL, FS
 		return 0;
 	// Such a client never sends UDP, and a browser has no UDP socket to open. Web-only servers advertise signal:<id>.
 	if( WebRtcOnly() || !appStrnicmp( ConnectURL.GetOption(TEXT("WebRTC="), TEXT("")), TEXT("signal:"), 7 ) )
-		return InitSockets( Error ) && WebRtcConnect( ConnectURL, Error );
+	{
+		if( !InitSockets( Error ) || !WebRtcConnect( ConnectURL, Error ) )
+			return 0;
+		UAssetDownload::Offer( ServerConnection );
+		return 1;
+	}
 	ConnectTime = appSeconds();
 	if( !InitBase( 1, InNotify, ConnectURL, Error ) )
 		return 0;
@@ -171,6 +176,7 @@ UBOOL UTcpNetDriver::InitConnect( FNetworkNotify* InNotify, FURL& ConnectURL, FS
 	// Create new connection.
 	ServerConnection = new UTcpipConnection( Socket, this, TempAddr, USOCK_Pending, 1, ConnectURL );
 	debugf( NAME_DevNet, TEXT("Game client on port %i, rate %i"), ntohs(LocalAddr.sin_port), ServerConnection->CurrentNetSpeed );
+	UAssetDownload::Offer( ServerConnection );
 
 	// Create channel zero.
 	GetServerConnection()->CreateChannel( CHTYPE_Control, 1, 0 );

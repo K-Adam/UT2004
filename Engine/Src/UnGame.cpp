@@ -2007,9 +2007,7 @@ ULevel* UGameEngine::LoadMap( const FURL& URL, UPendingLevel* Pending, const TMa
 		for( INT j=0; j<Loaders.Num(); j++ )
 		{
 			ULinkerLoad* Linker = (ULinkerLoad*)Loaders(j);
-			UBOOL InUse = GLevel && Linker->LinkerRoot==GLevel->GetOuter();
-			for( INT k=0; k<Linker->ExportMap.Num() && !InUse; k++ )
-				InUse = Linker->ExportMap(k).ClassIndex==0 && Linker->ExportMap(k).ObjectName!=NAME_None;
+			UBOOL InUse = UPendingLevel::LinkerInUse( Linker, GLevel );
 			for( INT i=0; i<PackageMap->List.Num() && !InUse; i++ )
 				if( Linker->LinkerRoot==PackageMap->List(i).Parent && Linker->Summary.Guid!=PackageMap->List(i).Guid )
 				{

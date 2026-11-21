@@ -8,6 +8,7 @@
 
 #include "EnginePrivate.h"
 #include "UnNet.h"
+#include "UnLinker.h"
 
 /*-----------------------------------------------------------------------------
 	UPendingLevel implementation.
@@ -52,19 +53,21 @@ void UPendingLevel::NotifyReceivedFile( UNetConnection* Connection, INT PackageI
 
 	// Map pack to package.
 	FPackageInfo& Info = Connection->PackageMap->List(PackageIndex);
-	if( *InError )
+	// A cut down copy that was to be replaced is still there and goes on being used. Once the client's own sources
+	// have failed, the server has nothing better than a copy of the size it reports.
+	TCHAR Filename[256];
+	UBOOL Cached = *InError && appFindPackageFile( Info.Parent->GetName(), &Info.Guid, Filename, Info.RemoteGeneration );
+	UBOOL ServerHasNoBetter = Cached && (Attempt+1) >= Connection->ClientDownloads && GFileManager->FileSize( Filename ) >= Info.FileSize;
+	if( *InError && (Attempt+1) < Connection->DownloadInfo.Num() && !ServerHasNoBetter )
 	{
-		if( (Attempt+1) < Connection->DownloadInfo.Num()  )
-		{
-			// Try with the next download method.
-			ReceiveNextFile( Connection, Attempt+1 );
-		}
-		else
-		{
-			// If transfer failed, so propagate error.
-			if( Error==TEXT("") )
-				Error = FString::Printf( LocalizeError(TEXT("DownloadFailed"),TEXT("Engine")), Info.Parent->GetName(), InError );
-		}
+		// Try with the next download method.
+		ReceiveNextFile( Connection, Attempt+1 );
+	}
+	else if( *InError && !Cached )
+	{
+		// If transfer failed, so propagate error.
+		if( Error==TEXT("") )
+			Error = FString::Printf( LocalizeError(TEXT("DownloadFailed"),TEXT("Engine")), Info.Parent->GetName(), InError );
 	}
 	else
 	{
@@ -79,6 +82,36 @@ void UPendingLevel::NotifyReceivedFile( UNetConnection* Connection, INT PackageI
 		ReceiveNextFile( Connection, 0 );
 	}
 	unguard;
+}
+
+UBOOL UPendingLevel::LinkerInUse( ULinkerLoad* Linker, ULevel* Level )
+{
+	guard(UPendingLevel::LinkerInUse);
+	if( Level && Linker->LinkerRoot==Level->GetOuter() )
+		return 1;
+	for( INT i=0; i<Linker->ExportMap.Num(); i++ )
+		if( Linker->ExportMap(i).ClassIndex==0 && Linker->ExportMap(i).ObjectName!=NAME_None )
+			return 1;
+	return 0;
+	unguard;
+}
+
+// Lets go of a package's file so that a download can replace it.
+static UBOOL ReleasePackage( UObject* Package, ULevel* Level )
+{
+	TArray<UObject*> Loaders = UObject::GetLoaderList();
+	for( INT i=0; i<Loaders.Num(); i++ )
+	{
+		ULinkerLoad* Linker = (ULinkerLoad*)Loaders(i);
+		if( Linker->LinkerRoot==Package )
+		{
+			if( UPendingLevel::LinkerInUse( Linker, Level ) )
+				return 0;
+			UObject::ResetLoaders( Package, 0, 1 );
+			break;
+		}
+	}
+	return 1;
 }
 
 /*-----------------------------------------------------------------------------
@@ -308,12 +341,39 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 		Parse( Text, TEXT("GAME="), gametype);
 		URL.AddOption( *FString::Printf(TEXT("GAME=%s"),*gametype) );
 
+		// A server that names no download method still has the channel. The client's own sources of stock packages
+		// leave a package to a server that claims the retail file, and get a second turn in case that fails.
+		if( Connection->DownloadInfo.Num()==Connection->ClientDownloads )
+		{
+			FDownloadInfo& Channel = Connection->DownloadInfo( Connection->DownloadInfo.AddZeroed() );
+			Channel.Class = UChannelDownload::StaticClass();
+			Channel.ClassName = TEXT("Engine.ChannelDownload");
+		}
+		for( INT i=NetDriver->ClientRedirectURLs.Num(); i<Connection->ClientDownloads; i++ )
+		{
+			// AddItem would assign into raw memory, and the copy has to exist before the array grows.
+			FDownloadInfo Again = Connection->DownloadInfo(i);
+			new(Connection->DownloadInfo)FDownloadInfo( Again );
+		}
+
 		// Make sure all packages we need are downloadable.
 		for( INT i=0; i<Connection->PackageMap->List.Num(); i++ )
 		{
 			TCHAR Filename[256];
 			FPackageInfo& Info = Connection->PackageMap->List(i);
-			if( !appFindPackageFile( Info.Parent->GetName(), &Info.Guid, Filename, Info.RemoteGeneration ) )
+			UBOOL Found = appFindPackageFile( Info.Parent->GetName(), &Info.Guid, Filename, Info.RemoteGeneration );
+
+			// A cached stock package below the retail size has data cut out, so it is fetched again where a full copy can be had.
+			INT StockSize;
+			FString StockMD5, StockPath;
+			if( Found && NetDriver->AllowDownloads && (Info.PackageFlags & PKG_AllowDownload)
+			&&	!appStrnicmp( Filename, *GSys->CachePath, GSys->CachePath.Len() )
+			&&	UDownload::StockPackage( Info.Guid, StockSize, StockMD5, StockPath )
+			&&	GFileManager->FileSize( Filename )<StockSize
+			&&	(Connection->ClientDownloads>NetDriver->ClientRedirectURLs.Num() || Info.FileSize==StockSize)
+			&&	ReleasePackage( Info.Parent, GameEngine->GLevel ) )
+				Found = 0;
+			if( !Found )
 			{
 				appSprintf( Filename, TEXT("%s%s"), Info.Parent->GetName(), DLLEXT );
 				if( GFileManager->FileSize(Filename) <= 0 )

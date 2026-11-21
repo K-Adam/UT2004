@@ -36,6 +36,9 @@ class UPendingLevel : public ULevelBase
 	virtual UBOOL TrySkipFile();
 	void ReceiveNextFile( UNetConnection* Connection, INT Attempt );
 	void NotifyReceivedFile( UNetConnection* Connection, INT PackageIndex, const TCHAR* Error, UBOOL Skipped, INT Attempt );
+
+	// Code and the current level would be replaced in place if their package was loaded again.
+	static UBOOL LinkerInUse( ULinkerLoad* Linker, ULevel* Level );
 };
 
 /*-----------------------------------------------------------------------------

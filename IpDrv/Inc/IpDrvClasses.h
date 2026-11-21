@@ -696,6 +696,7 @@ DECLARE_NATIVE_TYPE(IpDrv,AServerQueryClient);
 	AServerQueryClient::StaticClass(); \
 	GNativeLookupFuncs[Lookup++] = &FindIpDrvAServerQueryClientNative; \
 	UHTTPDownload::StaticClass(); \
+	UAssetDownload::StaticClass(); \
 
 #endif // NATIVE_DEFS_ONLY
 

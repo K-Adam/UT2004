@@ -61,6 +61,24 @@ class UHTTPDownload : public UDownload
 	UBOOL FetchData();
 };
 
+// Fetches the stock packages a reduced content set lacks from the port's asset host.
+class UAssetDownload : public UDownload
+{
+	DECLARE_CLASS(UAssetDownload,UDownload,CLASS_Transient|CLASS_Config,IpDrv);
+	NO_DEFAULT_CONSTRUCTOR(UAssetDownload);
+
+	struct FAssetTransfer* Transfer;
+
+	void StaticConstructor();
+	void Destroy();
+	void ReceiveFile( UNetConnection* InConnection, INT PackageIndex, const TCHAR *Params, UBOOL InCompression, INT InAttempt );
+	UBOOL TrySkipFile();
+	void Tick();
+
+	// Puts this step in front of the download methods a server names.
+	static void Offer( UNetConnection* Connection );
+};
+
 #pragma pack (pop)
 
 #endif

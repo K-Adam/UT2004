@@ -46,7 +46,43 @@ void UDownload::ReceiveFile( UNetConnection* InConnection, INT InPackageIndex, c
 	PackageIndex = InPackageIndex;
 	Info = &Connection->PackageMap->List( PackageIndex );
 	AttemptNumber = InAttempt;
+	// An earlier download method may have left its own size behind.
+	ExpectedSize = Info->DownloadSize = Info->FileSize;
 	unguard;
+}
+UBOOL UDownload::StockPackage( const FGuid& Guid, INT& Size, FString& MD5, FString& Path )
+{
+	guard(UDownload::StockPackage);
+	FString Line;
+	TArray<FString> Parts;
+	if( !GConfig->GetString( TEXT("Stock"), Guid.String(), Line, TEXT("StockPackages.ini") ) || Line.ParseIntoArray( TEXT(" "), &Parts )!=3 )
+		return 0;
+	Size = appAtoi( *Parts(0) );
+	MD5 = Parts(1);
+	Path = Parts(2);
+	return 1;
+	unguard;
+}
+static FString FileMD5( const TCHAR* Filename )
+{
+	FMD5Context Context;
+	appMD5Init( &Context );
+	FArchive* Ar = GFileManager->CreateFileReader( Filename );
+	BYTE Buffer[65536];
+	for( INT Left=Ar ? Ar->TotalSize() : 0; Left>0; )
+	{
+		INT Count = Min<INT>( Left, sizeof(Buffer) );
+		Ar->Serialize( Buffer, Count );
+		appMD5Update( &Context, Buffer, Count );
+		Left -= Count;
+	}
+	delete Ar;
+	BYTE Digest[16];
+	appMD5Final( Digest, &Context );
+	FString Result;
+	for( INT i=0; i<16; i++ )
+		Result += FString::Printf( TEXT("%02x"), Digest[i] );
+	return Result;
 }
 void UDownload::ReceiveData( BYTE* Data, INT Count )
 {
@@ -67,7 +103,7 @@ void UDownload::ReceiveData( BYTE* Data, INT Count )
 		// Opening file failed.
 		DownloadError( LocalizeError(TEXT("NetOpen"),TEXT("Engine")) );
 	}
-	else if( Info->FileSize<0 || (QWORD)Transfered+Count > (IsCompressed ? (QWORD)Info->FileSize+Info->FileSize/16+4096 : (QWORD)Info->FileSize) )
+	else if( ExpectedSize<0 || (QWORD)Transfered+Count > (IsCompressed ? (QWORD)ExpectedSize+ExpectedSize/16+4096 : (QWORD)ExpectedSize) )
 	{
 		// The size check after the transfer comes too late to stop a server from filling the disk. Compressed
 		// data may grow a little over the package size.
@@ -142,9 +178,14 @@ void UDownload::DownloadDone()
 				DownloadError( LocalizeError(TEXT("NetSize"),TEXT("Engine")) );
 			GFileManager->Delete( CFilenameWithExt );
 		}
-		if( !*Error && GFileManager->FileSize(TempFilename)!=Info->FileSize )
+		if( !*Error && GFileManager->FileSize(TempFilename)!=ExpectedSize )
 			DownloadError( LocalizeError(TEXT("NetSize"),TEXT("Engine")) );
 		if( !*Error && !appCheckPackageFileGUID(TempFilename, &Info->Guid) )
+			DownloadError( *FString::Printf( LocalizeError(TEXT("PackageVersion"),TEXT("Core")),Info->Parent->GetName()) );
+		// Servers send stock packages with data cut out, which is all a client may get. A copy of the retail size has to be the retail file.
+		INT StockSize;
+		FString StockMD5, StockPath;
+		if( !*Error && StockPackage( Info->Guid, StockSize, StockMD5, StockPath ) && (ExpectedSize>StockSize || (ExpectedSize==StockSize && FileMD5(TempFilename)!=StockMD5)) )
 			DownloadError( *FString::Printf( LocalizeError(TEXT("PackageVersion"),TEXT("Core")),Info->Parent->GetName()) );
 		if( !*Error && !GFileManager->Move( Dest, TempFilename ) )
 			DownloadError( LocalizeError(TEXT("NetMove"),TEXT("Engine")) );

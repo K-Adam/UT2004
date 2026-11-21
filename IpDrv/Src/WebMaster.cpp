@@ -121,26 +121,35 @@ const std::string& AndroidCaCerts()
 }
 #endif
 
-// Runs on a worker thread, so it only touches standard types.
-static bool HttpRequest( const std::string& Url, const std::string& Body, std::string& Response )
+// The setup that every request to the port's hosts needs.
+CURL* HttpEasy( const std::string& Url )
 {
 	CURL* Curl = curl_easy_init();
 	if( !Curl )
-		return false;
-	curl_slist* Headers = curl_slist_append( NULL, "Content-Type: application/json" );
+		return NULL;
 	curl_easy_setopt( Curl, CURLOPT_URL, Url.c_str() );
-	curl_easy_setopt( Curl, CURLOPT_HTTPHEADER, Headers );
-	// The master lists the address a post comes from, and the game is reachable over IPv4 only.
-	curl_easy_setopt( Curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
-	// An offer waits up to 8 seconds for the host to answer, an unreachable master still fails fast
-	curl_easy_setopt( Curl, CURLOPT_CONNECTTIMEOUT, 5L );
-	curl_easy_setopt( Curl, CURLOPT_TIMEOUT, 10L );
 	// Schannel otherwise fails when the CA's revocation server is unreachable, WinHTTP never checked it.
 	curl_easy_setopt( Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT );
 #if __ANDROID__
 	curl_blob Ca = { (void*)AndroidCaCerts().data(), AndroidCaCerts().size(), CURL_BLOB_NOCOPY };
 	curl_easy_setopt( Curl, CURLOPT_CAINFO_BLOB, &Ca );
 #endif
+	return Curl;
+}
+
+// Runs on a worker thread, so it only touches standard types.
+static bool HttpRequest( const std::string& Url, const std::string& Body, std::string& Response )
+{
+	CURL* Curl = HttpEasy( Url );
+	if( !Curl )
+		return false;
+	curl_slist* Headers = curl_slist_append( NULL, "Content-Type: application/json" );
+	curl_easy_setopt( Curl, CURLOPT_HTTPHEADER, Headers );
+	// The master lists the address a post comes from, and the game is reachable over IPv4 only.
+	curl_easy_setopt( Curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
+	// An offer waits up to 8 seconds for the host to answer, an unreachable master still fails fast
+	curl_easy_setopt( Curl, CURLOPT_CONNECTTIMEOUT, 5L );
+	curl_easy_setopt( Curl, CURLOPT_TIMEOUT, 10L );
 	curl_easy_setopt( Curl, CURLOPT_WRITEFUNCTION, AppendResponse );
 	curl_easy_setopt( Curl, CURLOPT_WRITEDATA, &Response );
 	if( !Body.empty() )

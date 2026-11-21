@@ -26,6 +26,7 @@ class ENGINE_API UDownload : public UObject
 	INT				AttemptNumber;		// Attempt number
 	INT				FileNumber;			// Position of this file among the files to download.
 	INT				FileCount;
+	INT				ExpectedSize;		// Size of the whole file, which a stock package's own source knows better than the server.
 
 	// Constructors.
 	void StaticConstructor();
@@ -41,6 +42,9 @@ class ENGINE_API UDownload : public UObject
 	virtual void Tick() {} 
 	virtual void DownloadError( const TCHAR* Error );
 	virtual void DownloadDone();
+
+	// The retail size, MD5 and content path of a stock package, from StockPackages.ini.
+	static UBOOL StockPackage( const FGuid& Guid, INT& Size, FString& MD5, FString& Path );
 };
 
 class ENGINE_API UChannelDownload : public UDownload

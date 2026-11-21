@@ -72,6 +72,7 @@ UNetConnection::UNetConnection( UNetDriver* InDriver, const FURL& InURL )
 		DownloadInfo(j).Params = InDriver->ClientRedirectURLs(i);
 		DownloadInfo(j).Compression = 1;	//!!
 	}
+	ClientDownloads = DownloadInfo.Num();
 
 	unguard;
 }
