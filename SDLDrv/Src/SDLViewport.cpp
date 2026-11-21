@@ -617,10 +617,14 @@ void USDLViewport::UpdateWindowFrame()
 //
 void USDLViewport::UpdateMousePosition()
 {
+	// SDL reports the cursor in window units, the GUI works in viewport pixels.
 	float X, Y;
+	int W, H;
 	SDL_GetMouseState( &X, &Y );
-	WindowsMouseX = X;
-	WindowsMouseY = Y;
+	if( !SDL_GetWindowSize( GetOuterUSDLClient()->Window, &W, &H ) || W <= 0 || H <= 0 )
+		return;
+	WindowsMouseX = X * SizeX / W;
+	WindowsMouseY = Y * SizeY / H;
 }
 
 //
@@ -1336,12 +1340,23 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 					Input->ResetInput();
 				break;
 
+			// The browser or the window manager left fullscreen without the engine asking.
+			case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+				if( BlitFlags & BLIT_Fullscreen )
+				{
+					EndFullscreen();
+					Client->StartupFullscreen = 0;
+					Client->SaveConfig();
+				}
+				break;
+
 			default:;
 		}
 	}
 
 	// Once after the loop, so a drag resizes once per frame. The window already has the new size.
-	if( Resized && RenDev && !(BlitFlags & BLIT_Fullscreen) )
+	// A browser reaches its fullscreen size only after the call that asked for it.
+	if( Resized && RenDev )
 	{
 		int W, H;
 		SDL_GetWindowSizeInPixels( Client->Window, &W, &H );
@@ -1353,6 +1368,10 @@ void USDLViewport::UpdateInput( UBOOL Reset, FLOAT DeltaSeconds )
 
 	if( MouseMoved )
 		SendMouse( DX, DY );
+
+	// The OS cursor is the menu cursor. Summed movement drifts from it when the window changes under it.
+	if( WindowsMouseShown )
+		UpdateMousePosition();
 
 	unguard;
 }
@@ -1637,10 +1656,13 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 	SizeX = NewX;
 	SizeY = NewY;
 
-	SDL_HideCursor();
-	WindowsMouseShown = 0;
 	// Phones and tablets are always fullscreen and touched, so menus follow the absolute touch position.
+	// A browser grants no pointer lock in the call that enters fullscreen, so its menus keep the page cursor.
+#ifdef __EMSCRIPTEN__
+	bWindowsMouseAvailable = 1;
+#else
 	bWindowsMouseAvailable = !(NewBlitFlags & BLIT_Fullscreen) || SDL_HasScreenKeyboardSupport();
+#endif
 
 	SetTitleBar();
 

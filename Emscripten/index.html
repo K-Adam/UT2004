@@ -538,17 +538,31 @@ canvas.addEventListener('webglcontextlost', () => crash('The browser took the gr
 
 // Chrome's default pointer lock warps the cursor and now and then reports the warp as a huge movement.
 const lockPointer = canvas.requestPointerLock.bind(canvas);
-canvas.requestPointerLock = () =>
-  Promise.resolve(lockPointer({ unadjustedMovement: true })).catch(() => lockPointer());
+let wantLock = false;
+canvas.requestPointerLock = () => {
+  wantLock = true;
+  return Promise.resolve(lockPointer({ unadjustedMovement: true })).catch(() => lockPointer());
+};
 
 // The browser keeps the Esc that ends a pointer lock, so the game gets it here.
 let gameUnlocked = false;
 const exitLock = document.exitPointerLock.bind(document);
-document.exitPointerLock = () => { gameUnlocked = true; exitLock(); };
+document.exitPointerLock = () => { wantLock = false; gameUnlocked = !!document.pointerLockElement; exitLock(); };
+// An Esc that closes a menu brings the lock back while the key is still down, and the browser ends that lock
+// for the same press. The game already has that press, so it only gets the release the browser kept.
+let escHeld = false;
+for (const type of ['keydown', 'keyup'])
+  document.addEventListener(type, (e) => {
+    if (e.isTrusted && e.code === 'Escape') escHeld = type === 'keydown';
+  }, true);
+addEventListener('blur', () => { escHeld = false; });
 document.addEventListener('pointerlockchange', () => {
+  // The browser grants a lock some time after the request, by then the game may have given it up.
+  if (document.pointerLockElement && !wantLock) return document.exitPointerLock();
   if (!document.pointerLockElement && !gameUnlocked && document.hasFocus())
-    for (const type of ['keydown', 'keyup'])
+    for (const type of escHeld ? ['keyup'] : ['keydown', 'keyup'])
       canvas.dispatchEvent(new KeyboardEvent(type, { key: 'Escape', code: 'Escape', bubbles: true }));
+  if (!document.pointerLockElement) escHeld = false;
   gameUnlocked = false;
 });
 
