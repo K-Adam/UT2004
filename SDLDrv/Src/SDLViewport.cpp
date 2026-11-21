@@ -420,14 +420,6 @@ UBOOL USDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		SetResolution( Cmd, 0 );
 		return 1;
 	}
-	else if( ParseCommand(&Cmd,TEXT("VIRTUALJOYSTICK")) )
-	{
-		USDLClient* Client = GetOuterUSDLClient();
-		Client->VJWanted = !Client->VJWanted;
-		SwitchVirtualJoystick( Client->VJWanted );
-		Ar.Logf( TEXT("Virtual joystick %s"), USDLClient::VirtualPad ? TEXT("on") : TEXT("off") );
-		return 1;
-	}
 
 	else if( ParseCommand(&Cmd,TEXT("SETMOUSE")) )
 	{
@@ -634,18 +626,21 @@ void USDLViewport::UpdateMousePosition()
 //
 void USDLViewport::VJLayout( INT i, FLOAT& X, FLOAT& Y, FLOAT& R )
 {
-	FLOAT StickR = SizeY * 0.11f, Margin = SizeY * 0.06f;
+	USDLClient* Client = GetOuterUSDLClient();
+	FLOAT StickR = SizeY * 0.11f * Clamp( Client->VirtualJoystickScale, 0.75f, 1.5f ), Margin = SizeY * 0.06f;
 	X = i == VJ_Move || i == VJ_Use ? Margin + StickR : SizeX - Margin - StickR;
 	Y = SizeY - Margin - StickR;
 	R = StickR;
 	if( i >= VJ_Fire )
 	{
-		static const FLOAT Angles[] = { 170.f, 135.f, 100.f, 65.f, 60.f };
+		static const FLOAT Angles[] = { 195.f, 150.f, 105.f, 60.f, 60.f };
 		FLOAT A = Angles[i - VJ_Fire] * PI / 180.f;
 		X += appCos( A ) * StickR * 1.7f;
 		Y -= appSin( A ) * StickR * 1.7f;
 		R = StickR * 0.42f;
 	}
+	if( Client->VirtualJoystickSwap )
+		X = SizeX - X;
 }
 
 //
@@ -745,6 +740,15 @@ void USDLViewport::SwitchVirtualJoystick( UBOOL On )
 		GUIController->ResetInput();
 	Input->ResetInput();
 	unguard;
+}
+
+//
+// A mouse or a real pad came into use. Only the Auto setting gives way to it.
+//
+void USDLViewport::VJStepAside()
+{
+	if( GetOuterUSDLClient()->VirtualJoystick != VJM_Enabled )
+		SwitchVirtualJoystick( 0 );
 }
 
 void USDLViewport::AddTouchTarget( FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, const TCHAR* Command )
@@ -1091,7 +1095,17 @@ void USDLViewport::MouseButtonEvent( const SDL_MouseButtonEvent& Event, UBOOL In
 	USDLClient* Client = GetOuterUSDLClient();
 	// Touch and pen arrive as fingers too. VJShown follows a frame later, VirtualPad at once.
 	if( VJShown && USDLClient::VirtualPad && Event.which != SDL_TOUCH_MOUSEID && Event.which != SDL_PEN_MOUSEID )
-		SwitchVirtualJoystick( 0 );
+	{
+		VJStepAside();
+		// Controls that stay work under the mouse like under a finger, and its buttons do not reach the binds.
+		if( USDLClient::VirtualPad )
+		{
+			FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
+			if( Event.button == SDL_BUTTON_LEFT )
+				VJPointer( 0, 1, Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? SDL_EVENT_FINGER_DOWN : SDL_EVENT_FINGER_UP, Event.x * Density, Event.y * Density );
+			return;
+		}
+	}
 	if( Event.which == SDL_TOUCH_MOUSEID && Event.button == SDL_BUTTON_LEFT )
 	{
 		if( InMenu && Event.type == SDL_EVENT_MOUSE_BUTTON_DOWN )
@@ -1143,7 +1157,14 @@ void USDLViewport::MouseMotionEvent( const SDL_MouseMotionEvent& Event, UBOOL In
 	if( VJShown )
 	{
 		if( USDLClient::VirtualPad && Event.which != SDL_TOUCH_MOUSEID && Event.which != SDL_PEN_MOUSEID )
-			SwitchVirtualJoystick( 0 );
+		{
+			VJStepAside();
+			if( USDLClient::VirtualPad )
+			{
+				FLOAT Density = SDL_GetWindowPixelDensity( Client->Window );
+				VJPointer( 0, 1, SDL_EVENT_FINGER_MOTION, Event.x * Density, Event.y * Density );
+			}
+		}
 		return;
 	}
 	if( !InMenu && Client->VJWanted && (Event.which == SDL_TOUCH_MOUSEID || Event.which == SDL_PEN_MOUSEID) )
@@ -1173,7 +1194,7 @@ void USDLViewport::GamepadEvent( const SDL_Event& Event )
 		case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 			if( USDLClient::WatchedPad && Event.gdevice.which == SDL_GetGamepadID( USDLClient::WatchedPad )
 				&& (Event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || Abs( (INT)Event.gaxis.value ) > 16000) )
-				SwitchVirtualJoystick( 0 );
+				VJStepAside();
 			break;
 
 		case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:

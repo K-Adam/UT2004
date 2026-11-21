@@ -49,12 +49,16 @@ void USDLClient::StaticConstructor()
 	new(GetClass(),TEXT("PadTurnBoost"),         RF_Public)UFloatProperty(CPP_PROPERTY(PadTurnBoost),        TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("PadGyro"),              RF_Public)UBoolProperty(CPP_PROPERTY(PadGyro),              TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("PadGyroSensitivity"),   RF_Public)UFloatProperty(CPP_PROPERTY(PadGyroSensitivity),  TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("VirtualJoystick"),      RF_Public)UIntProperty(CPP_PROPERTY(VirtualJoystick),       TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("VirtualJoystickScale"), RF_Public)UFloatProperty(CPP_PROPERTY(VirtualJoystickScale), TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("VirtualJoystickSwap"),  RF_Public)UBoolProperty(CPP_PROPERTY(VirtualJoystickSwap),  TEXT("Joystick"), CPF_Config );
 
 	// This runs on the default object before the config loads, so inis without the keys get these.
 	PadDeadZone = 0.1f;
 	PadLookExponent = 2.f;
 	PadTurnBoost = 1.5f;
 	PadGyroSensitivity = 2.f;
+	VirtualJoystickScale = 1.f;
 
 	unguard;
 }
@@ -174,14 +178,10 @@ void USDLClient::Init( UEngine* InEngine )
 		SDL_free( DBPath );
 	}
 
+	VJAuto = ParseParam(appCmdLine(),TEXT("VIRTUALJOYSTICK"));
+
 	// Note configuration.
 	PostEditChange();
-
-	if( ParseParam(appCmdLine(),TEXT("VIRTUALJOYSTICK")) )
-	{
-		VJWanted = 1;
-		SetVirtualJoystick( 1 );
-	}
 
 	if( ParseParam(appCmdLine(),TEXT("defaultres")) )
 	{
@@ -318,6 +318,7 @@ void USDLClient::SetVirtualJoystick( UBOOL On )
 		// SDL builds without HIDAPI have no virtual joystick driver.
 		debugf( NAME_Init, TEXT("Couldn't attach virtual joystick: %s"), appFromAnsi(SDL_GetError()) );
 		VJWanted = 0;
+		VJFailed = 1;
 	}
 	if( VirtualPad )
 		SDL_DetachVirtualJoystick( VirtualPad );
@@ -326,6 +327,23 @@ void USDLClient::SetVirtualJoystick( UBOOL On )
 	CloseDeviceSensors();
 	if( UseJoystick )
 		OpenGamepad();
+	unguard;
+}
+
+//
+// Follows the VirtualJoystick setting. Enabled also brings back controls that stepped aside under Auto.
+//
+void USDLClient::UpdateVirtualJoystick()
+{
+	guard(USDLClient::UpdateVirtualJoystick);
+	UBOOL Wanted = !VJFailed && (VirtualJoystick == VJM_Enabled || (VirtualJoystick == VJM_Auto && VJAuto));
+	if( Wanted == VJWanted && (VirtualPad || VirtualJoystick != VJM_Enabled) )
+		return;
+	VJWanted = Wanted;
+	if( Viewports.Num() )
+		CastChecked<USDLViewport>(Viewports(0))->SwitchVirtualJoystick( Wanted );
+	else
+		SetVirtualJoystick( Wanted );
 	unguard;
 }
 
@@ -475,6 +493,7 @@ void USDLClient::PostEditChange()
 {
 	guard(USDLClient::PostEditChange);
 	Super::PostEditChange();
+	UpdateVirtualJoystick();
 	// The menu turns UseJoystick on and off with set ini, which ends up here.
 	if( !UseJoystick && !VirtualPad )
 		CloseGamepad();

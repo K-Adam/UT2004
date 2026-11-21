@@ -20,7 +20,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 	sb_Display.ManageComponent(co_Resolution);
 	sb_Display.ManageComponent(ch_Fullscreen);
 	sb_Display.ManageComponent(sl_Gamma);
-	sb_Display.ManageComponent(co_Reflections);
+	sb_Options.ManageComponent(co_Reflections);
 	sb_Options.ManageComponent(ch_Shadows);
 	sb_Options.ManageComponent(ch_Antialiasing);
 	sb_Options.ManageComponent(ch_AmbientOcclusion);
@@ -191,7 +191,7 @@ defaultproperties
 {
 	Begin Object class=GUISectionBackground Name=sbDisplay
 		WinWidth=0.491849
-		WinHeight=0.400000
+		WinHeight=0.300000
 		WinLeft=0.000948
 		WinTop=0.012761
 		Caption="Display"

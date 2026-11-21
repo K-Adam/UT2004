@@ -7,11 +7,19 @@ void (*GRumble)( FLOAT Low, FLOAT High, INT Milliseconds ) = NULL;
 void InitForceFeedback(void* hInstance, void* hWnd) { GForceFeedbackAvailable = GRumble != NULL; }
 void ExitForceFeedback() { GForceFeedbackAvailable = 0; }
 
-// Script plays Damage on every hit and on death. The other effects were tuned for Immersion's force feedback mice.
+// The effect names belong to Immersion's force feedback mice, so they map to a few rumbles by kind.
+// Script checks the player's weapon, pickup and vehicle options before it plays one.
+// A vehicle's centring spring is a steady pull, so it stays silent.
 void PlayFeedbackEffect( const char* EffectName )
 {
-	if( GRumble && GForceFeedbackAvailable && EffectName && !strcmp( EffectName, "Damage" ) )
+	if( !GRumble || !GForceFeedbackAvailable || !EffectName || !*EffectName )
+		return;
+	if( !strcmp( EffectName, "Damage" ) )
 		GRumble( 0.5f, 0.8f, 150 );
+	else if( strstr( EffectName, "StartUp" ) || strstr( EffectName, "ShutDown" ) )
+		GRumble( 0.5f, 0.2f, 300 );
+	else if( !strstr( EffectName, "Spring" ) )
+		GRumble( 0.2f, 0.4f, 80 );
 }
 
 void StopFeedbackEffect( const char* EffectName ) {}

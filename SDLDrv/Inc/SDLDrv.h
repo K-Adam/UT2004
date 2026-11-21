@@ -63,6 +63,9 @@ class USDLClient : public UClient, public FNotifyHook
 	FLOAT               PadTurnBoost;
 	UBOOL               PadGyro;
 	FLOAT               PadGyroSensitivity;
+	INT                 VirtualJoystick;
+	FLOAT               VirtualJoystickScale;
+	UBOOL               VirtualJoystickSwap;
 
 	// Variables.
 	UBOOL				InMenuLoop;
@@ -80,6 +83,10 @@ class USDLClient : public UClient, public FNotifyHook
 	static SDL_Gamepad* WatchedPad;
 	// The on-screen controls are on, they step aside while a mouse or a real pad is used.
 	UBOOL				VJWanted;
+	// What the Auto setting answers: the launcher asked for the on-screen controls.
+	UBOOL				VJAuto;
+	// The virtual joystick did not attach, so later setting changes do not try again.
+	UBOOL				VJFailed;
 
 	// Constructors.
 	USDLClient();
@@ -108,6 +115,7 @@ class USDLClient : public UClient, public FNotifyHook
 	void CloseGamepad();
 	void EnableGyro();
 	void SetVirtualJoystick( UBOOL On );
+	void UpdateVirtualJoystick();
 	void WatchPads();
 };
 
@@ -116,6 +124,9 @@ class USDLClient : public UClient, public FNotifyHook
 -----------------------------------------------------------------------------*/
 
 enum { VJ_Move, VJ_Look, VJ_Fire, VJ_AltFire, VJ_Jump, VJ_Crouch, VJ_Use, VJ_Count };
+
+// The VirtualJoystick setting, in the order of the menu's list.
+enum { VJM_Auto, VJM_Enabled, VJM_Disabled };
 
 struct FTouchTarget
 {
@@ -211,6 +222,7 @@ class USDLViewport : public UViewport
 	void VJWrite( INT i, UBOOL Held, FLOAT X, FLOAT Y );
 	void VJRelease();
 	void SwitchVirtualJoystick( UBOOL On );
+	void VJStepAside();
 	INT VehicleSeats( INT& Seat );
 
 	virtual UBOOL TryRenderDevice( const TCHAR* ClassName, INT NewX, INT NewY, UBOOL Fullscreen );
