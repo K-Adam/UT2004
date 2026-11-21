@@ -363,12 +363,21 @@ FString WebMasterURL();
 // The STUN server to gather with when the web master names none, "<host>[:<port>]" or empty
 FString WebMasterStun();
 void WebMasterAdvertise( const FServerResponseLine& Server );
+// A host on the web master's socket sends its state there and returns true. A page always is one, a native server
+// when its WebRTC port turned out closed.
+UBOOL WebRtcHostState( const char* Json );
+// The WebRTC details the web master lists for a driver whose own are Own: signal:<id> for a host on its socket,
+// empty while there is nothing to list yet.
+FString WebRtcListedDetails( const FString& Own );
+// What the server does once its test finds the WebRTC port closed. Exported for the engine tests, which have no relay for that test to fail through.
+extern "C" IPDRV_API void WebRtcHostThroughWebMaster();
 // The Done functions return false while the request is running
 struct FWebMasterRequest* WebMasterList();
 UBOOL WebMasterListDone( struct FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News );
-// Sends a client's offer to a browser host and gets its answer back
+// Sends a client's offer to a host on the web master's socket and gets its answer back
 struct FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp );
-UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp );
+// Gone says the web master has no socket of that id, so offering again is no use
+UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp, UBOOL& Gone );
 void WebMasterRequestFree( struct FWebMasterRequest* Request );
 // The web master's ICE answer: its UDP relay (Host), the caller's public address (Ip) and a STUN server, the ini's
 // StunServer when it names none. Empty when not given. The strings are valid until the next call.

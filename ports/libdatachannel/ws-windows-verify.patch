@@ -1,0 +1,39 @@
+diff --git a/src/impl/verifiedtlstransport.cpp b/src/impl/verifiedtlstransport.cpp
+index cc098174..02b7e1a3 100644
+--- a/src/impl/verifiedtlstransport.cpp
++++ b/src/impl/verifiedtlstransport.cpp
+@@ -60,6 +60,17 @@ VerifiedTlsTransport::VerifiedTlsTransport(
+ 			}
+ 		}
+ 	}
++#ifdef _WIN32
++	if (!cacert) {
++		// SSL_CTX_set_default_verify_paths() finds no root CA certificates on Windows
++#if OPENSSL_VERSION_NUMBER >= 0x30200000 && !defined(OPENSSL_NO_WINSTORE)
++		openssl::check(SSL_CTX_load_verify_store(mCtx, "org.openssl.winstore:"),
++		               "Failed to load the Windows system certificate store");
++#else
++		PLOG_WARNING << "No root CA certificates available on Windows, set caCertificatePemFile";
++#endif
++	}
++#endif
+ 	SSL_set_verify(mSsl, SSL_VERIFY_PEER, NULL);
+ 	SSL_set_verify_depth(mSsl, 4);
+ #endif
+diff --git a/src/impl/websocket.cpp b/src/impl/websocket.cpp
+index 18c3e04e..8a5fdd01 100644
+--- a/src/impl/websocket.cpp
++++ b/src/impl/websocket.cpp
+@@ -377,12 +377,6 @@ shared_ptr<TlsTransport> WebSocket::initTlsTransport() {
+ 
+ 		bool verify = tlsHost.has_value() && !config.disableTlsVerification;
+ 
+-#ifdef _WIN32
+-		if (std::exchange(verify, false)) {
+-			PLOG_WARNING << "TLS certificate verification with root CA is not supported on Windows";
+-		}
+-#endif
+-
+ 		shared_ptr<TlsTransport> transport;
+ 		if (verify)
+ 			transport = std::make_shared<VerifiedTlsTransport>(lower, tlsHost.value(), mCertificate,

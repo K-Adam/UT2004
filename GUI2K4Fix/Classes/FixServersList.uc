@@ -4,14 +4,19 @@ class FixServersList extends UT2K4Browser_ServersList;
 var Material WebIcon;
 var bool bShiftCells;
 
-static function string WebRtcDetails( GameInfo.ServerResponseLine s )
+static function string ServerDetail( GameInfo.ServerResponseLine s, string Key )
 {
 	local int i;
 
 	for ( i = 0; i < s.ServerInfo.Length; i++ )
-		if ( s.ServerInfo[i].Key == "WebRTC" )
+		if ( s.ServerInfo[i].Key == Key )
 			return s.ServerInfo[i].Value;
 	return "";
+}
+
+static function string WebRtcDetails( GameInfo.ServerResponseLine s )
+{
+	return ServerDetail(s, "WebRTC");
 }
 
 function Connect( bool Spectator )
@@ -29,7 +34,12 @@ function Connect( bool Spectator )
 	WebRtc = WebRtcDetails(Servers[CurrentListId()]);
 	// The details come from the server or a master, so they must not carry further URL options
 	if ( WebRtc != "" && InStr(WebRtc, "?") < 0 && InStr(WebRtc, "#") < 0 )
+	{
 		URL $= "?WebRTC="$WebRtc;
+		// Such a server has no UDP port to try first
+		if ( ServerDetail(Servers[CurrentListId()], "WebOnly") != "" )
+			URL $= "?WebOnly=1";
+	}
 
 	Controller.CloseAll(false, True);
 	PlayerOwner().ClientTravel(URL, TRAVEL_Absolute, False);

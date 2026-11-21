@@ -131,6 +131,7 @@ class FMasterServerUplinkLink
 	AMasterServerUplink*		Actor;
 	TArray<FMasterConnection*>	Connections;
 	DOUBLE						LastRefreshTime;
+	FString						LastListedDetails;
 
 	friend class FServerQueryInterface;
 	friend class FServerLANInterface;
@@ -821,17 +822,25 @@ void FMasterServerUplinkLink::CheckRefresh()
 {
 	guard(FMasterServerUplinkLink::CheckRefresh);
 
-	if( GCurrentTime - LastRefreshTime > REFRESH_TIME )
+	// The web master lists other details than the server's own once the server hosts through its socket,
+	// and a server off the list until those are known should not wait out the refresh time
+	UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );
+	FString ListedDetails = WebRtcListedDetails( NetDriver->WebRtcDetails );
+	if( GCurrentTime - LastRefreshTime > REFRESH_TIME || ListedDetails != LastListedDetails )
 	{
 
 		LastRefreshTime = GCurrentTime;
+		LastListedDetails = ListedDetails;
 		Actor->eventRefresh();
 
 		// The script port is the URL port, the query interface follows the socket's actual port.
 		FServerResponseLine WebState = Actor->ServerState;
-		WebState.Port = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver )->GetSocketData().Port;
-		if( Actor->DoUplink && AddWebRtcDetails( Actor, WebState.ServerInfo ) )
+		WebState.Port = NetDriver->GetSocketData().Port;
+		if( Actor->DoUplink && ListedDetails.Len() && AddWebRtcDetails( Actor, WebState.ServerInfo ) )
+		{
+			SetServerDetail( WebState.ServerInfo, TEXT("WebRTC"), ListedDetails );
 			WebMasterAdvertise( WebState );
+		}
 
 		{
 			// Insure the proper mutator count

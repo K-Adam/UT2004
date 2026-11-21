@@ -1,0 +1,26 @@
+diff --git a/src/configuration.cpp b/src/configuration.cpp
+index fe28aef7..01dd2ce0 100644
+--- a/src/configuration.cpp
++++ b/src/configuration.cpp
+@@ -19,7 +19,7 @@ bool parse_url(const std::string &url, std::vector<std::optional<std::string>> &
+ 	// Modified regex from RFC 3986, see https://www.rfc-editor.org/rfc/rfc3986.html#appendix-B
+ 	static const char *rs =
+ 	    R"(^(([^:.@/?#]+):)?(/{0,2}((([^:@]*)(:([^@]*))?)@)?(([^:/?#]*)(:([^/?#]*))?))?([^?#]*)(\?([^#]*))?(#(.*))?)";
+-	static const std::regex r(rs, std::regex::extended);
++	static const std::regex r(rs);
+ 
+ 	std::smatch m;
+ 	if (!std::regex_match(url, m, r) || m[10].length() == 0)
+diff --git a/src/impl/websocket.cpp b/src/impl/websocket.cpp
+index 138095ff..18c3e04e 100644
+--- a/src/impl/websocket.cpp
++++ b/src/impl/websocket.cpp
+@@ -78,7 +78,7 @@ void WebSocket::open(const string &url) {
+ 	static const char *rs =
+ 	    R"(^(([^:.@/?#]+):)?(/{0,2}((([^:@]*)(:([^@]*))?)@)?((\[[^\]]*\]|[^:/?#]*)(:([^/?#]*))?))?([^?#]*)(\?([^#]*))?(#(.*))?)";
+ 
+-	static const std::regex r(rs, std::regex::extended);
++	static const std::regex r(rs);
+ 
+ 	std::smatch m;
+ 	if (!std::regex_match(url, m, r) || m[10].length() == 0)

@@ -4,6 +4,12 @@
 // The engine builds with /Zp4, std::string crosses to WebRtc.cpp and needs the same packing in both.
 #define NOMINMAX
 #pragma pack(push, 8)
+#if _WIN32
+// inet_pton, the engine's winsock.h has none
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
+#include <cstring>
 #include <random>
 #include <string>
 #pragma pack(pop)
@@ -33,23 +39,48 @@ static bool ValidFingerprint( const FString& Fp )
 	return true;
 }
 
-// A browser host's details are "signal:<id>". Its address is only shown, the web master knows it by the id.
+// The id goes into a URL option and the web master's JSON. Standard types only, a host checks it on a library thread.
+bool WebRtcHostIdValid( const char* Id )
+{
+	return strlen( Id )==32 && strspn( Id, "0123456789abcdef" )==32;
+}
+
+// The engine limits, bans and throttles by IPv4 address. An IPv6 client gets one made from its /64, which is what one
+// subscriber holds, in 240.0.0.0/4 where no real client is. Text that is no address shares 240.0.0.0.
+DWORD WebRtcPeerIp( const char* Text )
+{
+	DWORD Ip;
+	if( inet_pton( AF_INET, Text, &Ip )==1 )
+		return Ip;
+	BYTE V6[16];
+	if( inet_pton( AF_INET6, Text, V6 )!=1 )
+		return htonl( 0xF0000000 );
+	return htonl( 0xF0000000 | (appMemCrc( V6, 8 ) % 0x0FFFFFFE + 1) );
+}
+
+// The details of a host on the web master's socket are "signal:<id>". The web master knows it by the id, its address is for the UDP port a native one may also have open.
 UBOOL WebRtcSignalSetup( FURL& ConnectURL, FString& Id, sockaddr_in& Addr )
 {
 	FString Details = ConnectURL.GetOption( TEXT("WebRTC="), TEXT("") );
 	if( appStrnicmp( *Details, TEXT("signal:"), 7 ) )
 		return 0;
 	Id = Details.Mid( 7 );
-	if( Id.Len()!=32 )
+	if( !WebRtcHostIdValid( TCHAR_TO_ANSI(*Id) ) )
 		return 0;
-	for( INT i=0; i<Id.Len(); i++ )
-		if( !appStrchr( TEXT("0123456789abcdef"), (*Id)[i] ) )
-			return 0;
 	appMemzero( &Addr, sizeof(Addr) );
 	Addr.sin_family = AF_INET;
 	Addr.sin_port = htons( ConnectURL.Port );
 	Addr.sin_addr.s_addr = inet_addr( TCHAR_TO_ANSI(*ConnectURL.Host) );
 	return 1;
+}
+
+// A host on the web master's socket answers an offer only while its level takes players. One sent while the level changes
+// gets no answer, or a peer that goes with the old level. So a join that has heard nothing from the server offers again.
+UBOOL WebRtcOfferAgain( UTcpNetDriver* Driver, UWebRtcConnection* Connection, DOUBLE CreatedTime )
+{
+	return Connection && Connection==Driver->ServerConnection && Connection->State==USOCK_Pending && Connection->InPacketId==-1
+		&& appSeconds()-CreatedTime < WEBRTC_OFFER_RETRY_TIME
+		&& !appStrnicmp( Connection->URL.GetOption(TEXT("WebRTC="), TEXT("")), TEXT("signal:"), 7 );
 }
 
 // The per IP limit of new UDP connections, Connecting counts the address's peers that have not sent yet

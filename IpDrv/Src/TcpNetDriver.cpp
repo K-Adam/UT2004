@@ -155,9 +155,12 @@ UBOOL UTcpNetDriver::InitConnect( FNetworkNotify* InNotify, FURL& ConnectURL, FS
 	guard(UTcpNetDriver::InitConnect);
 	if( !Super::InitConnect( InNotify, ConnectURL, Error ) )
 		return 0;
-	// Such a client never sends UDP, and a browser has no UDP socket to open. Web-only servers advertise signal:<id>.
-	if( WebRtcOnly() || !appStrnicmp( ConnectURL.GetOption(TEXT("WebRTC="), TEXT("")), TEXT("signal:"), 7 ) )
+	// Such a client never sends UDP, and a browser has no UDP socket to open. Nor has a web-only server one to answer.
+	// Every other server is tried over UDP first, its WebRTC details are for when that gets no answer.
+	if( WebRtcOnly() || ConnectURL.GetOption(TEXT("WebOnly="), NULL) )
 	{
+		// The pending level reads from its connection which way the join went
+		ConnectURL.AddOption( TEXT("WebOnly=1") );
 		if( !InitSockets( Error ) || !WebRtcConnect( ConnectURL, Error ) )
 			return 0;
 		UAssetDownload::Offer( ServerConnection );
@@ -362,11 +365,13 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 		ConnectTime = 0;
 		debugf( TEXT("UDP got no answer, trying WebRTC") );
 		FURL URL = Pending->URL;
+		URL.AddOption( TEXT("WebOnly=1") );
 		FString Error;
 		if( WebRtcConnect( URL, Error ) )
 		{
 			closesocket( Socket );
 			Socket = 0;
+			UAssetDownload::Offer( ServerConnection );
 			// Only the greeting went out before, and it is lost with the UDP connection
 			ServerConnection->Logf( TEXT("HELLO REVISION=0 MINVER=%i VER=%i"), ENGINE_MIN_NET_VERSION, ENGINE_VERSION );
 			ServerConnection->FlushNet();

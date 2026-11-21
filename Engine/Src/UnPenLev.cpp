@@ -302,7 +302,7 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 		// The WebRTC details only tell this client how to reach the server, and the server reads the
 		// login URL up to the first comma, which would cut off every option after the fingerprint.
 		for( INT i=PartialURL.Op.Num()-1; i>=0; i-- )
-			if( appStrnicmp(*PartialURL.Op(i),TEXT("WebRTC="),7)==0 )
+			if( appStrnicmp(*PartialURL.Op(i),TEXT("WebRTC="),7)==0 || appStrnicmp(*PartialURL.Op(i),TEXT("WebOnly="),8)==0 )
 				PartialURL.Op.Remove( i );
 
 	    for( INT i=PartialURL.Op.Num()-1; i>=0; i-- )
@@ -340,6 +340,14 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 		FString gametype;
 		Parse( Text, TEXT("GAME="), gametype);
 		URL.AddOption( *FString::Printf(TEXT("GAME=%s"),*gametype) );
+		// Travel on this server starts from this URL. A join over WebRTC stays on it. One over UDP drops the WebRTC details,
+		// or a server that answers nothing while it changes its level would look filtered and move the player to a WebRTC port that may be closed.
+		if( NetDriver->ServerConnection->URL.GetOption(TEXT("WebOnly="), NULL) )
+			URL.AddOption( TEXT("WebOnly=1") );
+		else
+			for( INT i=URL.Op.Num()-1; i>=0; i-- )
+				if( appStrnicmp(*URL.Op(i),TEXT("WebRTC="),7)==0 )
+					URL.Op.Remove( i );
 
 		// A server that names no download method still has the channel. The client's own sources of stock packages
 		// leave a package to a server that claims the retail file, and get a second turn in case that fails.

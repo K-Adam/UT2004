@@ -33,25 +33,30 @@ if(NOT EMSCRIPTEN)
     set(BUILD_SHARED_LIBS OFF)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
     set(NO_MEDIA ON)
-    set(NO_WEBSOCKET ON)
     set(NO_EXAMPLES ON)
     set(NO_TESTS ON)
-    # The same patches as the vcpkg ports, libjuice is a submodule here. A changed patch gets a fresh source dir, since patching an already patched tree fails.
-    set(DATACHANNEL_PATCH ${CMAKE_SOURCE_DIR}/ports/libdatachannel/stopped-flag.patch)
+    # The same patches as the vcpkg ports, libjuice is a submodule here. A changed patch or release gets a fresh source dir, since patching an already patched tree fails.
+    # v0.24.7, by hash so a moved tag cannot change what gets built
+    set(DATACHANNEL_COMMIT 800e849a1ede5667caaf8f6caa1eb21e4906dd87)
     set(JUICE_PATCH ${CMAKE_SOURCE_DIR}/ports/libjuice/zero-tiebreaker.patch)
-    file(SHA256 ${DATACHANNEL_PATCH} DATACHANNEL_HASH)
-    file(SHA256 ${JUICE_PATCH} JUICE_HASH)
-    string(SHA256 DATACHANNEL_HASH "${DATACHANNEL_HASH}${JUICE_HASH}")
+    file(SHA256 ${JUICE_PATCH} DATACHANNEL_HASH)
+    set(DATACHANNEL_PATCH_COMMANDS "")
+    foreach(PATCH url-regex ws-ca-pem ws-windows-verify)
+      set(PATCH_FILE ${CMAKE_SOURCE_DIR}/ports/libdatachannel/${PATCH}.patch)
+      file(SHA256 ${PATCH_FILE} PATCH_HASH)
+      string(APPEND DATACHANNEL_HASH ${PATCH_HASH})
+      list(APPEND DATACHANNEL_PATCH_COMMANDS COMMAND patch -p1 -i ${PATCH_FILE})
+    endforeach()
+    string(SHA256 DATACHANNEL_HASH "${DATACHANNEL_COMMIT}${DATACHANNEL_HASH}")
     string(SUBSTRING ${DATACHANNEL_HASH} 0 12 DATACHANNEL_HASH)
     FetchContent_Declare(libdatachannel
       SOURCE_DIR ${CMAKE_BINARY_DIR}/_deps/libdatachannel-src-${DATACHANNEL_HASH}
       GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
-      # v0.24.6, by hash so a moved tag cannot change what gets built
-      GIT_TAG 6b1e2e620f1e37f0eafeee702eaea0043cb305fd
+      GIT_TAG ${DATACHANNEL_COMMIT}
       # A git source updates on every configure, which would patch the tree again and fail
       UPDATE_DISCONNECTED ON
-      PATCH_COMMAND patch -p1 -i ${DATACHANNEL_PATCH}
-      COMMAND patch -p1 -d deps/libjuice -i ${JUICE_PATCH})
+      PATCH_COMMAND patch -p1 -d deps/libjuice -i ${JUICE_PATCH}
+      ${DATACHANNEL_PATCH_COMMANDS})
     FetchContent_MakeAvailable(libdatachannel)
     set(IPDRV_DATACHANNEL datachannel)
   endif()

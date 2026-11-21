@@ -12,10 +12,10 @@
 -----------------------------------------------------------------------------*/
 
 #define PINGTIMEOUT 2.0f
-// How long a query over WebRTC waits for its channel. A browser host is reached through the web master, which takes longer.
+// How long a query over WebRTC waits for its channel. A host on the web master's socket is reached through it, which takes longer.
 #define QUERYOPENTIMEOUT 6.0f
 #define QUERYSIGNALTIMEOUT 12.0f
-// The list pings its selected row again every few seconds, and each query of a browser host costs an offer at the web master
+// The list pings its selected row again every few seconds, and each query of a host on its socket costs an offer at the web master
 #define QUERYSIGNALPERIOD 30.0
 
 struct FOutstandingPingInfo
@@ -179,11 +179,15 @@ public:
 	{
 		guard(FServerQueryLink::PingServer);
 
-		// UDP reaches neither a web only server nor anything from a browser, those are asked over WebRTC
-		FString WebRtc;
-		if( HasServerDetail( CurrentState.ServerInfo, TEXT("WebQuery") ) && (NetworkError() || HasServerDetail( CurrentState.ServerInfo, TEXT("WebOnly") )) )
-			WebRtc = GetServerDetail( CurrentState.ServerInfo, TEXT("WebRTC") );
+		// UDP reaches neither a web only server nor anything from a browser, those are asked over WebRTC.
+		// A native server on the web master's socket has a UDP port that may answer, so pings try that and only a click asks through the web master.
+		FString WebRtc = GetServerDetail( CurrentState.ServerInfo, TEXT("WebRTC") );
 		UBOOL Signal = !appStrnicmp( *WebRtc, TEXT("signal:"), 7 );
+		UBOOL OverWebRtc = HasServerDetail( CurrentState.ServerInfo, TEXT("WebQuery") )
+			&& (NetworkError() || HasServerDetail( CurrentState.ServerInfo, TEXT("WebOnly") ) || (Signal && PingCause==PC_Clicked));
+		if( !OverWebRtc )
+			WebRtc = TEXT("");
+		Signal = Signal && OverWebRtc;
 		if( Signal && PingCause==PC_Clicked )
 		{
 			DOUBLE* Last = SignalQueryTimes.Find( WebRtc );
@@ -200,7 +204,7 @@ public:
 			if( !WebRtcId )
 			{
 				// Reported from Poll, because script pings the next row from the timeout and would nest once per failing row.
-				// It takes no entry either, browser hosts often share an address and would take over each other's.
+				// It takes no entry either, hosts on the web master's socket often share an address and would take over each other's.
 				INT f = UnsentPings.Add();
 				UnsentPings(f).ServerID = ServerID;
 				UnsentPings(f).PingCause = PingCause;
@@ -244,7 +248,7 @@ public:
 		guard(FServerQueryLink::CancelPings);
 		OutstandingPings.Empty();
 		UnsentPings.Empty();
-		// A cancelled query of a browser host got no answer, so the next click may ask again
+		// A cancelled query through the web master got no answer, so the next click may ask again
 		SignalQueryTimes.Empty();
 		unguard;
 	}
@@ -283,6 +287,10 @@ private:
 			NewState.PlayerInfo = CurrentState->PlayerInfo;
 			// Servers put only their WebRTC details in the ping, so a restart replaces or drops the old ones
 			FString WebRtc = GetServerDetail( NewState.ServerInfo, TEXT("WebRTC") );
+			// A server on the web master's socket names its own port, which is closed. The row keeps the id the web master lists.
+			FString Listed = GetServerDetail( CurrentState->ServerInfo, TEXT("WebRTC") );
+			if( !appStrnicmp( *Listed, TEXT("signal:"), 7 ) )
+				WebRtc = Listed;
 			NewState.ServerInfo = CurrentState->ServerInfo;
 			SetServerDetail( NewState.ServerInfo, TEXT("WebRTC"), WebRtc );
 			// The rules and players replies report this copy, which would bring back a ping that timed out earlier
@@ -309,7 +317,9 @@ private:
 			{
 				for( INT ni=0;ni<NewInfo.Num();ni++ )
 				{
-					if( CurrentState->ServerInfo(ci).Key==NewInfo(ni).Key && CurrentState->ServerInfo(ci).Value==NewInfo(ni).Value )
+					// A server on the web master's socket names its own port here too, the row keeps the id
+					UBOOL OwnDetails = NewInfo(ni).Key==TEXT("WebRTC") && !appStrnicmp( *CurrentState->ServerInfo(ci).Value, TEXT("signal:"), 7 );
+					if( CurrentState->ServerInfo(ci).Key==NewInfo(ni).Key && (OwnDetails || CurrentState->ServerInfo(ci).Value==NewInfo(ni).Value) )
 					{
 						NewInfo.Remove(ni);
 						ni--;
@@ -660,7 +670,7 @@ public:
 	{
 		QueryType = InQueryType;
 		// A WebRTC only client lists the web master, which holds only servers it can join.
-		// Others list the main masters after it, web-only servers are on the web master alone.
+		// Others list the main masters after it. Web-only servers are on the web master alone, and so is the id of a host on its socket.
 		// The news is the web master's too, a community master only stands in while it cannot be reached.
 		if( WebRtcOnly() || QueryType==CTM_Query || QueryType==CTM_GetMOTD )
 		{
@@ -712,7 +722,8 @@ public:
 					GameType = Client->Query(i).Value;
 			TArray<FServerResponseLine> Listable;
 			for( INT i=0; i<Servers.Num(); i++ )
-				if( (!GameType.Len() || Servers(i).GameType == GameType) && (WebOnly || HasServerDetail( Servers(i).ServerInfo, TEXT("WebOnly") )) )
+				if( (!GameType.Len() || Servers(i).GameType == GameType)
+				&&	(WebOnly || HasServerDetail( Servers(i).ServerInfo, TEXT("WebOnly") ) || !appStrnicmp( *GetServerDetail( Servers(i).ServerInfo, TEXT("WebRTC") ), TEXT("signal:"), 7 )) )
 					new(Listable) FServerResponseLine( Servers(i) );
 			UBOOL Running = Deliver( Listable );
 			if( !WebOnly )

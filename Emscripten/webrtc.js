@@ -79,7 +79,7 @@ addToLibrary({
         } catch (e) {
           err(`WebRTC: ${e}`);
         }
-        await negotiate(peer.pc);
+        await negotiate(peer.pc, peer);
       })().catch(peer.fail);
       return id;
     },
@@ -164,11 +164,13 @@ addToLibrary({
   ut_webrtc_connect_signal: (url, hostId, maxInbox) => {
     url = UTF8ToString(url);
     hostId = UTF8ToString(hostId);
-    return UTWebRtc.connect(url, maxInbox, async (pc) => {
+    return UTWebRtc.connect(url, maxInbox, async (pc, peer) => {
       await pc.setLocalDescription(await pc.createOffer());
       await UTWebRtc.gathered(pc);
       // Sent as text/plain, which needs no CORS preflight.
       const res = await fetch(`${url}/offer`, { method: 'POST', body: JSON.stringify({ host: hostId, sdp: pc.localDescription.sdp }) });
+      // The game offers again unless the web master has no socket of that id.
+      peer.gone = res.status == 404;
       if (!res.ok) throw new Error(`the host did not answer (${res.status})`);
       await pc.setRemoteDescription({ type: 'answer', sdp: (await res.json()).sdp });
     });
@@ -231,7 +233,7 @@ addToLibrary({
     let msg;
     // Larger than any game packet, so not from the game.
     while ((msg = peer.inbox.shift()) && msg.length > max) {}
-    if (!msg) return peer.closed ? -1 : 0;
+    if (!msg) return peer.closed ? (peer.gone ? -2 : -1) : 0;
     HEAPU8.set(msg, data);
     return msg.length;
   },

@@ -9,7 +9,8 @@
 //
 // Browsers can't take unknown peers, so a browser host advertises signal:<id>
 // instead. Clients send their offer to it through the web master and both
-// ends gather candidates over STUN.
+// ends gather candidates over STUN. A native server whose WebRTC port is
+// closed is listed on the web master the same way.
 
 // IP, UDP, DTLS and SCTP headers per data channel message
 #define WEBRTC_PACKET_OVERHEAD 90
@@ -35,6 +36,18 @@
 #endif
 // Sending what was gathered so far beats waiting out slow interfaces, the host has to answer within 8 seconds
 #define WEBRTC_GATHER_TIME 3.0
+// The web master's limit for an offer and for an answer
+#define WEBRTC_MAX_SDP 8192
+// Room for an offer with its JSON escapes, and for the state of a server with many rules
+#define WEBRTC_HOST_SOCKET_MAX_MESSAGE 32768
+#define WEBRTC_HOST_SOCKET_RETRY 10.0
+// The web master waits 8 seconds for an answer. An offer that has waited this many for its level would miss that with its candidates.
+#define WEBRTC_OFFER_TIME 6
+// A join through the web master that has heard nothing offers again this often, for this long
+#define WEBRTC_OFFER_RETRY 2.0
+#define WEBRTC_OFFER_RETRY_TIME 30.0
+// What the ICE library takes
+#define WEBRTC_MAX_CANDIDATES 30
 
 struct FWebRtcPeer;
 struct FWebRtcHost;
@@ -61,6 +74,9 @@ class UWebRtcConnection : public UTcpipConnection
 // WebRtcCommon.cpp
 extern const char* WebRtcSdpEnd;
 std::string WebRtcCandidate( const std::string& Ip, INT Port );
+bool WebRtcHostIdValid( const char* Id );
+DWORD WebRtcPeerIp( const char* Text );
+UBOOL WebRtcOfferAgain( UTcpNetDriver* Driver, UWebRtcConnection* Connection, DOUBLE CreatedTime );
 UBOOL WebRtcSignalSetup( FURL& ConnectURL, FString& Id, sockaddr_in& Addr );
 UBOOL WebRtcClientSetup( FURL& ConnectURL, FString& Error, sockaddr_in& Addr, std::string& Ufrag, std::string& Answer );
 void WebRtcServerConnection( UTcpNetDriver* Driver, FWebRtcPeer* Peer, sockaddr_in& Addr, UWebRtcConnection*& Connection, const FURL& ConnectURL );
@@ -69,6 +85,11 @@ EAcceptConnection WebRtcAccept( UTcpNetDriver* Driver, FWebRtcPeer* Peer, sockad
 FURL WebRtcQueryURL( const FString& Host, const FString& Details );
 UBOOL WebRtcAnswerQuery( FWebRtcPeer* Peer, INT& Queries, const BYTE* Data, INT Count );
 UBOOL WebRtcPendingExpired( DOUBLE CreatedTime, INT Queries );
+
+// WebMaster.cpp
+#if __ANDROID__
+const std::string& AndroidCaCerts();
+#endif
 
 // WebRtc.cpp or WebRtcBrowser.cpp
 

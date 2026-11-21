@@ -45,8 +45,6 @@ enum
 };
 
 #if __EMSCRIPTEN__
-extern "C" void ut_webrtc_host_state( const char* Json );
-
 static void HttpFinished( emscripten_fetch_t* Fetch )
 {
 	// Closing a fetch that is still running calls its error handler again
@@ -220,10 +218,10 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 
 	std::string Json = Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 #if __EMSCRIPTEN__
-	// A browser host is listed through its signaling socket, a JSON post would need a CORS preflight
-	ut_webrtc_host_state( Json.c_str() );
+	WebRtcHostState( Json.c_str() );
 #else
-	HttpRequestAsync( &appToUtf8( *(Base + TEXT("/advertise")) )(0), Json, []( bool, std::string ) {} );
+	if( !WebRtcHostState( Json.c_str() ) )
+		HttpRequestAsync( &appToUtf8( *(Base + TEXT("/advertise")) )(0), Json, []( bool, std::string ) {} );
 #endif
 }
 
@@ -304,13 +302,14 @@ FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp )
 	return WebMasterRequest( TEXT("/offer"), nlohmann::json{ { "host", &appToUtf8(*HostId)(0) }, { "sdp", &appToUtf8(*Sdp)(0) } }.dump() );
 }
 
-UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp )
+UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp, UBOOL& Gone )
 {
 	std::string Body;
 	if( !WebMasterRequestDone( Request, Ok, Body ) )
 		return 0;
 	nlohmann::json Root = nlohmann::json::parse( Body, nullptr, false );
 	Ok = Ok && Root.is_object() && Root.contains("sdp") && Root["sdp"].is_string();
+	Gone = !Ok && Root.is_object() && Root.contains("error") && Root["error"]=="no such host";
 	if( Ok )
 		Sdp = appFromUtf8( Root["sdp"].get<std::string>().c_str() );
 	return 1;

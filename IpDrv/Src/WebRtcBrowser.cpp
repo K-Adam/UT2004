@@ -24,11 +24,12 @@ extern "C"
 	void ut_webrtc_host( const char* Url, int MaxInbox );
 	void ut_webrtc_host_stop();
 	int ut_webrtc_host_id( char* Id, int Max );
+	void ut_webrtc_host_state( const char* Json );
 	// The next answered peer and the client IP the web master saw, 0 when none is waiting.
 	int ut_webrtc_accept( char* Ip, int Max );
 	// 0 while the channel is not open.
 	int ut_webrtc_send( int Id, const void* Data, int Count );
-	// Bytes of the next message, 0 when none is waiting, -1 once the peer closed.
+	// Bytes of the next message, 0 when none is waiting, -1 once the peer closed, -2 when the web master has no such host.
 	int ut_webrtc_recv( int Id, void* Data, int Max );
 	void ut_webrtc_close( int Id );
 }
@@ -40,6 +41,7 @@ struct FWebRtcPeer
 	UWebRtcConnection* Connection;
 	DOUBLE CreatedTime;
 	INT Queries;
+	DOUBLE RetryTime;
 };
 
 struct FWebRtcHost
@@ -60,19 +62,6 @@ void WebRtcRemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
 UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
 {
 	return ut_webrtc_send( Peer->Id, Data, Count );
-}
-
-// The engine limits, bans and throttles by IPv4 address. An IPv6 client gets one made from its /64, which is what one
-// subscriber holds, in 240.0.0.0/4 where no real client is. Text that is no address shares 240.0.0.0.
-static DWORD WebRtcPeerIp( const char* Text )
-{
-	DWORD Ip = inet_addr( Text );
-	if( Ip!=INADDR_NONE )
-		return Ip;
-	BYTE V6[16];
-	if( inet_pton( AF_INET6, Text, V6 )!=1 )
-		return htonl( 0xF0000000 );
-	return htonl( 0xF0000000 | (appMemCrc( V6, 8 ) % 0x0FFFFFFE + 1) );
 }
 
 // The script's peer for the WebRTC details in the URL, 0 with Error set when they are unusable
@@ -116,6 +105,7 @@ UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
 		return 0;
 	}
 	auto Peer = std::make_shared<FWebRtcPeer>();
+	Peer->CreatedTime = appSeconds();
 	Peer->Id = ConnectPeer( ConnectURL, Error, Peer->Addr );
 	if( !Peer->Id )
 		return 0;
@@ -182,7 +172,19 @@ void UTcpNetDriver::WebRtcTick()
 		{
 			if( Count < 0 )
 			{
-				if( Peer->Connection )
+				if( Count==-1 && WebRtcOfferAgain( this, Peer->Connection, Peer->CreatedTime ) )
+				{
+					if( !Peer->RetryTime )
+						Peer->RetryTime = appSeconds() + WEBRTC_OFFER_RETRY;
+					else if( appSeconds() >= Peer->RetryTime )
+					{
+						FString Error;
+						ut_webrtc_close( Peer->Id );
+						Peer->Id = ConnectPeer( Peer->Connection->URL, Error, Peer->Addr );
+						Peer->RetryTime = 0;
+					}
+				}
+				else if( Peer->Connection )
 					Peer->Connection->State = USOCK_Closed;
 				else
 					WebRtcRemovePeer( Host, Peer.get() );
@@ -221,6 +223,18 @@ void UTcpNetDriver::WebRtcDestroy()
 	}
 	delete Host;
 	unguard;
+}
+
+// A page always hosts through the web master's socket, a JSON post would need a CORS preflight
+UBOOL WebRtcHostState( const char* Json )
+{
+	ut_webrtc_host_state( Json );
+	return 1;
+}
+
+FString WebRtcListedDetails( const FString& Own )
+{
+	return Own;
 }
 
 // Server browser queries, the id is the script's peer.

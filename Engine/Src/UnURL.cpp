@@ -148,7 +148,8 @@ FURL::FURL( FURL* Base, const TCHAR* TextURL, ETravelType Type )
 			&&	appStricmp(*Base->Op(i),TEXT("PEER"))!=0
 			&&	appStricmp(*Base->Op(i),TEXT("LOAD"))!=0
 			&&	appStricmp(*Base->Op(i),TEXT("QUIET"))!=0
-			&&	appStrnicmp(*Base->Op(i),TEXT("WebRTC="),7)!=0 )
+			&&	appStrnicmp(*Base->Op(i),TEXT("WebRTC="),7)!=0
+			&&	appStrnicmp(*Base->Op(i),TEXT("WebOnly="),8)!=0 )
 				new(Op)FString(Base->Op(i));
 		}
 	}
@@ -265,12 +266,16 @@ FURL::FURL( FURL* Base, const TCHAR* TextURL, ETravelType Type )
 		}
 	}
 
-	// A server's WebRTC details only apply to that server, so they follow travel to the same host only
+	// A server's WebRTC details and its lack of a UDP port only apply to that server, so they follow travel to the same host only
 	if( (Type==TRAVEL_Relative || Type==TRAVEL_Partial) && Host==Base->Host && Port==Base->Port && !GetOption(TEXT("WebRTC="), NULL) )
 	{
-		const TCHAR* WebRtc = Base->GetOption(TEXT("WebRTC="), NULL);
-		if( WebRtc )
-			new(Op)FString(FString(TEXT("WebRTC=")) + WebRtc);
+		const TCHAR* Keys[] = { TEXT("WebRTC="), TEXT("WebOnly=") };
+		for( INT i=0; i<ARRAY_COUNT(Keys); i++ )
+		{
+			const TCHAR* Value = Base->GetOption(Keys[i], NULL);
+			if( Value )
+				new(Op)FString(FString(Keys[i]) + Value);
+		}
 	}
 
 	// Copy existing options which aren't in current URL
