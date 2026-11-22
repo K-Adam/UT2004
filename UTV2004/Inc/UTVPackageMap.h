@@ -9,6 +9,8 @@
 class UUTVPackageMap : public UPackageMap
 {
 	DECLARE_CLASS(UUTVPackageMap,UPackageMap,CLASS_Transient,utv2004);
+	// User-provided, so new UUTVPackageMap() does not zero the class and index StaticAllocateObject set.
+	UUTVPackageMap() {}
 	void ShowStatus ();
 	UBOOL CreateLinkers ();
 	INT GetMaxObjectIndex();

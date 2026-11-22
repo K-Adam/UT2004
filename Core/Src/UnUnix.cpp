@@ -1747,7 +1747,8 @@ CORE_API const TCHAR* appUserName()
 	if( !Result[0] )
 	{
 		ANSICHAR *str = getlogin();
-		appStrncpy( Result, ANSI_TO_TCHAR(str), sizeof(Result) );
+		if( str )
+			appStrncpy( Result, ANSI_TO_TCHAR(str), ARRAY_COUNT(Result) );
 	}
 	return Result;
 	unguard;

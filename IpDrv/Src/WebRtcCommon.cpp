@@ -171,6 +171,7 @@ UBOOL WebRtcClientSetup( FURL& ConnectURL, FString& Error, sockaddr_in& Addr, st
 		// Emscripten's resolver makes up addresses for its WebSocket emulation.
 		HOSTENT* HostEnt = NULL;
 #else
+		FScopeCriticalSection Lock( gethostbyname_mutex );
 		HOSTENT* HostEnt = gethostbyname( TCHAR_TO_ANSI(*ConnectURL.Host) );
 #endif
 		if( !HostEnt || HostEnt->h_addrtype!=AF_INET )

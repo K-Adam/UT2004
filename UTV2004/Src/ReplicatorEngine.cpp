@@ -786,7 +786,7 @@ void UReplicatorEngine::NotifyAcceptedConnection( class UNetConnection* Connecti
 	oc.doRemove=false;
 	oc.username=FString::Printf(TEXT("Unknown"));
 	OpenConnections.Set(Connection,oc);
-	debugf(TEXT("New connection: %i"),(PTRINT)Connection);
+	debugf(TEXT("New connection: %i"),(INT)(PTRINT)Connection);
 	unguard;
 }
 

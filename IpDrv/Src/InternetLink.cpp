@@ -968,8 +968,6 @@ FUdpLink::FUdpLink()
 	FString Error;
 	InitSockets( Error );
 	SocketData.Socket = INVALID_SOCKET;
-	GWarn->Logf(TEXT("Defaulting to false"));
-	bConnectionBroken = false;
 	unguard;
 }
 
@@ -979,7 +977,6 @@ FUdpLink::FUdpLink(FSocketData InSocketData)
 ,	StatBytesSent(0)
 ,	StatBytesReceived(0)
 {
-	bConnectionBroken = false;
 }
 
 FUdpLink::~FUdpLink()
@@ -1085,17 +1082,16 @@ void FUdpLink::Poll()
 		INT Result = recvfrom( SocketData.Socket, (char*)Buffer, sizeof(Buffer), 0, (struct sockaddr*)&SockAddr, &SockAddrLen );
 		if( Result == SOCKET_ERROR )
 		{
-			if( WSAGetLastError() == WSAEWOULDBLOCK )
+			INT Error = WSAGetLastError();
+			if( Error == WSAEWOULDBLOCK )
 				break;
-			else
-			if( WSAGetLastError() != WSAECONNRESET )		// WSAECONNRESET means we got an ICMP unreachable, and should continue calling recv()
+#ifdef __linux__
+			// IP_RECVERR also queues every ICMP error, and the queue takes from the receive buffer until read.
+			recvfrom( SocketData.Socket, NULL, 0, MSG_ERRQUEUE, (struct sockaddr*)&SockAddr, &SockAddrLen );
+#endif
+			if( Error != UDP_ERR_PORT_UNREACH )
 			{
-				if (WSAGetLastError() == 111)
-				{
-					bConnectionBroken = true;
-				}
-
-				GWarn->Logf(TEXT("RecvFrom returned SOCKET_ERROR %d"), WSAGetLastError() );
+				GWarn->Logf(TEXT("RecvFrom returned SOCKET_ERROR %d"), Error );
 				break;
 			}
 		}
@@ -1104,8 +1100,6 @@ void FUdpLink::Poll()
 		{
 			StatBytesReceived += Result;
 			OnReceivedData( FIpAddr(SockAddr), Buffer, Result );
-			
-			bConnectionBroken = false;
 		}
 		else
 			break;

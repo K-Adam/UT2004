@@ -173,11 +173,6 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 {
 	guard(UUTVPackageMap::SerializeObject);
 
-#if PLATFORM_64BITS
-    check(0);  // UTV stores object indices in UObject* through DWORD casts, so it is 32-bit only.
-    return 0;
-#else
-
 	DWORD Index=0;
 	if( Ar.IsLoading() )
 	{
@@ -187,7 +182,7 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 		{
 			// Dynamic actor or None.
 			Ar.SerializeInt( Index, UNetConnection::MAX_CHANNELS );
-			Object = (UObject*)Index;
+			Object = (UObject*)(PTRINT)Index;
 
 			if (Class != NULL) {
 				if (Class->IsChildOf (AActor::StaticClass ()))
@@ -215,14 +210,14 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 			Object = tmp;
 
 			Index = Index + 2000;
-			Object = (UObject*)Index;
+			Object = (UObject*)(PTRINT)Index;
 		}
 
 		return 1;
 	}
 	else
 	{
-		Index = (DWORD)Object;
+		Index = (DWORD)(PTRINT)Object;
 		if (Index < 2000) {
 			BYTE B=1;
 			Ar.SerializeBits (&B, 1);
@@ -234,9 +229,8 @@ UBOOL UUTVPackageMap::SerializeObject( FArchive& Ar, UClass* Class, UObject*& Ob
 			Ar.SerializeBits (&B, 1);
 			Ar.SerializeInt (Index, MaxObjectIndex);
 		}
-		return 1; 
+		return 1;
 	}
-#endif
 	unguard;
 }
 

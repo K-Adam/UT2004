@@ -162,9 +162,6 @@ public:
 	// tors.
 	FUdpLink();
 	FUdpLink(FSocketData InSocketData);
-
-	UBOOL bConnectionBroken;
-
 	virtual ~FUdpLink();
 
 	// FUdpLink interface
