@@ -1767,10 +1767,10 @@ FStaticCubemap::FStaticCubemap(UCubemap* InCubemap)
 
 FTexture* FStaticCubemap::GetFace( INT Face )
 {
-	if(Cubemap->Faces[Face])
-		return (FTexture*) Cubemap->Faces[Face]->Get(Cubemap->GetLastUpdateTime(),NULL)->GetRenderInterface();
-	else
-		return NULL;
+	// A face may itself be a cubemap, whose interface is no FTexture.
+	UBitmapMaterial* Current = Cubemap->Faces[Face] ? Cubemap->Faces[Face]->Get(Cubemap->GetLastUpdateTime(),NULL) : NULL;
+	FBaseTexture* Base = Current ? Current->GetRenderInterface() : NULL;
+	return Base ? Base->GetTextureInterface() : NULL;
 }
 
 QWORD FStaticCubemap::GetCacheId()

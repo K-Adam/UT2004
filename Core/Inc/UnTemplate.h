@@ -641,8 +641,10 @@ public:
 	{
 		guardSlow(TArray::AddItem);
 		checkSlow(!TTypeInfo<T>::DefinitelyNeedsDestructor());
+		// Item may be an element of this array, which Add can move.
+		T Copy = Item;
 		INT Index=Add();
-		(*this)(Index)=Item;
+		(*this)(Index)=Copy;
 		return Index;
 		unguardSlow;
 	}
@@ -813,8 +815,9 @@ public:
 	INT AddItem( const T& Item )
 	{
 		guardSlow(TTransArray::AddItem);
+		T Copy = Item;
 		INT Index=Add();
-		(*this)(Index)=Item;
+		(*this)(Index)=Copy;
 		return Index;
 		unguardSlow;
 	}

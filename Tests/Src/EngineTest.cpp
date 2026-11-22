@@ -58,6 +58,19 @@ TEST( Engine, NativesBound )
 	EXPECT_GT( Count, 0 );
 }
 
+TEST( Engine, CubemapFaceMustBeATexture )
+{
+	UTexture* Plain = ConstructObject<UTexture>( UTexture::StaticClass() );
+	UCubemap* Cube = ConstructObject<UCubemap>( UCubemap::StaticClass() );
+	for( INT Face=0; Face<6; Face++ )
+		Cube->Faces[Face] = Cube;
+	Cube->Faces[1] = Plain;
+	FCubemap* Interface = Cube->GetRenderInterface()->GetCubemapInterface();
+	ASSERT_TRUE( Interface != NULL );
+	EXPECT_EQ( NULL, Interface->GetFace(0) );
+	EXPECT_EQ( Plain->GetRenderInterface()->GetTextureInterface(), Interface->GetFace(1) );
+}
+
 #if __STATIC_LINK
 // Only the static build has every module's C++ classes in reach of one executable.
 TEST( Engine, ClassSizes )
