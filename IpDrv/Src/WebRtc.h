@@ -1,4 +1,4 @@
-// What the libdatachannel and the browser WebRTC peers share.
+// What WebRtc.cpp shares with the rest of the module.
 // Included after <string> and the engine headers.
 //
 // Signaling-free like libp2p's WebRTC Direct (v1). The server advertises its
@@ -91,7 +91,7 @@ UBOOL WebRtcPendingExpired( DOUBLE CreatedTime, INT Queries );
 const std::string& AndroidCaCerts();
 #endif
 
-// WebRtc.cpp or WebRtcBrowser.cpp
+// WebRtc.cpp
 
 // False while the peer's channel is not open
 UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count );

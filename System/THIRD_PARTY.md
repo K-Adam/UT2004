@@ -1,6 +1,6 @@
 # Third party software
 
-The builds link or bundle the libraries below. Each keeps its own license, which follows its name. Which ones a build holds depends on the platform: ANGLE is Windows only, liblzma is Android only, and the web build uses the browser in place of OpenAL Soft, curl, OpenSSL and libdatachannel.
+The builds link or bundle the libraries below. Each keeps its own license, which follows its name. Which ones a build holds depends on the platform: ANGLE is Windows only, liblzma is Android only, and the web build uses the browser in place of OpenAL Soft, curl and OpenSSL, and through datachannel-wasm in place of libdatachannel.
 
 ## Files kept in this repository
 
@@ -165,6 +165,31 @@ inet_ntop.c and inet_pton.c Notice:
 /*
  * Original code by Paul Vixie. "curlified" by Gisle Vanem.
  */
+```
+
+## datachannel-wasm
+
+```
+Copyright (c) 2017-2022 Paul-Louis Ageneau and others
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 ## egl-registry

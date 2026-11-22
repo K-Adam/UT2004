@@ -63,10 +63,9 @@ if(EMSCRIPTEN)
     "#include <string.h>\n${decls}extern \"C\" void* appLinkedPackage(const char* Symbol)\n{\n${checks}\treturn 0;\n}\n")
   target_sources(SDLLaunch PRIVATE Src/SDLLaunchWeb.cpp ${CMAKE_CURRENT_BINARY_DIR}/LinkedPackages.cpp)
 
-  set(webrtc ${CMAKE_SOURCE_DIR}/Emscripten/webrtc.js)
   set(content ${CMAKE_SOURCE_DIR}/Emscripten/content.js)
   # Emscripten/index.html loads UT2004.js after the system package loader.
-  set_target_properties(SDLLaunch PROPERTIES SUFFIX .js RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR} LINK_DEPENDS "${webrtc};${content}")
+  set_target_properties(SDLLaunch PROPERTIES SUFFIX .js RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR} LINK_DEPENDS "${content}")
   target_link_options(SDLLaunch PRIVATE
     # Garbage collection and script recursion need far more than the 64 KB default.
     -sSTACK_SIZE=8MB
@@ -79,5 +78,5 @@ if(EMSCRIPTEN)
     -sEXPORTED_RUNTIME_METHODS=FS,IDBFS,addRunDependency,removeRunDependency
     # Lets the engine wait for content from IndexedDB and for the next animation frame.
     -sJSPI
-    "SHELL:--js-library ${webrtc}" "SHELL:--js-library ${content}")
+    "SHELL:--js-library ${content}")
 endif()

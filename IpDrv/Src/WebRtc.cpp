@@ -1,18 +1,24 @@
-// WebRTC data channel peers for UTcpNetDriver, on libdatachannel.
+// WebRTC data channel peers for UTcpNetDriver, on libdatachannel and in a browser on datachannel-wasm,
+// which gives the browser's own WebRTC the same interface.
 
 // The standard and libdatachannel headers go before the engine's, whose macros (check, clock, min, max) break them.
 // The engine builds with /Zp4, libdatachannel with the default packing its structs need here too.
 #define NOMINMAX
 #pragma pack(push, 8)
 #include <rtc/rtc.hpp>
+#if __EMSCRIPTEN__
+#include <emscripten.h>
+#else
 #if _WIN32
 // inet_pton, the engine's winsock.h has none
 #include <ws2tcpip.h>
 #endif
-#include <nlohmann/json.hpp>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <random>
+#endif
+#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <chrono>
 #include <deque>
@@ -20,7 +26,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <random>
 #include <string>
 #include <vector>
 #pragma pack(pop)
@@ -48,10 +53,12 @@ struct FWebRtcPeer
 	DOUBLE GatherTime = 0;
 	DOUBLE RetryTime = 0;
 	bool HostGone = false;
+	// A page's join by port and fingerprint waits for the web master's ICE servers with the answer it made up
+	std::string Answer;
 	// The web master's offer this peer still owes its answer to
 	std::string AnswerId;
 
-	// Filled on libdatachannel threads
+	// Filled from the library's callbacks, natively on its threads
 	std::mutex Lock;
 	std::deque<rtc::binary> Inbox;
 	bool Closed = false;
@@ -59,16 +66,18 @@ struct FWebRtcPeer
 
 struct FWebRtcHost
 {
-	std::unique_ptr<rtc::IceUdpMuxListener> Listener;
 	// Joins this server through the web master's relay to see whether the port is open from outside
 	std::shared_ptr<FWebRtcPeer> Probe;
 	std::optional<std::string> BindAddress;
 	std::string CertPem, KeyPem;
-	uint16_t Port = 0;
 	std::vector<std::shared_ptr<FWebRtcPeer>> Peers;
 
+#if !__EMSCRIPTEN__
+	uint16_t Port = 0;
+	std::unique_ptr<rtc::IceUdpMuxListener> Listener;
 	std::mutex Lock;
 	std::vector<rtc::IceUdpMuxRequest> Requests;
+#endif
 };
 
 struct FWebRtcOffer
@@ -77,15 +86,15 @@ struct FWebRtcOffer
 	std::chrono::steady_clock::time_point Time;
 };
 
-// A server whose WebRTC port the probe found closed hosts like a page does (Emscripten/webrtc.js). It keeps a socket to
-// the web master, which lists it as signal:<id> and passes each client's offer down the socket.
+// A page, and a server whose WebRTC port the probe found closed, keeps a socket to the web master, which lists it as
+// signal:<id> and passes each client's offer down the socket.
 struct FWebRtcHostSocket
 {
 	std::shared_ptr<rtc::WebSocket> Socket;
 	DOUBLE RetryTime = 0, OfferTime = 0;
 	enum { New, Listed, Failing } Logged = New;
 
-	// Filled on libdatachannel threads
+	// Filled from the library's callbacks, natively on its threads
 	std::mutex Lock;
 	std::string Id;
 	std::deque<FWebRtcOffer> Offers;
@@ -94,6 +103,396 @@ struct FWebRtcHostSocket
 
 // Never destroyed, and its callbacks touch nothing else. A host and its driver go with every level, the id has to outlive them.
 static FWebRtcHostSocket* HostSocket;
+
+// Longer messages are dropped on arrival, queued they would hold memory until the game thread got to them.
+static void WireCallbacks( const std::shared_ptr<FWebRtcPeer>& Peer, size_t MaxMessage )
+{
+	std::weak_ptr<FWebRtcPeer> Weak = Peer;
+	auto MarkClosed = [Weak]()
+	{
+		if( auto P = Weak.lock() )
+		{
+			std::lock_guard<std::mutex> Guard( P->Lock );
+			P->Closed = true;
+		}
+	};
+	Peer->Dc->onMessage(
+		[Weak, MaxMessage]( rtc::binary Data )
+		{
+			if( auto P = Weak.lock() )
+			{
+				std::lock_guard<std::mutex> Guard( P->Lock );
+				if( Data.size() <= MaxMessage && P->Inbox.size() < WEBRTC_MAX_INBOX )
+					P->Inbox.push_back( std::move(Data) );
+			}
+		},
+		[]( std::string ) {} );
+	Peer->Dc->onClosed( MarkClosed );
+	Peer->Pc->onStateChange( [MarkClosed]( rtc::PeerConnection::State State )
+	{
+		if( State==rtc::PeerConnection::State::Failed || State==rtc::PeerConnection::State::Closed )
+			MarkClosed();
+	});
+}
+
+static rtc::DataChannelInit UnreliableChannel()
+{
+	rtc::DataChannelInit Init;
+	Init.negotiated = true;
+	Init.id = 0;
+	Init.reliability.unordered = true;
+	Init.reliability.maxRetransmits = 0;
+	return Init;
+}
+
+static void MakeClientPeer( const std::shared_ptr<FWebRtcPeer>& Peer, rtc::Configuration Config, const FWebMasterTurn* Turn )
+{
+	Config.disableAutoNegotiation = true;
+	Config.maxMessageSize = WEBRTC_MAX_MESSAGE;
+	// ICE only picks the relay when no direct path works
+	if( Turn && *Turn->Host )
+		Config.iceServers.emplace_back( std::string(Turn->Host), (uint16_t)Turn->Port, std::string(Turn->Username), std::string(Turn->Password), rtc::IceServer::RelayType::TurnUdp );
+	if( Turn && *Turn->TlsHost )
+		Config.iceServers.emplace_back( std::string(Turn->TlsHost), (uint16_t)Turn->TlsPort, std::string(Turn->Username), std::string(Turn->Password), rtc::IceServer::RelayType::TurnTls );
+	Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
+	// The channel has to exist before the offer, or the offer has no application section
+	Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
+	WireCallbacks( Peer, WEBRTC_MAX_QUERY_REPLY );
+}
+
+// A peer of a listening server, for a client that came to its port or sent an offer
+static void MakeHostPeer( const std::shared_ptr<FWebRtcPeer>& Peer, FWebRtcHost* Host, rtc::Configuration Config )
+{
+	Config.bindAddress = Host->BindAddress;
+	Config.disableAutoNegotiation = true;
+	Config.maxMessageSize = WEBRTC_MAX_MESSAGE;
+	Config.certificatePemFile = Host->CertPem;
+	Config.keyPemFile = Host->KeyPem;
+	Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
+	Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
+	WireCallbacks( Peer, WEBRTC_MAX_PACKET );
+}
+
+static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
+{
+	if( Peer->Offer )
+	{
+		WebMasterRequestFree( Peer->Offer );
+		Peer->Offer = nullptr;
+	}
+	try
+	{
+		if( Peer->Dc )
+			Peer->Dc->resetCallbacks();
+		if( Peer->Pc )
+		{
+			Peer->Pc->resetCallbacks();
+			Peer->Pc->close();
+		}
+	}
+	catch( const std::exception& E )
+	{
+		debugf( NAME_DevNet, TEXT("WebRTC close: %s"), *FString(E.what()) );
+	}
+}
+
+UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
+{
+	if( !Peer->Dc || !Peer->Dc->isOpen() )
+		return 0;
+	try
+	{
+		Peer->Dc->send( (const rtc::byte*)Data, Count );
+	}
+	catch( const std::exception& )
+	{
+	}
+	return 1;
+}
+
+void WebRtcRemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
+{
+	auto It = std::find_if( Host->Peers.begin(), Host->Peers.end(), [Peer]( const std::shared_ptr<FWebRtcPeer>& P ) { return P.get()==Peer; } );
+	if( It!=Host->Peers.end() )
+	{
+		ClosePeer( *It );
+		Host->Peers.erase( It );
+	}
+}
+
+// The server learns the ufrag from the first STUN request, so the offer carries the one its answer was written for
+static void OfferDirect( const std::shared_ptr<FWebRtcPeer>& Peer, rtc::Configuration Config, const FWebMasterTurn* Turn )
+{
+	MakeClientPeer( Peer, Config, Turn );
+	Peer->Pc->setLocalDescription( rtc::Description::Type::Offer, rtc::LocalDescriptionInit{ Peer->Ufrag, Peer->Ufrag } );
+	Peer->Pc->setRemoteDescription( rtc::Description( Peer->Answer, rtc::Description::Type::Answer ) );
+	Peer->Answer.clear();
+}
+
+// Starts a client peer for the WebRTC details in the URL, null with Error set when that fails.
+// A signaled peer gets its connection in WebRtcSignal, the library takes the STUN server only when it creates one.
+static std::shared_ptr<FWebRtcPeer> ConnectPeer( FURL& ConnectURL, FString& Error, const FWebMasterTurn* Relay = nullptr )
+{
+	auto Peer = std::make_shared<FWebRtcPeer>();
+	Peer->CreatedTime = appSeconds();
+	if( WebRtcSignalSetup( ConnectURL, Peer->SignalId, Peer->Addr ) )
+		return Peer;
+	if( !WebRtcClientSetup( ConnectURL, Error, Peer->Addr, Peer->Ufrag, Peer->Answer ) )
+		return nullptr;
+	// A page has no other way out of a network that only lets TLS through, so its peer waits in WebRtcSignal for the web master's relay
+#if !__EMSCRIPTEN__
+	try
+	{
+		OfferDirect( Peer, rtc::Configuration(), Relay );
+	}
+	catch( const std::exception& E )
+	{
+		Error = FString::Printf( TEXT("WebRTC connect failed: %s"), *FString(E.what()) );
+		debugf( TEXT("%s"), *Error );
+		ClosePeer( Peer );
+		return nullptr;
+	}
+#endif
+	return Peer;
+}
+
+UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
+{
+	guard(UTcpNetDriver::WebRtcConnect);
+#if __EMSCRIPTEN__
+	if( !EM_ASM_INT({ return typeof RTCPeerConnection != 'undefined' }) )
+	{
+		// The dialog cuts a longer line off at a small window.
+		Error = TEXT("Joining needs WebRTC, which this browser has turned off");
+		return 0;
+	}
+#endif
+	std::shared_ptr<FWebRtcPeer> Peer = ConnectPeer( ConnectURL, Error );
+	if( !Peer )
+		return 0;
+
+	// A UDP connection that got no answer is replaced, it must still be the ServerConnection when it goes
+	if( ServerConnection )
+		delete ServerConnection;
+	FWebRtcHost* Host = new FWebRtcHost;
+	Host->Peers.push_back( Peer );
+	WebRtc = Host;
+
+	WebRtcServerConnection( this, Peer.get(), Peer->Addr, Peer->Connection, ConnectURL );
+	return 1;
+	unguard;
+}
+
+// The local description once it has its candidates, or what was gathered when the wait is over
+static std::optional<rtc::Description> GatheredDescription( FWebRtcPeer& Peer )
+{
+	auto Local = Peer.Pc->localDescription();
+	if( Local && (Peer.Pc->gatheringState()==rtc::PeerConnection::GatheringState::Complete || appSeconds()-Peer.GatherTime > WEBRTC_GATHER_TIME) )
+		return Local;
+	return std::nullopt;
+}
+
+static void WebRtcSignal( const std::shared_ptr<FWebRtcPeer>& Shared )
+{
+	FWebRtcPeer& Peer = *Shared;
+	try
+	{
+		if( !Peer.Pc )
+		{
+			FWebMasterTurn Turn;
+			if( appSeconds() < Peer.RetryTime || !WebMasterTurn( Turn ) )
+				return;
+			rtc::Configuration Config;
+			if( *Turn.StunHost )
+				Config.iceServers.emplace_back( std::string(Turn.StunHost), (uint16_t)Turn.StunPort );
+			if( !Peer.Answer.empty() )
+			{
+				OfferDirect( Shared, Config, &Turn );
+				return;
+			}
+			MakeClientPeer( Shared, Config, &Turn );
+			Peer.Pc->setLocalDescription( rtc::Description::Type::Offer );
+			Peer.GatherTime = appSeconds();
+			return;
+		}
+		if( !Peer.Offer )
+		{
+			if( auto Local = GatheredDescription( Peer ) )
+				Peer.Offer = WebMasterOffer( Peer.SignalId, FString( std::string(*Local).c_str() ) );
+			return;
+		}
+		UBOOL Ok, Gone;
+		FString Answer;
+		if( !WebMasterOfferDone( Peer.Offer, Ok, Answer, Gone ) )
+			return;
+		Peer.HostGone = Gone;
+		WebMasterRequestFree( Peer.Offer );
+		Peer.Offer = nullptr;
+		Peer.SignalId = TEXT("");
+		// The answer is as large as the web master makes it, so it must not go through the stack
+		if( Ok )
+			Peer.Pc->setRemoteDescription( rtc::Description( std::string(&appToUtf8(*Answer)(0)), rtc::Description::Type::Answer ) );
+		else
+		{
+			debugf( NAME_DevNet, TEXT("WebRTC: the host did not answer through the web master") );
+			std::lock_guard<std::mutex> Guard( Peer.Lock );
+			Peer.Closed = true;
+		}
+	}
+	catch( const std::exception& E )
+	{
+		debugf( TEXT("WebRTC signaling failed: %s"), *FString(E.what()) );
+		// Or a connection that could not be made would be tried again every tick
+		Peer.SignalId = TEXT("");
+		Peer.Answer.clear();
+		std::lock_guard<std::mutex> Guard( Peer.Lock );
+		Peer.Closed = true;
+	}
+}
+
+// Whether WebRtcSignal still has a step to take for the peer
+static bool Signaling( const FWebRtcPeer& Peer )
+{
+	return Peer.SignalId.Len() || !Peer.Answer.empty();
+}
+
+static std::string JsonString( const nlohmann::json& Object, const char* Key, size_t Max )
+{
+	auto It = Object.find( Key );
+	return It!=Object.end() && It->is_string() && It->get_ref<const std::string&>().size()<=Max ? It->get<std::string>() : std::string();
+}
+
+// Natively on a libdatachannel thread, so it only touches standard types
+static void HostSocketMessage( const std::string& Text )
+{
+	nlohmann::json Message = nlohmann::json::parse( Text, nullptr, false );
+	if( !Message.is_object() )
+		return;
+	std::string Type = JsonString( Message, "type", 16 ), Id = JsonString( Message, "id", 64 ), Sdp = JsonString( Message, "sdp", WEBRTC_MAX_SDP );
+	std::lock_guard<std::mutex> Guard( HostSocket->Lock );
+	if( Type=="id" && WebRtcHostIdValid( Id.c_str() ) )
+		HostSocket->Id = Id;
+	else if( Type=="offer" && !Id.empty() && !Sdp.empty() )
+	{
+		// The oldest has waited longest for its level and is the first to be too late
+		if( HostSocket->Offers.size()>=WEBRTC_MAX_PENDING )
+			HostSocket->Offers.pop_front();
+		HostSocket->Offers.push_back( { Id, Sdp, JsonString( Message, "ip", 64 ), std::chrono::steady_clock::now() } );
+	}
+}
+
+static void HostSocketOpen()
+{
+	// Also when no socket could be made, or that would be tried every tick
+	HostSocket->RetryTime = appSeconds() + WEBRTC_HOST_SOCKET_RETRY;
+	try
+	{
+		rtc::WebSocket::Configuration Config;
+		// Without a limit a dead link is only noticed when TCP gives up
+		Config.maxOutstandingPings = 2;
+		Config.maxMessageSize = WEBRTC_HOST_SOCKET_MAX_MESSAGE;
+#if __ANDROID__
+		Config.caCertificatePemFile = AndroidCaCerts();
+#endif
+		HostSocket->Socket = std::make_shared<rtc::WebSocket>( Config );
+		HostSocket->Socket->onMessage( []( rtc::binary ) {}, []( std::string Text ) { HostSocketMessage( Text ); } );
+		// http becomes ws and https becomes wss
+		HostSocket->Socket->open( "ws" + std::string( &appToUtf8( *WebMasterURL() )(0) ).substr( 4 ) + "/host" );
+	}
+	catch( const std::exception& E )
+	{
+		debugf( NAME_DevNet, TEXT("WebRTC: the web master socket failed: %s"), *FString(E.what()) );
+	}
+}
+
+static void HostSocketSend( const std::string& Text )
+{
+	try
+	{
+		if( HostSocket->Socket && HostSocket->Socket->isOpen() )
+			HostSocket->Socket->send( Text );
+	}
+	catch( const std::exception& E )
+	{
+		debugf( NAME_DevNet, TEXT("WebRTC: sending to the web master failed: %s"), *FString(E.what()) );
+	}
+}
+
+UBOOL WebRtcHostState( const char* Json )
+{
+	if( !HostSocket )
+		return 0;
+	HostSocketSend( std::string("{\"type\":\"state\",\"server\":") + Json + "}" );
+	return 1;
+}
+
+static INT ProbeTriesLeft = WEBRTC_PROBE_TRIES;
+
+void WebRtcHostThroughWebMaster()
+{
+	ProbeTriesLeft = 0;
+	if( !HostSocket )
+		HostSocket = new FWebRtcHostSocket;
+}
+
+FString WebRtcListedDetails( const FString& Own )
+{
+	// A port that turns out closed would be listed for minutes with details nobody can use
+	if( ProbeTriesLeft )
+		return FString();
+	if( !HostSocket )
+		return Own;
+	std::lock_guard<std::mutex> Guard( HostSocket->Lock );
+	return HostSocket->Id.empty() ? FString() : FString(TEXT("signal:")) + FString( HostSocket->Id.c_str() );
+}
+
+// The same limits as new UDP connections, each peer costs a DTLS handshake and SCTP state.
+// Evict is the pending peer that has to go when this one is added, -1 for none. A peer from an offer has no ufrag.
+static bool AdmitPeer( UTcpNetDriver* Driver, FWebRtcHost* Host, sockaddr_in& Addr, const std::string& Ufrag, INT& Evict )
+{
+	INT Pending = 0, SameIP = 0;
+	bool Known = false, EvictUnproven = false;
+	Evict = -1;
+	for( INT i=0; i<(INT)Host->Peers.size(); i++ )
+	{
+		FWebRtcPeer& Other = *Host->Peers[i];
+		Known |= !Ufrag.empty() && Other.Ufrag==Ufrag;
+		if( !Other.Connection )
+		{
+			Pending++;
+			SameIP += IpAddressMatches( Other.Addr, Addr );
+			// Peers are in creation order. The oldest whose address ICE has not proven goes first, spoofed requests never get further.
+			bool Unproven = Other.Pc->state()!=rtc::PeerConnection::State::Connected;
+			if( Evict<0 || (Unproven && !EvictUnproven) )
+			{
+				Evict = i;
+				EvictUnproven = Unproven;
+			}
+		}
+	}
+	if( Known || WebRtcIpLimited( Driver, Addr, SameIP ) )
+		return false;
+	// A peer gets time for its handshake before it can be pushed out, which also bounds what a flood of requests costs
+	if( Pending>=WEBRTC_MAX_PENDING && GCurrentTime-Host->Peers[Evict]->CreatedTime<WEBRTC_MIN_PENDING_TIME )
+		return false;
+	if( Pending<WEBRTC_MAX_PENDING )
+		Evict = -1;
+	return true;
+}
+
+// Refusing the new peer instead of evicting would let requests from made up addresses hold every slot against real clients
+static void AddPeer( FWebRtcHost* Host, const std::shared_ptr<FWebRtcPeer>& Peer, INT Evict )
+{
+	if( Evict>=0 )
+	{
+		ClosePeer( Host->Peers[Evict] );
+		Host->Peers.erase( Host->Peers.begin()+Evict );
+	}
+	Peer->CreatedTime = GCurrentTime;
+	Host->Peers.push_back( Peer );
+}
+
+#if !__EMSCRIPTEN__
 
 // v1 sets the ICE password to the ufrag, so the ufrag also has to satisfy the password rules (RFC 8839)
 static bool ValidUfrag( const std::string& Ufrag )
@@ -162,118 +561,40 @@ static bool MakeCertificate( std::string& CertPem, std::string& KeyPem, std::str
 	return true;
 }
 
-// Longer messages are dropped on arrival, queued they would hold memory until the game thread got to them.
-static void WireCallbacks( const std::shared_ptr<FWebRtcPeer>& Peer, size_t MaxMessage )
+// Leaves a description the candidates Keep accepts, as many as the ICE library takes
+template<class F> static void KeepCandidates( rtc::Description& Description, F Keep )
 {
-	std::weak_ptr<FWebRtcPeer> Weak = Peer;
-	auto MarkClosed = [Weak]()
-	{
-		if( auto P = Weak.lock() )
+	INT Left = WEBRTC_MAX_CANDIDATES;
+	for( rtc::Candidate& Candidate : Description.extractCandidates() )
+		if( Left>0 && Keep( Candidate ) )
 		{
-			std::lock_guard<std::mutex> Guard( P->Lock );
-			P->Closed = true;
+			Description.addCandidate( std::move(Candidate) );
+			Left--;
 		}
-	};
-	Peer->Dc->onMessage(
-		[Weak, MaxMessage]( rtc::binary Data )
-		{
-			if( auto P = Weak.lock() )
-			{
-				std::lock_guard<std::mutex> Guard( P->Lock );
-				if( Data.size() <= MaxMessage && P->Inbox.size() < WEBRTC_MAX_INBOX )
-					P->Inbox.push_back( std::move(Data) );
-			}
-		},
-		[]( std::string ) {} );
-	Peer->Dc->onClosed( MarkClosed );
-	Peer->Pc->onStateChange( [MarkClosed]( rtc::PeerConnection::State State )
+}
+
+// LAN, link-local, carrier NAT and loopback addresses. They describe the server's network and reach nobody outside it.
+static bool PrivateAddress( const std::string& Text )
+{
+	BYTE A[16];
+	if( inet_pton( AF_INET, Text.c_str(), A )==1 )
+		return A[0]==10 || A[0]==127 || (A[0]==172 && (A[1]&0xF0)==16) || (A[0]==192 && A[1]==168) || (A[0]==169 && A[1]==254) || (A[0]==100 && (A[1]&0xC0)==64);
+	return inet_pton( AF_INET6, Text.c_str(), A )==1 && (A[0]==0 || (A[0]&0xFE)==0xFC || (A[0]==0xFE && (A[1]&0xC0)==0x80));
+}
+
+// The library starts a thread and a lookup for each candidate that is a name, which a browser's are for its LAN addresses
+static void OfferCandidates( rtc::Description& Offer )
+{
+	KeepCandidates( Offer, []( rtc::Candidate& Candidate ) { return Candidate.resolve( rtc::Candidate::ResolveMode::Simple ); } );
+}
+
+// The answer goes to anyone who asks, so it does not name the server's LAN addresses
+static void AnswerCandidates( rtc::Description& Answer )
+{
+	KeepCandidates( Answer, []( rtc::Candidate& Candidate )
 	{
-		if( State==rtc::PeerConnection::State::Failed || State==rtc::PeerConnection::State::Closed )
-			MarkClosed();
+		return Candidate.type()!=rtc::Candidate::Type::Host || (Candidate.address() && !PrivateAddress( *Candidate.address() ));
 	});
-}
-
-static rtc::DataChannelInit UnreliableChannel()
-{
-	rtc::DataChannelInit Init;
-	Init.negotiated = true;
-	Init.id = 0;
-	Init.reliability.unordered = true;
-	Init.reliability.maxRetransmits = 0;
-	return Init;
-}
-
-static void MakeClientPeer( const std::shared_ptr<FWebRtcPeer>& Peer, rtc::Configuration Config, const FWebMasterTurn* Turn )
-{
-	Config.disableAutoNegotiation = true;
-	Config.maxMessageSize = WEBRTC_MAX_MESSAGE;
-	// ICE only picks the relay when no direct path works
-	if( Turn && *Turn->Host )
-		Config.iceServers.emplace_back( std::string(Turn->Host), (uint16_t)Turn->Port, std::string(Turn->Username), std::string(Turn->Password), rtc::IceServer::RelayType::TurnUdp );
-	Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
-	// The channel has to exist before the offer, or the offer has no application section
-	Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
-	WireCallbacks( Peer, WEBRTC_MAX_QUERY_REPLY );
-}
-
-// A peer of a listening server, for a client that came to its port or sent an offer
-static void MakeHostPeer( const std::shared_ptr<FWebRtcPeer>& Peer, FWebRtcHost* Host, rtc::Configuration Config )
-{
-	Config.bindAddress = Host->BindAddress;
-	Config.disableAutoNegotiation = true;
-	Config.maxMessageSize = WEBRTC_MAX_MESSAGE;
-	Config.certificatePemFile = Host->CertPem;
-	Config.keyPemFile = Host->KeyPem;
-	Peer->Pc = std::make_shared<rtc::PeerConnection>( Config );
-	Peer->Dc = Peer->Pc->createDataChannel( "", UnreliableChannel() );
-	WireCallbacks( Peer, WEBRTC_MAX_PACKET );
-}
-
-static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
-{
-	if( Peer->Offer )
-	{
-		WebMasterRequestFree( Peer->Offer );
-		Peer->Offer = nullptr;
-	}
-	try
-	{
-		if( Peer->Dc )
-			Peer->Dc->resetCallbacks();
-		if( Peer->Pc )
-		{
-			Peer->Pc->resetCallbacks();
-			Peer->Pc->close();
-		}
-	}
-	catch( const std::exception& E )
-	{
-		debugf( NAME_DevNet, TEXT("WebRTC close: %s"), *FString(E.what()) );
-	}
-}
-
-UBOOL WebRtcPeerSend( FWebRtcPeer* Peer, const void* Data, INT Count )
-{
-	if( !Peer->Dc || !Peer->Dc->isOpen() )
-		return 0;
-	try
-	{
-		Peer->Dc->send( (const rtc::byte*)Data, Count );
-	}
-	catch( const std::exception& )
-	{
-	}
-	return 1;
-}
-
-void WebRtcRemovePeer( FWebRtcHost* Host, FWebRtcPeer* Peer )
-{
-	auto It = std::find_if( Host->Peers.begin(), Host->Peers.end(), [Peer]( const std::shared_ptr<FWebRtcPeer>& P ) { return P.get()==Peer; } );
-	if( It!=Host->Peers.end() )
-	{
-		ClosePeer( *It );
-		Host->Peers.erase( It );
-	}
 }
 
 void UTcpNetDriver::WebRtcListen()
@@ -316,226 +637,9 @@ void UTcpNetDriver::WebRtcListen()
 	unguard;
 }
 
-// Starts a client peer for the WebRTC details in the URL, null with Error set when that fails.
-// A signaled peer gets its connection in WebRtcSignal, the library takes the STUN server only when it creates one.
-static std::shared_ptr<FWebRtcPeer> ConnectPeer( FURL& ConnectURL, FString& Error, const FWebMasterTurn* Relay = nullptr )
-{
-	auto Peer = std::make_shared<FWebRtcPeer>();
-	Peer->CreatedTime = appSeconds();
-	if( WebRtcSignalSetup( ConnectURL, Peer->SignalId, Peer->Addr ) )
-		return Peer;
-	std::string Answer;
-	if( !WebRtcClientSetup( ConnectURL, Error, Peer->Addr, Peer->Ufrag, Answer ) )
-		return nullptr;
-	try
-	{
-		MakeClientPeer( Peer, rtc::Configuration(), Relay );
-		Peer->Pc->setLocalDescription( rtc::Description::Type::Offer, rtc::LocalDescriptionInit{ Peer->Ufrag, Peer->Ufrag } );
-		Peer->Pc->setRemoteDescription( rtc::Description( Answer, rtc::Description::Type::Answer ) );
-	}
-	catch( const std::exception& E )
-	{
-		Error = FString::Printf( TEXT("WebRTC connect failed: %s"), *FString(E.what()) );
-		debugf( TEXT("%s"), *Error );
-		ClosePeer( Peer );
-		return nullptr;
-	}
-	return Peer;
-}
-
-UBOOL UTcpNetDriver::WebRtcConnect( FURL& ConnectURL, FString& Error )
-{
-	guard(UTcpNetDriver::WebRtcConnect);
-	std::shared_ptr<FWebRtcPeer> Peer = ConnectPeer( ConnectURL, Error );
-	if( !Peer )
-		return 0;
-
-	// A UDP connection that got no answer is replaced, it must still be the ServerConnection when it goes
-	if( ServerConnection )
-		delete ServerConnection;
-	FWebRtcHost* Host = new FWebRtcHost;
-	Host->Peers.push_back( Peer );
-	WebRtc = Host;
-
-	WebRtcServerConnection( this, Peer.get(), Peer->Addr, Peer->Connection, ConnectURL );
-	return 1;
-	unguard;
-}
-
-// The local description once it has its candidates, or what was gathered when the wait is over
-static std::optional<rtc::Description> GatheredDescription( FWebRtcPeer& Peer )
-{
-	auto Local = Peer.Pc->localDescription();
-	if( Local && (Peer.Pc->gatheringState()==rtc::PeerConnection::GatheringState::Complete || appSeconds()-Peer.GatherTime > WEBRTC_GATHER_TIME) )
-		return Local;
-	return std::nullopt;
-}
-
-static void WebRtcSignal( const std::shared_ptr<FWebRtcPeer>& Shared )
-{
-	FWebRtcPeer& Peer = *Shared;
-	try
-	{
-		if( !Peer.Pc )
-		{
-			FWebMasterTurn Turn;
-			if( appSeconds() < Peer.RetryTime || !WebMasterTurn( Turn ) )
-				return;
-			rtc::Configuration Config;
-			if( *Turn.StunHost )
-				Config.iceServers.emplace_back( std::string(Turn.StunHost), (uint16_t)Turn.StunPort );
-			MakeClientPeer( Shared, Config, &Turn );
-			Peer.Pc->setLocalDescription( rtc::Description::Type::Offer );
-			Peer.GatherTime = appSeconds();
-			return;
-		}
-		if( !Peer.Offer )
-		{
-			if( auto Local = GatheredDescription( Peer ) )
-				Peer.Offer = WebMasterOffer( Peer.SignalId, FString( std::string(*Local).c_str() ) );
-			return;
-		}
-		UBOOL Ok, Gone;
-		FString Answer;
-		if( !WebMasterOfferDone( Peer.Offer, Ok, Answer, Gone ) )
-			return;
-		Peer.HostGone = Gone;
-		WebMasterRequestFree( Peer.Offer );
-		Peer.Offer = nullptr;
-		Peer.SignalId = TEXT("");
-		// The answer is as large as the web master makes it, so it must not go through the stack
-		if( Ok )
-			Peer.Pc->setRemoteDescription( rtc::Description( std::string(&appToUtf8(*Answer)(0)), rtc::Description::Type::Answer ) );
-		else
-		{
-			debugf( NAME_DevNet, TEXT("WebRTC: the host did not answer through the web master") );
-			std::lock_guard<std::mutex> Guard( Peer.Lock );
-			Peer.Closed = true;
-		}
-	}
-	catch( const std::exception& E )
-	{
-		debugf( TEXT("WebRTC signaling failed: %s"), *FString(E.what()) );
-		// Or a connection that could not be made would be tried again every tick
-		Peer.SignalId = TEXT("");
-		std::lock_guard<std::mutex> Guard( Peer.Lock );
-		Peer.Closed = true;
-	}
-}
-
-// Leaves a description the candidates Keep accepts, as many as the ICE library takes
-template<class F> static void KeepCandidates( rtc::Description& Description, F Keep )
-{
-	INT Left = WEBRTC_MAX_CANDIDATES;
-	for( rtc::Candidate& Candidate : Description.extractCandidates() )
-		if( Left>0 && Keep( Candidate ) )
-		{
-			Description.addCandidate( std::move(Candidate) );
-			Left--;
-		}
-}
-
-// LAN, link-local, carrier NAT and loopback addresses. They describe the server's network and reach nobody outside it.
-static bool PrivateAddress( const std::string& Text )
-{
-	BYTE A[16];
-	if( inet_pton( AF_INET, Text.c_str(), A )==1 )
-		return A[0]==10 || A[0]==127 || (A[0]==172 && (A[1]&0xF0)==16) || (A[0]==192 && A[1]==168) || (A[0]==169 && A[1]==254) || (A[0]==100 && (A[1]&0xC0)==64);
-	return inet_pton( AF_INET6, Text.c_str(), A )==1 && (A[0]==0 || (A[0]&0xFE)==0xFC || (A[0]==0xFE && (A[1]&0xC0)==0x80));
-}
-
-static std::string JsonString( const nlohmann::json& Object, const char* Key, size_t Max )
-{
-	auto It = Object.find( Key );
-	return It!=Object.end() && It->is_string() && It->get_ref<const std::string&>().size()<=Max ? It->get<std::string>() : std::string();
-}
-
-// Runs on a libdatachannel thread, so it only touches standard types
-static void HostSocketMessage( const std::string& Text )
-{
-	nlohmann::json Message = nlohmann::json::parse( Text, nullptr, false );
-	if( !Message.is_object() )
-		return;
-	std::string Type = JsonString( Message, "type", 16 ), Id = JsonString( Message, "id", 64 ), Sdp = JsonString( Message, "sdp", WEBRTC_MAX_SDP );
-	std::lock_guard<std::mutex> Guard( HostSocket->Lock );
-	if( Type=="id" && WebRtcHostIdValid( Id.c_str() ) )
-		HostSocket->Id = Id;
-	else if( Type=="offer" && !Id.empty() && !Sdp.empty() )
-	{
-		// The oldest has waited longest for its level and is the first to be too late
-		if( HostSocket->Offers.size()>=WEBRTC_MAX_PENDING )
-			HostSocket->Offers.pop_front();
-		HostSocket->Offers.push_back( { Id, Sdp, JsonString( Message, "ip", 64 ), std::chrono::steady_clock::now() } );
-	}
-}
-
-static void HostSocketOpen()
-{
-	// Also when no socket could be made, or that would be tried every tick
-	HostSocket->RetryTime = appSeconds() + WEBRTC_HOST_SOCKET_RETRY;
-	try
-	{
-		rtc::WebSocket::Configuration Config;
-		// Without a limit a dead link is only noticed when TCP gives up
-		Config.maxOutstandingPings = 2;
-		Config.maxMessageSize = WEBRTC_HOST_SOCKET_MAX_MESSAGE;
-#if __ANDROID__
-		Config.caCertificatePemFile = AndroidCaCerts();
-#endif
-		HostSocket->Socket = std::make_shared<rtc::WebSocket>( Config );
-		HostSocket->Socket->onMessage( []( rtc::binary ) {}, []( std::string Text ) { HostSocketMessage( Text ); } );
-		// http becomes ws and https becomes wss
-		HostSocket->Socket->open( "ws" + std::string( &appToUtf8( *WebMasterURL() )(0) ).substr( 4 ) + "/host" );
-	}
-	catch( const std::exception& E )
-	{
-		debugf( NAME_DevNet, TEXT("WebRTC: the web master socket failed: %s"), *FString(E.what()) );
-	}
-}
-
-static void HostSocketSend( const std::string& Text )
-{
-	try
-	{
-		if( HostSocket->Socket && HostSocket->Socket->isOpen() )
-			HostSocket->Socket->send( Text );
-	}
-	catch( const std::exception& E )
-	{
-		debugf( NAME_DevNet, TEXT("WebRTC: sending to the web master failed: %s"), *FString(E.what()) );
-	}
-}
-
-UBOOL WebRtcHostState( const char* Json )
-{
-	if( !HostSocket )
-		return 0;
-	HostSocketSend( std::string("{\"type\":\"state\",\"server\":") + Json + "}" );
-	return 1;
-}
-
 // A try's ufrag stays for the process. A late request of a closed probe would otherwise become a player peer,
 // whose answer opens the router for the relay and makes the next try read reachable.
-static INT ProbeTriesLeft = WEBRTC_PROBE_TRIES;
 static std::vector<std::string> ProbeUfrags;
-
-void WebRtcHostThroughWebMaster()
-{
-	ProbeTriesLeft = 0;
-	if( !HostSocket )
-		HostSocket = new FWebRtcHostSocket;
-}
-
-FString WebRtcListedDetails( const FString& Own )
-{
-	// A port that turns out closed would be listed for minutes with details nobody can use
-	if( ProbeTriesLeft )
-		return FString();
-	if( !HostSocket )
-		return Own;
-	std::lock_guard<std::mutex> Guard( HostSocket->Lock );
-	return HostSocket->Id.empty() ? FString() : FString(TEXT("signal:")) + FString( HostSocket->Id.c_str() );
-}
 
 // Only a request from one of these came through the relay, the probe's direct ones prove nothing
 static std::vector<std::string> ProbeRelayAddresses( FWebRtcHost* Host )
@@ -594,51 +698,102 @@ static void WebRtcProbe( FWebRtcHost* Host, const FString& Details )
 	}
 }
 
-// The same limits as new UDP connections, each peer costs a DTLS handshake and SCTP state.
-// Evict is the pending peer that has to go when this one is added, -1 for none. A peer from an offer has no ufrag.
-static bool AdmitPeer( UTcpNetDriver* Driver, FWebRtcHost* Host, sockaddr_in& Addr, const std::string& Ufrag, INT& Evict )
+static void PortTick( UTcpNetDriver* Driver, FWebRtcHost* Host )
 {
-	INT Pending = 0, SameIP = 0;
-	bool Known = false, EvictUnproven = false;
-	Evict = -1;
-	for( INT i=0; i<(INT)Host->Peers.size(); i++ )
+	std::vector<rtc::IceUdpMuxRequest> Requests;
 	{
-		FWebRtcPeer& Other = *Host->Peers[i];
-		Known |= !Ufrag.empty() && Other.Ufrag==Ufrag;
-		if( !Other.Connection )
-		{
-			Pending++;
-			SameIP += IpAddressMatches( Other.Addr, Addr );
-			// Peers are in creation order. The oldest whose address ICE has not proven goes first, spoofed requests never get further.
-			bool Unproven = Other.Pc->state()!=rtc::PeerConnection::State::Connected;
-			if( Evict<0 || (Unproven && !EvictUnproven) )
-			{
-				Evict = i;
-				EvictUnproven = Unproven;
-			}
-		}
+		std::lock_guard<std::mutex> Guard( Host->Lock );
+		Requests.swap( Host->Requests );
 	}
-	if( Known || WebRtcIpLimited( Driver, Addr, SameIP ) )
-		return false;
-	// A peer gets time for its handshake before it can be pushed out, which also bounds what a flood of requests costs
-	if( Pending>=WEBRTC_MAX_PENDING && GCurrentTime-Host->Peers[Evict]->CreatedTime<WEBRTC_MIN_PENDING_TIME )
-		return false;
-	if( Pending<WEBRTC_MAX_PENDING )
-		Evict = -1;
-	return true;
+	for( auto& Request : Requests )
+	{
+		if( std::find( ProbeUfrags.begin(), ProbeUfrags.end(), Request.localUfrag ) != ProbeUfrags.end() )
+		{
+			if( Host->Probe )
+			{
+				std::vector<std::string> Relay = ProbeRelayAddresses( Host );
+				if( std::find( Relay.begin(), Relay.end(), Request.remoteAddress ) != Relay.end() )
+					ProbeFinish( Host, TEXT("WebRTC: UDP port %i is reachable from the internet") );
+			}
+			continue;
+		}
+		sockaddr_in Addr;
+		appMemzero( &Addr, sizeof(Addr) );
+		Addr.sin_family = AF_INET;
+		Addr.sin_port = htons( Request.remotePort );
+		Addr.sin_addr.s_addr = inet_addr( Request.remoteAddress.c_str() );
+		if( Addr.sin_addr.s_addr==INADDR_NONE )
+			continue;
+
+		INT Evict;
+		if( !AdmitPeer( Driver, Host, Addr, Request.localUfrag, Evict ) )
+			continue;
+		// A peer made while the level switches would die with this driver, the client's ICE checks retry against the next one
+		if( Driver->Notify->NotifyAcceptingConnection()!=ACCEPTC_Accept )
+			continue;
+
+		const std::string& Ufrag = Request.localUfrag;
+		const std::string& Ip = Request.remoteAddress;
+		std::string Offer =
+			"v=0\r\no=- 0 0 IN IP4 " + Ip + "\r\ns=-\r\nc=IN IP4 " + Ip + "\r\nt=0 0\r\na=ice-options:ice2,trickle\r\n"
+			"m=application " + std::to_string(Request.remotePort) + " UDP/DTLS/SCTP webrtc-datachannel\r\n"
+			"a=mid:0\r\na=setup:active\r\na=ice-ufrag:" + Ufrag + "\r\na=ice-pwd:" + Ufrag + "\r\n"
+			// The client's certificate is unknown and not checked, any sha-256 value passes the parser
+			"a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\n"
+			+ WebRtcSdpEnd + WebRtcCandidate( Ip, Request.remotePort );
+
+		auto Peer = std::make_shared<FWebRtcPeer>();
+		Peer->Addr = Addr;
+		Peer->Ufrag = Ufrag;
+		try
+		{
+			rtc::Configuration Config;
+			Config.enableIceUdpMux = true;
+			Config.portRangeBegin = Config.portRangeEnd = Host->Port;
+			Config.disableFingerprintVerification = true;
+			MakeHostPeer( Peer, Host, Config );
+			Peer->Pc->setRemoteDescription( rtc::Description( Offer, rtc::Description::Type::Offer ) );
+			Peer->Pc->setLocalDescription( rtc::Description::Type::Answer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
+		}
+		catch( const std::exception& E )
+		{
+			debugf( NAME_DevNet, TEXT("WebRTC peer %s failed: %s"), *IpString(Addr.sin_addr,Request.remotePort), *FString(E.what()) );
+			ClosePeer( Peer );
+			continue;
+		}
+		AddPeer( Host, Peer, Evict );
+	}
+	if( Host->Listener && ProbeTriesLeft )
+		WebRtcProbe( Host, Driver->WebRtcDetails );
 }
 
-// Refusing the new peer instead of evicting would let requests from made up addresses hold every slot against real clients
-static void AddPeer( FWebRtcHost* Host, const std::shared_ptr<FWebRtcPeer>& Peer, INT Evict )
+#else
+
+// A browser resolves the names in an offer itself and hides its own LAN addresses behind such names
+static void OfferCandidates( rtc::Description& ) {}
+static void AnswerCandidates( rtc::Description& ) {}
+
+void UTcpNetDriver::WebRtcListen()
 {
-	if( Evict>=0 )
+	guard(UTcpNetDriver::WebRtcListen);
+	if( !WebMasterURL().Len() )
 	{
-		ClosePeer( Host->Peers[Evict] );
-		Host->Peers.erase( Host->Peers.begin()+Evict );
+		debugf( TEXT("WebRTC: a browser hosts through the web master, set WebMasterServer in [IpDrv.MasterServerLink]") );
+		return;
 	}
-	Peer->CreatedTime = GCurrentTime;
-	Host->Peers.push_back( Peer );
+	WebRtcHostThroughWebMaster();
+	WebRtc = new FWebRtcHost;
+	unguard;
 }
+
+static void PortTick( UTcpNetDriver* Driver, FWebRtcHost* Host )
+{
+	// Empty while the socket has no id, and the uplink then lists nothing
+	if( !Driver->ServerConnection )
+		Driver->WebRtcDetails = WebRtcListedDetails( FString() );
+}
+
+#endif
 
 static void HostSocketTick( UTcpNetDriver* Driver, FWebRtcHost* Host )
 {
@@ -716,8 +871,7 @@ static void HostSocketTick( UTcpNetDriver* Driver, FWebRtcHost* Host )
 				Config.iceServers.emplace_back( std::string(Turn.StunHost), (uint16_t)Turn.StunPort );
 			MakeHostPeer( Peer, Host, Config );
 			rtc::Description Remote( Offer.Sdp, rtc::Description::Type::Offer );
-			// The library starts a thread and a lookup for each candidate that is a name, which a browser's are for its LAN addresses
-			KeepCandidates( Remote, []( rtc::Candidate& Candidate ) { return Candidate.resolve( rtc::Candidate::ResolveMode::Simple ); } );
+			OfferCandidates( Remote );
 			Peer->Pc->setRemoteDescription( Remote );
 			Peer->Pc->setLocalDescription( rtc::Description::Type::Answer );
 			Peer->GatherTime = appSeconds();
@@ -739,88 +893,20 @@ void UTcpNetDriver::WebRtcTick()
 	if( !Host )
 		return;
 
-	std::vector<rtc::IceUdpMuxRequest> Requests;
-	{
-		std::lock_guard<std::mutex> Guard( Host->Lock );
-		Requests.swap( Host->Requests );
-	}
-	for( auto& Request : Requests )
-	{
-		if( std::find( ProbeUfrags.begin(), ProbeUfrags.end(), Request.localUfrag ) != ProbeUfrags.end() )
-		{
-			if( Host->Probe )
-			{
-				std::vector<std::string> Relay = ProbeRelayAddresses( Host );
-				if( std::find( Relay.begin(), Relay.end(), Request.remoteAddress ) != Relay.end() )
-					ProbeFinish( Host, TEXT("WebRTC: UDP port %i is reachable from the internet") );
-			}
-			continue;
-		}
-		sockaddr_in Addr;
-		appMemzero( &Addr, sizeof(Addr) );
-		Addr.sin_family = AF_INET;
-		Addr.sin_port = htons( Request.remotePort );
-		Addr.sin_addr.s_addr = inet_addr( Request.remoteAddress.c_str() );
-		if( Addr.sin_addr.s_addr==INADDR_NONE )
-			continue;
-
-		INT Evict;
-		if( !AdmitPeer( this, Host, Addr, Request.localUfrag, Evict ) )
-			continue;
-		// A peer made while the level switches would die with this driver, the client's ICE checks retry against the next one
-		if( Notify->NotifyAcceptingConnection()!=ACCEPTC_Accept )
-			continue;
-
-		const std::string& Ufrag = Request.localUfrag;
-		const std::string& Ip = Request.remoteAddress;
-		std::string Offer =
-			"v=0\r\no=- 0 0 IN IP4 " + Ip + "\r\ns=-\r\nc=IN IP4 " + Ip + "\r\nt=0 0\r\na=ice-options:ice2,trickle\r\n"
-			"m=application " + std::to_string(Request.remotePort) + " UDP/DTLS/SCTP webrtc-datachannel\r\n"
-			"a=mid:0\r\na=setup:active\r\na=ice-ufrag:" + Ufrag + "\r\na=ice-pwd:" + Ufrag + "\r\n"
-			// The client's certificate is unknown and not checked, any sha-256 value passes the parser
-			"a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\n"
-			+ WebRtcSdpEnd + WebRtcCandidate( Ip, Request.remotePort );
-
-		auto Peer = std::make_shared<FWebRtcPeer>();
-		Peer->Addr = Addr;
-		Peer->Ufrag = Ufrag;
-		try
-		{
-			rtc::Configuration Config;
-			Config.enableIceUdpMux = true;
-			Config.portRangeBegin = Config.portRangeEnd = Host->Port;
-			Config.disableFingerprintVerification = true;
-			MakeHostPeer( Peer, Host, Config );
-			Peer->Pc->setRemoteDescription( rtc::Description( Offer, rtc::Description::Type::Offer ) );
-			Peer->Pc->setLocalDescription( rtc::Description::Type::Answer, rtc::LocalDescriptionInit{ Ufrag, Ufrag } );
-		}
-		catch( const std::exception& E )
-		{
-			debugf( NAME_DevNet, TEXT("WebRTC peer %s failed: %s"), *IpString(Addr.sin_addr,Request.remotePort), *FString(E.what()) );
-			ClosePeer( Peer );
-			continue;
-		}
-		AddPeer( Host, Peer, Evict );
-	}
-	if( Host->Listener && ProbeTriesLeft )
-		WebRtcProbe( Host, WebRtcDetails );
-	else if( Host->Listener && HostSocket )
+	PortTick( this, Host );
+	if( HostSocket && !ServerConnection )
 		HostSocketTick( this, Host );
 
 	// Backwards, because closing removes peers
 	for( INT i=(INT)Host->Peers.size()-1; i>=0 && WebRtc; i-- )
 	{
 		std::shared_ptr<FWebRtcPeer> Peer = Host->Peers[i];
-		if( Peer->SignalId.Len() )
+		if( Signaling( *Peer ) )
 			WebRtcSignal( Peer );
 		if( !Peer->AnswerId.empty() )
 			if( auto Local = GatheredDescription( *Peer ) )
 			{
-				// The answer goes to anyone who asks, so it does not name the server's LAN addresses
-				KeepCandidates( *Local, []( rtc::Candidate& Candidate )
-				{
-					return Candidate.type()!=rtc::Candidate::Type::Host || (Candidate.address() && !PrivateAddress( *Candidate.address() ));
-				});
+				AnswerCandidates( *Local );
 				HostSocketSend( nlohmann::json{ { "type", "answer" }, { "id", Peer->AnswerId }, { "sdp", std::string(*Local) } }.dump( -1, ' ', false, nlohmann::json::error_handler_t::replace ) );
 				Peer->AnswerId.clear();
 			}
@@ -850,10 +936,11 @@ void UTcpNetDriver::WebRtcTick()
 
 		if( Peer->Connection )
 		{
+			// A packet can end the level and with it this host and the connection
 			for( auto& Data : Inbox )
-				if( Data.size() <= WEBRTC_MAX_PACKET && Peer->Connection->State!=USOCK_Closed )
+				if( WebRtc && Data.size() <= WEBRTC_MAX_PACKET && Peer->Connection->State!=USOCK_Closed )
 					Peer->Connection->ReceivedRawPacket( Data.data(), (INT)Data.size() );
-			if( Closed )
+			if( Closed && WebRtc )
 				Peer->Connection->State = USOCK_Closed;
 		}
 		else if( Closed || WebRtcPendingExpired( Peer->CreatedTime, Peer->Queries ) )
@@ -872,8 +959,10 @@ void UTcpNetDriver::WebRtcDestroy()
 	if( !Host )
 		return;
 	WebRtc = NULL;
+#if !__EMSCRIPTEN__
 	if( Host->Listener )
 		Host->Listener->stop();
+#endif
 	if( Host->Probe )
 		ClosePeer( Host->Probe );
 	for( auto& Peer : Host->Peers )
@@ -917,7 +1006,7 @@ INT WebRtcQueryRecv( INT Id, BYTE* Data, INT Max )
 	if( It==QueryPeers().end() )
 		return -1;
 	FWebRtcPeer& Peer = *It->second;
-	if( Peer.SignalId.Len() )
+	if( Signaling( Peer ) )
 		WebRtcSignal( It->second );
 	std::lock_guard<std::mutex> Guard( Peer.Lock );
 	while( !Peer.Inbox.empty() )

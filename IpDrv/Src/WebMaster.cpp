@@ -45,16 +45,24 @@ enum
 };
 
 #if __EMSCRIPTEN__
+// The browser reads the body after this call returns, so the request keeps it
+struct FHttpFetch
+{
+	FHttpDone Done;
+	std::string Body;
+};
+
 static void HttpFinished( emscripten_fetch_t* Fetch )
 {
 	// Closing a fetch that is still running calls its error handler again
-	FHttpDone* Done = (FHttpDone*)Fetch->userData;
-	if( !Done )
+	FHttpFetch* Request = (FHttpFetch*)Fetch->userData;
+	if( !Request )
 		return;
 	Fetch->userData = NULL;
-	bool Ok = Fetch->status >= 200 && Fetch->status < 300 && Fetch->numBytes <= MAX_RESPONSE_SIZE;
-	(*Done)( Ok, Ok ? std::string( Fetch->data, Fetch->numBytes ) : std::string() );
-	delete Done;
+	// A refusal has a body too, which says why
+	bool Sized = Fetch->data && Fetch->numBytes <= MAX_RESPONSE_SIZE;
+	Request->Done( Sized && Fetch->status >= 200 && Fetch->status < 300, Sized ? std::string( Fetch->data, Fetch->numBytes ) : std::string() );
+	delete Request;
 	emscripten_fetch_close( Fetch );
 }
 
@@ -67,15 +75,20 @@ static void HttpProgress( emscripten_fetch_t* Fetch )
 	}
 }
 
-// GET only, because a GET without headers needs no CORS preflight. The callbacks run on the main thread once the browser has the answer.
-static void HttpGetAsync( const std::string& Url, FHttpDone Done )
+// No headers, because a request without them needs no CORS preflight. The callbacks run on the main thread once the browser has the answer.
+static void HttpRequestAsync( const std::string& Url, const std::string& Body, FHttpDone Done )
 {
+	FHttpFetch* Request = new FHttpFetch{ Done, Body };
 	emscripten_fetch_attr_t Attr;
 	emscripten_fetch_attr_init( &Attr );
-	strcpy( Attr.requestMethod, "GET" );
-	Attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
-	Attr.timeoutMSecs = 5000;
-	Attr.userData = new FHttpDone( Done );
+	strcpy( Attr.requestMethod, Body.empty() ? "GET" : "POST" );
+	// Replace, or the request waits for a lookup in a cache that never holds it
+	Attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_REPLACE;
+	// An offer waits up to 8 seconds for the host to answer
+	Attr.timeoutMSecs = Body.empty() ? 5000 : 10000;
+	Attr.requestData = Request->Body.data();
+	Attr.requestDataSize = Request->Body.size();
+	Attr.userData = Request;
 	Attr.onsuccess = HttpFinished;
 	Attr.onerror = HttpFinished;
 	Attr.onprogress = HttpProgress;
@@ -217,12 +230,8 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 	};
 
 	std::string Json = Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-#if __EMSCRIPTEN__
-	WebRtcHostState( Json.c_str() );
-#else
 	if( !WebRtcHostState( Json.c_str() ) )
 		HttpRequestAsync( &appToUtf8( *(Base + TEXT("/advertise")) )(0), Json, []( bool, std::string ) {} );
-#endif
 }
 
 #pragma pack(push, 8)
@@ -248,7 +257,11 @@ static FWebMasterRequest* WebMasterRequest( const TCHAR* Path, const std::string
 	Request->Response = std::make_shared<FWebMasterResponse>();
 	if( !Base.Len() )
 	{
-		debugf( TEXT("WebMasterServer is not set in [IpDrv.MasterServerLink]") );
+		// A page without a web master asks for its ICE servers again and again
+		static UBOOL Logged;
+		if( !Logged )
+			debugf( TEXT("WebMasterServer is not set in [IpDrv.MasterServerLink]") );
+		Logged = 1;
 		Request->Response->Done = true;
 		return Request;
 	}
@@ -259,11 +272,7 @@ static FWebMasterRequest* WebMasterRequest( const TCHAR* Path, const std::string
 		Response->Ok = Ok;
 		Response->Done = true;
 	};
-#if __EMSCRIPTEN__
-	HttpGetAsync( &appToUtf8( *(Base + Path) )(0), Done );
-#else
 	HttpRequestAsync( &appToUtf8( *(Base + Path) )(0), Body, Done );
-#endif
 	return Request;
 }
 
@@ -296,7 +305,6 @@ static UBOOL IsDottedQuad( const TCHAR* S )
 	return 1;
 }
 
-#if !__EMSCRIPTEN__
 FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp )
 {
 	return WebMasterRequest( TEXT("/offer"), nlohmann::json{ { "host", &appToUtf8(*HostId)(0) }, { "sdp", &appToUtf8(*Sdp)(0) } }.dump() );
@@ -319,12 +327,13 @@ UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp, U
 #pragma pack(push, 8)
 struct FIceAnswer
 {
-	std::string Host, Username, Password, Ip, StunHost;
-	INT Port = 0, StunPort = 0;
+	std::string Host, TlsHost, Username, Password, Ip, StunHost;
+	INT Port = 0, TlsPort = 0, StunPort = 0;
 };
 #pragma pack(pop)
 
-// The first STUN server and the first UDP relay of the list, the only kind of relay the game's ICE library can use
+// The first STUN server, the first UDP relay and the first TLS relay of the list. Only a browser can use the TLS one,
+// the game's ICE library has UDP alone.
 static void ParseIce( const std::string& Body, FIceAnswer& Out )
 {
 	nlohmann::json Root = nlohmann::json::parse( Body, nullptr, false );
@@ -344,9 +353,9 @@ static void ParseIce( const std::string& Body, FIceAnswer& Out )
 			if( !Item.is_string() )
 				continue;
 			std::string Url = Item.get<std::string>();
-			bool Stun = Url.compare( 0, 5, "stun:" ) == 0;
-			size_t Colon = Url.find( ':', 5 );
-			if( (!Stun && Url.compare( 0, 5, "turn:" ) != 0) || Colon == std::string::npos || Colon == 5 )
+			bool Stun = Url.compare( 0, 5, "stun:" ) == 0, Tls = Url.compare( 0, 6, "turns:" ) == 0;
+			size_t Name = Tls ? 6 : 5, Colon = Url.find( ':', Name );
+			if( (!Stun && !Tls && Url.compare( 0, 5, "turn:" ) != 0) || Colon == std::string::npos || Colon == Name )
 				continue;
 			INT UrlPort = atoi( Url.c_str() + Colon + 1 );
 			if( UrlPort < 1 || UrlPort > 65535 )
@@ -356,7 +365,16 @@ static void ParseIce( const std::string& Body, FIceAnswer& Out )
 				Out.StunHost = Url.substr( 5, Colon - 5 );
 				Out.StunPort = UrlPort;
 			}
-			else if( !Stun && Credential && Out.Host.empty() && Url.find("transport=tcp") == std::string::npos )
+#if __EMSCRIPTEN__
+			else if( Tls && Credential && Out.TlsHost.empty() )
+			{
+				Out.TlsHost = Url.substr( 6, Colon - 6 );
+				Out.TlsPort = UrlPort;
+				Out.Username = Server["username"].get<std::string>();
+				Out.Password = Server["credential"].get<std::string>();
+			}
+#endif
+			else if( !Stun && !Tls && Credential && Out.Host.empty() && Url.find("transport=tcp") == std::string::npos )
 			{
 				Out.Host = Url.substr( 5, Colon - 5 );
 				Out.Port = UrlPort;
@@ -383,7 +401,7 @@ UBOOL WebMasterTurn( FWebMasterTurn& Out )
 		Ice = FIceAnswer();
 		if( Ok )
 			ParseIce( Body, Ice );
-		NextTime = appSeconds() + (Ice.Host.empty() ? TURN_RETRY_TIME : TURN_REFRESH_TIME);
+		NextTime = appSeconds() + (Ice.Host.empty() && Ice.TlsHost.empty() ? TURN_RETRY_TIME : TURN_REFRESH_TIME);
 		if( Ice.StunHost.empty() )
 		{
 			// Without a port the ICE library takes the standard one
@@ -399,15 +417,16 @@ UBOOL WebMasterTurn( FWebMasterTurn& Out )
 		return 0;
 	}
 	Out.Host = Ice.Host.c_str();
+	Out.TlsHost = Ice.TlsHost.c_str();
 	Out.Username = Ice.Username.c_str();
 	Out.Password = Ice.Password.c_str();
 	Out.Ip = Ice.Ip.c_str();
 	Out.StunHost = Ice.StunHost.c_str();
 	Out.Port = Ice.Port;
+	Out.TlsPort = Ice.TlsPort;
 	Out.StunPort = Ice.StunPort;
 	return 1;
 }
-#endif
 
 UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News )
 {

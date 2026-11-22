@@ -379,12 +379,12 @@ struct FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& 
 // Gone says the web master has no socket of that id, so offering again is no use
 UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp, UBOOL& Gone );
 void WebMasterRequestFree( struct FWebMasterRequest* Request );
-// The web master's ICE answer: its UDP relay (Host), the caller's public address (Ip) and a STUN server, the ini's
-// StunServer when it names none. Empty when not given. The strings are valid until the next call.
+// The web master's ICE answer: its UDP relay (Host), its TLS relay for a page (TlsHost), the caller's public address (Ip)
+// and a STUN server, the ini's StunServer when it names none. Empty when not given. The strings are valid until the next call.
 struct FWebMasterTurn
 {
-	const ANSICHAR *Host, *Username, *Password, *Ip, *StunHost;
-	INT Port, StunPort;
+	const ANSICHAR *Host, *TlsHost, *Username, *Password, *Ip, *StunHost;
+	INT Port, TlsPort, StunPort;
 };
 // Returns false while the web master is being asked
 UBOOL WebMasterTurn( FWebMasterTurn& Out );

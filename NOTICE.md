@@ -14,7 +14,7 @@ The files this port added, and the changes it made to existing files as far as t
 - `Emscripten/`, `DevIni/`, `ports/`, `triplets/`
 - `GUI2K4Fix/`, `XAdminFix/`
 - `SDLDrv/`, `SDLLaunch/`, `OpenGLDrv/` (apart from the vendored files listed in `System/THIRD_PARTY.md`)
-- `IpDrv/Src/WebMaster.cpp`, `IpDrv/Src/WebRtc.cpp`, `IpDrv/Src/WebRtc.h`, `IpDrv/Src/WebRtcCommon.cpp`, `IpDrv/Src/WebRtcBrowser.cpp`
+- `IpDrv/Src/WebMaster.cpp`, `IpDrv/Src/WebRtc.cpp`, `IpDrv/Src/WebRtc.h`, `IpDrv/Src/WebRtcCommon.cpp`
 - `Engine/Src/UnNicknameWords.h`
 - every `CMakeLists.txt`, `CMakePresets.json` and `vcpkg.json`
 
