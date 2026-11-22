@@ -527,6 +527,7 @@ public:
 			INT LM = SampleTexture(S->Lightmap,TC_Clamp,TC_Clamp,Mod);
 			if( LM == INDEX_NONE )
 				return INDEX_NONE;
+			State.SamplerFlags[State.NumTextures - 1] |= GSF_Isotropic;
 			Emit(TEXT("\tr%i.rgb = clamp(r%i.rgb * r%i.rgb * (1.0 + Options.z), 0.0, 1.0);\n"),C,C,LM);
 			if( Light == INDEX_NONE )
 			{

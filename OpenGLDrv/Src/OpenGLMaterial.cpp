@@ -38,7 +38,9 @@ const ANSICHAR* OpenGLVertexShader =
 	"out vec3 vCameraPos;\n"
 	"out vec4 vDiffuse;\n"
 	"out vec4 vSpecular;\n"
-	"out vec4 vTexCoord0, vTexCoord1, vTexCoord2, vTexCoord3, vTexCoord4, vTexCoord5, vTexCoord6, vTexCoord7;\n"
+	"out vec4 vTexCoord0, vTexCoord2, vTexCoord3, vTexCoord4, vTexCoord5, vTexCoord6, vTexCoord7;\n"
+	// The lightmap coordinate, an edge pixel must not leave the surface's atlas rectangle.
+	"centroid out vec4 vTexCoord1;\n"
 	"#ifdef INSTANCED\n"
 	"in vec4 aInstance0, aInstance1, aInstance2, aInstance3;\n"
 	"uniform mat4 WorldToLightmap;\n"
@@ -145,7 +147,8 @@ const ANSICHAR* OpenGLFragmentPrologue =
 	"in vec3 vCameraPos;\n"
 	"in vec4 vDiffuse;\n"
 	"in vec4 vSpecular;\n"
-	"in vec4 vTexCoord0, vTexCoord1, vTexCoord2, vTexCoord3, vTexCoord4, vTexCoord5, vTexCoord6, vTexCoord7;\n"
+	"in vec4 vTexCoord0, vTexCoord2, vTexCoord3, vTexCoord4, vTexCoord5, vTexCoord6, vTexCoord7;\n"
+	"centroid in vec4 vTexCoord1;\n"
 	"uniform float AlphaRef;\n"
 	"layout(location = 0) out vec4 FragColor;\n"
 	// What the env map added and how reflective the surface is, the screen space reflections replace it.

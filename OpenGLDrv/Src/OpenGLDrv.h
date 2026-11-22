@@ -171,6 +171,7 @@ enum EOpenGLSamplerFlags
 	GSF_ClampV		= 2,
 	GSF_Mipmapped	= 4,
 	GSF_Nearest		= 8,	// Depth textures are incomplete with linear filtering.
+	GSF_Isotropic	= 16,	// Anisotropic taps reach the filler around an atlas rectangle.
 };
 
 struct FOpenGLMaterialState

@@ -300,7 +300,7 @@ GLuint UOpenGLRenderDevice::GetSampler(DWORD Flags)
 	glSamplerParameteri(Sampler,GL_TEXTURE_WRAP_R,GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(Sampler,GL_TEXTURE_MAG_FILTER,(Flags & GSF_Nearest) ? GL_NEAREST : GL_LINEAR);
 	glSamplerParameteri(Sampler,GL_TEXTURE_MIN_FILTER,(Flags & GSF_Nearest) ? GL_NEAREST : (Flags & GSF_Mipmapped) ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
-	if( MaxAnisotropy > 1 && !(Flags & GSF_Nearest) )
+	if( MaxAnisotropy > 1 && !(Flags & (GSF_Nearest | GSF_Isotropic)) )
 		glSamplerParameterf(Sampler,GL_TEXTURE_MAX_ANISOTROPY_EXT,(FLOAT)MaxAnisotropy);
 	Samplers.Set(Flags,Sampler);
 	return Sampler;
