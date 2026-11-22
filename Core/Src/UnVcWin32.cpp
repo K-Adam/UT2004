@@ -89,6 +89,9 @@ CORE_API void appRequestExit( UBOOL Force )
 	if( Force )
 	{
 		// Force immediate exit. Dangerous because config code isn't flushed, etc.
+		// The log is, or the error that led here is lost with it.
+		if( GLog )
+			GLog->Flush();
 		ExitProcess( 1 );
 	}
 	else

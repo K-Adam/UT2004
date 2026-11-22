@@ -343,7 +343,10 @@ if(UT_ASSETS_DIR AND TARGET UCC)
   add_test(NAME server_smoke
     COMMAND ${CMAKE_COMMAND} -DUCC=$<TARGET_FILE:UCC> -P ${CMAKE_SOURCE_DIR}/Tools/ServerSmoke.cmake
     WORKING_DIRECTORY ${UT_SYSTEM_DIR})
-  set(UT_SERVER_TESTS server_smoke)
+  add_test(NAME package_sweep
+    COMMAND ${CMAKE_COMMAND} -DUCC=$<TARGET_FILE:UCC> "-DPACKAGES=../../Scripts/*.u ../assets/src/Maps/*.ut2" -P ${CMAKE_SOURCE_DIR}/Tools/PackageSweep.cmake
+    WORKING_DIRECTORY ${UT_SYSTEM_DIR})
+  set(UT_SERVER_TESTS server_smoke package_sweep)
   if(TARGET ut_tests)
     add_test(NAME engine
       COMMAND ut_tests DM-Rankin?game=XGame.xDeathMatch?MinPlayers=4?QuickStart=true -INI=Smoke.ini -USERINI=SmokeUser.ini -nohomedir -multihome=127.0.0.1

@@ -133,6 +133,17 @@ void UProperty::Serialize( FArchive& Ar )
 	{
 		Offset = 0;
 		ConstructorLinkNext = NULL;
+		// The flag keeps a string or array out of construction and destruction, which is only right for a
+		// member the C++ class handles itself. The compiler accepts it on any variable.
+		if( (PropertyFlags & CPF_Native) && Ar.LoadingPackage() && !GIsEditor )
+		{
+			UClass* Owner = GetOwnerClass();
+			if( !Owner || !(Owner->GetFlags() & RF_Native) )
+			{
+				debugf( TEXT("Dropped the native flag of %s"), GetFullName() );
+				PropertyFlags &= ~CPF_Native;
+			}
+		}
 	}
 	unguardobj;
 }
@@ -297,6 +308,10 @@ void UProperty::CopyCompleteValue( void* Dest, void* Src, UObject* SuperObject, 
 //
 void UProperty::Link( FArchive& Ar, UProperty* Prev )
 {}
+const TCHAR* UProperty::LinkError( FArchive& Ar )
+{
+	return NULL;
+}
 
 IMPLEMENT_CLASS(UProperty);
 
@@ -1116,6 +1131,9 @@ void UObjectProperty::Link( FArchive& Ar, UProperty* Prev )
 {
 	guard(UObjectProperty::Link);
 	Super::Link( Ar, Prev );
+	// A class the client does not load reads as None.
+	if( !PropertyClass && !GIsEditor )
+		PropertyClass = UObject::StaticClass();
 	ElementSize = sizeof(UObject*);
     // Native classes are built under #pragma pack(4), so script offsets must match that layout.
 	Offset      = Align( GetOuterUField()->GetPropertiesSize(), 4);
@@ -1317,6 +1335,8 @@ void UClassProperty::Serialize( FArchive& Ar )
 	guard(UClassProperty::Serialize);
 	Super::Serialize( Ar );
 	Ar << MetaClass;
+	if( !MetaClass && Ar.IsLoading() && !GIsEditor )
+		MetaClass = UObject::StaticClass();
 	check(MetaClass);
 	unguardobj;
 }
@@ -1567,6 +1587,11 @@ void UFixedArrayProperty::CleanupDestroyed( BYTE* Data ) const
 		Inner->CleanupDestroyed(Data+i*GetSize());
 	unguardobj;
 }
+const TCHAR* UFixedArrayProperty::LinkError( FArchive& Ar )
+{
+	// The compiler never makes one, and Count comes from the file unchecked.
+	return TEXT("is a fixed array");
+}
 void UFixedArrayProperty::Link( FArchive& Ar, UProperty* Prev )
 {
 	guard(UFixedArrayProperty::Link);
@@ -1715,6 +1740,16 @@ void UArrayProperty::CleanupDestroyed( BYTE* Data ) const
 			Inner->CleanupDestroyed((BYTE*)A->GetData() + j*Inner->GetSize());
 	}
 	unguardobj;
+}
+const TCHAR* UArrayProperty::LinkError( FArchive& Ar )
+{
+	// Link sets the element's offset, which must not be a property that lies in a struct.
+	if( !Inner || Inner->GetOuter()!=this || Inner->IsA(UArrayProperty::StaticClass()) )
+		return TEXT("has no element type of its own");
+	Ar.Preload( Inner );
+	if( Inner->ArrayDim!=1 )
+		return TEXT("has an array as element");
+	return Inner->LinkError( Ar );
 }
 void UArrayProperty::Link( FArchive& Ar, UProperty* Prev )
 {
@@ -1986,6 +2021,11 @@ IMPLEMENT_CLASS(UArrayProperty);
 	UMapProperty.
 -----------------------------------------------------------------------------*/
 
+const TCHAR* UMapProperty::LinkError( FArchive& Ar )
+{
+	// The compiler never makes one, and the class is only stubs.
+	return TEXT("is a map");
+}
 void UMapProperty::Link( FArchive& Ar, UProperty* Prev )
 {
 	guard(UMapProperty::Link);
@@ -2092,6 +2132,17 @@ void UStructProperty::CleanupDestroyed( BYTE* Data ) const
 		Struct->CleanupDestroyed(Data+i*ElementSize);
 	unguardobj;
 }
+const TCHAR* UStructProperty::LinkError( FArchive& Ar )
+{
+	if( !Struct || Struct->GetClass()!=UStruct::StaticClass() )
+		return TEXT("has no struct");
+	Ar.Preload( Struct );
+	// A struct still being read has no size yet. The struct this property lies in sees to itself.
+	UObject* Owner = GetOuter()->IsA(UArrayProperty::StaticClass()) ? GetOuter()->GetOuter() : GetOuter();
+	if( Struct!=Owner && (Struct->GetFlags() & (RF_Preloading|RF_NeedLoad)) )
+		return TEXT("holds a struct that holds it");
+	return NULL;
+}
 void UStructProperty::Link( FArchive& Ar, UProperty* Prev )
 {
 	guard(UStructProperty::Link);
@@ -2134,7 +2185,8 @@ void UStructProperty::SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes
 UBOOL UStructProperty::NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const
 {
 	guardSlow(UStructProperty::NetSerializeItem);
-	if( Ar.NetPackData() && Struct->GetFName()==NAME_Vector )
+	// A struct of a package can carry one of these names, the packed forms are for the engine's own.
+	if( Ar.NetPackData() && Struct->GetFName()==NAME_Vector && ElementSize==sizeof(FVector) )
 	{
 		FVector& V = *(FVector*)Data;
 		INT X(appRound(V.X)), Y(appRound(V.Y)), Z(appRound(V.Z));
@@ -2149,7 +2201,7 @@ UBOOL UStructProperty::NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* D
 		if( Ar.IsLoading() )
 			V = FVector((INT)DX-Bias,(INT)DY-Bias,(INT)DZ-Bias);
 	}
-	else if( Ar.NetPackData() && Struct->GetFName()==NAME_Rotator )
+	else if( Ar.NetPackData() && Struct->GetFName()==NAME_Rotator && ElementSize==sizeof(FRotator) )
 	{
 		FRotator& R = *(FRotator*)Data;
 		BYTE Pitch(R.Pitch>>8), Yaw(R.Yaw>>8), Roll(R.Roll>>8), B;
@@ -2174,7 +2226,7 @@ UBOOL UStructProperty::NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* D
 		if( Ar.IsLoading() )
 			R = FRotator(Pitch<<8,Yaw<<8,Roll<<8);
 	}
-	else if ( Ar.NetPackData() && Struct->GetFName()==NAME_CompressedPosition )
+	else if ( Ar.NetPackData() && Struct->GetFName()==NAME_CompressedPosition && ElementSize==sizeof(FCompressedPosition) )
 	{
 		FCompressedPosition& C = *(FCompressedPosition*)Data;
 
@@ -2234,7 +2286,7 @@ UBOOL UStructProperty::NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* D
 		if ( Ar.IsLoading() )
 			Q.W = appSqrt(1 - Q.X*Q.X - Q.Y*Q.Y - Q.Z*Q.Z);
 	}		
-	else if( Ar.NetPackData() && Struct->GetFName()==NAME_Plane )
+	else if( Ar.NetPackData() && Struct->GetFName()==NAME_Plane && ElementSize==sizeof(FPlane) )
 	{
 		FPlane& P = *(FPlane*)Data;
 		SWORD X(appRound(P.X)), Y(appRound(P.Y)), Z(appRound(P.Z)), W(appRound(P.W));

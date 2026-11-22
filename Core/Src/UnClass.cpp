@@ -234,7 +234,7 @@ UClass* UField::GetOwnerClass()
 {
 	guardSlow(UField::GetOwnerClass);
 	UObject* Obj;
-	for( Obj=this; Obj->GetClass()!=UClass::StaticClass(); Obj=Obj->GetOuter() );
+	for( Obj=this; Obj && Obj->GetClass()!=UClass::StaticClass(); Obj=Obj->GetOuter() );
 	return (UClass*)Obj;
 	unguardSlow;
 }
@@ -357,6 +357,9 @@ void UStruct::Register()
 //
 // Link offsets.
 //
+// Structs being read whose size is not final yet.
+static TArray<UStruct*> GUnlinked;
+
 void UStruct::Link( FArchive& Ar, UBOOL Props )
 {
 	guard(UStruct::Link);
@@ -369,15 +372,49 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 		if( GetInheritanceSuper() )
 		{
 			Ar.Preload( GetInheritanceSuper() );
+			// A file can make a struct load from inside the read of its own super, and would lay it out
+			// after a part of that super.
+			if( GUnlinked.FindItemIndex(GetInheritanceSuper())!=INDEX_NONE )
+				appErrorf( TEXT("%s is read inside its super"), GetFullName() );
 			PropertiesSize = Align(GetInheritanceSuper()->GetPropertiesSize(),4);
 		}
+		INT Left = GetLinker() ? GetLinker()->ExportMap.Num() : MAXINT;
 		UProperty* Prev = NULL;
-		for( UField* Field=Children; Field; Field=Field->Next )
+		TArray<UStructProperty*> Own;
+		for( UField** Field=&Children; *Field; )
 		{
-			Ar.Preload( Field );
-			if( Field->GetOuter()!=this )
+			Ar.Preload( *Field );
+			// The lists built below follow the chain to its end, so it must end and hold only this struct's fields.
+			if( (*Field)->GetOuter()!=this || Left--<=0 )
+			{
+				*Field = NULL;
+				GRefuseScript( this, TEXT("has fields that are not its own") );
 				break;
-			UProperty* Property = Cast<UProperty>( Field );
+			}
+			UProperty* Property = Cast<UProperty>( *Field );
+			const TCHAR* Error = Property ? Property->LinkError( Ar ) : NULL;
+			if( Error )
+			{
+				*Field = Property->Next;
+				GRefuseScript( Property, Error );
+				continue;
+			}
+			// Retail script has a struct with a member of its own type, which copies without end. The member
+			// leaves the chain and stands for the whole struct. An array of the own type only needs the size.
+			UArrayProperty* Array = Cast<UArrayProperty>( Property );
+			UStructProperty* Inside = Cast<UStructProperty>( Array ? Array->Inner : Property );
+			if( Inside && Inside->Struct==this && (Array || !GIsEditor) )
+			{
+				Own.AddItem( Inside );
+				if( !Array )
+				{
+					debugf( NAME_DevLoad, TEXT("%s holds itself"), Inside->GetFullName() );
+					Inside->ArrayDim = 1;
+					*Field = Property->Next;
+					continue;
+				}
+			}
+			Field = &(*Field)->Next;
 			if( Property )
 			{
 				Property->Link( Ar, Prev );
@@ -390,6 +427,8 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 		}
 
 		PropertiesSize = Align(PropertiesSize,4);
+		for( INT i=0; i<Own.Num(); i++ )
+			Own(i)->ElementSize = PropertiesSize;
 		GMaxPropertySize = Max( GMaxPropertySize, PropertiesSize );
 		for( UStruct* Base=GetInheritanceSuper(); Base; Base=Base->GetInheritanceSuper() )
 			Base->DerivedSize = Max( Base->DerivedSize, PropertiesSize );
@@ -685,7 +724,16 @@ FString UStruct::FunctionMD5()
 void UStruct::Serialize( FArchive& Ar )
 {
 	guard(UStruct::Serialize);
+	// The linker checked the super the export table names, the copy in the body is not checked.
+	UField* TableSuper = SuperField;
+	if( Ar.IsLoading() )
+		GUnlinked.AddItem( this );
 	Super::Serialize( Ar );
+	if( Ar.LoadingPackage() && SuperField!=TableSuper )
+	{
+		SuperField = TableSuper;
+		GRefuseScript( this, TEXT("names two supers") );
+	}
 
 	// Serialize stuff.
 	Ar << ScriptText << Children;
@@ -736,7 +784,10 @@ void UStruct::Serialize( FArchive& Ar )
 	Ar.ThisContainsCode();
 	// Link the properties.
 	if( Ar.IsLoading() )
+	{
 		Link( Ar, 1 );
+		GUnlinked.RemoveItem( this );
+	}
 
 	unguardobj;
 }
@@ -800,7 +851,31 @@ void UState::Serialize( FArchive& Ar )
 	Ar << ProbeMask << IgnoreMask;
 	Ar << LabelTableOffset << StateFlags;
 
+	// GotoLabel walks the table to its end mark and jumps to what an entry names.
+	if( Ar.IsLoading() && LabelTableOffset!=MAXWORD )
+	{
+		UBOOL Ended = 0;
+		for( INT i=LabelTableOffset; !Ended && i+(INT)sizeof(FLabelEntry)<=Script.Num(); i+=sizeof(FLabelEntry) )
+		{
+			FLabelEntry& Label = *(FLabelEntry*)&Script(i);
+			Ended = Label.Name==NAME_None;
+			if( !Ended && (Label.iCode<0 || Label.iCode>=Script.Num()) )
+				break;
+		}
+		if( !Ended )
+		{
+			LabelTableOffset = MAXWORD;
+			GRefuseScript( this, TEXT("has a label table that leaves the script") );
+		}
+	}
+
 	unguard;
+}
+void UState::DisableScript()
+{
+	if( Script.Num() )
+		appMemset( &Script(0), EX_Stop, Script.Num() );
+	LabelTableOffset = MAXWORD;
 }
 void UState::Link( FArchive& Ar, UBOOL Props )
 {
@@ -886,6 +961,10 @@ void UClass::Bind()
 	guard(UClass::Bind);
 	UStruct::Bind();
 	check(GIsEditor || GetSuperClass() || this==UObject::StaticClass());
+	// A native class is laid out by its script, which must be the one this build was made with.
+	ULinkerLoad* Linker = GetLinker();
+	if( (GetFlags() & RF_Native) && Linker && GSys->CacheExt.Len() && Linker->Filename.Right(GSys->CacheExt.Len())==GSys->CacheExt )
+		appErrorf( TEXT("Native class %s must come from this build, not from %s"), GetPathName(), *Linker->Filename );
 	if( !ClassConstructor && (GetFlags() & RF_Native) )
 	{
 		// Find the native implementation.
@@ -897,8 +976,8 @@ void UClass::Bind()
 		UClass** ClassPtr = (UClass**)ClassPackage->GetDllExport( ProcName, 0 );
 		if( ClassPtr )
 		{
-			check(*ClassPtr);
-			check(*ClassPtr==this);
+			if( *ClassPtr!=this )
+				appErrorf( TEXT("Native class %s is not the one this build registered"), GetPathName() );
 			ClassConstructor = (*ClassPtr)->ClassConstructor;
 		}
 		else if( !GIsEditor )
@@ -1002,6 +1081,13 @@ void UClass::Link( FArchive& Ar, UBOOL Props )
 	}
 	unguard;
 }
+void UClass::DisableScript()
+{
+	// A class holds the conditions its variables and functions replicate on, each one expression.
+	if( Script.Num() )
+		appMemset( &Script(0), EX_False, Script.Num() );
+	LabelTableOffset = MAXWORD;
+}
 void UClass::Serialize( FArchive& Ar )
 {
 	guard(UClass::Serialize);
@@ -1019,6 +1105,13 @@ void UClass::Serialize( FArchive& Ar )
 	if( Ar.Ver()>=62 )
 	{
 		Ar << ClassWithin << ClassConfigName;
+		// Native code of the super class takes the outer object for what its within class says.
+		UClass* SuperWithin = Ar.IsLoading() && GetSuperClass() ? GetSuperClass()->ClassWithin : NULL;
+		if( SuperWithin && (!ClassWithin || !ClassWithin->IsChildOf(SuperWithin)) )
+		{
+			ClassWithin = SuperWithin;
+			GRefuseScript( this, TEXT("has a within class that does not fit its super") );
+		}
 		// The name becomes an ini path, and the class may come from a downloaded package.
 		if( Ar.IsLoading() && !appIsBareFileName(*ClassConfigName) )
 			ClassConfigName = FName(TEXT("System"));
@@ -1666,7 +1759,77 @@ void UFunction::PostLoad()
 {
 	guard(UFunction::PostLoad);
 	Super::PostLoad();
+	if( const TCHAR* Error = SignatureError() )
+		GRefuseScript( this, Error );
 	unguard;
+}
+static UPackage* TopPackage( UObject* Object );
+const TCHAR* UFunction::SignatureError()
+{
+	// Callers size and fill the parameter block from the leading parameters, 16 bits wide.
+	// They follow the chain as properties.
+	INT Count = 0;
+	UBOOL Locals = 0;
+	for( UField* Field=Children; Field; Field=Field->Next )
+	{
+		UProperty* Property = Cast<UProperty>( Field );
+		if( !Property )
+			return TEXT("holds a field that is no variable");
+		if( !(Property->PropertyFlags & CPF_Parm) )
+			Locals = 1;
+		else if( Locals || ++Count>MAX_FUNC_PARMS || Property->Offset+Property->GetSize()>MAXWORD )
+			return TEXT("has a bad parameter list");
+	}
+
+	UClass* Owner = GetOwnerClass();
+	if( !Owner )
+		return TEXT("is in no class");
+
+	// A native reads its arguments as its C++ declares them, whatever class redeclares it.
+	if( (FunctionFlags & FUNC_Native) && iNative )
+	{
+		UFunction* Native = GNativeFunction( iNative );
+		if( Native && !GSameParms(this,Native) )
+			return TEXT("redeclares a native with other parameters");
+	}
+
+	// Script and C++ find a function by name and pass what the one they know takes: the same name in a
+	// parent class, and for a state function in the class and the parent states.
+	INT iHash = GetFName().GetIndex() & (UField::HASH_COUNT-1);
+	UState* Scopes[2] = { Owner, GetOuter()!=Owner ? Cast<UState>(GetOuter()) : NULL };
+	for( INT i=0; i<2; i++ )
+	{
+		for( UField* Node=Scopes[i] ? Scopes[i]->VfHash[iHash] : NULL; Node; Node=Node->HashNext )
+		{
+			UFunction* Hidden = Node!=this && Node->GetFName()==GetFName() ? Cast<UFunction>(Node) : NULL;
+			if( !Hidden )
+				continue;
+			UBOOL Natives = (Hidden->FunctionFlags & FunctionFlags & FUNC_Native)!=0;
+			if( GSameParms(this,Hidden,!Natives) && !((Hidden->FunctionFlags ^ FunctionFlags) & FUNC_Iterator) )
+				continue;
+			// The compiler lets a private name be used again with any parameters. Calls to it still go by
+			// name, so only the package that made both can know what arrives.
+			if( (Hidden->FunctionFlags & FUNC_Private) && !Natives && TopPackage(Hidden)==TopPackage(this) )
+				continue;
+			return TEXT("takes other parameters than the function it hides");
+		}
+	}
+
+	// The condition of a replicated function is run from this offset in its class.
+	UFunction* Root = this;
+	while( Root->GetSuperFunction() )
+		Root = Root->GetSuperFunction();
+	UClass* RootOwner = Root->GetOwnerClass();
+	if( (FunctionFlags & FUNC_Net) && (!RootOwner || Root->RepOffset>=RootOwner->Script.Num()) )
+		return TEXT("has its replication condition outside the script");
+	return NULL;
+}
+void UFunction::DisableScript()
+{
+	// A native would leave the caller's arguments unread, script functions have them read for them.
+	FunctionFlags &= ~(FUNC_Native|FUNC_Net);
+	iNative = 0;
+	Func = &UObject::execNothing;
 }
 UProperty* UFunction::GetReturnProperty()
 {
@@ -1680,6 +1843,81 @@ UProperty* UFunction::GetReturnProperty()
 CORE_API void (*GBindScriptFunction)( UFunction* Function ) = NULL;
 CORE_API FString GRefusedScript;
 
+static UBOOL GAnyRefused = 0, GRefusalPending = 0;
+
+static UPackage* TopPackage( UObject* Object )
+{
+	while( Object->GetOuter() )
+		Object = Object->GetOuter();
+	return Cast<UPackage>( Object );
+}
+UBOOL GIsRefused( UObject* Object )
+{
+	UPackage* Package = GAnyRefused ? TopPackage( Object ) : NULL;
+	return Package && Package->Refused;
+}
+void GRefuseScript( UObject* Culprit, const TCHAR* Rule )
+{
+	// The tools would save the repaired object.
+	if( GIsEditor )
+		appErrorf( TEXT("%s %s"), Culprit->GetFullName(), Rule );
+	debugf( NAME_Warning, TEXT("Refused %s: it %s"), Culprit->GetFullName(), Rule );
+	GRefusedScript = Culprit->GetPathName();
+	if( UPackage* Package = TopPackage(Culprit) )
+		Package->Refused = 1;
+	GAnyRefused = GRefusalPending = 1;
+}
+void GKeepClass( FArchive& Ar, UObject*& Object, UClass* Class )
+{
+	if( Object->IsA(Class) )
+		return;
+	FString Rule = FString::Printf( TEXT("uses %s as a %s"), Object->GetFullName(), Class->GetName() );
+	Object = NULL;
+	if( Ar.LoadingPackage() )
+		GRefuseScript( Ar.LoadingPackage(), *Rule );
+}
+static UBOOL IsRefusedFunction( UField* Field )
+{
+	return Field && Field->IsA(UFunction::StaticClass()) && GIsRefused( Field );
+}
+void GDisableRefusedScript( TArray<UObject*>& Loaded )
+{
+	if( !GAnyRefused )
+		return;
+	for( INT i=0; i<Loaded.Num() && !GRefusalPending; i++ )
+		GRefusalPending = GIsRefused( Loaded(i) );
+	if( !GRefusalPending )
+		return;
+
+	// Script that names a refused package's fields outright lives in the packages that import it.
+	for( UBOOL Again=1; Again; )
+	{
+		Again = 0;
+		for( TObjectIterator<ULinkerLoad> It; It; ++It )
+			for( INT i=0; i<It->ImportMap.Num() && !GIsRefused(It->LinkerRoot); i++ )
+				if( It->ImportMap(i).SourceLinker && GIsRefused(It->ImportMap(i).SourceLinker->LinkerRoot) )
+				{
+					GRefuseScript( It->LinkerRoot, TEXT("uses a refused package") );
+					Again = 1;
+				}
+	}
+
+	// Lookup by name then finds the function of a package that stands, or none.
+	for( TObjectIterator<UField> It; It; ++It )
+	{
+		while( IsRefusedFunction(It->HashNext) )
+			It->HashNext = It->HashNext->HashNext;
+		UState* State = Cast<UState>( *It );
+		for( INT i=0; State && i<UField::HASH_COUNT; i++ )
+			while( IsRefusedFunction(State->VfHash[i]) )
+				State->VfHash[i] = State->VfHash[i]->HashNext;
+		UStruct* Struct = Cast<UStruct>( *It );
+		if( Struct && GIsRefused(Struct) )
+			Struct->DisableScript();
+	}
+	GRefusalPending = 0;
+}
+
 // The function ends the game if it is still called before the engine leaves the level.
 static void RefuseNative( UFunction* Function )
 {
@@ -1691,7 +1929,9 @@ static void RefuseNative( UFunction* Function )
 void UFunction::Bind()
 {
 	guard(UFunction::Bind);
-	if( !(FunctionFlags & FUNC_Native) )
+	if( GIsRefused(this) )
+		DisableScript();
+	else if( !(FunctionFlags & FUNC_Native) )
 	{
 		// Use UnrealScript processing function.
 		check(iNative==0);

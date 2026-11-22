@@ -19,6 +19,7 @@ class CORE_API UPackage : public UObject
 	UBOOL AttemptedBind;
 	DWORD PackageFlags;
 	UBOOL bDirty;			// Used by the editor to determine if a package has been changed
+	UBOOL Refused;			// The loader had to repair its layout, none of its script runs
 
 	// Constructors.
 	UPackage();

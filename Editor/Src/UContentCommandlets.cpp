@@ -176,7 +176,7 @@ class ULoadPackage : public UCommandlet
 	{
 		guard(ULoadPackage::StaticConstructor);
 
-		LogToStdout     = 0;
+		LogToStdout     = 1;
 		IsClient        = 1;
 		IsEditor        = 1;
 		IsServer        = 1;
@@ -198,19 +198,25 @@ class ULoadPackage : public UCommandlet
 
 		GLazyLoad = 0;
 
+		// Loads the way a game client does.
+		if( ParseParam(Parms,TEXT("GAME")) )
+			GIsEditor = 0;
+
 		while( ParseToken(Parms, PackageWildcard, 0) )
 		{
 			TArray<FString> FilesInPath;
-			FString			PathPrefix;
 
 			FilesInPath = GFileManager->FindFiles( *PackageWildcard, 1, 0 );
 
 			if( !FilesInPath.Num() )
 				continue;
 
+			// The search gives bare names, a package outside the ini's paths is only found with its folder.
+			FString Folder = PackageWildcard.Left( Max(PackageWildcard.InStr(TEXT("/"),1),PackageWildcard.InStr(TEXT("\\"),1))+1 );
+
 			for( INT FileIndex = 0; FileIndex < FilesInPath.Num(); FileIndex++ )
 			{
-				const FString &File = FilesInPath(FileIndex);
+				const FString File = Folder + FilesInPath(FileIndex);
 				UObject* Package;
 
 				GWarn->Logf(NAME_Log, TEXT("Loading %s"), *File);

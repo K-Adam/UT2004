@@ -35,6 +35,11 @@ public:
 	}
 	virtual void Preload( UObject* Object )
 	{}
+	// The package being loaded, NULL for any other archive.
+	virtual UObject* LoadingPackage()
+	{
+		return NULL;
+	}
 	virtual void CountBytes( SIZE_T InNum, SIZE_T InMax )
 	{}
 	virtual FArchive& operator<<( class FName& N )

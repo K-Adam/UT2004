@@ -175,8 +175,8 @@ struct FScript
 	TArray<UProperty*> Props;
 	TArray<BYTE>& Code;
 
-	FScript( const TCHAR* Name )
-	:	Function( new( AActor::StaticClass(), Name )UFunction( NULL ) )
+	FScript( const TCHAR* Name, UObject* Outer=AActor::StaticClass() )
+	:	Function( new( Outer, Name )UFunction( NULL ) )
 	,	Code( Function->Script )
 	{}
 	template<class T> T* Add( T* Property )
@@ -523,6 +523,268 @@ TEST( Security, LatentActionMustBeAPollNative )
 	EXPECT_FALSE( Frame->Code );
 	Frame->Node = Node;
 	Frame->Code = Code;
+}
+
+// The loader repairs a layout it cannot trust and refuses the package.
+static UBOOL TakeRefusal( UPackage* Package )
+{
+	UBOOL Refused = Package->Refused && GRefusedScript.Len();
+	Package->Refused = 0;
+	GRefusedScript = TEXT("");
+	return Refused;
+}
+
+// A script class as a package would hold it. The constructor copies the super's defaults byte by byte.
+static UClass* ForgedClass( UPackage* Package, const TCHAR* Name, UClass* Super )
+{
+	UClass* Class = new( Package, Name, RF_Public|RF_Standalone )UClass( Super );
+	Class->Defaults.Empty();
+	Class->Defaults.Add( Class->GetPropertiesSize() );
+	Class->GetDefaultObject()->InitClassDefaultObject( Class );
+	Class->LabelTableOffset = MAXWORD;
+	FArchive Ar;
+	Class->Link( Ar, 1 );
+	return Class;
+}
+
+static UFunction* Lookup( UState* Scope, const TCHAR* Name )
+{
+	FName Find( Name );
+	for( UField* Node=Scope->VfHash[Find.GetIndex() & (UField::HASH_COUNT-1)]; Node; Node=Node->HashNext )
+		if( Node->GetFName()==Find )
+			return Cast<UFunction>( Node );
+	return NULL;
+}
+
+TEST( Security, FieldChainStaysInItsStruct )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityChain") );
+	UStruct* Other = new( Package, TEXT("Other") )UStruct( NULL );
+	UIntProperty* Foreign = new( Other, TEXT("Foreign") )UIntProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	Foreign->Offset = 77;
+	UStruct* Struct = new( Package, TEXT("Chained") )UStruct( NULL );
+	UIntProperty* Kept = new( Struct, TEXT("Kept") )UIntProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	Kept->Next = Foreign;
+	FArchive Ar;
+	Struct->Link( Ar, 1 );
+	EXPECT_FALSE( Kept->Next );
+	EXPECT_EQ( 77, Foreign->Offset );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+}
+
+TEST( Security, PropertyWithoutUsableTypeIsDropped )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityTypes") );
+	UStruct* Other = new( Package, TEXT("Other") )UStruct( NULL );
+	UIntProperty* Element = new( Other, TEXT("Element") )UIntProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	Element->Offset = 77;
+
+	UStruct* NoStruct = new( Package, TEXT("NoStruct") )UStruct( NULL );
+	new( NoStruct, TEXT("Member") )UStructProperty( EC_CppProperty, 0, TEXT(""), 0, NULL );
+	FArchive Ar;
+	NoStruct->Link( Ar, 1 );
+	EXPECT_FALSE( NoStruct->Children );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+
+	// Linking the array would move the element another struct owns.
+	UStruct* Borrowed = new( Package, TEXT("Borrowed") )UStruct( NULL );
+	UArrayProperty* Array = new( Borrowed, TEXT("Array") )UArrayProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	Array->Inner = Element;
+	Borrowed->Link( Ar, 1 );
+	EXPECT_FALSE( Borrowed->Children );
+	EXPECT_EQ( 77, Element->Offset );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+}
+
+TEST( Security, StructHoldingItselfHasASize )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityOwn") );
+	FArchive Ar;
+
+	// As a member it would copy without end, so it stands for the whole struct instead.
+	UStruct* List = new( Package, TEXT("List") )UStruct( NULL );
+	UStructProperty* Next = new( List, TEXT("Next") )UStructProperty( EC_CppProperty, 0, TEXT(""), 0, List );
+	Next->ArrayDim = 4;
+	new( List, TEXT("Value") )UIntProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	List->Link( Ar, 1 );
+	EXPECT_EQ( 4, List->PropertiesSize );
+	EXPECT_EQ( 4, Next->GetSize() );
+	EXPECT_FALSE( FindField<UProperty>( List, TEXT("Next") ) );
+
+	UStruct* Tree = new( Package, TEXT("Tree") )UStruct( NULL );
+	UArrayProperty* Branches = new( Tree, TEXT("Branches") )UArrayProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	new( Branches, TEXT("Branches") )UStructProperty( EC_CppProperty, 0, TEXT(""), 0, Tree );
+	new( Tree, TEXT("Leaf") )UIntProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	Tree->Link( Ar, 1 );
+	EXPECT_EQ( Tree->PropertiesSize, Branches->Inner->ElementSize );
+	EXPECT_FALSE( TakeRefusal( Package ) );
+}
+
+// Script and C++ find a function by name and pass what the one they know takes.
+TEST( Security, FunctionMustFitWhatItHides )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecuritySignature") );
+
+	// C++ calls Touch with one actor, a version with more would be copied past that.
+	FScript Wide( TEXT("Touch"), ForgedClass( Package, TEXT("Wide"), AActor::StaticClass() ) );
+	Wide.Ref( TEXT("Other"), CPF_Parm, AActor::StaticClass() );
+	Wide.Int( TEXT("More"), CPF_Parm, 64 );
+	Wide.Link();
+	EXPECT_TRUE( Wide.Function->SignatureError() );
+	Wide.Function->FunctionFlags |= FUNC_Operator;
+	EXPECT_TRUE( Wide.Function->SignatureError() );
+
+	// Another object class is handed to code that takes it for its own.
+	FScript Typed( TEXT("Touch"), ForgedClass( Package, TEXT("Typed"), AActor::StaticClass() ) );
+	Typed.Ref( TEXT("Other"), CPF_Parm, APawn::StaticClass() );
+	Typed.Link();
+	EXPECT_TRUE( Typed.Function->SignatureError() );
+
+	FScript Same( TEXT("Touch"), ForgedClass( Package, TEXT("Same"), AActor::StaticClass() ) );
+	Same.Ref( TEXT("Renamed"), CPF_Parm, AActor::StaticClass() );
+	Same.Int( TEXT("Local"), 0 );
+	Same.Link();
+	EXPECT_FALSE( Same.Function->SignatureError() );
+}
+
+// An override may drop out. One that adds it writes back to a caller who passed a value.
+TEST( Security, OverrideMayOnlyDropOut )
+{
+	UClass* Class = ForgedClass( UObject::CreatePackage( NULL, TEXT("SecurityOut") ), TEXT("Forged"), AActor::StaticClass() );
+	FScript Out( TEXT("SecurityOut"), Class ), Plain( TEXT("SecurityPlain"), Class );
+	Out.Int( TEXT("Value"), CPF_Parm|CPF_OutParm );
+	Plain.Int( TEXT("Value"), CPF_Parm );
+	Out.Link();
+	Plain.Link();
+	EXPECT_TRUE( GSameParms( Plain.Function, Out.Function, 1 ) );
+	EXPECT_FALSE( GSameParms( Out.Function, Plain.Function, 1 ) );
+	EXPECT_FALSE( GSameParms( Plain.Function, Out.Function ) );
+}
+
+// Callers take the leading properties of a function for its parameters.
+TEST( Security, FunctionParameterListIsChecked )
+{
+	UClass* Class = ForgedClass( UObject::CreatePackage( NULL, TEXT("SecurityParms") ), TEXT("Forged"), AActor::StaticClass() );
+
+	FScript Late( TEXT("SecurityLateParm"), Class );
+	Late.Int( TEXT("Local"), 0 );
+	Late.Int( TEXT("Parm"), CPF_Parm );
+	Late.Link();
+	EXPECT_TRUE( Late.Function->SignatureError() );
+
+	FScript Many( TEXT("SecurityManyParms"), Class );
+	for( INT i=0; i<=MAX_FUNC_PARMS; i++ )
+		Many.Int( *FString::Printf(TEXT("Parm%i"),i), CPF_Parm );
+	Many.Link();
+	EXPECT_TRUE( Many.Function->SignatureError() );
+
+	FScript Mixed( TEXT("SecurityMixed"), Class );
+	Mixed.Link();
+	Mixed.Function->Children = new( Mixed.Function, TEXT("NoVariable") )UConst( NULL, TEXT("1") );
+	EXPECT_TRUE( Mixed.Function->SignatureError() );
+}
+
+// A native reads its arguments as its C++ declares them, whatever class redeclares it.
+TEST( Security, RedeclaredNativeKeepsItsParameters )
+{
+	UClass* Class = ForgedClass( UObject::CreatePackage( NULL, TEXT("SecurityNative") ), TEXT("Forged"), AActor::StaticClass() );
+	UFunction* Native = NULL;
+	for( TFieldIterator<UFunction> It(AActor::StaticClass()); It && !Native; ++It )
+		if( It->iNative>=256 && It->NumParms>0 && It->GetOwnerClass()==AActor::StaticClass() )
+			Native = *It;
+	ASSERT_TRUE( Native );
+	FScript Decoy( TEXT("SecurityDecoy"), Class );
+	Decoy.Function->FunctionFlags = FUNC_Native;
+	Decoy.Function->iNative = Native->iNative;
+	Decoy.Link();
+	EXPECT_TRUE( Decoy.Function->SignatureError() );
+}
+
+TEST( Security, RefusedPackageRunsNoScript )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityRefused") );
+	UClass* Class = ForgedClass( Package, TEXT("Forged"), AActor::StaticClass() );
+	UFunction* Stock = Lookup( Class, TEXT("Touch") );
+	FScript S( TEXT("Touch"), Class );
+	S.Ref( TEXT("Other"), CPF_Parm, AActor::StaticClass() );
+	S.Link();
+	S.Return();
+	Class->Children = S.Function;
+	Class->Script.AddItem( EX_True );
+	FArchive Ar;
+	Class->Link( Ar, 1 );
+	UClass* Child = ForgedClass( Package, TEXT("Child"), Class );
+	ASSERT_TRUE( Lookup( Class, TEXT("Touch") )==S.Function );
+	ASSERT_TRUE( Lookup( Child, TEXT("Touch") )==S.Function );
+
+	GRefuseScript( S.Function, TEXT("is refused by a test") );
+	TArray<UObject*> Loaded;
+	GDisableRefusedScript( Loaded );
+	EXPECT_TRUE( Lookup( Class, TEXT("Touch") )==Stock );
+	EXPECT_TRUE( Lookup( Child, TEXT("Touch") )==Stock );
+	EXPECT_TRUE( S.Function->Func==(Native)&UObject::execNothing );
+	EXPECT_EQ( (INT)EX_False, (INT)Class->Script(0) );
+	S.Function->Bind();
+	EXPECT_TRUE( S.Function->Func==(Native)&UObject::execNothing );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+}
+
+// What only shows when a file is read: a reference of the wrong class, a native flag on a script variable,
+// a within class that does not fit, a label table past the script and a state of another class.
+TEST( Security, ForgedPackageIsRepairedOnLoad )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityForged") );
+	UPackage* NotAStruct = UObject::CreatePackage( Package, TEXT("NotAStruct") );
+	UStruct* Struct = new( Package, TEXT("Forged"), RF_Public|RF_Standalone )UStruct( NULL );
+	new( Struct, TEXT("Kept") )UIntProperty( EC_CppProperty, 0, TEXT(""), 0 );
+	new( Struct, TEXT("Text") )UStrProperty( EC_CppProperty, 0, TEXT(""), CPF_Native );
+	new( Struct, TEXT("Wrong") )UStructProperty( EC_CppProperty, 0, TEXT(""), 0, (UStruct*)NotAStruct );
+
+	UState* State = new( Package, TEXT("Labels"), RF_Public|RF_Standalone )UState( NULL );
+	State->Script.AddItem( EX_Stop );
+	State->LabelTableOffset = 500;
+
+	UClass* Cheat = UObject::StaticLoadClass( UObject::StaticClass(), NULL, TEXT("Engine.CheatManager"), NULL, LOAD_NoWarn, NULL );
+	ASSERT_TRUE( Cheat && Cheat->ClassWithin!=UObject::StaticClass() );
+	UClass* Class = ForgedClass( Package, TEXT("Within"), Cheat );
+	Class->ClassWithin = UObject::StaticClass();
+
+	UClass* Plain = UObject::StaticLoadClass( UObject::StaticClass(), NULL, TEXT("Engine.LevelSummary"), NULL, LOAD_NoWarn, NULL );
+	ASSERT_TRUE( Plain );
+	UState* Elsewhere = NULL;
+	for( TObjectIterator<UState> It; It && !Elsewhere; ++It )
+		if( It->GetClass()==UState::StaticClass() && It->GetOuter()->IsA(UClass::StaticClass()) && !Plain->IsChildOf((UClass*)It->GetOuter()) )
+			Elsewhere = *It;
+	ASSERT_TRUE( Elsewhere );
+	UObject* Object = UObject::StaticConstructObject( Plain, Package, TEXT("Stateful"), RF_Public|RF_Standalone );
+	Object->InitExecution();
+	Object->GetStateFrame()->Node = Object->GetStateFrame()->StateNode = Elsewhere;
+
+	ASSERT_TRUE( UObject::SavePackage( Package, NULL, RF_Standalone, TEXT("SecurityForged.u"), GWarn ) );
+	Object->GetStateFrame()->Node = Object->GetStateFrame()->StateNode = Plain;
+	ASSERT_TRUE( UObject::LoadPackage( NULL, TEXT("SecurityForged.u"), LOAD_NoWarn ) );
+	UObject::ResetLoaders( Package, 0, 1 );
+	GFileManager->Delete( TEXT("SecurityForged.u") );
+
+	Struct = FindObject<UStruct>( Package, TEXT("Forged") );
+	ASSERT_TRUE( Struct );
+	UProperty* Text = FindField<UProperty>( Struct, TEXT("Text") );
+	ASSERT_TRUE( Text );
+	EXPECT_FALSE( Text->PropertyFlags & CPF_Native );
+	EXPECT_TRUE( Text->PropertyFlags & CPF_NeedCtorLink );
+	EXPECT_FALSE( FindField<UProperty>( Struct, TEXT("Wrong") ) );
+	EXPECT_TRUE( FindField<UProperty>( Struct, TEXT("Kept") ) );
+	State = FindObject<UState>( Package, TEXT("Labels") );
+	ASSERT_TRUE( State );
+	EXPECT_EQ( (INT)MAXWORD, (INT)State->LabelTableOffset );
+	Class = FindObject<UClass>( Package, TEXT("Within") );
+	ASSERT_TRUE( Class );
+	EXPECT_TRUE( Class->ClassWithin==Cheat->ClassWithin );
+	Object = FindObject<UObject>( Package, TEXT("Stateful") );
+	ASSERT_TRUE( Object && Object->GetStateFrame() );
+	EXPECT_TRUE( Object->GetStateFrame()->Node==Plain );
+	EXPECT_TRUE( Object->GetStateFrame()->StateNode==Plain );
+	EXPECT_TRUE( TakeRefusal( Package ) );
 }
 
 // The query script answers each request in a datagram, the engine caps what one datagram can set off.

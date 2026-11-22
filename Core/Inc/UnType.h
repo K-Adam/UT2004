@@ -51,6 +51,8 @@ class CORE_API UProperty : public UField
 	// UProperty interface.
 	virtual void CleanupDestroyed( BYTE* Data ) const;
 	virtual void Link( FArchive& Ar, UProperty* Prev );
+	// Why a property read from a file cannot take part in its struct, checked before Link trusts its type.
+	virtual const TCHAR* LinkError( FArchive& Ar );
 	virtual UBOOL Identical( const void* A, const void* B ) const=0;
 	virtual void ExportCpp( FOutputDevice& Out, UBOOL IsLocal, UBOOL IsParm, UBOOL IsEvent, UBOOL IsStruct ) const;
 	virtual void ExportCppItem( FOutputDevice& Out, UBOOL IsEvent=0 ) const=0;
@@ -448,6 +450,7 @@ class CORE_API UFixedArrayProperty : public UProperty
 	// UProperty interface.
 	void CleanupDestroyed( BYTE* Data ) const;
 	void Link( FArchive& Ar, UProperty* Prev );
+	const TCHAR* LinkError( FArchive& Ar );
 	UBOOL Identical( const void* A, const void* B ) const;
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
@@ -490,6 +493,7 @@ class CORE_API UArrayProperty : public UProperty
 	// UProperty interface.
 	void CleanupDestroyed( BYTE* Data ) const;
 	void Link( FArchive& Ar, UProperty* Prev );
+	const TCHAR* LinkError( FArchive& Ar );
 	UBOOL Identical( const void* A, const void* B ) const;
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
@@ -533,6 +537,7 @@ class CORE_API UMapProperty : public UProperty
 
 	// UProperty interface.
 	void Link( FArchive& Ar, UProperty* Prev );
+	const TCHAR* LinkError( FArchive& Ar );
 	UBOOL Identical( const void* A, const void* B ) const;
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;
@@ -574,6 +579,7 @@ class CORE_API UStructProperty : public UProperty
 	// UProperty interface.
 	void CleanupDestroyed( BYTE* Data ) const;
 	void Link( FArchive& Ar, UProperty* Prev );
+	const TCHAR* LinkError( FArchive& Ar );
 	UBOOL Identical( const void* A, const void* B ) const;
 	void SerializeItem( FArchive& Ar, void* Value, INT MaxReadBytes ) const;
 	UBOOL NetSerializeItem( FArchive& Ar, UPackageMap* Map, void* Data ) const;

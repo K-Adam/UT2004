@@ -30,7 +30,14 @@ extern CORE_API INT GMaxPropertySize;
 // Natives that poll a latent action, the only ones a state frame's LatentAction may name.
 extern CORE_API BYTE GLatentNatives[];
 // Whether two functions take and return the same parameter block, so one can be called in place of the other.
-CORE_API UBOOL GSameParms( UFunction* A, UFunction* B );
+// With Override A is called in place of B by name: it may drop out, and object parameters are of the same class.
+CORE_API UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override=0 );
+// The script function that declares a numbered native.
+UFunction* GNativeFunction( INT iNative );
+// Turns down the package of an object whose layout the loader had to repair.
+CORE_API void GRefuseScript( UObject* Culprit, const TCHAR* Rule );
+UBOOL GIsRefused( UObject* Object );
+CORE_API void GDisableRefusedScript( TArray<UObject*>& Loaded );
 
 extern CORE_API Native GCasts[];
 BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );

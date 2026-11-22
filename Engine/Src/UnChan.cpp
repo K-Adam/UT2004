@@ -993,11 +993,16 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 			guard(RemoteCall);
 			FName Message = FieldCache->Field->GetFName();
 			UFunction* Function = Actor->FindFunction( Message );
-			check(Function);
 
 			// See if UnrealScript replication condition is met.
 			UBOOL Ignore=0;
-			if( !Connection->Driver->ServerConnection )
+			// A function of a refused package is no longer found by name. Its arguments are still in the bunch.
+			if( !Function )
+			{
+				Function = (UFunction*)FieldCache->Field;
+				Ignore = 1;
+			}
+			else if( !Connection->Driver->ServerConnection )
 			{
 				// Checked on every call, because bNetOwner depends on the actor and the calling connection.
 				guard(EvalRPCCondition);

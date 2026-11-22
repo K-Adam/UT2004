@@ -574,6 +574,24 @@ void UObject::Serialize( FArchive& Ar )
 			Ar << StateFrame->Node << StateFrame->StateNode;
 			Ar << StateFrame->ProbeMask;
 			Ar << StateFrame->LatentAction;
+			// State code runs on this object and function lookup goes through the state's table, so both
+			// must be the class, one above it, or a state of those.
+			UBOOL Foreign = 0;
+			UStruct* Nodes[2] = { StateFrame->Node, StateFrame->StateNode };
+			if( Ar.IsLoading() )
+			{
+				for( INT i=0; i<2; i++ )
+				{
+					UClass* Scope = Cast<UClass>( Nodes[i] && Nodes[i]->GetClass()==UState::StaticClass() ? Nodes[i]->GetOuter() : Nodes[i] );
+					Foreign |= Nodes[i] && (!Scope || !GetClass()->IsChildOf(Scope));
+				}
+			}
+			if( Foreign )
+			{
+				StateFrame->Node = StateFrame->StateNode = GetClass();
+				StateFrame->LatentAction = 0;
+				GRefuseScript( this, TEXT("is in a state of another class") );
+			}
 			if( StateFrame->Node )
 			{
 				Ar.Preload( StateFrame->Node );
@@ -581,6 +599,9 @@ void UObject::Serialize( FArchive& Ar )
 					check(StateFrame->Code>=&StateFrame->Node->Script(0) && StateFrame->Code<&StateFrame->Node->Script(StateFrame->Node->Script.Num()));
 				INT Offset = StateFrame->Code ? StateFrame->Code - &StateFrame->Node->Script(0) : INDEX_NONE;
 				Ar << AR_INDEX(Offset);
+				// A class holds no state code to go on in.
+				if( Foreign || StateFrame->Node->GetClass()==UClass::StaticClass() )
+					Offset = INDEX_NONE;
 				if( Offset!=INDEX_NONE )
 					if( Offset<0 || Offset>=StateFrame->Node->Script.Num() )
 						appErrorf( TEXT("%s: Offset mismatch: %i %i"), GetFullName(), Offset, StateFrame->Node->Script.Num() );
@@ -3505,6 +3526,10 @@ ULinkerLoad* UObject::GetPackageLinker
 			SafeLoadError( LoadFlags, Error, LocalizeError(TEXT("FailedLoad"),TEXT("Core")), InFilename ? InFilename : InOuter ? InOuter->GetName() : TEXT("NULL"), Error );
 	}
 
+	// A refused package that is still loaded must not be played on a second time.
+	if( Result && GIsRefused(Result->LinkerRoot) )
+		GRefusedScript = Result->LinkerRoot->GetPathName();
+
 	// Success.
 	return Result;
 	unguard;
@@ -3824,6 +3849,9 @@ void UObject::EndLoad()
 				ObjLoaded(i)->ConditionalPostLoad();
 			unguard;
 			}
+
+			// Before the import table forgets which packages were used, and before any script runs.
+			GDisableRefusedScript( ObjLoaded );
 
 			// Dissociate all linker import object references, since they 
 			// may be destroyed, causing their pointers to become invalid.
@@ -5500,6 +5528,7 @@ UPackage::UPackage()
 
 	BindPackage( this );
 	bDirty = 0;
+	Refused = 0;
 
 	unguard;
 }

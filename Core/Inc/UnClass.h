@@ -305,6 +305,8 @@ class CORE_API UStruct : public UField
 	// UStruct interface.
 	virtual UStruct* GetInheritanceSuper() {return GetSuperStruct();}
 	virtual void Link( FArchive& Ar, UBOOL Props );
+	// Leaves nothing of the struct's script that could run, for a package the loader refused.
+	virtual void DisableScript() {}
 	virtual void SerializeBin( FArchive& Ar, BYTE* Data, INT MaxReadBytes );
 	virtual void SerializeTaggedProperties( FArchive& Ar, BYTE* Data, UClass* DefaultsClass );
 	virtual void CleanupDestroyed( BYTE* Data );
@@ -392,6 +394,9 @@ class CORE_API UFunction : public UStruct
 	UBOOL MergeBools() {return 0;}
 	UStruct* GetInheritanceSuper() {return NULL;}
 	void Link( FArchive& Ar, UBOOL Props );
+	void DisableScript();
+	// Why the function cannot be called in place of the ones it hides, NULL when it can.
+	const TCHAR* SignatureError();
 
 	// UFunction interface.
 	UFunction* GetSuperFunction() const
@@ -436,6 +441,7 @@ class CORE_API UState : public UStruct
 	UBOOL MergeBools() {return 1;}
 	UStruct* GetInheritanceSuper() {return GetSuperState();}
 	void Link( FArchive& Ar, UBOOL Props );
+	void DisableScript();
 
 	// UState interface.
 	UState* GetSuperState() const
@@ -531,6 +537,7 @@ class CORE_API UClass : public UState
 	// UStruct interface.
 	UBOOL MergeBools() {return 1;}
 	UStruct* GetInheritanceSuper() {return GetSuperClass();}
+	void DisableScript();
 	TCHAR* GetNameCPP() const
 	{
 		TCHAR* Result = appStaticString1024();

@@ -410,13 +410,17 @@ public: \
 		{ return (void*)Mem; }
 #endif
 
+// A file can put any object where a typed reference is read. One of another class is dropped, and the
+// package it was read for is refused.
+CORE_API void GKeepClass( FArchive& Ar, UObject*& Object, UClass* Class );
+
 // Declare a concrete class.
 // InternalConstructor must default-initialize. "new TClass()" zero-fills classes without
 // a user-provided constructor and wipes the Class, Name and Index set by StaticAllocateObject.
 #define DECLARE_CLASS( TClass, TSuperClass, TStaticFlags, TPackage ) \
 	DECLARE_BASE_CLASS( TClass, TSuperClass, TStaticFlags, TPackage ) \
 	friend FArchive &operator<<( FArchive& Ar, TClass*& Res ) \
-		{ return Ar << *(UObject**)&Res; } \
+		{ Ar << *(UObject**)&Res; if( Res && Ar.IsLoading() ) GKeepClass( Ar, *(UObject**)&Res, StaticClass() ); return Ar; } \
 	virtual ~TClass() \
 		{ ConditionalDestroy(); } \
 	static void InternalConstructor( void* X ) \
@@ -426,7 +430,7 @@ public: \
 #define DECLARE_ABSTRACT_CLASS( TClass, TSuperClass, TStaticFlags, TPackage ) \
 	DECLARE_BASE_CLASS( TClass, TSuperClass, TStaticFlags | CLASS_Abstract, TPackage ) \
 	friend FArchive &operator<<( FArchive& Ar, TClass*& Res ) \
-		{ return Ar << *(UObject**)&Res; } \
+		{ Ar << *(UObject**)&Res; if( Res && Ar.IsLoading() ) GKeepClass( Ar, *(UObject**)&Res, StaticClass() ); return Ar; } \
 	virtual ~TClass() \
 		{ ConditionalDestroy(); } \
 

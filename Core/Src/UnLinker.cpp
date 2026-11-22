@@ -458,6 +458,8 @@ ULinkerLoad::ULinkerLoad( UObject* InParent, const TCHAR* InFilename, DWORD InLo
 		(	Export.ClassIndex<-ImportMap.Num() || Export.ClassIndex>ExportMap.Num()
 		||	Export.SuperIndex<-ImportMap.Num() || Export.SuperIndex>ExportMap.Num()
 		||	(Export.ClassIndex<0 && ImportMap(-Export.ClassIndex-1).PackageIndex>=0)
+		// An export inside an import would be created in another package, in place of what is there.
+		||	Export.PackageIndex<0
 		||	!ChainEnds(Export.PackageIndex)
 		||	!TableFits(Export.SerialSize, Export.SerialOffset, FileSize) )
 			RejectFile();
@@ -589,6 +591,8 @@ void ULinkerLoad::VerifyImport( INT i )
 		{
 			appThrowf( TEXT("%s"), Error );
 		}
+		if( Import.SourceLinker && GIsRefused(Import.SourceLinker->LinkerRoot) && !GIsRefused(LinkerRoot) )
+			GRefuseScript( LinkerRoot, TEXT("uses a refused package") );
 	}
 	else
 	{
@@ -867,7 +871,17 @@ UObject* ULinkerLoad::CreateExport( INT Index )
 
 		// If it's a struct or class, set its parent.
 		if( Export._Object->IsA(UStruct::StaticClass()) && Export.SuperIndex!=0 )
-			((UStruct*)Export._Object)->SuperField = Cast<UStruct>( IndexToObject( Export.SuperIndex ) );
+		{
+			// A class lays its instances out after its super and binds to its constructor, a state copies its
+			// function table. There is no safe stand-in for a super of another kind or one that loops.
+			UStruct* Super = (UStruct*)IndexToObject( Export.SuperIndex );
+			if( Super && Super->GetClass()!=Export._Object->GetClass() )
+				appErrorf( TEXT("%s has %s as super"), Export._Object->GetFullName(), Super->GetFullName() );
+			for( UField* Test=Super; Test; Test=Test->SuperField )
+				if( Test==Export._Object )
+					appErrorf( TEXT("%s is its own super"), Export._Object->GetFullName() );
+			((UStruct*)Export._Object)->SuperField = Super;
+		}
 
 		// If it's a class, bind it to C++.
 		if( Export._Object->IsA( UClass::StaticClass() ) )

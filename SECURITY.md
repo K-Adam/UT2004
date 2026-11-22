@@ -6,6 +6,8 @@ The game talks to master servers, game servers and other players, and a dedicate
 
 Joining a server runs that server's UnrealScript on the player's machine, as the retail game does. On Windows, Linux and Android that script runs with the game's own rights. It can change the game's settings and write logs, saves, screenshots and demos in the game's folders. It is not meant to reach other files, load native code or start programs, and anything that lets it is a bug to report. A web page it wants to open is shown to the player first, who can say no. The web build is confined by the browser's sandbox.
 
+A package whose classes, structures and functions do not fit together the way the compiler makes them is repaired as it loads and refused: none of its script runs and the game leaves the level with a message. The log names the reason in a line that starts with `Refused`. The rules were run over 1,427 retail, downloaded and mod packages without a refusal, so one on a server that works in the retail game is a bug to report.
+
 `AllowDownloads=False` in `[IpDrv.TcpNetDriver]` keeps new packages from being downloaded. Packages already in the game folders or in the cache are still used. Join servers you trust.
 
 ## Running a server

@@ -2060,10 +2060,12 @@ UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT 
 CORE_API void appCreateTempFilename( const TCHAR* Path, TCHAR* Result256 )
 {
 	guard(appCreateTempFilename);
-	static INT i=0;
+	// Game instances share the cache folder and pick a name before they create the file, so each starts
+	// counting somewhere else and leaves alone what is there, written to or not.
+	static INT i = appCreateGuid().A & 0x7FFF;
 	do
 		appSprintf( Result256, TEXT("%s") PATH_SEPARATOR TEXT("%04X.tmp"), Path, i++ );
-	while( GFileManager->FileSize(Result256)>0 );
+	while( GFileManager->FileSize(Result256)>=0 );
 	unguard;
 }
 

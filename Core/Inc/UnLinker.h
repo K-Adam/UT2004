@@ -198,6 +198,10 @@ private:
 	INT Tell();
 	INT TotalSize();
 	void Serialize( void* V, INT Length );
+	UObject* LoadingPackage()
+	{
+		return LinkerRoot;
+	}
 	FArchive& operator<<( UObject*& Object )
 	{
 		guard(ULinkerLoad<<UObject);

@@ -262,6 +262,7 @@ void UHTTPDownload::Tick(void)
 				AnsiRequest(i) = ToAnsi( (*Request)[i] );
 			send( ServerSocket, &AnsiRequest(0), AnsiRequest.Num(), 0 );
 		}
+		ConnectStartTime = GCurrentTime;
 		HTTPState = HTTP_ReceivingHeader;
 		break;
 	case HTTP_ReceivingHeader:
@@ -400,9 +401,11 @@ UBOOL UHTTPDownload::FetchData()
 	if( Bytes != SOCKET_ERROR )
 	{
 		appMemcpy( &ReceivedData(ReceivedData.Add(Bytes)), Buf, Bytes );
+		ConnectStartTime = GCurrentTime;
 		return 1;
 	}
-	if( Bytes == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK )
+	// A host that accepts the connection and then sends nothing would keep the player waiting for good.
+	if( Bytes == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK && GCurrentTime - ConnectStartTime <= 30 )
 		return 0; // No data
 
 	debugf( NAME_DevNet, TEXT("HTTPDownload: recv() failed") );

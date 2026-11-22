@@ -42,7 +42,9 @@ static UBOOL NativeAllowed( UObject* Object, INT iNative )
 CORE_API void (UObject::*GCasts[256])( FFrame &Stack, RESULT_DECL );
 CORE_API INT GCastDuplicate=0;
 
-#define RUNAWAY_LIMIT 10000000
+// Jumps script may take between two resets. The retail 10 million end the game on servers whose anti-cheat
+// walks every loaded class member in one call, which retail clients crash on as well.
+#define RUNAWAY_LIMIT 100000000
 #define RECURSE_LIMIT 250
 
 #if DO_GUARD
@@ -357,8 +359,7 @@ void UObject::execUndefined( FFrame& Stack, RESULT_DECL  )
 CORE_API INT GMaxPropertySize = 0;
 CORE_API BYTE GLatentNatives[EX_Max];
 
-// The script function that declares a numbered native.
-static UFunction* NativeFunction( INT iNative )
+UFunction* GNativeFunction( INT iNative )
 {
 	if( UClass* Class = GNativeClass( iNative ) )
 		for( TFieldIterator<UFunction> It(Class); It; ++It )
@@ -385,9 +386,9 @@ static void SkipNullContext( FFrame& Stack, RESULT_DECL )
 		Stack.Code = Expr;
 	}
 	else if( Token>=EX_FirstNative )
-		Field = NativeFunction( Token );
+		Field = GNativeFunction( Token );
 	else if( Token>=EX_ExtendedNative )
-		Field = NativeFunction( (Token-EX_ExtendedNative)*0x100 + Stack.Code[1] );
+		Field = GNativeFunction( (Token-EX_ExtendedNative)*0x100 + Stack.Code[1] );
 	if( Field )
 	{
 		UDelegateProperty* Delegate = Cast<UDelegateProperty>( Field );
@@ -1266,7 +1267,24 @@ IMPLEMENT_FUNCTION( UObject, EX_GlobalFunction, execGlobalFunction );
 // Delegates         //
 ///////////////////////
 
-UBOOL GSameParms( UFunction* A, UFunction* B )
+static UBOOL SameType( UProperty* P, UProperty* Q, UBOOL Classes )
+{
+	if( P->GetClass()!=Q->GetClass() || P->ElementSize!=Q->ElementSize || P->ArrayDim!=Q->ArrayDim )
+		return 0;
+	if( UStructProperty* Struct = Cast<UStructProperty>(P) )
+		return Struct->Struct==((UStructProperty*)Q)->Struct;
+	if( UArrayProperty* Array = Cast<UArrayProperty>(P) )
+		return SameType( Array->Inner, ((UArrayProperty*)Q)->Inner, Classes );
+	if( Classes && (P->GetClass()->ClassFlags & CLASS_IsAUObjectProperty) )
+	{
+		UClassProperty* Meta = Cast<UClassProperty>( P );
+		return ((UObjectProperty*)P)->PropertyClass==((UObjectProperty*)Q)->PropertyClass
+			&& (!Meta || Meta->MetaClass==((UClassProperty*)Q)->MetaClass);
+	}
+	return 1;
+}
+
+UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override )
 {
 	if( A==B )
 		return 1;
@@ -1274,16 +1292,9 @@ UBOOL GSameParms( UFunction* A, UFunction* B )
 	UProperty* Q = Cast<UProperty>( B->Children );
 	for( ; P && Q && ((P->PropertyFlags | Q->PropertyFlags) & CPF_Parm); P=Cast<UProperty>(P->Next), Q=Cast<UProperty>(Q->Next) )
 	{
-		UStructProperty* Struct = Cast<UStructProperty>( P );
-		UArrayProperty* Array = Cast<UArrayProperty>( P );
-		if
-		(	P->GetClass()!=Q->GetClass()
-		||	P->Offset!=Q->Offset
-		||	P->ElementSize!=Q->ElementSize
-		||	P->ArrayDim!=Q->ArrayDim
-		||	((P->PropertyFlags ^ Q->PropertyFlags) & (CPF_Parm|CPF_OutParm|CPF_ReturnParm))
-		||	(Struct && Struct->Struct!=((UStructProperty*)Q)->Struct)
-		||	(Array && Array->Inner->GetClass()!=((UArrayProperty*)Q)->Inner->GetClass()) )
+		// An out that only A has is copied back to a caller who passed a value.
+		DWORD Differ = (P->PropertyFlags ^ Q->PropertyFlags) & (Override ? P->PropertyFlags|~CPF_OutParm : ~0);
+		if( P->Offset!=Q->Offset || (Differ & (CPF_Parm|CPF_ReturnParm|CPF_OutParm)) || !SameType(P,Q,Override) )
 			return 0;
 	}
 	// A list that ended may be followed by locals on the other side, but not by more parameters.
