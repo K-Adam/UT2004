@@ -8,17 +8,9 @@ The engine, the game code, the UnrealScript packages and all game data belong to
 
 ## This port
 
-The files this port added, and the changes it made to existing files as far as their author can license them, are under the Mozilla Public License 2.0 in `LICENSE`. That covers:
+Everything this port wrote, and the changes it made to existing files as far as their author can license them, is under the Mozilla Public License 2.0 in `LICENSE`. Epic's code and data and the files listed in `System/THIRD_PARTY.md` are excluded.
 
-- `Android/` (apart from `app/src/main/java/org/libsdl/app`, which is SDL's)
-- `Emscripten/`, `DevIni/`, `ports/`, `triplets/`
-- `GUI2K4Fix/`, `XAdminFix/`
-- `SDLDrv/`, `SDLLaunch/`, `OpenGLDrv/` (apart from the vendored files listed in `System/THIRD_PARTY.md`)
-- `IpDrv/Src/WebMaster.cpp`, `IpDrv/Src/WebRtc.cpp`, `IpDrv/Src/WebRtc.h`, `IpDrv/Src/WebRtcCommon.cpp`
-- `Engine/Src/UnNicknameWords.h`
-- every `CMakeLists.txt`, `CMakePresets.json` and `vcpkg.json`
-
-The files carry no license header. This notice takes its place, as Exhibit A of the license allows.
+The port's files carry no license header. This notice takes its place, as Exhibit A of the license allows.
 
 In short: you may use, change and ship these files, in open or closed projects. If you distribute changed versions of them, those files stay under the MPL, and you say where they came from: https://github.com/K-Adam/UT2004
 
