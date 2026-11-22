@@ -284,6 +284,9 @@ class CORE_API UStruct : public UField
 	UProperty*			PropertyLink;
 	UProperty*			ConfigLink;
 	UProperty*			ConstructorLink;
+	// Size of the largest struct that extends this one, 0 when none was linked. Script hands such a value to
+	// code that names this struct.
+	INT					DerivedSize;
 
 	// Constructors.
 	UStruct( ENativeConstructor, INT InSize, const TCHAR* InName, const TCHAR* InPackageName, DWORD InFlags, UStruct* InSuperStruct );

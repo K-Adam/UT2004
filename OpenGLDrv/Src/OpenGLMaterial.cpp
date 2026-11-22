@@ -328,6 +328,9 @@ void FOpenGLRenderInterface::SetMaterial(UMaterial* Material,FString* ErrorStrin
 	}
 
 	Material->PreSetMaterial(Viewport->Actor ? Viewport->Actor->Level->TimeSeconds : 0.f);
+	FString Reason;
+	if( !ErrorString )
+		ErrorString = &Reason;
 	if( !CompileMaterial(Material,ErrorString,ErrorMaterial) )
 	{
 		// Content the fixed function drivers could not render may name a chain of fallbacks. Only the
@@ -338,7 +341,14 @@ void FOpenGLRenderInterface::SetMaterial(UMaterial* Material,FString* ErrorStrin
 			Compiled = CompileMaterial(Fallback,NULL,NULL);
 		if( !Compiled )
 		{
-			debugf(NAME_Warning,TEXT("OpenGLDrv: %s is not renderable"),Material->GetFullName());
+			// This runs for every draw, so a material is reported once.
+			static TArray<FString> Reported;
+			FString Name = Material->GetPathName();
+			if( Reported.FindItemIndex(Name)==INDEX_NONE )
+			{
+				new(Reported)FString(Name);
+				debugf(NAME_Warning,TEXT("OpenGLDrv: %s is not renderable: %s"),Material->GetFullName(),**ErrorString);
+			}
 			CompileMaterial(DefaultMaterial,NULL,NULL);
 		}
 	}

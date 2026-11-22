@@ -304,6 +304,7 @@ UStruct::UStruct( ENativeConstructor, INT InSize, const TCHAR* InName, const TCH
 ,	PropertyLink	( NULL )
 ,	ConfigLink	    ( NULL )
 ,	ConstructorLink	( NULL )
+,	DerivedSize		( 0 )
 ,	FriendlyName	( /*Uninitialized*/ )
 {}
 UStruct::UStruct( EStaticConstructor, INT InSize, const TCHAR* InName, const TCHAR* InPackageName, DWORD InFlags )
@@ -318,6 +319,7 @@ UStruct::UStruct( EStaticConstructor, INT InSize, const TCHAR* InName, const TCH
 ,	PropertyLink	( NULL )
 ,	ConfigLink	    ( NULL )
 ,	ConstructorLink	( NULL )
+,	DerivedSize		( 0 )
 ,	FriendlyName	( /*Uninitialized*/ )
 {}
 UStruct::UStruct( UStruct* InSuperStruct )
@@ -388,6 +390,9 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 		}
 
 		PropertiesSize = Align(PropertiesSize,4);
+		GMaxPropertySize = Max( GMaxPropertySize, PropertiesSize );
+		for( UStruct* Base=GetInheritanceSuper(); Base; Base=Base->GetInheritanceSuper() )
+			Base->DerivedSize = Max( Base->DerivedSize, PropertiesSize );
 	}
 	else
 	{

@@ -149,7 +149,9 @@ void UDownload::DownloadDone()
 	if( SkippedFile )
 	{
 		debugf( TEXT("Skipped download of '%s'"), Info->Parent->GetName() );
-		GFileManager->Delete( TempFilename );
+		// A download that ends before any data came has no temporary file.
+		if( *TempFilename )
+			GFileManager->Delete( TempFilename );
 		TCHAR Msg[256];
 		appSprintf( Msg, TEXT("Skipped '%s'"), Info->Parent->GetName() );
 		Connection->Driver->Notify->NotifyProgress( TEXT(""),TEXT("Success"), Msg, 4.f );
@@ -191,7 +193,8 @@ void UDownload::DownloadDone()
 			DownloadError( LocalizeError(TEXT("NetMove"),TEXT("Engine")) );
 		if( *Error )
 		{
-			GFileManager->Delete( TempFilename );
+			if( *TempFilename )
+				GFileManager->Delete( TempFilename );
 			Connection->Driver->Notify->NotifyReceivedFile( Connection, PackageIndex, Error, 0, AttemptNumber );
 		}
 		else

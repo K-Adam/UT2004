@@ -704,7 +704,7 @@ void AActor::execPollSleep( FFrame& Stack, RESULT_DECL )
 	}
 	unguardexecSlow;
 }
-IMPLEMENT_FUNCTION( AActor, EPOLL_Sleep, execPollSleep );
+IMPLEMENT_LATENT_FUNCTION( AActor, EPOLL_Sleep, execPollSleep );
 
 void AActor::execPollFinishAnim( FFrame& Stack, RESULT_DECL )
 {
@@ -715,7 +715,7 @@ void AActor::execPollFinishAnim( FFrame& Stack, RESULT_DECL )
 
 	unguardexecSlow;
 }
-IMPLEMENT_FUNCTION( AActor, EPOLL_FinishAnim, execPollFinishAnim );
+IMPLEMENT_LATENT_FUNCTION( AActor, EPOLL_FinishAnim, execPollFinishAnim );
 
 void AActor::execPollFinishInterpolation( FFrame& Stack, RESULT_DECL )
 {
@@ -726,7 +726,7 @@ void AActor::execPollFinishInterpolation( FFrame& Stack, RESULT_DECL )
 
 	unguardexecSlow;
 }
-IMPLEMENT_FUNCTION( AActor, EPOLL_FinishInterpolation, execPollFinishInterpolation );
+IMPLEMENT_LATENT_FUNCTION( AActor, EPOLL_FinishInterpolation, execPollFinishInterpolation );
 
 /////////////////////////
 // Animation functions //
@@ -2914,8 +2914,12 @@ void AActor::ProcessState( FLOAT DeltaSeconds )
 			clock(GScriptCycles);
 
 		// If a latent action is in progress, update it.
-		if( GetStateFrame()->LatentAction )
-			(this->*GNatives[GetStateFrame()->LatentAction])( *GetStateFrame(), (BYTE*)&DeltaSeconds );
+		// A saved state frame brings its own number, which must be a poll native of this actor.
+		INT Latent = GetStateFrame()->LatentAction;
+		if( Latent<=0 || Latent>=EX_Max || !GLatentNatives[Latent] || !IsA(GNativeClass(Latent)) )
+			GetStateFrame()->LatentAction = 0;
+		else
+			(this->*GNatives[Latent])( *GetStateFrame(), (BYTE*)&DeltaSeconds );
 
 		// Execute code.
 		INT NumStates=0;

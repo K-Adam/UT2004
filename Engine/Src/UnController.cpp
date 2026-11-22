@@ -756,7 +756,7 @@ void AController::execPollWaitForLanding( FFrame& Stack, RESULT_DECL )
 	}
 	unguardSlow;
 }
-IMPLEMENT_FUNCTION( AController, AI_PollWaitForLanding, execPollWaitForLanding);
+IMPLEMENT_LATENT_FUNCTION( AController, AI_PollWaitForLanding, execPollWaitForLanding );
 
 void AController::execPickWallAdjust( FFrame& Stack, RESULT_DECL )
 {
@@ -1230,7 +1230,7 @@ void AAIController::execPollWaitToSeeEnemy( FFrame& Stack, RESULT_DECL )
 
 	unguardSlow;
 }
-IMPLEMENT_FUNCTION( AAIController, AI_PollWaitToSeeEnemy, execPollWaitToSeeEnemy);
+IMPLEMENT_LATENT_FUNCTION( AAIController, AI_PollWaitToSeeEnemy, execPollWaitToSeeEnemy );
 
 /* execMoveTo()
 start moving to a point -does not use routing
@@ -1288,7 +1288,7 @@ void AController::execPollMoveTo( FFrame& Stack, RESULT_DECL )
 		CheckFears();
 	unguardSlow;
 }
-IMPLEMENT_FUNCTION( AController, AI_PollMoveTo, execPollMoveTo);
+IMPLEMENT_LATENT_FUNCTION( AController, AI_PollMoveTo, execPollMoveTo );
 
 /* CheckFears()
 Adjust pawn movement to avoid active FearSpots
@@ -1670,7 +1670,7 @@ void AController::execPollMoveToward( FFrame& Stack, RESULT_DECL )
 	}
 	unguardSlow;
 }
-IMPLEMENT_FUNCTION( AController, AI_PollMoveToward, execPollMoveToward);
+IMPLEMENT_LATENT_FUNCTION( AController, AI_PollMoveToward, execPollMoveToward );
 
 /* execTurnToward()
 turn toward Focus
@@ -1694,7 +1694,7 @@ void AController::execPollFinishRotation( FFrame& Stack, RESULT_DECL )
 
 	unguardSlow;
 }
-IMPLEMENT_FUNCTION( AController, AI_PollFinishRotation, execPollFinishRotation);
+IMPLEMENT_LATENT_FUNCTION( AController, AI_PollFinishRotation, execPollFinishRotation );
 
 /* 
 SeePawn()

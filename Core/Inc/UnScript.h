@@ -25,6 +25,13 @@ CORE_API Native GUncheckedNative( INT iNative );
 // Path of script the loader refused, the engine leaves the level that brought it.
 extern CORE_API FString GRefusedScript;
 
+// Size of the largest struct, class or function frame linked so far, which bounds any value script can produce.
+extern CORE_API INT GMaxPropertySize;
+// Natives that poll a latent action, the only ones a state frame's LatentAction may name.
+extern CORE_API BYTE GLatentNatives[];
+// Whether two functions take and return the same parameter block, so one can be called in place of the other.
+CORE_API UBOOL GSameParms( UFunction* A, UFunction* B );
+
 extern CORE_API Native GCasts[];
 BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 
@@ -41,6 +48,10 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 		extern "C" DLL_EXPORT { Native int##cls##func = (Native)&cls::func; } \
 		static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func, &cls::StaticClass );
 #endif
+
+#define IMPLEMENT_LATENT_FUNCTION(cls,num,func) \
+	IMPLEMENT_FUNCTION(cls,num,func) \
+	static BYTE cls##func##Latent = GLatentNatives[num] = 1;
 
 /*-----------------------------------------------------------------------------
 	Macros.
@@ -101,9 +112,8 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 //
 // Iterator macros.
 //
-extern CORE_API INT GIteratorRuns;
+extern CORE_API FFrame* GIteratorFrame;
 #define PRE_ITERATOR \
-	GIteratorRuns++; \
 	INT wEndOffset = Stack.ReadWord(); \
 	BYTE B=0, Buffer[MAX_STRING_CONST_SIZE]; \
 	BYTE *StartCode = Stack.Code; \
@@ -113,7 +123,8 @@ extern CORE_API INT GIteratorRuns;
 			Stack.Step( Stack.Object, Buffer ); \
 		if( *Stack.Code++==EX_IteratorNext ) \
 			Stack.Code = StartCode; \
-	} while( B != EX_IteratorPop );
+	} while( B != EX_IteratorPop ); \
+	GIteratorFrame = &Stack;
 
 /*-----------------------------------------------------------------------------
 	FFrame implementation.
