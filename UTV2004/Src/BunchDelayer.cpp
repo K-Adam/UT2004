@@ -355,6 +355,13 @@ void BunchDelayer::ParseProperty(UProperty &Prop, BYTE *Data, int Element, FArch
 			}
 		}
 	}
+	// The map stores indices in place of objects, so the class property's metaclass check would dereference one.
+	else if (UObjectProperty* ObjectProp = FlagCast<UObjectProperty,CLASS_IsAUObjectProperty>(&Prop)) {
+		if (in)
+			UtvEngine->ServerPackageMap->SerializeObject(*in, ObjectProp->PropertyClass, *(UObject**)Dest);
+		if (out)
+			UtvEngine->ServerPackageMap->SerializeObject(*out, ObjectProp->PropertyClass, *(UObject**)Dest);
+	}
 	//Other properties can use the default way
 	else {
 		if (in)

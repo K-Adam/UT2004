@@ -3,10 +3,6 @@
 #include "ReplicatorEngine.h"
 #include "UnTcpNetDriver.h"
 
-//Is this really good that I need these two lines?
-IMPLEMENT_CLASS(UTcpipConnection);
-IMPLEMENT_CLASS(UTcpNetDriver);
-
 #define REFRESH_TIME (60.0)
 #define MAX_QUERY_PACKET_THRESHOLD (450)
 

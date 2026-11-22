@@ -13,7 +13,7 @@ Revision history:
 //
 // Windows socket class.
 //
-class DLL_EXPORT_CLASS UTcpipConnection : public UNetConnection
+class IPDRV_API UTcpipConnection : public UNetConnection
 {
 	DECLARE_CLASS(UTcpipConnection,UNetConnection,CLASS_Config|CLASS_Transient,IpDrv)
 	NO_DEFAULT_CONSTRUCTOR(UTcpipConnection)
@@ -40,7 +40,7 @@ class DLL_EXPORT_CLASS UTcpipConnection : public UNetConnection
 //
 // BSD sockets network driver.
 //
-class DLL_EXPORT_CLASS UTcpNetDriver : public UNetDriver
+class IPDRV_API UTcpNetDriver : public UNetDriver
 {
 	DECLARE_CLASS(UTcpNetDriver,UNetDriver,CLASS_Transient|CLASS_Config,IpDrv)
 

@@ -272,7 +272,7 @@ set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
 if(NOT ANDROID AND NOT EMSCRIPTEN)
   list(APPEND UT_MODULES UCC)
 endif()
-# UTV2004 has its own copies of IpDrv's net driver classes, so it only works as a loaded module.
+# StaticLink.h registers no UTV2004 classes, so it only works as a loaded module.
 if(NOT UT_STATIC_LINK)
   list(APPEND UT_MODULES UTV2004)
 endif()
