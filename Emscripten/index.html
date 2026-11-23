@@ -428,6 +428,12 @@ async function sync() {
 
 const MAP_NAME = /^[A-Za-z0-9]+-[A-Za-z0-9-]+$/;
 const detail = (s, key) => (Array.isArray(s?.info) ? s.info : []).find((p) => p?.key === key)?.value;
+// The game names a host without an address by its row's Link id, else by the id of its signal: details
+const NAME = /^([0-9a-f]{32})\.signal$/;
+const hostName = (s) => {
+  const id = [detail(s, 'Link'), detail(s, 'WebRTC')?.match(/^signal:(.*)$/)?.[1]].find((v) => NAME.test(`${v}.signal`));
+  return id && `${id}.signal`;
+};
 const servers = () => fetch(master, { cache: 'no-store' }).then((r) => r.json())
   .then((list) => (Array.isArray(list?.servers) ? list.servers : []), () => []);
 
@@ -448,11 +454,13 @@ async function linked() {
   const list = window.RTCPeerConnection ? await servers() : [];
   // The list has the server that reported last first, which is the one to join when two share a link.
   // Hosts the web master has no IPv4 address of are all listed at 0.0.0.0, so that address names none of them.
-  const row = list.find((s) => (join.includes(':') ? s?.ip !== '0.0.0.0' && `${s?.ip}:${s?.port}` : detail(s, 'Link')) === join);
+  const row = list.find((s) => (join.includes(':') ? s?.ip !== '0.0.0.0' && `${s?.ip}:${s?.port}` === join
+    : detail(s, 'Link') === join || detail(s, 'WebRTC') === `signal:${join}`));
   const webrtc = detail(row, 'WebRTC');
-  if (row && new RegExp(`^${quad}$`).test(row.ip) && Number.isInteger(row.port) && row.port > 0 && row.port < 65536
+  const host = row?.ip === '0.0.0.0' ? hostName(row) : new RegExp(`^${quad}$`).test(row?.ip) && row.ip;
+  if (row && host && Number.isInteger(row.port) && row.port > 0 && row.port < 65536
     && /^(?:signal:[0-9a-f]{32}|\d{1,5},(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2})$/.test(webrtc))
-    return `${row.ip}:${row.port}?WebRTC=${webrtc}`;
+    return `${host}:${row.port}?WebRTC=${webrtc}`;
   alert('The server of this link is not online, or this browser cannot join it.');
 }
 
@@ -524,7 +532,9 @@ var Module = {
   gamePlace: async (map, host, port, webrtc) => {
     const place = ++places;
     let hash = '';
-    if (host) {
+    const named = host.match(NAME);
+    if (named) hash = `#join=${named[1]}`;
+    else if (host) {
       // A link only opens a listed server. Without a link id that is by its address, which has to name it alone.
       const at = (await servers()).filter((s) => s?.ip === host && s?.port === port);
       const id = detail(at.find((s) => detail(s, 'WebRTC') === webrtc), 'Link');

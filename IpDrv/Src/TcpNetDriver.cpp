@@ -111,6 +111,9 @@ void UTcpipConnection::LowLevelSend( void* Data, INT Count )
 FString UTcpipConnection::LowLevelGetRemoteAddress()
 {
 	guard(UTcpipConnection::LowLevelGetRemoteAddress);
+	// Favorites and saved admin logins are keyed by this text, and every such host has address 0
+	if( Driver && Driver->ServerConnection==this && HostTextSignal( *URL.Host ) )
+		return FString::Printf( TEXT("%s:%i"), *URL.Host, URL.Port );
 	return IpString(RemoteAddr.sin_addr,ntohs(RemoteAddr.sin_port));
 	unguard;
 }
@@ -145,9 +148,9 @@ UBOOL UTcpNetDriver::InitConnect( FNetworkNotify* InNotify, FURL& ConnectURL, FS
 	guard(UTcpNetDriver::InitConnect);
 	if( !Super::InitConnect( InNotify, ConnectURL, Error ) )
 		return 0;
-	// Such a client never sends UDP, and a browser has no UDP socket to open. Nor has a web-only server one to answer.
-	// Every other server is tried over UDP first, its WebRTC details are for when that gets no answer.
-	if( WebRtcOnly() || ConnectURL.GetOption(TEXT("WebOnly="), NULL) )
+	// Such a client never sends UDP, and a browser has no UDP socket to open. Nor has a web-only server one to answer,
+	// or a host without an address. Every other server is tried over UDP first, its WebRTC details are for when that gets no answer.
+	if( WebRtcOnly() || ConnectURL.GetOption(TEXT("WebOnly="), NULL) || HostTextSignal( *ConnectURL.Host ) )
 	{
 		// The pending level reads from its connection which way the join went
 		ConnectURL.AddOption( TEXT("WebOnly=1") );

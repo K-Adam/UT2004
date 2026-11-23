@@ -257,7 +257,7 @@ FURL::FURL( FURL* Base, const TCHAR* TextURL, ETravelType Type )
 				*t++ = 0;
 				Port = appAtoi( t );
 			}
-			Host = s;
+			Host = HostTextCanonical( s );
 			if( appStricmp(*Protocol,*DefaultProtocol)==0 )
 				Map = DefaultMap;
 			else

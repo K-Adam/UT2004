@@ -46,6 +46,8 @@
 // A join through the web master that has heard nothing offers again this often, for this long
 #define WEBRTC_OFFER_RETRY 2.0
 #define WEBRTC_OFFER_RETRY_TIME 30.0
+// The web master's list is cached this long at the edge
+#define WEBRTC_LIST_CACHE_TIME 11.0
 // What the ICE library takes
 #define WEBRTC_MAX_CANDIDATES 30
 

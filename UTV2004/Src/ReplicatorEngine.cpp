@@ -414,8 +414,11 @@ void UReplicatorEngine::Tick( FLOAT DeltaSeconds )
 			DemoDriver = 0;
 		
 		FString Error;
-
-		if( ConnectDriver->InitConnect( this, URL, Error ) )
+		// Such a host is only reached over WebRTC, which the proxy does not do
+		UBOOL Named = !DemoDriver && HostTextSignalSuffix( *URL.Host );
+		if( Named )
+			debugf( TEXT("%s has no address, the proxy cannot join it"), *URL.Host );
+		if( !Named && ConnectDriver->InitConnect( this, URL, Error ) )
 		{
 			// Send initial message.
 			ConnectDriver->ServerConnection->Logf( TEXT("HELLO REVISION=0 MINVER=%i VER=%i"), ENGINE_MIN_NET_VERSION, ENGINE_VERSION );

@@ -49,6 +49,12 @@ struct FWebRtcPeer
 	DOUBLE GatherTime = 0;
 	DOUBLE RetryTime = 0;
 	bool HostGone = false;
+	// The id of a named host. A join without its signal: details asks the list for them, and one whose details the web master
+	// no longer knows asks once more. GoneId is the id it reported gone.
+	FString Name, GoneId;
+	FWebMasterRequest* Lookup = nullptr;
+	DOUBLE LookupTime = 0;
+	bool NeedLookup = false, LookedUp = false;
 	// A page's join by port and fingerprint waits for the web master's ICE servers with the answer it made up
 	std::string Answer;
 	// The web master's offer this peer still owes its answer to
@@ -176,6 +182,11 @@ static void ClosePeer( const std::shared_ptr<FWebRtcPeer>& Peer )
 		WebMasterRequestFree( Peer->Offer );
 		Peer->Offer = nullptr;
 	}
+	if( Peer->Lookup )
+	{
+		WebMasterRequestFree( Peer->Lookup );
+		Peer->Lookup = nullptr;
+	}
 	try
 	{
 		if( Peer->Dc )
@@ -231,8 +242,17 @@ static std::shared_ptr<FWebRtcPeer> ConnectPeer( FURL& ConnectURL, FString& Erro
 {
 	auto Peer = std::make_shared<FWebRtcPeer>();
 	Peer->CreatedTime = appSeconds();
+	Peer->Name = HostTextSignalId( *ConnectURL.Host );
 	if( WebRtcSignalSetup( ConnectURL, Peer->SignalId, Peer->Addr ) )
 		return Peer;
+	if( Peer->Name.Len() )
+	{
+		appMemzero( &Peer->Addr, sizeof(Peer->Addr) );
+		Peer->Addr.sin_family = AF_INET;
+		Peer->Addr.sin_port = htons( ConnectURL.Port );
+		Peer->NeedLookup = true;
+		return Peer;
+	}
 	if( !WebRtcClientSetup( ConnectURL, Error, Peer->Addr, Peer->Ufrag, Peer->Answer ) )
 		return nullptr;
 	// A page has no other way out of a network that only lets TLS through, so its peer waits in WebRtcSignal for the web master's relay
@@ -293,6 +313,41 @@ static void WebRtcSignal( const std::shared_ptr<FWebRtcPeer>& Shared )
 	FWebRtcPeer& Peer = *Shared;
 	try
 	{
+		if( Peer.NeedLookup )
+		{
+			if( !Peer.Lookup )
+			{
+				if( appSeconds() >= Peer.LookupTime )
+					Peer.Lookup = WebMasterList();
+				return;
+			}
+			FString Signal;
+			if( !WebMasterLookupDone( Peer.Lookup, Peer.Name, Signal ) )
+				return;
+			WebMasterRequestFree( Peer.Lookup );
+			Peer.Lookup = nullptr;
+			if( Signal.Len() && Signal==Peer.GoneId )
+			{
+				// The list is cached at the edge and can still name the socket that just went, the next copy has the new one
+				Peer.GoneId = TEXT("");
+				Peer.LookupTime = appSeconds() + WEBRTC_LIST_CACHE_TIME;
+				return;
+			}
+			Peer.NeedLookup = false;
+			if( !Signal.Len() )
+			{
+				debugf( TEXT("WebRTC: the web master lists no host %s.signal"), *Peer.Name );
+				std::lock_guard<std::mutex> Guard( Peer.Lock );
+				Peer.Closed = true;
+				return;
+			}
+			Peer.SignalId = Signal;
+			Peer.HostGone = false;
+			// The offer retry reads its details from there
+			if( Peer.Connection )
+				Peer.Connection->URL.AddOption( *(FString(TEXT("WebRTC=signal:")) + Signal) );
+			return;
+		}
 		if( !Peer.Pc )
 		{
 			FWebMasterTurn Turn;
@@ -324,10 +379,17 @@ static void WebRtcSignal( const std::shared_ptr<FWebRtcPeer>& Shared )
 		Peer.HostGone = Gone;
 		WebMasterRequestFree( Peer.Offer );
 		Peer.Offer = nullptr;
+		FString Offered = Peer.SignalId;
 		Peer.SignalId = TEXT("");
 		// The answer is as large as the web master makes it, so it must not go through the stack
 		if( Ok )
 			Peer.Pc->setRemoteDescription( rtc::Description( std::string(&appToUtf8(*Answer)(0)), rtc::Description::Type::Answer ) );
+		else if( Gone && Peer.Name.Len() && !Peer.LookedUp )
+		{
+			// The host's socket reconnected under a new id, its name finds it. The same offer goes there.
+			Peer.NeedLookup = Peer.LookedUp = true;
+			Peer.GoneId = Offered;
+		}
 		else
 		{
 			debugf( NAME_DevNet, TEXT("WebRTC: the host did not answer through the web master") );
@@ -340,6 +402,7 @@ static void WebRtcSignal( const std::shared_ptr<FWebRtcPeer>& Shared )
 		debugf( TEXT("WebRTC signaling failed: %s"), *FString(E.what()) );
 		// Or a connection that could not be made would be tried again every tick
 		Peer.SignalId = TEXT("");
+		Peer.NeedLookup = false;
 		Peer.Answer.clear();
 		std::lock_guard<std::mutex> Guard( Peer.Lock );
 		Peer.Closed = true;
@@ -349,7 +412,7 @@ static void WebRtcSignal( const std::shared_ptr<FWebRtcPeer>& Shared )
 // Whether WebRtcSignal still has a step to take for the peer
 static bool Signaling( const FWebRtcPeer& Peer )
 {
-	return Peer.SignalId.Len() || !Peer.Answer.empty();
+	return Peer.SignalId.Len() || !Peer.Answer.empty() || Peer.NeedLookup;
 }
 
 std::string WebRtcJsonString( const nlohmann::json& Object, const char* Key, size_t Max )

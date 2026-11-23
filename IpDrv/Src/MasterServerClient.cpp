@@ -196,10 +196,12 @@ public:
 			SignalQueryTimes.Set( *WebRtc, appSeconds() );
 		}
 
+		// A host without an address has nothing UDP could reach, its key address is made up
+		UBOOL Named = HostTextSignal( *CurrentState.IP );
 		INT WebRtcId = 0;
-		if( WebRtc.Len() )
+		if( WebRtc.Len() || Named )
 		{
-			if( !Signal || PingCause==PC_Clicked )
+			if( WebRtc.Len() && (!Signal || PingCause==PC_Clicked) )
 				WebRtcId = WebRtcQueryOpen( Addr.GetString(0), WebRtc );
 			if( !WebRtcId )
 			{
@@ -258,7 +260,7 @@ private:
 		FServerResponseLine NewState;
 		ArRecv << NewState;
 			NewState.Ping = Ping;
-		NewState.IP = SrcAddr.GetString(0);
+		NewState.IP = CurrentState && HostTextSignal( *CurrentState->IP ) ? HostTextCanonical( CurrentState->IP ) : SrcAddr.GetString(0);
 		NewState.QueryPort = SrcAddr.Port;
 
 		if( CurrentState )
@@ -473,8 +475,12 @@ void AServerQueryClient::execPingServer( FFrame& Stack, RESULT_DECL )
 	Init();
 
 	FIpAddr Addr( *IP, Port );
+	FString Id = HostTextSignalId( *IP );
 	if( IP == TEXT("BROADCAST") )
 		Addr.Addr = INADDR_BROADCAST;
+	// inet_addr gives a name the broadcast address. Pings and replies are matched by this key, in 240.0.0.0/4 where no host is.
+	else if( Id.Len() )
+		Addr.Addr = 0xF0000000 | (appMemCrc( *Id, Id.Len()*sizeof(TCHAR) ) % 0x0FFFFFFE + 1);
 
 	((FServerQueryLink*)LinkPtr)->PingServer( ServerID, PingCause, Addr, Command, CurrentState );
 }

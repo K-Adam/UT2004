@@ -13,6 +13,12 @@
 
 UBOOL IpResolve( const ANSICHAR* Host, in_addr& Addr, FString& Error )
 {
+	// The id would leak to DNS
+	if( HostTextSignalSuffix( ANSI_TO_TCHAR(Host) ) )
+	{
+		Error = FString::Printf( TEXT("%s has no address, it is joined through the web master"), *FString(Host) );
+		return 0;
+	}
 	// Spellings like 1.2.3 and 2130706433 that getaddrinfo refuses on some systems.
 	DWORD Numeric = inet_addr( Host );
 	if( Numeric != INADDR_NONE )

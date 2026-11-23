@@ -65,7 +65,8 @@ UBOOL WebRtcSignalSetup( FURL& ConnectURL, FString& Id, sockaddr_in& Addr )
 	appMemzero( &Addr, sizeof(Addr) );
 	Addr.sin_family = AF_INET;
 	Addr.sin_port = htons( ConnectURL.Port );
-	Addr.sin_addr.s_addr = inet_addr( TCHAR_TO_ANSI(*ConnectURL.Host) );
+	// inet_addr gives a name the broadcast address
+	Addr.sin_addr.s_addr = HostTextSignal( *ConnectURL.Host ) ? 0 : inet_addr( TCHAR_TO_ANSI(*ConnectURL.Host) );
 	return 1;
 }
 

@@ -394,6 +394,7 @@ typedef QWORD KModelPairType;
 #include "UnPhysic.h"			// Physics constants
 #include "UnReach.h"			// Reach specs.
 #include "UnURL.h"				// Uniform resource locators.
+#include "HostText.h"			// Names of hosts without an address.
 #include "UnLevel.h"			// Level object.
 #include "UnIn.h"				// Input system.
 #include "UnPlayer.h"			// Player class.

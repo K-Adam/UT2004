@@ -487,6 +487,73 @@ UBOOL WebMasterTurn( FWebMasterTurn& Out )
 	return 1;
 }
 
+// The engine's strings end at a NUL, so a key such as "Link\0x" would read as Link. Colour codes are other control characters and stay.
+static FString JsonText( const nlohmann::json& J, const char* Key )
+{
+	if( !J.contains(Key) || !J[Key].is_string() )
+		return FString();
+	const std::string& S = J[Key].get_ref<const std::string&>();
+	return S.find( '\0' )!=std::string::npos ? FString() : appFromUtf8( S.c_str() );
+}
+
+static void ParseServers( const nlohmann::json& Root, TArray<FServerResponseLine>& Servers )
+{
+	auto Int = []( const nlohmann::json& J, const char* Key ) { return J.contains(Key) && J[Key].is_number_integer() ? J[Key].get<INT>() : 0; };
+	if( Root.contains("servers") && Root["servers"].is_array() )
+		for( const nlohmann::json& S : Root["servers"] )
+		{
+			if( Servers.Num() >= MAX_WEB_SERVERS )
+				break;
+			FString IP = JsonText( S, "ip" );
+			INT Port = Int( S, "port" );
+			if( !S.is_object() || !IsDottedQuad(*IP) || Port<1 || Port>65535 )
+				continue;
+			FServerResponseLine* Server = &Servers(Servers.AddZeroed());
+			Server->IP = IP;
+			Server->Port = Port;
+			Server->QueryPort = Server->Port + 1;
+			Server->ServerName = JsonText( S, "name" );
+			Server->MapName = JsonText( S, "map" );
+			Server->GameType = JsonText( S, "gameType" );
+			Server->CurrentPlayers = Int( S, "players" );
+			Server->MaxPlayers = Int( S, "maxPlayers" );
+			Server->Flags = Int( S, "flags" );
+			Server->SkillLevel = JsonText( S, "skill" );
+			if( S.contains("info") && S["info"].is_array() )
+				for( const nlohmann::json& P : S["info"] )
+					if( P.is_object() && Server->ServerInfo.Num() < MAX_WEB_SERVER_INFO )
+					{
+						FKeyValuePair& Pair = Server->ServerInfo(Server->ServerInfo.AddZeroed());
+						Pair.Key = JsonText( P, "key" );
+						Pair.Value = JsonText( P, "value" );
+					}
+			// Every host the web master has no address of is listed at 0.0.0.0, which names none of them
+			FString Id = IP==TEXT("0.0.0.0") ? ServerNameId( Server->ServerInfo ) : FString();
+			if( Id.Len() )
+				Server->IP = Id + TEXT(".signal");
+		}
+}
+
+void WebMasterParseServers( const ANSICHAR* Json, TArray<FServerResponseLine>& Servers )
+{
+	nlohmann::json Root = nlohmann::json::parse( Json, nullptr, false );
+	if( Root.is_object() )
+		ParseServers( Root, Servers );
+}
+
+UBOOL WebMasterLookupDone( FWebMasterRequest* Request, const FString& Id, FString& Signal )
+{
+	UBOOL Ok;
+	std::string Body;
+	if( !WebMasterRequestDone( Request, Ok, Body ) )
+		return 0;
+	TArray<FServerResponseLine> Servers;
+	if( Ok )
+		WebMasterParseServers( Body.c_str(), Servers );
+	Signal = FindServerSignal( Servers, Id );
+	return 1;
+}
+
 UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News )
 {
 	std::string Response;
@@ -499,48 +566,17 @@ UBOOL WebMasterListDone( FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerRe
 		Ok = 0;
 		return 1;
 	}
-
-	auto Str = []( const nlohmann::json& J, const char* Key ) { return J.contains(Key) && J[Key].is_string() ? appFromUtf8( J[Key].get<std::string>().c_str() ) : FString(); };
-	auto Int = []( const nlohmann::json& J, const char* Key ) { return J.contains(Key) && J[Key].is_number_integer() ? J[Key].get<INT>() : 0; };
-	if( Root.contains("servers") && Root["servers"].is_array() )
-		for( const nlohmann::json& S : Root["servers"] )
-		{
-			if( Servers.Num() >= MAX_WEB_SERVERS )
-				break;
-			FString IP = Str( S, "ip" );
-			INT Port = Int( S, "port" );
-			if( !S.is_object() || !IsDottedQuad(*IP) || Port<1 || Port>65535 )
-				continue;
-			FServerResponseLine* Server = &Servers(Servers.AddZeroed());
-			Server->IP = IP;
-			Server->Port = Port;
-			Server->QueryPort = Server->Port + 1;
-			Server->ServerName = Str( S, "name" );
-			Server->MapName = Str( S, "map" );
-			Server->GameType = Str( S, "gameType" );
-			Server->CurrentPlayers = Int( S, "players" );
-			Server->MaxPlayers = Int( S, "maxPlayers" );
-			Server->Flags = Int( S, "flags" );
-			Server->SkillLevel = Str( S, "skill" );
-			if( S.contains("info") && S["info"].is_array() )
-				for( const nlohmann::json& P : S["info"] )
-					if( P.is_object() && Server->ServerInfo.Num() < MAX_WEB_SERVER_INFO )
-					{
-						FKeyValuePair& Pair = Server->ServerInfo(Server->ServerInfo.AddZeroed());
-						Pair.Key = Str( P, "key" );
-						Pair.Value = Str( P, "value" );
-					}
-		}
+	ParseServers( Root, Servers );
 #if !__EMSCRIPTEN__
 	// The web page is always the latest build.
 	if( Root.contains("version") && Root["version"].is_string() && SemVerIsNewer( Root["version"].get<std::string>(), UT_VERSION ) )
-		News = FString::Printf( TEXT("Update available: %s\r%s\r\r"), *Str( Root, "version" ), appFromAnsi(UT_UPDATE_URL) );
+		News = FString::Printf( TEXT("Update available: %s\r%s\r\r"), *JsonText( Root, "version" ), appFromAnsi(UT_UPDATE_URL) );
 #endif
 	INT NewsCount = 0;
 	if( Root.contains("news") && Root["news"].is_array() )
 		for( const nlohmann::json& N : Root["news"] )
 			if( N.is_object() && NewsCount++ < MAX_WEB_NEWS )
-				News += Str( N, "title" ) + TEXT("\r") + Str( N, "body" ) + TEXT("\r\r");
+				News += JsonText( N, "title" ) + TEXT("\r") + JsonText( N, "body" ) + TEXT("\r\r");
 	return 1;
 }
 

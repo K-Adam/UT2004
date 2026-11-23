@@ -244,6 +244,32 @@ inline FString GetServerDetail( const TArray<FKeyValuePair>& Info, const TCHAR* 
 	return FString();
 }
 
+// The id of a row's signal: details, empty when it has none
+inline FString ServerSignalId( const TArray<FKeyValuePair>& Info )
+{
+	FString Details = GetServerDetail( Info, TEXT("WebRTC") );
+	return !appStrncmp( *Details, TEXT("signal:"), 7 ) && HostTextId( *Details+7 ) ? Details.Mid( 7 ) : FString();
+}
+
+// A row the web master has no address of is named by its Link id, else by the id of its signal: details
+inline FString ServerNameId( const TArray<FKeyValuePair>& Info )
+{
+	FString Link = GetServerDetail( Info, TEXT("Link") );
+	return HostTextId( *Link ) ? Link : ServerSignalId( Info );
+}
+
+// The signal: id of the first row whose Link or signal: id is Id, empty when none has it. The list has the row seen last first.
+inline FString FindServerSignal( const TArray<FServerResponseLine>& Servers, const FString& Id )
+{
+	for( INT i=0; i<Servers.Num(); i++ )
+	{
+		FString Signal = ServerSignalId( Servers(i).ServerInfo );
+		if( Signal.Len() && (Signal==Id || GetServerDetail( Servers(i).ServerInfo, TEXT("Link") )==Id) )
+			return Signal;
+	}
+	return FString();
+}
+
 // Replaces a server detail, adds it when missing and removes it when Value is empty
 inline void SetServerDetail( TArray<FKeyValuePair>& Info, const TCHAR* Key, const FString& Value )
 {
@@ -283,10 +309,14 @@ extern "C" IPDRV_API void WebRtcHostThroughWebMaster();
 // The Done functions return false while the request is running
 struct FWebMasterRequest* WebMasterList();
 UBOOL WebMasterListDone( struct FWebMasterRequest* Request, UBOOL& Ok, TArray<FServerResponseLine>& Servers, FString& News );
+// The rows of list JSON as WebMasterListDone reads them. Exported for the engine tests.
+extern "C" IPDRV_API void WebMasterParseServers( const ANSICHAR* Json, TArray<FServerResponseLine>& Servers );
 // Sends a client's offer to a host on the web master's socket and gets its answer back
 struct FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp );
 // Gone says the web master has no socket of that id, so offering again is no use
 UBOOL WebMasterOfferDone( struct FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp, UBOOL& Gone );
+// FindServerSignal on a WebMasterList request, Signal is empty when no row has the id or the list failed
+UBOOL WebMasterLookupDone( struct FWebMasterRequest* Request, const FString& Id, FString& Signal );
 void WebMasterRequestFree( struct FWebMasterRequest* Request );
 // The web master's ICE answer: its UDP relay (Host), its TLS relay for a page (TlsHost), the caller's public address (Ip)
 // and a STUN server, the ini's StunServer when it names none. Empty when not given. The strings are valid until the next call.
