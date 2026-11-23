@@ -349,11 +349,12 @@ if(UT_ASSETS_DIR AND TARGET UCC)
   set(UT_SERVER_TESTS server_smoke package_sweep)
   if(TARGET ut_tests)
     add_test(NAME engine
-      COMMAND ut_tests DM-Rankin?game=XGame.xDeathMatch?MinPlayers=4?QuickStart=true -INI=Smoke.ini -USERINI=SmokeUser.ini -nohomedir -multihome=127.0.0.1
+      COMMAND ut_tests DM-Rankin?game=XGame.xDeathMatch?MinPlayers=4?QuickStart=true -INI=Smoke.ini -USERINI=SmokeUser.ini -nohomedir -multihome=127.0.0.1 -PORT=7800
       WORKING_DIRECTORY ${UT_SYSTEM_DIR})
     list(APPEND UT_SERVER_TESTS engine)
   endif()
-  # They share the inis and the server port. Both listen on loopback only, which keeps the Windows firewall
+  # They share the inis. Each server gets ports of its own, as on Linux a killed server holds its ports until its exit
+  # is done, which can be after the next test started. They listen on loopback only, which keeps the Windows firewall
   # from asking about network access.
   set_tests_properties(${UT_SERVER_TESTS} PROPERTIES FIXTURES_REQUIRED ini RESOURCE_LOCK server)
 endif()
