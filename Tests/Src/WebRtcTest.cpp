@@ -205,9 +205,12 @@ TEST( WebRtc, HostsThroughWebMaster )
 		if( DoUplink )
 			*(BITFIELD*)((BYTE*)Actor + DoUplink->Offset) |= DoUplink->BitMask;
 	}
+	const std::string Id = "0123456789abcdef0123456789abcdef";
+	// A server sends the token it has, and keeps the one the web master answers with
+	const FString Kept = TEXT("00112233445566778899aabbccddeeff"), Issued = TEXT("ffeeddccbbaa99887766554433221100");
+	GConfig->SetString( TEXT("IpDrv.MasterServerLink"), TEXT("LinkToken"), *Kept );
 	WebRtcHostThroughWebMaster();
 
-	const std::string Id = "0123456789abcdef0123456789abcdef";
 	const std::string Offer =
 		"v=0\\r\\no=- 1 1 IN IP4 127.0.0.1\\r\\ns=-\\r\\nt=0 0\\r\\na=group:BUNDLE 0\\r\\n"
 		"m=application 9 UDP/DTLS/SCTP webrtc-datachannel\\r\\nc=IN IP4 0.0.0.0\\r\\na=mid:0\\r\\n"
@@ -221,7 +224,8 @@ TEST( WebRtc, HostsThroughWebMaster )
 	const FSocket None = (FSocket)-1;
 	FSocket Host = None;
 	// The answer waits up to 3 seconds for candidates, which the loopback address the test server is bound to never gets
-	for( INT i=0; i<150 && (Answer.empty() || State.empty()); i++ )
+	FString Token = Kept;
+	for( INT i=0; i<150 && (Answer.empty() || State.empty() || Token!=Issued); i++ )
 	{
 		RunGame( 0.1f );
 		std::this_thread::sleep_for( std::chrono::milliseconds(50) );
@@ -262,9 +266,13 @@ TEST( WebRtc, HostsThroughWebMaster )
 		}
 		std::string Text = Host!=None ? ReceiveText( Host ) : std::string();
 		if( Text.find( "\"type\":\"state\"" )!=std::string::npos )
+		{
 			State = Text;
+			SendText( Host, std::string("{\"type\":\"link\",\"link\":\"https://example.test/#join=") + Id + "\",\"token\":\"" + TCHAR_TO_ANSI(*Issued) + "\"}" );
+		}
 		else if( !Text.empty() )
 			Answer = Text;
+		GConfig->GetString( TEXT("IpDrv.MasterServerLink"), TEXT("LinkToken"), Token );
 	}
 
 	EXPECT_NE( std::string::npos, Request.find( "GET /host " ) );
@@ -273,6 +281,8 @@ TEST( WebRtc, HostsThroughWebMaster )
 	EXPECT_EQ( std::string::npos, Request.find( "Origin:" ) );
 	// The web master lists the id
 	EXPECT_NE( std::string::npos, State.find( "{\"key\":\"WebRTC\",\"value\":\"signal:" + Id + "\"}" ) ) << State;
+	EXPECT_NE( std::string::npos, State.find( std::string("\"token\":\"") + TCHAR_TO_ANSI(*Kept) + "\"" ) ) << State;
+	EXPECT_TRUE( Token==Issued );
 	EXPECT_NE( std::string::npos, Answer.find( "\"type\":\"answer\"" ) ) << Answer;
 	EXPECT_NE( std::string::npos, Answer.find( "\"id\":\"offer-1\"" ) );
 	EXPECT_NE( std::string::npos, Answer.find( "a=fingerprint:sha-256 " ) );
@@ -286,4 +296,5 @@ TEST( WebRtc, HostsThroughWebMaster )
 	closesocket( Listener );
 	// The tests after this one run without a web master again
 	GConfig->SetString( TEXT("IpDrv.MasterServerLink"), TEXT("WebMasterServer"), TEXT("") );
+	GConfig->SetString( TEXT("IpDrv.MasterServerLink"), TEXT("LinkToken"), TEXT("") );
 }

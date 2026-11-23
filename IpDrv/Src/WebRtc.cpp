@@ -356,7 +356,7 @@ static bool Signaling( const FWebRtcPeer& Peer )
 	return Peer.SignalId.Len() || !Peer.Answer.empty();
 }
 
-static std::string JsonString( const nlohmann::json& Object, const char* Key, size_t Max )
+std::string WebRtcJsonString( const nlohmann::json& Object, const char* Key, size_t Max )
 {
 	auto It = Object.find( Key );
 	return It!=Object.end() && It->is_string() && It->get_ref<const std::string&>().size()<=Max ? It->get<std::string>() : std::string();
@@ -368,7 +368,9 @@ static void HostSocketMessage( const std::string& Text )
 	nlohmann::json Message = nlohmann::json::parse( Text, nullptr, false );
 	if( !Message.is_object() )
 		return;
-	std::string Type = JsonString( Message, "type", 16 ), Id = JsonString( Message, "id", 64 ), Sdp = JsonString( Message, "sdp", WEBRTC_MAX_SDP );
+	std::string Type = WebRtcJsonString(Message, "type", 16 ), Id = WebRtcJsonString(Message, "id", 64 ), Sdp = WebRtcJsonString(Message, "sdp", WEBRTC_MAX_SDP );
+	if( Type=="link" )
+		return WebMasterLinkReceived( Text );
 	std::lock_guard<std::mutex> Guard( HostSocket->Lock );
 	if( Type=="id" && WebRtcHostIdValid( Id.c_str() ) )
 		HostSocket->Id = Id;
@@ -377,7 +379,7 @@ static void HostSocketMessage( const std::string& Text )
 		// The oldest has waited longest for its level and is the first to be too late
 		if( HostSocket->Offers.size()>=WEBRTC_MAX_PENDING )
 			HostSocket->Offers.pop_front();
-		HostSocket->Offers.push_back( { Id, Sdp, JsonString( Message, "ip", 64 ), std::chrono::steady_clock::now() } );
+		HostSocket->Offers.push_back( { Id, Sdp, WebRtcJsonString(Message, "ip", 64 ), std::chrono::steady_clock::now() } );
 	}
 }
 

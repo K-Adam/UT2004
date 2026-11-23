@@ -822,6 +822,22 @@ void FMasterServerUplinkLink::CheckRefresh()
 {
 	guard(FMasterServerUplinkLink::CheckRefresh);
 
+	// The web master derives the link from the token, so a server that keeps its token keeps its link
+	FString Link, Token;
+	if( WebMasterLinkTake( Link, Token ) )
+	{
+		if( Token.Len() )
+		{
+			GConfig->SetString( TEXT("IpDrv.MasterServerLink"), TEXT("LinkToken"), *Token );
+			GConfig->Flush( 0 );
+		}
+		// The uplink is made anew for every level, the link stays the same
+		static FString LastLink;
+		if( Link != LastLink )
+			debugf( TEXT("Join link: %s"), *Link );
+		LastLink = Link;
+	}
+
 	// The web master lists other details than the server's own once the server hosts through its socket,
 	// and a server off the list until those are known should not wait out the refresh time
 	UTcpNetDriver* NetDriver = Cast<UTcpNetDriver>( Actor->XLevel->NetDriver );

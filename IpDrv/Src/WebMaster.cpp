@@ -15,6 +15,7 @@
 #include <sstream>
 #endif
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -23,6 +24,9 @@
 #pragma pack(pop)
 
 #include "UnIpDrv.h"
+#include "UnTcpNetDriver.h"
+
+#include "WebRtc.h"
 
 // Done gets whether the server answered 2xx, and the body.
 typedef std::function<void( bool, std::string )> FHttpDone;
@@ -208,11 +212,64 @@ FString WebMasterStun()
 	return Stun;
 }
 
+#pragma pack(push, 8)
+struct FWebMasterLink
+{
+	std::mutex Lock;
+	std::string Link, Token;
+};
+#pragma pack(pop)
+
+// Never destroyed, a request that is still running at exit writes to it
+static FWebMasterLink& ReceivedLink()
+{
+	static FWebMasterLink* Link = new FWebMasterLink;
+	return *Link;
+}
+
+// WebRtc.cpp, the header it would go in is read by files without the JSON library
+std::string WebRtcJsonString( const nlohmann::json& Object, const char* Key, size_t Max );
+
+// Natively on a network thread, so it only touches standard types
+void WebMasterLinkReceived( const std::string& Json )
+{
+	nlohmann::json Reply = nlohmann::json::parse( Json, nullptr, false );
+	if( !Reply.is_object() )
+		return;
+	// The link goes into the log as one line
+	std::string Link = WebRtcJsonString( Reply, "link", 256 ), Token = WebRtcJsonString( Reply, "token", 32 );
+	if( Link.empty() || std::any_of( Link.begin(), Link.end(), []( unsigned char C ) { return C<=' ' || C>'~'; } ) )
+		return;
+	FWebMasterLink& Out = ReceivedLink();
+	std::lock_guard<std::mutex> Guard( Out.Lock );
+	Out.Link = Link;
+	// The token goes into the ini and back to the web master
+	if( WebRtcHostIdValid( Token.c_str() ) )
+		Out.Token = Token;
+}
+
+UBOOL WebMasterLinkTake( FString& Link, FString& Token )
+{
+	FWebMasterLink& In = ReceivedLink();
+	std::lock_guard<std::mutex> Guard( In.Lock );
+	if( In.Link.empty() )
+		return 0;
+	Link = FString( In.Link.c_str() );
+	Token = FString( In.Token.c_str() );
+	In.Link.clear();
+	In.Token.clear();
+	return 1;
+}
+
 void WebMasterAdvertise( const FServerResponseLine& Server )
 {
 	FString Base = WebMasterURL();
 	if( !Base.Len() )
 		return;
+
+	// Empty asks the web master for one
+	FString Token;
+	GConfig->GetString( TEXT("IpDrv.MasterServerLink"), TEXT("LinkToken"), Token );
 
 	nlohmann::json Info = nlohmann::json::array();
 	for( INT i=0; i<Server.ServerInfo.Num(); i++ )
@@ -228,11 +285,12 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 		{ "flags", Server.Flags },
 		{ "skill", &appToUtf8(*Server.SkillLevel)(0) },
 		{ "info", Info },
+		{ "token", &appToUtf8(*Token)(0) },
 	};
 
 	std::string Json = Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 	if( !WebRtcHostState( Json.c_str() ) )
-		HttpRequestAsync( &appToUtf8( *(Base + TEXT("/advertise")) )(0), Json, []( bool, std::string ) {} );
+		HttpRequestAsync( &appToUtf8( *(Base + TEXT("/advertise")) )(0), Json, []( bool Ok, std::string Reply ) { if( Ok ) WebMasterLinkReceived( Reply ); } );
 }
 
 #pragma pack(push, 8)

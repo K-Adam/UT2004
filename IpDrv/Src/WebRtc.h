@@ -87,6 +87,7 @@ UBOOL WebRtcAnswerQuery( FWebRtcPeer* Peer, INT& Queries, const BYTE* Data, INT 
 UBOOL WebRtcPendingExpired( DOUBLE CreatedTime, INT Queries );
 
 // WebMaster.cpp
+void WebMasterLinkReceived( const std::string& Json );
 #if __ANDROID__
 const std::string& AndroidCaCerts();
 #endif

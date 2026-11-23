@@ -363,6 +363,8 @@ FString WebMasterURL();
 // The STUN server to gather with when the web master names none, "<host>[:<port>]" or empty
 FString WebMasterStun();
 void WebMasterAdvertise( const FServerResponseLine& Server );
+// True once for each join link the web master answered a state with. Token is the one to keep, empty when it issued none.
+UBOOL WebMasterLinkTake( FString& Link, FString& Token );
 // A host on the web master's socket sends its state there and returns true. A page always is one, a native server
 // when its WebRTC port turned out closed.
 UBOOL WebRtcHostState( const char* Json );
