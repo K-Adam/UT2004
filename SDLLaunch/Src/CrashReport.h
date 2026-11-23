@@ -63,13 +63,18 @@ inline FString RedactAddresses( const FString& Text )
 }
 
 // Names are the user, computer and player names. A short one would match all over the log and is left in.
-inline FString RedactLog( FString Text, const TArray<FString>& Names )
+// The keys go first, a name inside one would hide its value. A longer name goes before one it contains.
+inline FString RedactLog( FString Text, TArray<FString> Names )
 {
+	Text = ReplaceAll( Text, TEXT("Password="), TEXT("<password>"), TEXT("?& \t\r\n") );
+	Text = ReplaceAll( Text, TEXT(" id="), TEXT("<id>"), TEXT(" \t\r\n") );
+	for( INT i = 0; i < Names.Num(); i++ )
+		for( INT j = i + 1; j < Names.Num(); j++ )
+			if( Names(j).Len() > Names(i).Len() )
+				ExchangeString( Names(i), Names(j) );
 	for( INT i = 0; i < Names.Num(); i++ )
 		if( Names(i).Len() >= 3 )
 			Text = ReplaceAll( Text, Names(i), TEXT("<name>") );
-	Text = ReplaceAll( Text, TEXT("Password="), TEXT("<password>"), TEXT("?& \t\r\n") );
-	Text = ReplaceAll( Text, TEXT(" id="), TEXT("<id>"), TEXT(" \t\r\n") );
 	return RedactAddresses( Text );
 }
 

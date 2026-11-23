@@ -349,19 +349,12 @@ void UNetPendingLevel::NotifyReceivedText( UNetConnection* Connection, const TCH
 				if( appStrnicmp(*URL.Op(i),TEXT("WebRTC="),7)==0 )
 					URL.Op.Remove( i );
 
-		// A server that names no download method still has the channel. The client's own sources of stock packages
-		// leave a package to a server that claims the retail file, and get a second turn in case that fails.
+		// A server that names no download method still has the channel.
 		if( Connection->DownloadInfo.Num()==Connection->ClientDownloads )
 		{
 			FDownloadInfo& Channel = Connection->DownloadInfo( Connection->DownloadInfo.AddZeroed() );
 			Channel.Class = UChannelDownload::StaticClass();
 			Channel.ClassName = TEXT("Engine.ChannelDownload");
-		}
-		for( INT i=NetDriver->ClientRedirectURLs.Num(); i<Connection->ClientDownloads; i++ )
-		{
-			// AddItem would assign into raw memory, and the copy has to exist before the array grows.
-			FDownloadInfo Again = Connection->DownloadInfo(i);
-			new(Connection->DownloadInfo)FDownloadInfo( Again );
 		}
 
 		// Make sure all packages we need are downloadable.

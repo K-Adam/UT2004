@@ -976,12 +976,16 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 					new(Names) FString( appComputerName() );
 #ifndef __ANDROID__
 					// Unix has no login name without a terminal, the home folder carries it there. On Android that folder is the app's.
+					// The Unix log carries engine paths byte by byte, so the folder is looked for in both readings.
 					if( const char* Home = SDL_GetUserFolder( SDL_FOLDER_HOME ) )
 					{
-						FString Folder = appFromUtf8( Home );
-						while( Folder.Right(1) == TEXT("/") || Folder.Right(1) == TEXT("\\") )
-							Folder = Folder.LeftChop(1);
-						new(Names) FString( Folder.Mid( Max( Folder.InStr( TEXT("/"), 1 ), Folder.InStr( TEXT("\\"), 1 ) ) + 1 ) );
+						FString Folders[2] = { FString( appFromUtf8( Home ) ), FString( appFromAnsi( Home ) ) };
+						for( FString& Folder : Folders )
+						{
+							while( Folder.Right(1) == TEXT("/") || Folder.Right(1) == TEXT("\\") )
+								Folder = Folder.LeftChop(1);
+							new(Names) FString( Folder.Mid( Max( Folder.InStr( TEXT("/"), 1 ), Folder.InStr( TEXT("\\"), 1 ) ) + 1 ) );
+						}
 					}
 #endif
 					FString Player;

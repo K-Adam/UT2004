@@ -26,6 +26,17 @@ TEST( CrashReport, RedactsWhatIdentifiesThePlayer )
 		TEXT("Log: Resolved master (<ip>), connecting...<ip>") ) ) << TCHAR_TO_ANSI(*Out);
 }
 
+TEST( CrashReport, NamesDoNotHideKeysOrEachOther )
+{
+	TArray<FString> Names;
+	new(Names) FString( TEXT("adam") );
+	new(Names) FString( TEXT("Sword") );
+	new(Names) FString( TEXT("Adam Smith") );
+	FString Out = RedactLog( TEXT("C:\\Users\\Adam Smith ?Password=secret"), Names );
+	EXPECT_TRUE( Out.InStr( TEXT("secret") ) == INDEX_NONE ) << TCHAR_TO_ANSI(*Out);
+	EXPECT_TRUE( Out.InStr( TEXT("Smith") ) == INDEX_NONE ) << TCHAR_TO_ANSI(*Out);
+}
+
 TEST( CrashReport, TailStartsAtALine )
 {
 	EXPECT_TRUE( LogTail( TEXT("first\nsecond\nthird"), 9 ) == TEXT("third") );

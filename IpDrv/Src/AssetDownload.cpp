@@ -74,6 +74,7 @@ void UAssetDownload::Offer( UNetConnection* Connection )
 	const FString& Url = HostUrl();
 	if( !Url.Len() )
 		return;
+	// Ahead of the server's methods, as a server redirect can be far slower than the host.
 	FDownloadInfo& Info = Connection->DownloadInfo( Connection->DownloadInfo.AddZeroed() );
 	Info.Class = StaticClass();
 	Info.ClassName = StaticClass()->GetPathName();
@@ -87,11 +88,10 @@ void UAssetDownload::ReceiveFile( UNetConnection* InConnection, INT InPackageInd
 	guard(UAssetDownload::ReceiveFile);
 	UDownload::ReceiveFile( InConnection, InPackageIndex, Params, InCompression, InAttempt );
 
-	// A server that reports the retail size is asked first, and this step takes its second turn if that fails. Maps are not hosted.
+	// Maps are not hosted.
 	INT StockSize;
 	FString StockMD5, StockPath;
-	UBOOL SecondTurn = InAttempt>=Connection->ClientDownloads;
-	if( appSeconds()<GHostRetryTime || !StockPackage( Info->Guid, StockSize, StockMD5, StockPath ) || StockPath.Left(5)==TEXT("Maps/") || SecondTurn!=(Info->FileSize==StockSize) )
+	if( appSeconds()<GHostRetryTime || !StockPackage( Info->Guid, StockSize, StockMD5, StockPath ) || StockPath.Left(5)==TEXT("Maps/") )
 	{
 		// The caller still sets this download up after the call, so Tick reports the failure.
 		DownloadError( LocalizeError(TEXT("ConnectionFailed"),TEXT("Engine")) );

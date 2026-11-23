@@ -48,6 +48,7 @@ static bool Download(const char* Url, Sint64 ResumeFrom, FPartFile& Part, char* 
     curl_easy_setopt(Curl, CURLOPT_URL, Url);
     curl_easy_setopt(Curl, CURLOPT_FOLLOWLOCATION, 1L);
     // An error page must not end up in the file.
+    curl_easy_setopt(Curl, CURLOPT_FAILONERROR, 1L);
     curl_easy_setopt(Curl, CURLOPT_RESUME_FROM_LARGE, (curl_off_t)ResumeFrom);
     curl_easy_setopt(Curl, CURLOPT_CONNECTTIMEOUT, 20L);
     curl_easy_setopt(Curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);
@@ -69,7 +70,7 @@ static bool Download(const char* Url, Sint64 ResumeFrom, FPartFile& Part, char* 
     curl_easy_cleanup(Curl);
     // The server has nothing past the end of a file that is already complete.
     bool Ok = Code == CURLE_OK || (ResumeFrom > 0 && Status == 416);
-    NoResume = Code == CURLE_RANGE_ERROR;
+    NoResume = !Ok && Code == CURLE_RANGE_ERROR;
     if (!Ok)
         SDL_snprintf(Why, WhySize, "%s", Reason[0] ? Reason : curl_easy_strerror(Code));
     return Ok;
