@@ -31,6 +31,7 @@
   progress { width: min(480px, 80vw); }
   button { font: inherit; padding: 8px 20px; }
   canvas[hidden], #server[hidden] { display: none; }
+  #splash { position: fixed; inset: 0; margin: auto; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); }
   #server { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; box-sizing: border-box; }
   #server header { display: flex; align-items: center; gap: 16px; }
   #log { flex: 1; margin: 0; overflow: auto; color: #999; font: 13px ui-monospace, monospace; white-space: pre-wrap; }
@@ -38,6 +39,7 @@
 </head>
 <body>
 <canvas id="canvas" tabindex="-1" aria-label="UT2004 game"></canvas>
+<img id="splash" alt="" hidden>
 <div id="server" hidden>
   <header>
     <strong>UT2004 dedicated server</strong>
@@ -85,6 +87,7 @@ const pick = document.getElementById('pick');
 const forget = document.getElementById('forget');
 const zipInput = document.getElementById('zip');
 const canvas = document.getElementById('canvas');
+const splash = document.getElementById('splash');
 
 // The content comes from the asset host, or straight from the linked local content set when testing locally.
 const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
@@ -119,6 +122,7 @@ function show(text, info = '') {
 }
 
 function stop(text, retry, info) {
+  splash.remove();
   show(text, info);
   progress.hidden = true;
   action.textContent = 'Retry';
@@ -498,6 +502,11 @@ var Module = {
     Promise.all(resident.map(async (node) => (node.contents = new Uint8Array(await (await readContent(node.contentPath)).arrayBuffer()))))
       .then(() => Module.removeRunDependency('content'), (e) => stop(e.message, true));
   }],
+  showSplash: (bmp) => {
+    splash.src = URL.createObjectURL(new Blob([bmp], { type: 'image/bmp' }));
+    splash.hidden = false;
+  },
+  hideSplash: () => splash.remove(),
   onAbort: (what) => stop(`The game stopped: ${what}`),
   gameError: (text, reportUrl, log) => {
     const note = '\n\nSend report sends this text and the end of the log to the developers of this port. Your player name and network addresses are taken out of it.';

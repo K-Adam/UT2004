@@ -118,9 +118,14 @@ FFeedbackContextSDL Warn;
 #ifdef __ANDROID__
 static void ExitSplash(void) {}
 #elif __EMSCRIPTEN__
-// The page shows the loading progress, and a 2D context would keep SDLDrv from getting WebGL on the same canvas.
-static void InitSplash(const TCHAR *filename) {}
-static void ExitSplash(void) {}
+// The page shows the logo over the canvas, a 2D context would keep SDLDrv from getting WebGL on it.
+static void InitSplash(const TCHAR *filename)
+{
+	TArray<BYTE> Data;
+	if (appLoadFileToArray(Data, filename))
+		EM_ASM( Module.showSplash(HEAPU8.subarray($0, $0 + $1)), Data.GetData(), Data.Num() );
+}
+static void ExitSplash(void) { EM_ASM( Module.hideSplash() ); }
 #else
 static SDL_Window* SplashWindow = NULL;
 
