@@ -354,7 +354,6 @@ class EDITOR_API UEditorEngine : public UEngine
 	// de ---
 	UBOOL Exec_DecaAnim( const TCHAR* Str, FOutputDevice& Ar );
 	UBOOL Exec_DecaMesh( const TCHAR* Str, FOutputDevice& Ar );
-    UBOOL DDSConversion( TCHAR* FileName, const TCHAR* Str, FOutputDevice& Ar );
 	UBOOL Exec_StaticMeshImport( const TCHAR* Str, FOutputDevice& Ar );
 	UBOOL Exec_StaticMeshImportToEditor( const TCHAR* Str, FOutputDevice& Ar );
     // --- de

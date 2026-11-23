@@ -424,10 +424,6 @@ class UDataRipCommandlet : public UCommandlet
 		GWarn->Logf( TEXT("Loaded %s."), *Src );
 		UClass* FireClass = CastChecked<UClass>(StaticLoadObject( UClass::StaticClass(), NULL, TEXT("Fire.FireTexture"), NULL, LOAD_NoWarn, NULL ));
 
-		// Blank sound.
-		TArray<BYTE> BlankSoundData;
-		appLoadFileToArray( BlankSoundData, TEXT("C:\\Documents and Settings\\Default User\\Templates\\sndrec.wav") );
-
 		// Clear textures and sounds data
 		for( TObjectIterator<UObject> It; It; ++It )
 		{
@@ -444,8 +440,6 @@ class UDataRipCommandlet : public UCommandlet
 					FSoundData& SoundData = S->GetData();
 					SoundData.Load();
 					SoundData.Empty();
-					SoundData.AddZeroed( BlankSoundData.Num() );
-					appMemcpy( &SoundData(0), &BlankSoundData(0), BlankSoundData.Num() );
 				}
 			}
 		}

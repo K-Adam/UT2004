@@ -2,15 +2,7 @@
 
 // The system headers go before the engine's, whose macros (check, clock, min, max) break them.
 #pragma pack(push,8)
-#if _WIN32
-#include <winsock2.h>
-#else
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#define closesocket close
-#endif
+#include "UnSocketApi.h"
 #include <cstring>
 #include <string>
 #pragma pack(pop)
@@ -803,12 +795,7 @@ TEST( Security, GamespyQueryReplyLimit )
 	Server.sin_port = htons( (unsigned short)*(INT*)((BYTE*)Query + Port->Offset) );
 	Server.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
 	auto Socket = socket( AF_INET, SOCK_DGRAM, 0 );
-#if _WIN32
-	u_long NonBlocking = 1;
-	ioctlsocket( Socket, FIONBIO, &NonBlocking );
-#else
-	fcntl( Socket, F_SETFL, O_NONBLOCK );
-#endif
+	SetNonBlocking( Socket );
 	auto Replies = [&]( const std::string& Request )
 	{
 		sendto( Socket, Request.data(), (int)Request.size(), 0, (sockaddr*)&Server, sizeof(Server) );

@@ -42,13 +42,13 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 				ExtraJunk; \
 			}
 
-/*-----------------------------------------------------------------------------
-	Engine compiler specific includes.
------------------------------------------------------------------------------*/
-
-#if __GNUC__
-	#include "UnEngineGnuG.h"
-#endif
+// Level updating. Defined here because the actor headers declare Tick with it before UnLevel.h.
+enum ELevelTick
+{
+	LEVELTICK_TimeOnly		= 0,	// Update the level time only.
+	LEVELTICK_ViewportsOnly	= 1,	// Update time and viewports.
+	LEVELTICK_All			= 2,	// Update all.
+};
 
 /*-----------------------------------------------------------------------------
 	Size of the world.
@@ -78,13 +78,6 @@ ENGINE_API extern class FTempLineBatcher*	GTempLineBatcher;
 
 
 #pragma pack(push,4)
-
-// LIPSinc Includes
-#if !defined(__LINUX__)
-#ifndef WITH_LIPSINC
-#//  define WITH_LIPSINC
-#endif
-#endif
 
 /*-----------------------------------------------------------------------------
 	Editor callback codes.

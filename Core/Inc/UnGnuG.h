@@ -1,22 +1,10 @@
 /*=============================================================================
-	UnGnuG.h: Unreal definitions for Gnu G++. Unfinished. Unsupported.
+	UnGnuG.h: Unreal definitions for GCC and Clang on Unix.
 	Copyright 1997-1999 Epic Games, Inc. All Rights Reserved.
 =============================================================================*/
 
-/*----------------------------------------------------------------------------
-	Platform compiler definitions.
-----------------------------------------------------------------------------*/
 #ifndef _INCL_UNGNUG_H_
 #define _INCL_UNGNUG_H_
-
-#if defined __LINUX_X86__
-	#define __UNIX__  1
-	#define __LINUX__ 1
-	#define __INTEL__ 1
-	#define COMPILER "Compiled with GNU g++ ("__VERSION__")"
-#else
-	#error Unsupported platform.
-#endif
 
 // System headers the engine headers use, included before Core.h and Engine.h switch to 4-byte packing.
 #include <stddef.h>
@@ -64,15 +52,9 @@
 #define HANDLE DWORD
 #define HINSTANCE void*
 
-// Sizes.
-enum {DEFAULT_ALIGNMENT = 8 }; // Default boundary to align memory allocations on.
-enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
-
 // Every use sits under #pragma pack(n) or has natural alignment <= n, where aligned(n)
 // gives the same layout as packed,aligned(n). Packed fields could not be bound to references.
 #define GCC_PACK(n)  __attribute__((aligned(n)))
-#define GCC_ALIGN(n) __attribute__((aligned(n)))
-#define GCC_MOVE_ALIGN(n)
 
 
 // Optimization macros
@@ -81,7 +63,7 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 
 // Function type macros.
 #define DLL_IMPORT
-#define DLL_EXPORT			extern "C"
+#define DLL_EXPORT			__attribute__((visibility("default")))
 #define DLL_EXPORT_CLASS
 #define VARARGS
 #define CDECL
@@ -97,24 +79,6 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 #else
 #define VSNPRINTF wvsnprintf
 #endif
-
-// Variable arguments.
-#define GET_VARARGS(msg,len,lastarg,fmt)	\
-{	\
-	va_list ArgPtr;	\
-	va_start( ArgPtr, lastarg );	\
-	VSNPRINTF( msg, len, fmt, ArgPtr );	\
-	va_end( ArgPtr );	\
-	(msg)[(len)-1] = 0;	\
-}
-
-#define GET_VARARGS_RESULT(msg,len,lastarg,fmt,result)	\
-{	\
-	va_list ArgPtr;	\
-	va_start( ArgPtr, lastarg );	\
-	result = VSNPRINTF( msg, len, fmt, ArgPtr );	\
-	va_end( ArgPtr );	\
-}
 
 // Unsigned base types.
 typedef unsigned char		BYTE;		// 8-bit  unsigned.
@@ -166,15 +130,9 @@ typedef DWORD PTRINT;
 #endif
 
 // Strings.
-#if __UNIX__
 #define LINE_TERMINATOR TEXT("\n")
 #define PATH_SEPARATOR TEXT("/")
 #define DLLEXT TEXT(".so")
-#else
-#define LINE_TERMINATOR TEXT("\r\n")
-#define PATH_SEPARATOR TEXT("\\")
-#define DLLEXT TEXT(".dll")
-#endif
 
 // NULL.
 #undef NULL
@@ -185,7 +143,6 @@ typedef DWORD PTRINT;
 	BYTE GLoaded##pkgname;
 
 // Platform support options.
-#define PLATFORM_NEEDS_ARRAY_NEW 1
 #define FORCE_ANSI_LOG           0
 
 #if defined(NO_UNICODE_OS_SUPPORT) || !defined(UNICODE)
@@ -280,43 +237,6 @@ extern ANSICHAR GModule[32];
 extern CORE_API DOUBLE GSecondsPerCycle;
 
 char *strlwr(char *str);
-
-
-
-// Math intrinsics.
-
-#include <math.h>
-
-// The math functions map straight to the C library, since gcc doesn't inline
-// the app* wrappers in UnAnsi.cpp across files.
-
-#define DEFINED_appMathIntrinsics 1
-#define appExp(x) exp(x)
-#define appLoge(x) log(x)
-#define appFmod(x,y) fmod(x,y)
-#define appSin(x) sin(x)
-#define appAsin(x) asin(x)
-#define appCos(x) cos(x)
-#define appAcos(x) acos(x)
-#define appTan(x) tan(x)
-#define appAtan(x) atan(x)
-#define appAtan2(x,y) atan2(x,y)
-#define appPow(x,y) pow(x,y)
-#define appIsNan(x) isnan(x)
-#define appRand() rand()
-#define appRandInit(x) srand(x)
-#define appFrand() ((FLOAT) (rand() / (FLOAT) RAND_MAX))
-#define appCeil(x) ((INT)ceil(x))
-#define appRound(x) ((INT)floor(x + 0.5f))
-#define appFractional(x) (x - appFloor(x))
-
-#define appSqrt(x) sqrt(x)
-#define appRecipSqrt(x) (1.0/sqrt(x))
-
-
-
-#define appFloor(x) ((INT)floor(x))
-
 
 //
 // Memory copy.

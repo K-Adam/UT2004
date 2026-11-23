@@ -477,25 +477,6 @@ CORE_API void GKeepClass( FArchive& Ar, UObject*& Object, UClass* Class );
 			if( TClass::PrivateStaticClass->GetInitialized() && TClass::PrivateStaticClass->GetClass()==TClass::PrivateStaticClass->StaticClass() ) \
 				TClass::PrivateStaticClass->Register(); \
 		}
-#elif _MSC_VER
-	#define IMPLEMENT_CLASS(TClass) \
-		UClass TClass::PrivateStaticClass \
-		( \
-			EC_NativeConstructor, \
-			sizeof(TClass), \
-			TClass::StaticClassFlags, \
-			TClass::Super::StaticClass(), \
-			TClass::WithinClass::StaticClass(), \
-			FGuid(TClass::GUID1,TClass::GUID2,TClass::GUID3,TClass::GUID4), \
-			TEXT(#TClass)+1, \
-			GPackage, \
-			StaticConfigName(), \
-			RF_Public | RF_Standalone | RF_Transient | RF_Native, \
-			(void(*)(void*))TClass::InternalConstructor, \
-			(void(UObject::*)())&TClass::StaticConstructor \
-		); \
-		extern "C" DLL_EXPORT UClass* autoclass##TClass;\
-		DLL_EXPORT UClass* autoclass##TClass = TClass::StaticClass();
 #else
 	#define IMPLEMENT_CLASS(TClass) \
 		UClass TClass::PrivateStaticClass \
@@ -513,7 +494,7 @@ CORE_API void GKeepClass( FArchive& Ar, UObject*& Object, UClass* Class );
 			(void(*)(void*))TClass::InternalConstructor, \
 			(void(UObject::*)())&TClass::StaticConstructor \
 		); \
-		DLL_EXPORT {UClass* autoclass##TClass = TClass::StaticClass();}
+		extern "C" DLL_EXPORT UClass* autoclass##TClass = TClass::StaticClass();
 #endif
 
 // Define the package of the current DLL being compiled.
@@ -521,14 +502,9 @@ CORE_API void GKeepClass( FArchive& Ar, UObject*& Object, UClass* Class );
 	#define IMPLEMENT_PACKAGE(pkg) \
 		extern "C" {TCHAR G##pkg##Package[] = TEXT(#pkg);} \
 		IMPLEMENT_PACKAGE_PLATFORM(pkg)
-#elif _MSC_VER
-	#define IMPLEMENT_PACKAGE(pkg) \
-		extern "C" DLL_EXPORT TCHAR GPackage[]; \
-		extern "C" DLL_EXPORT TCHAR GPackage[] = TEXT(#pkg); \
-		IMPLEMENT_PACKAGE_PLATFORM(pkg)
 #else
 	#define IMPLEMENT_PACKAGE(pkg) \
-	extern "C" DLL_EXPORT {TCHAR GPackage[] = TEXT(#pkg);} \
+		extern "C" DLL_EXPORT TCHAR GPackage[] = TEXT(#pkg); \
 		IMPLEMENT_PACKAGE_PLATFORM(pkg)
 #endif
 

@@ -15,7 +15,7 @@ ut_module(Editor SHARED
           UPkgCommandlet.cpp URebuildCommandlet.cpp
           USetNormalLODCommandlet.cpp USoundLocCommandlet.cpp UStripSourceCommandlet.cpp
           USurfaceTypeCommandlet.cpp UTextureInfoCommandlet.cpp UTextureLODCommandlet.cpp
-          UTextureStripCommandlet.cpp xEdInt.cpp xObjExporters.cpp xTextureConversions.cpp
+          UTextureStripCommandlet.cpp xEdInt.cpp xObjExporters.cpp
   PCH EditorPrivate.h Editor.cpp
   DEPS Engine)
 target_compile_definitions(Editor PRIVATE _EDITOR_)

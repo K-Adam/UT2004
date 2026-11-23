@@ -406,7 +406,7 @@ UBOOL UALAudioSubsystem::Init()
 		unguard;
 	#endif
 
-	#ifndef WIN32
+	#ifndef _WIN32
 	alcProcessContext( SoundContext );
 	#endif
 
@@ -689,7 +689,7 @@ UBOOL UALAudioSubsystem::Update( FSceneNode* SceneNode )
 	{
 		LastHWUpdate = Viewport->CurrentTime;
 		alcProcessContext( SoundContext );
-#ifdef WIN32
+#ifdef _WIN32
 		alcSuspendContext( SoundContext );
 #endif
 	}
@@ -1185,19 +1185,15 @@ UBOOL UALAudioSubsystem::alError( TCHAR* Text, UBOOL Log )
 				case AL_INVALID_NAME:
 					debugf(TEXT("ALAudio: AL_INVALID_NAME in %s"), Text);
 					break;
-				#if __WIN32__
 				case AL_INVALID_ENUM:
 					debugf(TEXT("ALAudio: AL_INVALID_ENUM in %s"), Text);
 					break;
-				#endif
 				case AL_INVALID_VALUE:
 					debugf(TEXT("ALAudio: AL_INVALID_VALUE in %s"), Text);
 					break;
-				#if __WIN32__
 				case AL_INVALID_OPERATION:
 					debugf(TEXT("ALAudio: AL_INVALID_OPERATION in %s"), Text);
 					break;
-				#endif
 				case AL_OUT_OF_MEMORY:
 					debugf(TEXT("ALAudio: AL_OUT_OF_MEMORY in %s"), Text);
 					break;

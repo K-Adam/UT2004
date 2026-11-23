@@ -613,13 +613,13 @@ void UCanvas::ClippedStrLen( UFont* Font, FLOAT ScaleX, FLOAT ScaleY, FLOAT& XL,
 	ScaleX *= Font->ScaleFactor;
 	ScaleY *= Font->ScaleFactor;
 
-	register INT CharIncrement = ((INT) SpaceX) + Font->Kerning;
-	register const TCHAR* T = Text;
-	register INT Skip = 0;
-	register INT W = 0;
-	register INT H = 0;
-	register FLOAT regXL = 0.0f;
-	register FLOAT regYL = 0.0f;
+	INT CharIncrement = ((INT) SpaceX) + Font->Kerning;
+	const TCHAR* T = Text;
+	INT Skip = 0;
+	INT W = 0;
+	INT H = 0;
+	FLOAT regXL = 0.0f;
+	FLOAT regYL = 0.0f;
 
 	while ( *T )
 	{

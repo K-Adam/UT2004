@@ -46,7 +46,7 @@ public:
 					// Make log filename.
 					if( !Filename[0] )
 					{
-                        #if WIN32
+                        #if _WIN32
 						appStrcpy( Filename, GFileManager ? GFileManager->CalcHomeDir() : appBaseDir() );
                         #endif
 
@@ -164,7 +164,7 @@ public:
 					WriteRaw( LINE_TERMINATOR );
 #endif
 #ifdef _DEBUG
-#if _MSC_VER
+#if _WIN32
 					TCHAR Temp[1024];
 
                     // gam ---

@@ -73,12 +73,13 @@ add_custom_target(ut_stage ALL
 option(UT_STATIC_LINK "Link the engine modules into the executables instead of loading them at runtime" OFF)
 
 add_library(ut_common INTERFACE)
+target_compile_features(ut_common INTERFACE cxx_std_17)
 target_compile_definitions(ut_common INTERFACE
   UNICODE _UNICODE __STATIC_LINK=$<BOOL:${UT_STATIC_LINK}>
   DO_GUARD=1 DO_CHECK=1 DO_STAT=1 DO_CLOCK=1
   DO_GUARD_SLOW=0 DO_STAT_SLOW=0 DO_CLOCK_SLOW=0
   $<IF:$<CONFIG:Debug>,_DEBUG$<SEMICOLON>DEBUG$<SEMICOLON>DO_CHECK_SLOW=1,DO_CHECK_SLOW=0>)
-target_include_directories(ut_common INTERFACE ${CMAKE_SOURCE_DIR}/metoolkit-karma/include)
+target_link_libraries(ut_common INTERFACE karma_api)
 
 if(MSVC)
   # The prebuilt static libs expect the release DLL CRT.
@@ -91,7 +92,7 @@ if(MSVC)
     /Zp4 /W3 /MP /guard:cf
     /wd4005 /wd4244 /wd4267 /wd4305 /wd4996 /wd4595 /wd4291 /wd4838 /wd4311 /wd4312 /wd4302)
   target_compile_definitions(ut_common INTERFACE
-    _WIN32_IE=0x0200 _WIN32_WINNT=0x0601
+    _WIN32_IE=0x0200 _WIN32_WINNT=0x0601 WIN32_LEAN_AND_MEAN
     _CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS _WINSOCK_DEPRECATED_NO_WARNINGS
     WINDOWS_IGNORE_PACKING_MISMATCH)  # original code includes windows.h under /Zp4 too
   target_link_libraries(ut_common INTERFACE legacy_stdio_definitions)
@@ -108,7 +109,7 @@ else()
     -fshort-wchar -fno-builtin-wcslen -fsigned-char -fno-strict-aliasing -fno-delete-null-pointer-checks -w
     $<$<CXX_COMPILER_ID:GNU>:$<$<COMPILE_LANGUAGE:CXX>:-fpermissive>>
     # Like MSVC, template bodies that use classes declared later in the header are checked at instantiation.
-    $<$<CXX_COMPILER_ID:Clang>:$<$<COMPILE_LANGUAGE:CXX>:-fdelayed-template-parsing -Wno-register>>)
+    $<$<CXX_COMPILER_ID:Clang>:$<$<COMPILE_LANGUAGE:CXX>:-fdelayed-template-parsing>>)
   # The engine calls destructors explicitly and reuses the object (FArray in UArrayProperty::DestroyValue),
   # so the stores a destructor makes must not be optimized away. Newer Clang does the same optimization and accepts the flag.
   include(CheckCXXCompilerFlag)
@@ -117,7 +118,7 @@ else()
     target_compile_options(ut_common INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-fno-lifetime-dse>)
   endif()
   # 32-bit stat fails with EOVERFLOW on large inode numbers (WSL drives, XFS) without 64-bit file offsets.
-  target_compile_definitions(ut_common INTERFACE __LINUX_X86__ LINUX=1 __FILE_NOCASE=1 _FILE_OFFSET_BITS=64)
+  target_compile_definitions(ut_common INTERFACE __FILE_NOCASE=1 _FILE_OFFSET_BITS=64)
   find_package(Threads REQUIRED)
   target_link_libraries(ut_common INTERFACE dl Threads::Threads)
   if(CMAKE_SIZEOF_VOID_P EQUAL 4 AND NOT EMSCRIPTEN)

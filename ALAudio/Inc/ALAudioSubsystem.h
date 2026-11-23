@@ -24,7 +24,7 @@ Revision history:
 #include "AL/al.h"
 #include "AL/alc.h"
 
-#ifdef WIN32
+#ifdef _WIN32
 #define SUPPORTS_EAX 1
 #endif
 
@@ -46,7 +46,7 @@ typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 #define NUM_VOICE_BUFFERS 10
 
 // The Windows build copies OpenAL Soft into System/, where it is found before a system-wide OpenAL.
-#ifdef WIN32
+#ifdef _WIN32
 #define AL_DLL TEXT("OpenAL32.dll")
 #elif __ANDROID__
 // Packaged in the APK next to libmain.so, without a version suffix.

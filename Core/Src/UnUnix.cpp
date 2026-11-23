@@ -32,8 +32,6 @@
 
 #include <dlfcn.h>
 
-#include <netdb.h>
-
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -1777,27 +1775,22 @@ void appPlatformPreInit()
     unixDetectUNICODE();
 #endif
 
-#if __LINUX_X86__
-    #if __ANDROID__
-        // No OS enum exists for it, and the 64-bit Linux one is the closest to what servers expect.
-        GRunningOS = OS_LINUX_X86_64;
-        appSprintf(GMachineOS, TEXT("arm64 Android"));
-    #elif __EMSCRIPTEN__
-        GRunningOS = OS_LINUX_X86_64;
-        appSprintf(GMachineOS, TEXT("Web"));
-    #elif defined __aarch64__
-        GRunningOS = OS_LINUX_X86_64;
-        appSprintf(GMachineOS, TEXT("arm64 Linux"));
-    #elif defined __x86_64__
-        GRunningOS = OS_LINUX_X86_64;
-        appSprintf(GMachineOS, TEXT("x86-64 Linux"));
-    #else
-        GRunningOS = OS_LINUX_X86;
-        appSprintf(GMachineOS, TEXT("x86 Linux"));
-    #endif
-
+#if __ANDROID__
+    // No OS enum exists for it, and the 64-bit Linux one is the closest to what servers expect.
+    GRunningOS = OS_LINUX_X86_64;
+    appSprintf(GMachineOS, TEXT("arm64 Android"));
+#elif __EMSCRIPTEN__
+    GRunningOS = OS_LINUX_X86_64;
+    appSprintf(GMachineOS, TEXT("Web"));
+#elif defined __aarch64__
+    GRunningOS = OS_LINUX_X86_64;
+    appSprintf(GMachineOS, TEXT("arm64 Linux"));
+#elif defined __x86_64__
+    GRunningOS = OS_LINUX_X86_64;
+    appSprintf(GMachineOS, TEXT("x86-64 Linux"));
 #else
-    #error fill in your platform.
+    GRunningOS = OS_LINUX_X86;
+    appSprintf(GMachineOS, TEXT("x86 Linux"));
 #endif
 
     mainPID = getpid();
@@ -2237,38 +2230,6 @@ char* appUnixPath( const char* Path )
 
 	return UnixPath;
 	unguard;
-}
-
-
-/*-----------------------------------------------------------------------------
-	Networking.
------------------------------------------------------------------------------*/
-
-DWORD appGetLocalIP( void )
-{
-	static bool lookedUp = false;
-	static DWORD LocalIP = 0;
-
-#if !__EMSCRIPTEN__
-	// A page has no address of its own.
-	if( !lookedUp )
-	{
-		lookedUp = true;
-		char Hostname[256];
-		Hostname[0] = '\0';
-		if (gethostname( Hostname, sizeof(Hostname) ) == 0)
-		{
-			check(gethostbyname_mutex != NULL);
-			gethostbyname_mutex->Lock();
-			struct hostent *Hostinfo = gethostbyname( Hostname );
-			if (Hostinfo != NULL)
-				LocalIP = *(DWORD*)Hostinfo->h_addr_list[0];
-			gethostbyname_mutex->Unlock();
-		}
-	}
-#endif
-
-	return LocalIP;
 }
 
 

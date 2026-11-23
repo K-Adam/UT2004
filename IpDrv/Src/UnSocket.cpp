@@ -11,61 +11,48 @@
 	Resolve.
 ----------------------------------------------------------------------------*/
 
-TCHAR* SocketHostError( INT Code )
+UBOOL IpResolve( const ANSICHAR* Host, in_addr& Addr, FString& Error )
 {
-	return(SocketError(Code));
+	// Spellings like 1.2.3 and 2130706433 that getaddrinfo refuses on some systems.
+	DWORD Numeric = inet_addr( Host );
+	if( Numeric != INADDR_NONE )
+	{
+		Addr.s_addr = Numeric;
+		return 1;
+	}
+#if __EMSCRIPTEN__
+	// Emscripten's resolver only makes up addresses for its WebSocket emulation.
+	Error = TEXT("Browsers can't look up host names");
+	return 0;
+#else
+	addrinfo Hints, *Result = NULL;
+	appMemzero( &Hints, sizeof(Hints) );
+	Hints.ai_family = AF_INET;
+	INT Code = getaddrinfo( Host, NULL, &Hints, &Result );
+	if( Code || !Result )
+	{
+#if __WINSOCK__
+		FString Reason = SocketError( Code );
+#else
+		FString Reason = gai_strerror( Code );
+#endif
+		Error = FString::Printf( TEXT("Can't find host %s (%s)"), *FString(Host), *Reason );
+		return 0;
+	}
+	Addr = ((sockaddr_in*)Result->ai_addr)->sin_addr;
+	freeaddrinfo( Result );
+	return 1;
+#endif
 }
 
 // Resolution thread entrypoint.
-#if __UNIX__
-void* ResolveThreadEntry( void* Arg )
-#else
-DWORD STDCALL ResolveThreadEntry( void* Arg )
-#endif
+void ResolveThreadEntry( FResolveInfo* Info )
 {
-	FResolveInfo* Info = (FResolveInfo*)Arg;
-	check(gethostbyname_mutex != NULL);
 	IpSetInt( Info->Addr, 0 );
-	HOSTENT* HostEnt = NULL;
-	INT e = 0;
-	bool locked = false;
-	for( INT i=0; i<3; i++)
-	{
-		locked = true;
-		gethostbyname_mutex->Lock();
-		HostEnt = gethostbyname( Info->HostName );
-		if( HostEnt )
-			break;
-#if __WINSOCK__
-		e = WSAGetLastError();
-#else
-		e = WSAGetLastHostError();
-#endif
-		if( e == WSAHOST_NOT_FOUND || e == WSANO_DATA)
-			break;
-		locked = false;
-		gethostbyname_mutex->Unlock();  // Let someone else try while we sleep.
-		appSleep(1);
-	}
-
-	if( HostEnt==NULL || HostEnt->h_addrtype!=PF_INET )
-		appSnprintf( Info->Error, ARRAY_COUNT(Info->Error), TEXT("Can't find host %s (%s)"), appFromAnsi(Info->HostName), SocketHostError(e) );
-	else
-		Info->Addr = *(in_addr*)( *HostEnt->h_addr_list );
-
-	if (locked)
-		gethostbyname_mutex->Unlock();
-
-#if _MSC_VER
-	InterlockedExchange( (volatile LONG*)&Info->Done, 1 );
-#else
-	__atomic_store_n( &Info->Done, 1, __ATOMIC_RELEASE );
-#endif
-
-#if __UNIX__
-	pthread_exit( NULL );
-#endif
-	return 0;
+	FString Error;
+	if( !IpResolve( Info->HostName, Info->Addr, Error ) )
+		appStrncpy( Info->Error, *Error, ARRAY_COUNT(Info->Error) );
+	Info->Done = 1;
 }
 
 /*----------------------------------------------------------------------------
@@ -99,8 +86,6 @@ UBOOL InitSockets( FString& Error )
 	if( Mismatch )
 		appErrorf(TEXT("IpDrv C++/UnrealScript class size mismatch"));
 
-	check(gethostbyname_mutex != NULL);
-
 #if __WINSOCK__
 	// Init WSA.
 	static UBOOL Tried = 0;
@@ -108,7 +93,7 @@ UBOOL InitSockets( FString& Error )
 	{
 		Tried = 1;
 		WSADATA WSAData;
-		INT Code = WSAStartup( 0x0101, &WSAData );
+		INT Code = WSAStartup( 0x0202, &WSAData );
 		if( Code==0 )
 		{
 			GIpDrvInitialized = 1;
@@ -126,7 +111,7 @@ UBOOL InitSockets( FString& Error )
 			Error = FString::Printf( TEXT("%s"), Error256 );
 		}
 	}
-#elif __BSD_SOCKETS__
+#else
 	GIpDrvInitialized = 1;
 #endif
 
@@ -202,7 +187,7 @@ TCHAR* SocketError( INT Code )
 		case 0:						return TEXT("WSANO_ERROR");
 		default:					return TEXT("WSA_Unknown");
 	}
-#elif __BSD_SOCKETS__
+#else
 	if( Code == -1 )
 		Code = errno;
 	switch( Code )
@@ -267,26 +252,15 @@ TCHAR* SocketError( INT Code )
 
 UBOOL IpMatches( sockaddr_in& A, sockaddr_in& B )
 {
-#if __WINSOCK__
-	return	A.sin_addr.S_un.S_addr == B.sin_addr.S_un.S_addr
-	&&		A.sin_port             == B.sin_port
-	&&		A.sin_family           == B.sin_family;
-#elif __BSD_SOCKETS__
 	return	A.sin_addr.s_addr      == B.sin_addr.s_addr
 	&&		A.sin_port             == B.sin_port
 	&&		A.sin_family           == B.sin_family;
-#endif
 }
 
 UBOOL IpAddressMatches( sockaddr_in& A, sockaddr_in& B )
 {
-#if __WINSOCK__
-	return	A.sin_addr.S_un.S_addr	== B.sin_addr.S_un.S_addr
-		&&	A.sin_family			== B.sin_family;
-#elif __BSD_SOCKETS__
 	return	A.sin_addr.s_addr	== B.sin_addr.s_addr
 		&&	A.sin_family		== B.sin_family;
-#endif
 }
 
 UBOOL IpAddressRangeMatches( sockaddr_in& A, sockaddr_in& B )
@@ -314,20 +288,12 @@ void IpSetBytes( in_addr& Addr, BYTE Ip1, BYTE Ip2, BYTE Ip3, BYTE Ip4 )
 
 void IpGetInt( in_addr Addr, DWORD& Ip )
 {
-#if __WINSOCK__
-	Ip = Addr.S_un.S_addr;
-#elif __BSD_SOCKETS__
 	Ip = Addr.s_addr;
-#endif
 }
 
 void IpSetInt( in_addr& Addr, DWORD Ip )
 {
-#if __WINSOCK__
-	Addr.S_un.S_addr = Ip;
-#elif __BSD_SOCKETS__
 	Addr.s_addr = Ip;
-#endif
 }
 
 FString IpString( in_addr Addr, INT Port )
@@ -340,27 +306,10 @@ FString IpString( in_addr Addr, INT Port )
 	unguard;
 }
 
-UBOOL SetNonBlocking( INT Socket )
-{
-#if __UNIX__
-	INT pd_flags;
-	pd_flags = fcntl( Socket, F_GETFL, 0 );
-	pd_flags |= O_NONBLOCK;
-	return fcntl( Socket, F_SETFL, pd_flags ) == 0;
-#else
-	DWORD NoBlock = 1;
-	return  ioctlsocket( Socket, FIONBIO, &NoBlock ) == 0;
-#endif
-}
-
 UBOOL SetSocketReuseAddr( INT Socket, UBOOL ReUse )
 {
 	INT optval = ReUse?1:0;
-#if _MSC_VER
 	return setsockopt( Socket, SOL_SOCKET, SO_REUSEADDR, (char *)&optval, sizeof(INT) ) == 0;
-#else
-	return setsockopt( Socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(INT) ) == 0;
-#endif
 }
 
 
@@ -369,15 +318,15 @@ UBOOL SetSocketLinger( INT Socket )
 	LINGER ling;
 	ling.l_onoff  = 1;	// linger on
 	ling.l_linger = 0;	// timeout in seconds
-	return ( setsockopt( Socket, SOL_SOCKET, SO_LINGER, (LPSTR)&ling, sizeof(ling) ) == 0 );
+	return ( setsockopt( Socket, SOL_SOCKET, SO_LINGER, (char*)&ling, sizeof(ling) ) == 0 );
 }
 
 
 UBOOL SetSocketRecvErr( INT Socket )
 {
-#ifdef LINUX
+#ifdef __linux__
 	int on = 1;
-	return setsockopt(Socket, SOL_IP, IP_RECVERR, &on, sizeof (on)) == 0;
+	return setsockopt(Socket, SOL_IP, IP_RECVERR, (char*)&on, sizeof (on)) == 0;
 #else
 	return 1;
 #endif

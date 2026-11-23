@@ -2634,11 +2634,7 @@ void APawn::physLadder(FLOAT deltaTime, INT Iterations)
 physSpider()
 
 */
-#ifdef __GNUG__
 int APawn::checkFloor(FVector Dir, FCheckResult &Hit)
-#else
-inline int APawn::checkFloor(FVector Dir, FCheckResult &Hit)
-#endif
 {
 	GetLevel()->SingleLineCheck(Hit, 0, Location - UCONST_MAXSTEPHEIGHT * Dir, Location, TRACE_World, GetCylinderExtent());
 	if (Hit.Time < 1.f)

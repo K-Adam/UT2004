@@ -4,10 +4,9 @@ ut_module(IpDrv SHARED
           UdpLink.cpp UnIpDrvNative.cpp UnSocket.cpp WebMaster.cpp WebRtc.cpp WebRtcCommon.cpp
   PCH UnIpDrv.h IpDrv.cpp
   NOPCH AssetDownload.cpp WebMaster.cpp WebRtc.cpp WebRtcCommon.cpp
-  DEPS Engine $<$<PLATFORM_ID:Windows>:wsock32>)
+  DEPS Engine $<$<PLATFORM_ID:Windows>:ws2_32>)
 find_package(nlohmann_json CONFIG REQUIRED)
 target_link_libraries(IpDrv PRIVATE nlohmann_json::nlohmann_json)
-set_target_properties(IpDrv PROPERTIES CXX_STANDARD 17)
 # Only a build of a release tag has a version to compare with the web master's.
 set(UT_VERSION develop)
 if("$ENV{GITHUB_REF_TYPE}" STREQUAL "tag")

@@ -28,12 +28,8 @@ class ENGINE_API FColor
 {
 public:
 	// Variables.
-#if _MSC_VER
-	union { struct{ BYTE B,G,R,A; }; DWORD AlignmentDummy; };
-#else
-	BYTE B GCC_ALIGN(4);
+	alignas(4) BYTE B;
 	BYTE G,R,A;
-#endif
 
 	DWORD& DWColor(void) {return *((DWORD*)this);}
 	const DWORD& DWColor(void) const {return *((DWORD*)this);}

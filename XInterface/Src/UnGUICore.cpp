@@ -1985,33 +1985,6 @@ void UGUIController::SetMoveControl( UGUIComponent* C )
 
 void UGUIController::CreatePropertyWindow()
 {
-	guard(UGUIController::CreatePropertyWindow);
-
-	if ( DesignerMenu == TEXT("") || !Master || !Master->Client || !Master->Client->Viewports.Num() )
-		return;
-
-#ifdef WIN32
-	UViewport* Port = Master->Client->Viewports(0);
-	Port->Exec(TEXT("ENDFULLSCREEN"));
-
-	if ( !Designer )
-	{
-		UClass* ManagerClass = LoadClass<UPropertyManagerBase>(NULL, *DesignerMenu, NULL, 0, NULL);
-		if ( ManagerClass )
-			Designer = (PTRINT)ConstructObject<UPropertyManagerBase>(ManagerClass);
-	}
-
-	if ( Designer )
-	{
-		((UPropertyManagerBase*)Designer)->SetWindow(Port->GetWindow());
-		((UPropertyManagerBase*)Designer)->SetParent(this);
-	}
-
-#else
-	debugf(TEXT("GUIDesigner is only supported on Windows!"));
-#endif
-
-	unguard;
 }
 
 void UGUIController::HidePropertyWindow()
@@ -2054,9 +2027,6 @@ UBOOL UGUIController::DesignerVisible()
 UBOOL UGUIController::ShowProperties(UGUIComponent* Comp )
 {
 	guard(UGUIController::ShowProperties);
-
-	if ( !Designer && DesignerMenu != TEXT("") )
-		CreatePropertyWindow();
 
 	if ( Designer )
 	{

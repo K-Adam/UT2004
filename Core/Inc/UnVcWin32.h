@@ -4,13 +4,6 @@
 =============================================================================*/
 
 /*----------------------------------------------------------------------------
-	Platform compiler definitions.
-----------------------------------------------------------------------------*/
-
-#define __WIN32__				1
-#define __INTEL__				1
-
-/*----------------------------------------------------------------------------
 	Platform specifics types and defines.
 ----------------------------------------------------------------------------*/
 
@@ -31,10 +24,6 @@
 	#define HANDLE void*
 	#define HINSTANCE void*
 #endif
-
-// Sizes.
-enum {DEFAULT_ALIGNMENT = 8 }; // Default boundary to align memory allocations on.
-enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 
 // Optimization macros (preceeded by #pragma).
 #define DISABLE_OPTIMIZATION optimize("",off)
@@ -68,40 +57,6 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 #define VSNPRINTF _vsnprintf
 #else
 #define VSNPRINTF _vsnwprintf
-#endif
-
-// Variable arguments.
-#define GET_VARARGS(msg,len,lastarg,fmt)	\
-{	\
-	va_list ArgPtr;	\
-	va_start( ArgPtr, lastarg );	\
-	VSNPRINTF( msg, len, fmt, ArgPtr );	\
-	va_end( ArgPtr );	\
-	(msg)[(len)-1] = 0;	\
-}
-
-#define GET_VARARGS_ANSI(msg,len,lastarg,fmt)	\
-{	\
-	va_list ArgPtr;	\
-	va_start( ArgPtr, lastarg );	\
-	_vsnprintf( msg, len, fmt, ArgPtr );	\
-	va_end( ArgPtr );	\
-	(msg)[(len)-1] = 0;	\
-}
-
-#define GET_VARARGS_RESULT(msg,len,lastarg,fmt,result)	\
-{	\
-	va_list ArgPtr;	\
-	va_start( ArgPtr, lastarg );	\
-	result = VSNPRINTF( msg, len, fmt, ArgPtr );	\
-	va_end( ArgPtr );	\
-}
-
-// Compiler name.
-#ifdef _DEBUG
-	#define COMPILER "Compiled with Visual C++ Debug"
-#else
-	#define COMPILER "Compiled with Visual C++"
 #endif
 
 // Unsigned base types.
@@ -182,14 +137,10 @@ typedef unsigned long PTRINT;
 
 // Strings.
 #define LINE_TERMINATOR TEXT("\r\n")
-#define LINE_TERMINATOR_INLINE \r\n
 #define PATH_SEPARATOR TEXT("\\")
 
 // DLL file extension.
 #define DLLEXT TEXT(".dll")
-
-// Pathnames.
-#define PATH(s) s
 
 // NULL.
 #define NULL 0
@@ -206,7 +157,6 @@ typedef unsigned long PTRINT;
 #endif
 
 // Platform support options.
-#define PLATFORM_NEEDS_ARRAY_NEW 1
 #define FORCE_ANSI_LOG           1
 
 // OS unicode function calling.
@@ -234,8 +184,6 @@ typedef unsigned long PTRINT;
 
 // Bitfield alignment.
 #define GCC_PACK(n)
-#define GCC_ALIGN(n) 
-#define GCC_MOVE_ALIGN(n) 
 
 // This is for gcc bugs, mostly.
 #ifndef BUGGYINLINE
@@ -262,31 +210,7 @@ extern CORE_API ANSICHAR GModule[32];
 extern "C" void* __cdecl _alloca(size_t);
 #define appAlloca(size) ((size==0) ? 0 : _alloca((size+7)&~7))
 
-#include <math.h>
-#include <float.h>  // newer platform sdk's need this for _isnan().
-#define DEFINED_appMathIntrinsics 1
-#define appExp(x) exp(x)
-#define appLoge(x) log(x)
-#define appFmod(x,y) fmod(x,y)
-#define appSin(x) sin(x)
-#define appAsin(x) asin(x)
-#define appCos(x) cos(x)
-#define appAcos(x) acos(x)
-#define appTan(x) tan(x)
-#define appAtan(x) atan(x)
-#define appAtan2(x,y) atan2(x,y)
-#define appPow(x,y) pow(x,y)
-#define appIsNan(x) (_isnan(x))
-#define appRand() rand()
-#define appRandInit(x) srand(x)
-#define appFrand() ((FLOAT) (rand() / (FLOAT) RAND_MAX))
-#define appSqrt(x) sqrt(x)
-#define appFloor(x) ((INT)floor(x))
-#define appCeil(x) ((INT)ceil(x))
-#define appRound(x) ((INT)floor(x + 0.5f))
-#define appFractional(x) (x - floor(x))
-
-
+#include <float.h>
 
 /*----------------------------------------------------------------------------
 	The End.

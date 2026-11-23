@@ -10,8 +10,6 @@
 #include "CorePrivate.h"
 #include "FConfigCacheIni.h"
 
-CORE_API FCriticalSection *gethostbyname_mutex = NULL;
-
 /*-----------------------------------------------------------------------------
 	FOutputDevice implementation.
 -----------------------------------------------------------------------------*/
@@ -2101,7 +2099,7 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 	}}
 
 	// Command line.
-	#if _MSC_VER
+	#if _WIN32
 		if( *InCmdLine=='\"' )
 		{
 			InCmdLine++;
@@ -2157,20 +2155,6 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 	debugf( NAME_Init, TEXT("Command line: %s"), appCmdLine() );
 	// Parameters.
 	GIsStrict = ParseParam( appCmdLine(), TEXT("STRICT") );
-
-	// Make sure the log notes if this is a platform-specific patch over the usual revision.
-	#ifdef PLATFORM_VERSION_BUMP
-		#if LINUX && PLATFORM_64BITS
-		const TCHAR *platform = TEXT("Linux64");
-		#elif LINUX
-		const TCHAR *platform = TEXT("Linux");
-		#elif WIN64
-		const TCHAR *platform = TEXT("Win64");
-		#else
-		#error Fill in your platform.
-		#endif
-		debugf( NAME_Init, TEXT("(This is %s patch version %d.%d)"), platform, ENGINE_VERSION, PLATFORM_VERSION_BUMP );
-	#endif
 
     if( ParseParam( appCmdLine(), TEXT("MAKENAMES") ) ) // sjs
     {
@@ -2287,9 +2271,6 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 	// Platform specific init.
 	appPlatformInit();
 
-	check(gethostbyname_mutex == NULL);
-	gethostbyname_mutex = new FCriticalSection;
-
 	unguard;
 }
 
@@ -2337,8 +2318,6 @@ void appExit()
 	FName::StaticExit();
 	if( !GIsCriticalError )
 		GMalloc->DumpAllocs();
-
-	delete gethostbyname_mutex;
 
 	unguard;
 }

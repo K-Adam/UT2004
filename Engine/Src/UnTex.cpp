@@ -1623,11 +1623,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 			_WORD Color = MipColor.HiColor565();
 
 			QWORD	ColorPattern= (QWORD)Color,
-#if __GNUG__
-					AlphaPattern= (DestFormat == TEXF_DXT3) ? 0x7777777777777777LLU : 0x8081ffffffffffffLLU;
-#else
-					AlphaPattern= (DestFormat == TEXF_DXT3) ? 0x7777777777777777 : 0x8081ffffffffffff;
-#endif
+					AlphaPattern= (DestFormat == TEXF_DXT3) ? 0x7777777777777777ULL : 0x8081ffffffffffffULL;
 
 			INT		USize		= Max(Mipmap.USize,4),
 					VSize		= Max(Mipmap.VSize,4),

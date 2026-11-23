@@ -1,6 +1,6 @@
 #include "TestEngine.h"
 
-#if _MSC_VER
+#if _WIN32
 	extern "C" {HINSTANCE hInstance;}
 #endif
 extern "C" {TCHAR GPackage[64]=TEXT("ut_tests");}
@@ -35,7 +35,7 @@ static FFeedbackContextAnsi Warn;
 #else
 #define TEST_INIT_FIRST __attribute__((init_priority(101)))
 #endif
-#if WIN32
+#if _WIN32
 	#include "FFileManagerWindows.h"
 	static FFileManagerWindowsHome FileManager;
 #else
@@ -54,7 +54,7 @@ int main( int argc, char* argv[] )
 	testing::InitGoogleTest( &argc, argv );
 
 	TCHAR CmdLine[1024] = TEXT("");
-	#if _MSC_VER
+	#if _WIN32
 		// appInit drops the first token there.
 		appStrcpy( CmdLine, TEXT("ut_tests") );
 	#else

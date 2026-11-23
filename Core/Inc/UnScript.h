@@ -46,15 +46,9 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 //
 // Registering a native function.
 //
-#if _MSC_VER
-	#define IMPLEMENT_FUNCTION(cls,num,func) \
-		extern "C" DLL_EXPORT Native int##cls##func = (Native)&cls::func; \
-		static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func, &cls::StaticClass );
-#else
-	#define IMPLEMENT_FUNCTION(cls,num,func) \
-		extern "C" DLL_EXPORT { Native int##cls##func = (Native)&cls::func; } \
-		static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func, &cls::StaticClass );
-#endif
+#define IMPLEMENT_FUNCTION(cls,num,func) \
+	extern "C" DLL_EXPORT Native int##cls##func = (Native)&cls::func; \
+	static BYTE cls##func##Temp = GRegisterNative( num, int##cls##func, &cls::StaticClass );
 
 #define IMPLEMENT_LATENT_FUNCTION(cls,num,func) \
 	IMPLEMENT_FUNCTION(cls,num,func) \

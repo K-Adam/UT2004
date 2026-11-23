@@ -194,7 +194,7 @@ class EDITOR_API UFontFactory : public UTextureFactory
 	UObject* FactoryCreateBinary( UClass* Class, UObject* InParent, FName Name, DWORD Flags, UObject* Context, const TCHAR* Type, const BYTE*& Buffer, const BYTE* BufferEnd, FFeedbackContext* Warn );
 };
 
-#if WIN32
+#if _WIN32
 class EDITOR_API UTrueTypeFontFactory : public UFontFactory
 {
 	DECLARE_CLASS(UTrueTypeFontFactory,UFontFactory,0,Editor)

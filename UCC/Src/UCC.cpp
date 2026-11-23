@@ -6,7 +6,7 @@ Revision history:
 	* Created by Tim Sweeney.
 =============================================================================*/
 
-#if WIN32
+#if _WIN32
 	#pragma pack(push,8)
 	#include <windows.h>
 	#include <process.h>
@@ -35,7 +35,7 @@ INT GFilesOpen, GFilesOpened;
 -----------------------------------------------------------------------------*/
 
 // General.
-#if _MSC_VER
+#if _WIN32
 	extern "C" {HINSTANCE hInstance;}
 #endif
 extern "C" {TCHAR GPackage[64]=TEXT("UCC");}
@@ -62,7 +62,7 @@ FFeedbackContextAnsi Warn;
 #pragma init_seg(lib)
 #endif
 // File manager.
-#if WIN32
+#if _WIN32
 	#include "FFileManagerWindows.h"
 	FFileManagerWindowsHome FileManager;
 	#include "FMallocAnsi.h"
@@ -122,7 +122,7 @@ int main( int argc, char* argv[] )
 	{
 		GIsGuarded = 1;
 
-		#if !_MSC_VER
+		#if !_WIN32
 		// Set module name.
 		strcpy( GModule, "ucc" );
 		#endif
@@ -130,7 +130,7 @@ int main( int argc, char* argv[] )
 		// Parse command line.
 		TCHAR CmdLine[1024], *CmdLinePtr=CmdLine;
 		*CmdLinePtr = 0;
-		#if WIN32
+		#if _WIN32
 			ANSICHAR* Ch = GetCommandLineA();
 			while( *Ch && *Ch!=' ' )
 				Ch++;

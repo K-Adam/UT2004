@@ -5,59 +5,7 @@
 		* Created by Mike Danylchuk
 ============================================================================*/
 
-/*-----------------------------------------------------------------------------
-	Definitions.
------------------------------------------------------------------------------*/
-
-#if __WINSOCK__
-	typedef INT					SOCKLEN;
-	#define GCC_OPT_INT_CAST
-	#define MSG_NOSIGNAL		0
-	#define UDP_ERR_PORT_UNREACH WSAECONNRESET
-	#define WSAGetLastHostError()	WSAGetLastError()
-#endif
-
-// Provide WinSock definitions for BSD sockets.
-#if __BSD_SOCKETS__
-	typedef int			SOCKET;
-	typedef struct hostent		HOSTENT;
-	typedef in_addr			IN_ADDR;
-	typedef struct sockaddr		SOCKADDR;
-	typedef struct sockaddr_in	SOCKADDR_IN;
-	typedef struct linger		LINGER;
-	typedef struct timeval		TIMEVAL;
-	typedef TCHAR*			LPSTR;
-	typedef socklen_t		SOCKLEN;
-
-	#define INVALID_SOCKET		-1
-	#define SOCKET_ERROR		-1
-
-	#define UDP_ERR_PORT_UNREACH ECONNREFUSED
-
-	#define WSAEWOULDBLOCK		EAGAIN
-	#define WSAEINPROGRESS		EINPROGRESS
-
-	#define WSAENOTSOCK		ENOTSOCK
-	#define WSATRY_AGAIN		TRY_AGAIN
-	#define WSAHOST_NOT_FOUND	HOST_NOT_FOUND
-	#define WSANO_DATA		NO_ADDRESS
-	#define LPSOCKADDR		sockaddr*
-	#define WSAECONNRESET		ECONNRESET
-
-	#define closesocket		close
-	#define ioctlsocket		ioctl
-	#define WSAGetLastError()	errno
-	#define WSAGetLastHostError()	h_errno
-
-	#define GCC_OPT_INT_CAST	(DWORD*)
-#endif
-
-// IP address macros.
-#if __WINSOCK__
-	#define IP(sin_addr,n) sin_addr.S_un.S_un_b.s_b##n
-#elif __BSD_SOCKETS__
-	#define IP(sin_addr,n) ((BYTE*)&sin_addr.s_addr)[n-1]
-#endif
+#define IP(sin_addr,n) ((BYTE*)&sin_addr.s_addr)[n-1]
 
 /*-----------------------------------------------------------------------------
 	Definitions.
@@ -118,12 +66,12 @@ struct IPDRV_API FSocketData
 ----------------------------------------------------------------------------*/
 
 UBOOL InitSockets( FString& Error );
-UBOOL SetNonBlocking( INT Socket );
 UBOOL SetSocketReuseAddr( INT Socket, UBOOL ReUse=1 );
 UBOOL SetSocketLinger( INT Socket );
 UBOOL SetSocketRecvErr( INT Socket );
 TCHAR* SocketError( INT Code=-1 );
-TCHAR* SocketHostError( INT Code=-1 );
+// Addr of a host name or an address in text. Blocks while the system looks a name up.
+UBOOL IpResolve( const ANSICHAR* Host, in_addr& Addr, FString& Error );
 UBOOL IpMatches( sockaddr_in& A, sockaddr_in& B );
 UBOOL IpAddressMatches( sockaddr_in& A, sockaddr_in& B );
 UBOOL IpAddressRangeMatches( sockaddr_in& A, sockaddr_in& B );

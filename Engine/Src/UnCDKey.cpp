@@ -13,7 +13,7 @@
 // This sucks, but I really don't want the code to read the CD key to be
 // in a DLL export.  So we have to declare the registry stuff we need here.
 
-#if _MSC_VER
+#if _WIN32
 #pragma pack(push, 8)
 #include <windows.h>
 #pragma pack(pop)
@@ -24,7 +24,7 @@
 	Win32 Registry access
 -----------------------------------------------------------------------------*/
 
-#if _MSC_VER
+#if _WIN32
 #define RegOpenKeyX(a,b,c)				TCHAR_CALL_OS(RegOpenKeyW(a,b,c),RegOpenKeyA(a,TCHAR_TO_ANSI(b),c))
 static inline LONG RegQueryValueExX( HKEY hKey, LPCTSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData )
 {
@@ -64,7 +64,7 @@ static FString GetRealCDKey()
 	if( cdkey != TEXT("") )
 		return cdkey;
 
-#if _MSC_VER
+#if _WIN32
 	// Read the cdkey from the registry.
 	TCHAR Temp[256];
 	FString Product;

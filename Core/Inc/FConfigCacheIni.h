@@ -215,15 +215,10 @@ public:
 		FString Text;
 		for( TIterator It(*this); It; ++It )
 		{
-            #if WIN32
-                TCHAR *newline = TEXT("\r\n");
-            #else
-                TCHAR *newline = TEXT("\n");
-            #endif
-			Text += FString::Printf( TEXT("[%s]%s"), *SingleLine(It.Key()), newline );
+			Text += FString::Printf( TEXT("[%s]%s"), *SingleLine(It.Key()), LINE_TERMINATOR );
 			for( FConfigSection::TIterator It2(It.Value()); It2; ++It2 )
-				Text += FString::Printf( TEXT("%s=%s%s%s%s"), *SingleLine(It2.Key()), Quotes ? TEXT("\"") : TEXT(""), *SingleLine(It2.Value()), Quotes ? TEXT("\"") : TEXT(""), newline );
-			Text += FString::Printf( newline );
+				Text += FString::Printf( TEXT("%s=%s%s%s%s"), *SingleLine(It2.Key()), Quotes ? TEXT("\"") : TEXT(""), *SingleLine(It2.Value()), Quotes ? TEXT("\"") : TEXT(""), LINE_TERMINATOR );
+			Text += LINE_TERMINATOR;
 		}
 		return appSaveStringToFile( Text, Filename, GFileManager, 0, 1 );
 		unguard;

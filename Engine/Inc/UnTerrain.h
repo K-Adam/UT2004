@@ -509,23 +509,12 @@ class ENGINE_API ATerrainInfo : public AInfo
 	void PrecomputeLayerWeights();
 	void CombineLayerWeights();
 
-
-
-#if __STATIC_LINK || __LINUX__
 	BYTE GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAlphaMap = NULL );
 	void SetLayerAlpha( FLOAT x, FLOAT y, INT Layer, BYTE Alpha, UTexture* InAlphaMap = NULL );
 	_WORD GetHeightmap( INT x, INT y );
 	void SetHeightmap( INT x, INT y, _WORD w );
 	FColor GetTextureColor( INT x, INT y, UTexture* InTextureMap );
 	void SetTextureColor( INT x, INT y, UTexture* InTextureMap, FColor& Color );
-#else
-	inline BYTE GetLayerAlpha( INT x, INT y, INT Layer, UTexture* InAlphaMap = NULL );
-	inline void SetLayerAlpha( FLOAT x, FLOAT y, INT Layer, BYTE Alpha, UTexture* InAlphaMap = NULL );
-	inline _WORD GetHeightmap( INT x, INT y );
-	inline void SetHeightmap( INT x, INT y, _WORD w );
-	inline FColor GetTextureColor( INT x, INT y, UTexture* Texture );
-	inline void SetTextureColor( INT x, INT y, UTexture* Texture, FColor& Color );
-#endif
 	UBOOL GetQuadVisibilityBitmap( INT x, INT y )
 	{
 		INT BitIndex = x + y * HeightmapX;

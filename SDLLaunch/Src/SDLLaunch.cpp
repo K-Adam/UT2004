@@ -29,7 +29,7 @@ extern "C" BYTE GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio;
 -----------------------------------------------------------------------------*/
 
 // General.
-#ifdef WIN32
+#ifdef _WIN32
 extern "C" {HINSTANCE hInstance;}
 #endif
 extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
@@ -64,7 +64,7 @@ FOutputDeviceAnsiError Error;
 #include "FFeedbackContextAnsi.h"
 
 // File manager.
-#ifdef WIN32
+#ifdef _WIN32
 #include "FFileManagerWindows.h"
 FFileManagerWindowsHome FileManager;
 #else
@@ -220,7 +220,7 @@ static void PumpServerTray(void)
     {
         // The file writer holds back up to 4 KB, which can be the whole log of a quiet server.
         Log.Flush();
-#ifdef WIN32
+#ifdef _WIN32
         FString Path = Log.Filename;
 #else
         FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + FString(Log.Filename);
@@ -853,7 +853,7 @@ int main(int argc, char **argv)
 	SDL_SetHint( SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0" );
 #endif
 	TCHAR CmdLine[1024] = TEXT("");
-#ifdef WIN32
+#ifdef _WIN32
 	// appInit skips the executable name on Windows, as GetCommandLine starts with it.
 	appStrncpy( CmdLine, GetCommandLine(), ARRAY_COUNT(CmdLine) );
 #else
@@ -876,7 +876,7 @@ int RunEngine( TCHAR* CmdLine )
 	INT ErrorLevel = 0;
 	GIsStarted     = 1;
 
-#ifdef WIN32
+#ifdef _WIN32
 	hInstance = GetModuleHandle( NULL );
 #endif
 	strcpy( GModule, appToAnsi(TEXT("UT2004")) );

@@ -2951,12 +2951,8 @@ UBOOL UTextureExporterUPT::ExportBinary( UObject* Object, const TCHAR* Type, FAr
 		UPT.ImageTypeCode = 2;
 		UPT.BitsPerPixel = 32;
 		UPT.Height = Texture->VSize;
-		UPT.Width = Texture->USize;	
-		#ifdef __GNUC__
-            UPT.seed = appFrand()*appFrand()*(FLOAT)0x7FFF000000000000ll;
-        #else
-		    UPT.seed = appFrand()*appFrand()*(FLOAT)0x7FFF000000000000;
-        #endif
+		UPT.Width = Texture->USize;
+		UPT.seed = appFrand()*appFrand()*(FLOAT)0x7FFF000000000000LL;
 
 		// Flip bits.
 		for( INT i=8; i<sizeof(FUPTFileHeader); i++ )

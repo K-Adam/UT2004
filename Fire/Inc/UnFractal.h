@@ -18,10 +18,6 @@
 	General structures.
 ----------------------------------------------------------------------------*/
 
-#if __GNUG__
-	typedef SQWORD	__int64;
-#endif
-
 // Random numbers.
 BYTE SpeedRand();
 
@@ -38,12 +34,6 @@ extern "C"
 {
 	extern DOUBLE LTimeTotal1, LTimeTotal2, LinePixels;
 }
-extern __int64  TotalTime0;
-extern __int64  TotalTime1;
-extern __int64  TotalTime2;
-extern __int64  TotalTime3;
-extern __int64  TotalTime4;
-extern __int64  TotalPixels;
 extern INT 	TotalFrames;
 
 

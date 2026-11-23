@@ -718,11 +718,6 @@ public:
 		*ArSend << NAT << Gamespy;
 		ArSend->Flush();
 	}
-
-// Some versions of GNU C++ seem to need a little nudging here.
-#ifdef __GNUC__
-    void *operator new(size_t x) { return ::operator new(x); }
-#endif
 };
 
 FMasterServerUplinkLink::~FMasterServerUplinkLink() noexcept(false)

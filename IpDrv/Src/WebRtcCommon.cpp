@@ -4,11 +4,6 @@
 // The engine builds with /Zp4, std::string crosses to WebRtc.cpp and needs the same packing in both.
 #define NOMINMAX
 #pragma pack(push, 8)
-#if _WIN32
-// inet_pton, the engine's winsock.h has none
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#endif
 #include <cstring>
 #include <random>
 #include <string>
@@ -164,22 +159,11 @@ UBOOL WebRtcClientSetup( FURL& ConnectURL, FString& Error, sockaddr_in& Addr, st
 	appMemzero( &Addr, sizeof(Addr) );
 	Addr.sin_family = AF_INET;
 	Addr.sin_port = htons(Port);
-	Addr.sin_addr.s_addr = inet_addr( TCHAR_TO_ANSI(*ConnectURL.Host) );
-	if( Addr.sin_addr.s_addr == INADDR_NONE )
+	FString ResolveError;
+	if( !IpResolve( TCHAR_TO_ANSI(*ConnectURL.Host), Addr.sin_addr, ResolveError ) )
 	{
-#if __EMSCRIPTEN__
-		// Emscripten's resolver makes up addresses for its WebSocket emulation.
-		HOSTENT* HostEnt = NULL;
-#else
-		FScopeCriticalSection Lock( gethostbyname_mutex );
-		HOSTENT* HostEnt = gethostbyname( TCHAR_TO_ANSI(*ConnectURL.Host) );
-#endif
-		if( !HostEnt || HostEnt->h_addrtype!=AF_INET )
-		{
-			Error = FString::Printf( TEXT("Could not resolve %s"), *ConnectURL.Host );
-			return 0;
-		}
-		Addr.sin_addr = *(in_addr*)HostEnt->h_addr_list[0];
+		Error = FString::Printf( TEXT("Could not resolve %s"), *ConnectURL.Host );
+		return 0;
 	}
 	std::string Ip = TCHAR_TO_ANSI( *IpString(Addr.sin_addr) );
 	std::string Fp = TCHAR_TO_ANSI( *Fingerprint );

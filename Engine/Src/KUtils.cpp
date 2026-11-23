@@ -1334,11 +1334,7 @@ void MEAPI KCreateAssetDB(MeAssetDB** db, McdGeomMan** gm)
 					char *data = (char*)chararray.GetData();
 					char *out = (char*)MeMemoryAPI.create(512);
 
-					#if WIN32 // this conflicts on Linux.
-						wcstombs(out, (unsigned short*)data, 512);
-					#else
-						strncpy(out, appToAnsi((TCHAR *) data), 512);
-					#endif
+					strncpy(out, appToAnsi((TCHAR *) data), 512);
 
 					char *filename = (char*)MeMemoryAPI.create(strlen(out)+32);
 					filename[0] = 0;

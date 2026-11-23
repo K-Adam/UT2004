@@ -9,10 +9,6 @@
 #if __EMSCRIPTEN__
 #include <emscripten.h>
 #else
-#if _WIN32
-// inet_pton, the engine's winsock.h has none
-#include <ws2tcpip.h>
-#endif
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>

@@ -4997,7 +4997,7 @@ void UObject::execPlatformIsWindows( FFrame& Stack, RESULT_DECL )
     guardSlow(UObject::execPlatformIsWindows);
     P_FINISH;
     
-    #if ((defined _WIN32) || (defined _WIN64))
+    #if _WIN32
     *(UBOOL*)Result = 1;
     #else
     *(UBOOL*)Result = 0;

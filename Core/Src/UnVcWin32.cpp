@@ -5,13 +5,16 @@
 	Revision history:
 		* Created by Tim Sweeney
 =============================================================================*/
-#if _MSC_VER
+#if _WIN32
 
 // Windows and runtime includes.
 #pragma warning( disable : 4201 )
 
 #pragma pack(push,8)
 #include <windows.h>
+#include <shellapi.h>
+#include <objbase.h>
+#include <mmsystem.h>
 #pragma pack(pop)
 
 #include <stdio.h>
@@ -382,15 +385,6 @@ CORE_API void* appGetDllExport( void* DllHandle, const TCHAR* ProcName )
 	unguard;
 }
 
-CORE_API const void appDebugMessagef( const TCHAR* Fmt, ... )
-{
-	TCHAR TempStr[4096]=TEXT("");
-	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
-	guard(appDebugMessagef);
-	MessageBox(NULL,TempStr,TEXT("appDebugMessagef"),MB_OK);
-	unguard;
-}
-
 // Type - dicrates the type of dialog we're displaying
 CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 {
@@ -410,16 +404,6 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 			break;
 	}
 	return 1;
-	unguard;
-}
-
-CORE_API const void appGetLastError( void )
-{
-	guard(appGetLastError);
-	TCHAR TempStr[4096]=TEXT("");
-	appSprintf( TempStr, TEXT("GetLastError : %d\n\n%s"),
-		GetLastError(), appGetSystemErrorMessage() );
-	MessageBox( NULL, TempStr, TEXT("System Error"), MB_OK );
 	unguard;
 }
 

@@ -294,7 +294,7 @@ public:
 			for( int j=0; j<4; j++ )
 			{
 				// Handle all four packed values.
-				register DWORD val = 0;
+				DWORD val = 0;
 				for( INT Pack=0; Pack<4; Pack++ )
 				{
 					// Accumulate filter weights in FilterTab[i][j] according to which bits are set in i.

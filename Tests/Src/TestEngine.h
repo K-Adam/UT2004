@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#if WIN32
+#if _WIN32
 #include <windows.h>
 #endif
 #pragma pack(pop)

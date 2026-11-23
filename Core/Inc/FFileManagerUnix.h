@@ -26,12 +26,6 @@
 #include <errno.h>
 #include <time.h>
 
-#define UNREAL_USE_MMAP 0
-
-#if UNREAL_USE_MMAP
-#include <sys/mman.h>
-#endif
-
 #if __EMSCRIPTEN__
 // Emscripten/content.js reads the content files from IndexedDB, suspending the engine while it waits.
 extern "C" int ut_content_read( int File, void* Data, int Count );
@@ -44,110 +38,6 @@ static inline ssize_t ReadFileData( int File, void* Data, INT Count ) { return r
 /*-----------------------------------------------------------------------------
 	File Manager.
 -----------------------------------------------------------------------------*/
-
-#if UNREAL_USE_MMAP
-class FArchiveFileReaderMMAP : public FArchive
-{
-public:
-	FArchiveFileReaderMMAP( int InFile, FOutputDevice* InError, INT InSize )
-	:	File			( InFile )
-	,	Error			( InError )
-	,	Size			( InSize )
-	,	MmapSize		( InSize )
-	,	Pos				( 0 )
-    ,   Buffer          ( NULL )
-	{
-		guard(FArchiveFileReaderMMAP::FArchiveFileReaderMMAP);
-		ArIsLoading = ArIsPersistent = 1;
-
-		// Align mmap() calls to page boundaries...
-		int PageSize = getpagesize();
-		if ((Size % PageSize) != 0)
-			MmapSize = Size + (PageSize - (Size % PageSize));
-		unguard;
-	}
-
-    bool DoMapping(void)
-    {
-		guard(FArchiveFileReaderMMAP::DoMapping);
-        if ( ( Buffer == NULL ) && ( File >= 0 ) )
-        {
-            Buffer = (BYTE *) mmap(NULL, MmapSize, PROT_READ, MAP_SHARED | MAP_FILE, File, 0);
-            if (Buffer == (void *) MAP_FAILED)
-                Buffer = NULL;
-            else
-                close(File);  // don't need file handle anymore.
-            File = -1;  // don't try to close handle either way.
-        }
-
-        return (Buffer != NULL);
-		unguard;
-    }
-
-	~FArchiveFileReaderMMAP()
-	{
-		guard(FArchiveFileReaderMMAP::~FArchiveFileReaderMMAP);
-		Close();
-		unguard;
-	}
-
-	void Precache( INT HintCount )
-	{
-	}
-
-	void Seek( INT InPos )
-	{
-		guard(FArchiveFileReaderMMAP::Seek);
-		check(InPos>=0);
-		check(InPos<=Size);
-		Pos         = InPos;
-		unguard;
-	}
-	INT Tell()
-	{
-		return Pos;
-	}
-	INT TotalSize()
-	{
-		return Size;
-	}
-	UBOOL Close()
-	{
-		guardSlow(FArchiveFileReaderMMAP::Close);
-        if( Buffer != NULL )
-        {
-            munmap(Buffer, MmapSize);
-            Buffer = NULL;
-        }
-		if( File >= 0 )
-        {
-			close( File );
-		    File = -1;
-        }
-		return !ArIsError;
-		unguardSlow;
-	}
-	void Serialize( void* V, INT Length )
-	{
-		guardSlow(FArchiveFileReaderMMAP::Serialize);
-
-		if (Length > (this->Size - this->Pos))
-			Error->Logf( TEXT("ReadFile beyond EOF %i+%i/%i"), Pos, Length, Size );
-        
-        memcpy(V, Buffer + Pos, Length);
-        Pos += Length;
-		unguardSlow;
-	}
-protected:
-	int				File;
-	FOutputDevice*	Error;
-	INT				Size;
-	INT				MmapSize;
-	INT				Pos;
-    BYTE			*Buffer;
-};
-#endif
-
 
 class FArchiveFileReader : public FArchive
 {
@@ -468,14 +358,6 @@ public:
 				appErrorf(TEXT("Failed to read file: %s"),FakeFilename);
 			return NULL;
 		}
-
-        #if UNREAL_USE_MMAP
-        FArchiveFileReaderMMAP *ar = new(TEXT("UnixFileReaderMMAP"))FArchiveFileReaderMMAP(File,Error,statbuf.st_size);
-        if (ar->DoMapping())
-            return(ar);  // will try white-bread FArchiveFileReader if mmap() fails...
-
-        delete ar;
-        #endif
 
 		return new(TEXT("UnixFileReader"))FArchiveFileReader(File,Error,statbuf.st_size);
 		unguard;

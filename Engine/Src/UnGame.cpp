@@ -649,12 +649,6 @@ UBOOL UGameEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		Ar.Logf( TEXT("%f"), GetMaxTickRate() );
 		return 1;
 	}
-	else if( ParseCommand( &Str, TEXT("GSPYLITE") ) )
-	{
-		FString Error;
-		appLaunchURL( TEXT("GSpyLite.exe"), TEXT(""), &Error );
-		return 1;
-	}
 	else if( ParseCommand(&Str,TEXT("SAVEGAME")) )
 	{
 		if( appIsDigit(Str[0]) )

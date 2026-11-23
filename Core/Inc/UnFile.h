@@ -52,9 +52,7 @@ CORE_API void appRequestExit( UBOOL Force );
 CORE_API void VARARGS appFailAssert( const ANSICHAR* Expr, const ANSICHAR* File, INT Line );
 CORE_API void VARARGS appUnwindf( const TCHAR* Fmt, ... );
 CORE_API const TCHAR* appGetSystemErrorMessage( INT Error=0 );
-CORE_API const void appDebugMessagef( const TCHAR* Fmt, ... );
 CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... );
-CORE_API const void appGetLastError( void );
 CORE_API const void EdClearLoadErrors();
 CORE_API const void EdLoadErrorf( INT Type, const TCHAR* Fmt, ... );
 CORE_API void appDebugBreak();
@@ -457,29 +455,6 @@ CORE_API UBOOL ParseParam( const TCHAR* Stream, const TCHAR* Param );
 	Math functions.
 -----------------------------------------------------------------------------*/
 
-#if !DEFINED_appMathIntrinsics
-CORE_API DOUBLE appExp( DOUBLE Value );
-CORE_API DOUBLE appLoge( DOUBLE Value );
-CORE_API DOUBLE appFmod( DOUBLE A, DOUBLE B );
-CORE_API DOUBLE appSin( DOUBLE Value );
-CORE_API DOUBLE appAsin( DOUBLE Value );
-CORE_API DOUBLE appCos( DOUBLE Value );
-CORE_API DOUBLE appAcos( DOUBLE Value );
-CORE_API DOUBLE appTan( DOUBLE Value );
-CORE_API DOUBLE appAtan( DOUBLE Value );
-CORE_API DOUBLE appAtan2( DOUBLE Y, DOUBLE X );
-CORE_API DOUBLE appSqrt( DOUBLE Value );
-CORE_API DOUBLE appPow( DOUBLE A, DOUBLE B );
-CORE_API UBOOL appIsNan( DOUBLE Value );
-CORE_API void appRandInit( INT Seed );
-CORE_API INT appRand();
-CORE_API FLOAT appFrand();
-CORE_API INT appRound( FLOAT Value );
-CORE_API INT appFloor( FLOAT Value );
-CORE_API INT appCeil( FLOAT Value );
-CORE_API FLOAT appFractional( FLOAT Value );
-#endif
-
 CORE_API void appSRandInit( INT );
 CORE_API FLOAT appSRand();
 
@@ -541,7 +516,6 @@ inline void operator delete( void* Ptr )
 	unguardSlow;
 }
 
-#if PLATFORM_NEEDS_ARRAY_NEW
 inline void* operator new[]( size_t Size, const TCHAR* Tag )
 {
 	guardSlow(new);
@@ -560,7 +534,6 @@ inline void operator delete[]( void* Ptr )
 	appFree( Ptr );
 	unguardSlow;
 }
-#endif
 
 /*-----------------------------------------------------------------------------
 	Math.

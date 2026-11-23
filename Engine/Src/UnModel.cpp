@@ -528,8 +528,8 @@ void BoxLeavesRecurse(UModel* Model,INT iNode,FVector Origin,FVector Extent,TArr
 		    iNode = iNodes[Index--];
 
 		    FBspNode& Node			= Model->Nodes(iNode);
-		    register FLOAT PushOut	= FBoxPushOut(Node.Plane,Extent);
-		    register FLOAT Distance	= Node.Plane.PlaneDot(Origin);
+		    FLOAT PushOut	= FBoxPushOut(Node.Plane,Extent);
+		    FLOAT Distance	= Node.Plane.PlaneDot(Origin);
 
 		    if(Distance < PushOut)
 		    {

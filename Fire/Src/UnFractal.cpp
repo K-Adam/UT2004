@@ -69,12 +69,6 @@ extern "C"
 	DOUBLE  LTimeTotal1, LTimeTotal2, LinePixels;
 }
 
-__int64  TotalTime0;
-__int64  TotalTime1;
-__int64  TotalTime2;
-__int64  TotalTime3;
-__int64  TotalTime4;
-__int64  TotalPixels;
 INT 	TotalFrames;
 
 /*-----------------------------------------------------------------------------

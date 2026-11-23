@@ -40,7 +40,7 @@
 // !! Note to self: Move to UnVcWin32.cpp
 // !! Make Linux version.
 //
-#if _MSC_VER
+#if _WIN32
 CORE_API const TCHAR* appTimestamp()
 {
 	guard(appTimestamp);
@@ -90,93 +90,6 @@ CORE_API FString appGetGMTRef()
 /*-----------------------------------------------------------------------------
 	Math functions.
 -----------------------------------------------------------------------------*/
-
-#if !DEFINED_appMathIntrinsics
-CORE_API DOUBLE appExp( DOUBLE Value )
-{
-	return exp(Value);
-}
-CORE_API DOUBLE appLoge( DOUBLE Value )
-{
-	return log(Value);
-}
-CORE_API DOUBLE appFmod( DOUBLE Y, DOUBLE X )
-{
-	return fmod(Y,X);
-}
-CORE_API DOUBLE appSin( DOUBLE Value )
-{
-	return sin(Value);
-}
-CORE_API DOUBLE appAsin( DOUBLE Value )
-{
-	return asin(Value);
-}
-CORE_API DOUBLE appCos( DOUBLE Value )
-{
-	return cos(Value);
-}
-CORE_API DOUBLE appAcos( DOUBLE Value )
-{
-	return acos(Value);
-}
-CORE_API DOUBLE appTan( DOUBLE Value )
-{
-	return tan(Value);
-}
-CORE_API DOUBLE appAtan( DOUBLE Value )
-{
-	return atan(Value);
-}
-CORE_API DOUBLE appAtan2( DOUBLE Y, DOUBLE X )
-{
-	return atan2(Y,X);
-}
-CORE_API DOUBLE appSqrt( DOUBLE Value )
-{
-	return sqrt(Value);
-}
-CORE_API DOUBLE appPow( DOUBLE A, DOUBLE B )
-{
-	return pow(A,B);
-}
-CORE_API UBOOL appIsNan( DOUBLE A )
-{
-#if _MSC_VER
-	return _isnan(A)==1;
-#else
-	return isnan(A)==1;
-#endif
-}
-CORE_API INT appRand()
-{
-	return rand();
-}
-CORE_API void appRandInit(INT Seed)
-{
-	srand( Seed );
-}
-CORE_API FLOAT appFrand()
-{
-	return rand() / (FLOAT)RAND_MAX;
-}
-CORE_API INT appFloor( FLOAT Value )
-{
-	return (INT)floor(Value);
-}
-CORE_API INT appCeil( FLOAT Value )
-{
-	return (INT)ceil(Value);
-}
-CORE_API INT appRound( FLOAT Value )
-{
-	return (INT)floor(Value + 0.5);
-}
-CORE_API FLOAT appFractional( FLOAT Value )
-{
-	return Value - appFloor( Value );
-}
-#endif  // !DEFINED_appMathIntrinsics
 
 static INT		SRandSeed = 0;
 static FLOAT	SRandTemp = 1.f;

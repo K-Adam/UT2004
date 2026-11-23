@@ -2,16 +2,7 @@
 
 // The system headers go before the engine's, whose macros (check, clock, min, max) break them.
 #pragma pack(push,8)
-#if _WIN32
-#include <winsock2.h>
-typedef int socklen_t;
-#else
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#define closesocket close
-#endif
+#include "UnSocketApi.h"
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <zlib.h>
@@ -75,12 +66,7 @@ TEST( WebRtc, AnswersZeroTiebreaker )
 	Server.sin_port = htons( (unsigned short)(GTestEngine->GLevel->URL.Port + 2) );
 	Server.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
 	auto Socket = socket( AF_INET, SOCK_DGRAM, 0 );
-#if _WIN32
-	u_long NonBlocking = 1;
-	ioctlsocket( Socket, FIONBIO, &NonBlocking );
-#else
-	fcntl( Socket, F_SETFL, O_NONBLOCK );
-#endif
+	SetNonBlocking( Socket );
 
 	INT Successes = 0, Errors = 0;
 	// The first check makes the server build its peer, that peer answers the later ones
@@ -186,15 +172,10 @@ TEST( WebRtc, HostsThroughWebMaster )
 	Address.sin_family = AF_INET;
 	Address.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
 	ASSERT_EQ( 0, bind( Listener, (sockaddr*)&Address, sizeof(Address) ) );
-	socklen_t Size = sizeof(Address);
+	SOCKLEN Size = sizeof(Address);
 	getsockname( Listener, (sockaddr*)&Address, &Size );
 	listen( Listener, 4 );
-#if _WIN32
-	u_long NonBlocking = 1;
-	ioctlsocket( Listener, FIONBIO, &NonBlocking );
-#else
-	fcntl( Listener, F_SETFL, O_NONBLOCK );
-#endif
+	SetNonBlocking( Listener );
 
 	GConfig->SetString( TEXT("IpDrv.MasterServerLink"), TEXT("WebMasterServer"), *FString::Printf( TEXT("http://127.0.0.1:%i"), ntohs(Address.sin_port) ) );
 	// The test ini turns the uplink off so no test advertises to a real master
@@ -234,8 +215,8 @@ TEST( WebRtc, HostsThroughWebMaster )
 		{
 #if _WIN32
 			// It takes after the listener there
-			NonBlocking = 0;
-			ioctlsocket( Client, FIONBIO, &NonBlocking );
+			u_long Blocking = 0;
+			ioctlsocket( Client, FIONBIO, &Blocking );
 #endif
 			SetTimeout( Client, 2000 );
 			std::string Head;

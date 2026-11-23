@@ -20,44 +20,72 @@
 
 #include <typeinfo>
 
-// OS X doesn't define __GNUG__.
-#if ((defined __GNUC__) && (!defined __GNUG__))
-  #define __GNUG__ 1
-#endif
-
 // Build options.
 #include "UnBuild.h"
 
 #define FTime DOUBLE
 
-#ifdef _WIN64
-    #ifndef __x86_64__
-      #define __x86_64__ 1
-    #endif
-#endif
-
-#if (defined __x86_64__) || (defined __aarch64__)
+#include <stdint.h>
+#if UINTPTR_MAX == UINT64_MAX
     #define PLATFORM_64BITS 1
 #else
     #define PLATFORM_32BITS 1
 #endif
 
-// Compiler specific include.
-#if _MSC_VER
+// Platform specific include.
+#if _WIN32
 	#include "UnVcWin32.h"
-#elif __GNUG__
-	#include <string.h>
-	#include "UnGnuG.h"
 #else
-	#error Unknown Compiler
-#endif
-
-
-// OS specific include.
-#if __UNIX__
+	#define __UNIX__ 1
+	#include "UnGnuG.h"
 	#include "UnUnix.h"
 	#include <signal.h>
 #endif
+
+// Sizes.
+enum {DEFAULT_ALIGNMENT = 8 }; // Default boundary to align memory allocations on.
+enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
+
+// Variable arguments.
+#define GET_VARARGS(msg,len,lastarg,fmt)	\
+{	\
+	va_list ArgPtr;	\
+	va_start( ArgPtr, lastarg );	\
+	VSNPRINTF( msg, len, fmt, ArgPtr );	\
+	va_end( ArgPtr );	\
+	(msg)[(len)-1] = 0;	\
+}
+
+#define GET_VARARGS_RESULT(msg,len,lastarg,fmt,result)	\
+{	\
+	va_list ArgPtr;	\
+	va_start( ArgPtr, lastarg );	\
+	result = VSNPRINTF( msg, len, fmt, ArgPtr );	\
+	va_end( ArgPtr );	\
+}
+
+// Math intrinsics.
+#include <math.h>
+#define appExp(x) exp(x)
+#define appLoge(x) log(x)
+#define appFmod(x,y) fmod(x,y)
+#define appSin(x) sin(x)
+#define appAsin(x) asin(x)
+#define appCos(x) cos(x)
+#define appAcos(x) acos(x)
+#define appTan(x) tan(x)
+#define appAtan(x) atan(x)
+#define appAtan2(x,y) atan2(x,y)
+#define appPow(x,y) pow(x,y)
+#define appIsNan(x) isnan(x)
+#define appRand() rand()
+#define appRandInit(x) srand(x)
+#define appFrand() ((FLOAT) (rand() / (FLOAT) RAND_MAX))
+#define appSqrt(x) sqrt(x)
+#define appFloor(x) ((INT)floor(x))
+#define appCeil(x) ((INT)ceil(x))
+#define appRound(x) ((INT)floor(x + 0.5f))
+#define appFractional(x) (x - floor(x))
 
 // Global constants.
 enum {MAXBYTE		= 0xff       };
@@ -436,13 +464,6 @@ public:
 private:
 	FCriticalSection* CriticalSection;
 };
-
-
-// gethostbyname() returns a static buffer that is overwritten
-//  each call, so we need to serialize access to it so that correct
-//  results make it back for each query. This is largely for IpDrv, but
-//  UnUnix.cpp uses gethostbyname(), too, so it's in Core.
-CORE_API extern FCriticalSection *gethostbyname_mutex;
 
 
 class FEdLoadError;

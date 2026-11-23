@@ -6,7 +6,7 @@
 =============================================================================*/
 
 #include <stdlib.h>
-#ifdef WIN32
+#ifdef _WIN32
 #include <io.h>
 #else
 #include <unistd.h>
@@ -865,7 +865,7 @@ void* USDLViewport::GetWindow()
 {
 	guard(USDLViewport::GetWindow);
 	SDL_Window* Window = GetOuterUSDLClient()->Window;
-#ifdef WIN32
+#ifdef _WIN32
 	// Force feedback needs the native window.
 	return SDL_GetPointerProperty( SDL_GetWindowProperties(Window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL );
 #else
@@ -1627,7 +1627,7 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 		if( !GIsEditor )
 			SDL_SetWindowMinimumSize( Client->Window, 640, 480 );
 
-#ifndef WIN32
+#ifndef _WIN32
 		// Windows windows get the executable's icon.
 		SDL_Surface* Icon = SDL_LoadBMP( "../Help/Unreal.bmp" );
 		if( Icon )

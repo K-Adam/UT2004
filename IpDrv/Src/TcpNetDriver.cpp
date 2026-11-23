@@ -4,10 +4,6 @@
 
 Revision history:
 	* Created by Tim Sweeney.
-
-Notes:
-	* See \msdev\vc98\include\winsock.h and \msdev\vc98\include\winsock2.h 
-	  for Winsock WSAE* errors returned by Windows Sockets.
 =============================================================================*/
 
 #include "UnIpDrv.h"
@@ -16,12 +12,6 @@ Notes:
 /*-----------------------------------------------------------------------------
 	Declarations.
 -----------------------------------------------------------------------------*/
-
-#ifdef __linux__
-#  ifndef MSG_ERRQUEUE
-#    define MSG_ERRQUEUE 0x2000
-#  endif
-#endif
 
 // Size of a UDP header.
 #define IP_HEADER_SIZE     (20)
@@ -237,8 +227,8 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 	{
 		// Get data, if any.
 		clock(RecvCycles);
-		INT FromSize = sizeof(FromAddr);
-		INT Size = recvfrom( Socket, (char*)Data, sizeof(Data), 0, (sockaddr*)&FromAddr, GCC_OPT_INT_CAST &FromSize );
+		SOCKLEN FromSize = sizeof(FromAddr);
+		INT Size = recvfrom( Socket, (char*)Data, sizeof(Data), 0, (sockaddr*)&FromAddr, &FromSize );
 		unclock(RecvCycles);
 		// Handle result.
 		if( Size==SOCKET_ERROR )
@@ -253,14 +243,14 @@ void UTcpNetDriver::TickDispatch( FLOAT DeltaTime )
 			{
                 #ifdef __linux__
                     // Determine the IP address where the problem originated.
-                    recvfrom(Socket, NULL, 0, MSG_ERRQUEUE, (sockaddr*)&FromAddr, GCC_OPT_INT_CAST &FromSize );
+                    recvfrom(Socket, NULL, 0, MSG_ERRQUEUE, (sockaddr*)&FromAddr, &FromSize );
                 #endif
                 
 				if( Error != UDP_ERR_PORT_UNREACH )
 				{
 					static UBOOL FirstError=1;
 					if( FirstError )
-						debugf( TEXT("UDP recvfrom error: %i from %s:%d"), WSAGetLastError(), *IpString(FromAddr.sin_addr), ntohs(FromAddr.sin_port) );
+						debugf( TEXT("UDP recvfrom error: %i from %s:%d"), Error, *IpString(FromAddr.sin_addr), ntohs(FromAddr.sin_port) );
 					FirstError = 0;
 					break;
 				}
@@ -436,12 +426,13 @@ UBOOL UTcpNetDriver::InitBase( UBOOL Connect, FNetworkNotify* InNotify, FURL& UR
 
     // Increase socket queue size, because we are polling rather than threading
 	// and thus we rely on Windows Sockets to buffer a lot of data on the server.
-	INT RecvSize = Connect ? 0x8000 : 0x20000, SizeSize=sizeof(RecvSize);
+	INT RecvSize = Connect ? 0x8000 : 0x20000;
+	SOCKLEN SizeSize = sizeof(RecvSize);
 	INT SendSize = Connect ? 0x8000 : 0x20000;
 	setsockopt( Socket, SOL_SOCKET, SO_RCVBUF, (char*)&RecvSize, SizeSize );
-	getsockopt( Socket, SOL_SOCKET, SO_RCVBUF, (char*)&RecvSize, GCC_OPT_INT_CAST &SizeSize );
+	getsockopt( Socket, SOL_SOCKET, SO_RCVBUF, (char*)&RecvSize, &SizeSize );
 	setsockopt( Socket, SOL_SOCKET, SO_SNDBUF, (char*)&SendSize, SizeSize );
-	getsockopt( Socket, SOL_SOCKET, SO_SNDBUF, (char*)&SendSize, GCC_OPT_INT_CAST &SizeSize );
+	getsockopt( Socket, SOL_SOCKET, SO_SNDBUF, (char*)&SendSize, &SizeSize );
 	debugf( NAME_Init, TEXT("%s: Socket queue %i / %i"), SOCKET_API, RecvSize, SendSize );
 
 	// Bind socket to our port.

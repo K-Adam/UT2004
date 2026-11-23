@@ -13,44 +13,21 @@ Revision history:
 	#pragma warning( disable : 4201 )
 #endif
 
-// Socket API.
-#if _MSC_VER
-	#define __WINSOCK__ 1
+// A statically linked launcher includes this after the engine headers, whose clock macro breaks <ctime>.
+#pragma push_macro("clock")
+#undef clock
+#pragma pack(push,8)
+#include <atomic>
+#include <thread>
+#pragma pack(pop)
+#pragma pop_macro("clock")
+
+#include "UnSocketApi.h"
+
+#if __WINSOCK__
 	#define SOCKET_API TEXT("WinSock")
 #else
-	#define __BSD_SOCKETS__ 1
 	#define SOCKET_API TEXT("Sockets")
-#endif
-
-// WinSock includes.
-#if __WINSOCK__
-#pragma pack(push,8)
-	#include <windows.h>
-	#include <winsock.h>
-	#include <conio.h>
-#pragma pack(pop)
-#endif
-
-// BSD socket includes.
-#if __BSD_SOCKETS__
-	#include <stdio.h>
-	#include <unistd.h>
-	#include <sys/types.h>
-	#include <sys/socket.h>
-	#include <netinet/in.h>
-	#include <arpa/inet.h>
-	#include <netdb.h>
-	#include <sys/uio.h>
-	#include <sys/ioctl.h>
-	#include <sys/time.h>
-	#include <errno.h>
-	#include <pthread.h>
-	#include <fcntl.h>
-
-	// Handle glibc < 2.1.3
-	#ifndef MSG_NOSIGNAL
-	#define MSG_NOSIGNAL 0x4000
-	#endif
 
 	#if __EMSCRIPTEN__
 	// Emscripten emulates sockets over WebSockets, every ping, link and download would turn into a ws:// connection attempt.
@@ -91,11 +68,7 @@ extern UBOOL GIpDrvInitialized;
 	Host resolution thread.
 -----------------------------------------------------------------------------*/
 
-#if __UNIX__
-void* ResolveThreadEntry( void* Arg );
-#else
-DWORD STDCALL ResolveThreadEntry( void* Arg );
-#endif
+void ResolveThreadEntry( class FResolveInfo* Info );
 
 //
 // Class for creating a background thread to resolve a host.
@@ -105,13 +78,10 @@ class FResolveInfo
 public:
 	// Variables.
 	in_addr		Addr;
-	INT			Done;
+	// Written by the resolve thread.
+	std::atomic<INT>	Done;
 	ANSICHAR	HostName[256];
 	TCHAR		Error[256];
-
-	#if __UNIX__
-	pthread_t	ResolveThread;
-	#endif
 
 	// Functions.
 	FResolveInfo( const TCHAR* InHostName )
@@ -130,29 +100,15 @@ public:
 		Done = 0;
 
 #if __EMSCRIPTEN__
-		// No threads, and Emscripten's resolver only makes up addresses for its WebSocket emulation.
-		appStrncpy( Error, TEXT("Browsers can't look up host names"), ARRAY_COUNT(Error) );
-		Done = 1;
-#elif _MSC_VER
-		HANDLE hThread = CreateThread( NULL, 0, ResolveThreadEntry, this, 0, NULL );
-		check(hThread);
-		CloseHandle( hThread );
+		// No threads, and IpResolve takes no host names there.
+		ResolveThreadEntry( this );
 #else
-		pthread_attr_t ThreadAttributes;
-		pthread_attr_init( &ThreadAttributes );
-		pthread_attr_setdetachstate( &ThreadAttributes, PTHREAD_CREATE_DETACHED );
-		pthread_create( &ResolveThread, &ThreadAttributes, &ResolveThreadEntry, this );
+		std::thread( ResolveThreadEntry, this ).detach();
 #endif
-
 	}
-	// Done is written by the resolve thread.
 	UBOOL Resolved()
 	{
-#if _MSC_VER
-		return InterlockedCompareExchange( (volatile LONG*)&Done, 0, 0 ) != 0;
-#else
-		return __atomic_load_n( &Done, __ATOMIC_ACQUIRE ) != 0;
-#endif
+		return Done != 0;
 	}
 	const TCHAR* GetError()
 	{
@@ -178,46 +134,6 @@ public:
 inline int bindnextport( SOCKET s, struct sockaddr_in* addr, int portcount, int portinc )
 {
 	guard(bindnextport);
-
-#ifdef __linux__
-    // Long explanation follows:
-    //
-    // Using port 0 tells the OS to allocate an unused port. But, this will
-    // allocate the same port as the socket we just closed on Linux's
-    // TCP/IP stack. If you get a stray packet from the last socket, the game
-    // gets VERY confused. This is most obvious by hitting a passworded server
-    // with the wrong password. We connect, fail to gain access, user enters a
-    // password and we closesocket() and immediately hit the server again with
-    // a newly bound port...and gets some extra unexpected chatter that hangs
-    // the client.
-    //
-    // The workaround is to pick our own random ports if port zero is
-    // requested. If we can't find a valid port above 1024 (below 1024 is
-    // seconds and then continue as normal, which tends to fix things.
-    // tends to fix things, too. Oh well.
-    //
-    // The Win32 TCP/IP stack does not exhibit this problem.
-
-    if( addr->sin_port==0 )
-    {
-        // try 10 random ports...
-        for (int i = 0; i < 10; i++)
-        {
-            short p = ((short) (31742.0f * rand() / (RAND_MAX + 1.0))) + 1024;
-            addr->sin_port = htons(p);
-            int rc = bindnextport(s, addr, portcount, portinc);
-            if (rc != 0)
-                return(rc);  // got one.
-        }
-
-        debugf( NAME_Warning, TEXT("Failed to manually bind random port. Letting OS do it instead.") );
-        appSleep(3.0f);
-        addr->sin_port = 0;
-    }
-#endif
-
-
-
 
 	for( int i=0; i<portcount; i++ )
 	{
@@ -274,21 +190,13 @@ inline int getlocalhostaddr( FOutputDevice& Out, in_addr &HostAddr )
 	}
 	else
 	{
-		check(gethostbyname_mutex != NULL);
-		gethostbyname_mutex->Lock();
-		HOSTENT* HostEnt = gethostbyname( appToAnsi(HostName) );
-		if( HostEnt==NULL )
+		FString ResolveError;
+		if( !IpResolve( AnsiHostName, HostAddr, ResolveError ) )
 		{
-			Out.Logf( TEXT("gethostbyname failed (%s) ... can't get local IP."), SocketHostError() );
-		}
-		else if( HostEnt->h_addrtype!=PF_INET )
-		{
-			Out.Logf( TEXT("gethostbyname: non-Internet address (%s)"), \
-				SocketHostError() );
+			Out.Logf( TEXT("%s ... can't get local IP."), *ResolveError );
 		}
 		else
 		{
-			HostAddr = *(in_addr*)( *HostEnt->h_addr_list );
 			if( !ParseParam(appCmdLine(),TEXT("PRIMARYNET")) )
 				CanBindAll = 1;
 			static UBOOL First=0;
@@ -298,7 +206,6 @@ inline int getlocalhostaddr( FOutputDevice& Out, in_addr &HostAddr )
 				debugf( NAME_Init, TEXT("%s: I am %s (%s)"), SOCKET_API, HostName, *IpString( HostAddr ) );
 			}
 		}
-		gethostbyname_mutex->Unlock();
 	}
 	return CanBindAll;
 	unguard;

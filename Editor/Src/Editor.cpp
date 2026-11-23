@@ -102,7 +102,7 @@ void autoInitializeRegistrantsEditor(INT &Lookup)
 	UBrushBuilder::StaticClass();
 	GNativeLookupFuncs[Lookup++] = &FindEditorUBrushBuilderNative;
 
-    #if WIN32
+    #if _WIN32
 	UTrueTypeFontFactory::StaticClass();
     #endif
 }

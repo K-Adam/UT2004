@@ -337,11 +337,7 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 	/* Get skeletal mesh name and look up asset. */
 	char cSkelName[512];
 
-    #if WIN32 // this conflicts on Linux.
-	    wcstombs(cSkelName, *(skelParams->KSkeleton), 512);
-    #else
-        strncpy(cSkelName, appToAnsi((TCHAR *) *(skelParams->KSkeleton)), 512);
-    #endif
+	strncpy(cSkelName, appToAnsi((TCHAR *) *(skelParams->KSkeleton)), 512);
 
 	int jointCount = 0, modelCount = 0, boneIdx, numBones = skelmesh->RefSkeleton.Num();
 
@@ -404,11 +400,7 @@ void MEAPI KInitSkeletonKarma(USkeletalMeshInstance* inst)
 	for(boneIdx = 0; boneIdx<numBones; boneIdx++)
 	{
 		char cBoneName[512];
-        #if WIN32 // this conflicts on Linux.
-		    wcstombs(cBoneName, *(skelmesh->RefSkeleton(boneIdx).Name), 512);
-        #else
-            strncpy(cBoneName, appToAnsi((TCHAR *) *(skelmesh->RefSkeleton(boneIdx).Name)), 512);
-        #endif
+		strncpy(cBoneName, appToAnsi((TCHAR *) *(skelmesh->RefSkeleton(boneIdx).Name)), 512);
 
 		strlwr(cBoneName); // Assume part names are always lower case.
 
