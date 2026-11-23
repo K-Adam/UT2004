@@ -156,6 +156,7 @@ static bool HttpRequest( const std::string& Url, const std::string& Body, std::s
 		return false;
 	curl_slist* Headers = curl_slist_append( NULL, "Content-Type: application/json" );
 	curl_easy_setopt( Curl, CURLOPT_HTTPHEADER, Headers );
+	curl_easy_setopt( Curl, CURLOPT_USERAGENT, "UT2004/" UT_VERSION );
 	// The master lists the address a post comes from, and the game is reachable over IPv4 only.
 	curl_easy_setopt( Curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
 	// An offer waits up to 8 seconds for the host to answer, an unreachable master still fails fast
