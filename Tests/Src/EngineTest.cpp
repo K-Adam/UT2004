@@ -58,17 +58,32 @@ TEST( Engine, NativesBound )
 	EXPECT_GT( Count, 0 );
 }
 
-TEST( Engine, CubemapFaceMustBeATexture )
+TEST( Engine, CubemapFacesFitFaceZero )
 {
-	UTexture* Plain = ConstructObject<UTexture>( UTexture::StaticClass() );
 	UCubemap* Cube = ConstructObject<UCubemap>( UCubemap::StaticClass() );
+	Cube->USize = Cube->VSize = 16;
+	Cube->Format = TEXF_RGBA8;
+	UTexture* Faces[4];
+	for( INT i=0; i<4; i++ )
+	{
+		Faces[i] = ConstructObject<UTexture>( UTexture::StaticClass() );
+		Faces[i]->USize = Faces[i]->VSize = 16;
+		Faces[i]->Format = TEXF_RGBA8;
+	}
+	Faces[1]->USize = 32;
+	Faces[2]->Format = TEXF_DXT1;
+	Faces[3]->Format = TEXF_P8;
 	for( INT Face=0; Face<6; Face++ )
 		Cube->Faces[Face] = Cube;
-	Cube->Faces[1] = Plain;
+	for( INT i=0; i<4; i++ )
+		Cube->Faces[i+1] = Faces[i];
 	FCubemap* Interface = Cube->GetRenderInterface()->GetCubemapInterface();
 	ASSERT_TRUE( Interface != NULL );
 	EXPECT_EQ( NULL, Interface->GetFace(0) );
-	EXPECT_EQ( Plain->GetRenderInterface()->GetTextureInterface(), Interface->GetFace(1) );
+	EXPECT_EQ( Faces[0]->GetRenderInterface()->GetTextureInterface(), Interface->GetFace(1) );
+	EXPECT_EQ( NULL, Interface->GetFace(2) );
+	EXPECT_EQ( NULL, Interface->GetFace(3) );
+	EXPECT_EQ( Faces[3]->GetRenderInterface()->GetTextureInterface(), Interface->GetFace(4) );
 }
 
 #if __STATIC_LINK

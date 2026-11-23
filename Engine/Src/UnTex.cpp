@@ -1765,12 +1765,25 @@ FStaticCubemap::FStaticCubemap(UCubemap* InCubemap)
 	LastRevision = 1;
 }
 
+// Each face in one of these formats is converted to RGBA8 from its own format.
+static UBOOL ExpandsToRGBA8( ETextureFormat Format )
+{
+	return Format == TEXF_P8 || Format == TEXF_RGBA8 || Format == TEXF_G16;
+}
+
 FTexture* FStaticCubemap::GetFace( INT Face )
 {
 	// A face may itself be a cubemap, whose interface is no FTexture.
 	UBitmapMaterial* Current = Cubemap->Faces[Face] ? Cubemap->Faces[Face]->Get(Cubemap->GetLastUpdateTime(),NULL) : NULL;
 	FBaseTexture* Base = Current ? Current->GetRenderInterface() : NULL;
-	return Base ? Base->GetTextureInterface() : NULL;
+	FTexture* Texture = Base ? Base->GetTextureInterface() : NULL;
+	if( !Texture )
+		return NULL;
+	// Renderers size every face from face 0.
+	ETextureFormat Format = Texture->GetFormat(), Expected = GetFormat();
+	if( Texture->GetWidth() != GetWidth() || Texture->GetHeight() != GetHeight() || (Format != Expected && !(ExpandsToRGBA8(Format) && ExpandsToRGBA8(Expected))) )
+		return NULL;
+	return Texture;
 }
 
 QWORD FStaticCubemap::GetCacheId()
