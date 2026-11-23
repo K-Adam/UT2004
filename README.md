@@ -61,6 +61,18 @@ A dedicated server is `UCC server DM-Rankin` (`ucc-bin` on Linux). It does not a
 
 The web page is served from any static host, for example `python -m http.server 8000 -d build/web`.
 
+The web page starts what its address names after the `#`:
+
+| Link | Starts |
+|---|---|
+| `https://ut2004.dev/#join=<id>` | The server with that link id |
+| `https://ut2004.dev/#join=<ip>:<port>` | The server the web master lists at that address |
+| `https://ut2004.dev/#map=DM-Rankin` | A map of the content the page has |
+
+While playing, the address becomes the link to the current map or listed server. In the menu, on an unlisted server and while hosting it has no `#` part.
+
+A server listed on the web master logs its link as `Join link:` and keeps it across restarts and address changes through `LinkToken` in `[IpDrv.MasterServerLink]` of `UT2004.ini`, as long as its port stays the same. Servers with a copied ini and the same port share a link until one deletes its `LinkToken`.
+
 ## Files and logs
 
 | Platform | Settings, saves and `UT2004.log` |

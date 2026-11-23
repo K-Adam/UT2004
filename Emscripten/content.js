@@ -94,4 +94,8 @@ addToLibrary({
   ut_error__deps: ['$UTF8ToString'],
   ut_error__sig: 'vppp',
   ut_error: (text, reportUrl, log) => Module.gameError(UTF8ToString(text), UTF8ToString(reportUrl), UTF8ToString(log)),
+
+  ut_place__deps: ['$UTF8ToString'],
+  ut_place__sig: 'vppip',
+  ut_place: (map, host, port, webrtc) => Module.gamePlace(UTF8ToString(map), UTF8ToString(host), port, UTF8ToString(webrtc)),
 });

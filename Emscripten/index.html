@@ -91,6 +91,8 @@ const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const host = 'https://assets.ut2004.dev/web/';
 const manifestUrl = local ? 'assets/build/web/files.json' : host + 'files.json';
 const fileUrl = (path) => (local ? 'assets/src/' : host) + path;
+// Lists the servers a link can name. The game lists and joins from the same one, set in its ini.
+const master = 'https://master.ut2004.dev';
 // Files this small are read into memory before the game starts, so reading them never waits.
 const RESIDENT = 2 << 20;
 const PARALLEL = 4;
@@ -420,6 +422,37 @@ async function sync() {
   await syncHosted().catch(zipFallback);
 }
 
+const MAP_NAME = /^[A-Za-z0-9]+-[A-Za-z0-9-]+$/;
+const detail = (s, key) => (Array.isArray(s?.info) ? s.info : []).find((p) => p?.key === key)?.value;
+const servers = () => fetch(master, { cache: 'no-store' }).then((r) => r.json())
+  .then((list) => (Array.isArray(list?.servers) ? list.servers : []), () => []);
+
+// The engine reads switches anywhere in its command line, so nothing of the page address goes there. The address only
+// picks a stored map or a server the web master lists, and the argument is built from values checked here.
+async function linked() {
+  const quad = String.raw`(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)`;
+  const link = new URLSearchParams(location.hash.slice(1));
+  const map = link.get('map') ?? '', join = link.get('join') ?? '';
+  if (MAP_NAME.test(map)) {
+    // The stored spelling, the engine's file names are case sensitive here.
+    const file = files.find((f) => f.path.toLowerCase() === `maps/${map}.ut2`.toLowerCase());
+    return file?.path.slice(5, -4);
+  }
+  if (!new RegExp(`^(?:[0-9a-f]{32}|${quad}:\\d{1,5})$`).test(join)) return;
+
+  // The engine drops its own message for a join that fails this early.
+  const list = window.RTCPeerConnection ? await servers() : [];
+  // The list has the server that reported last first, which is the one to join when two share a link.
+  // Hosts the web master has no IPv4 address of are all listed at 0.0.0.0, so that address names none of them.
+  const row = list.find((s) => (join.includes(':') ? s?.ip !== '0.0.0.0' && `${s?.ip}:${s?.port}` : detail(s, 'Link')) === join);
+  const webrtc = detail(row, 'WebRTC');
+  if (row && new RegExp(`^${quad}$`).test(row.ip) && Number.isInteger(row.port) && row.port > 0 && row.port < 65536
+    && /^(?:signal:[0-9a-f]{32}|\d{1,5},(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2})$/.test(webrtc))
+    return `${row.ip}:${row.port}?WebRTC=${webrtc}`;
+  alert('The server of this link is not online, or this browser cannot join it.');
+}
+
+let places = 0;
 var Module = {
   canvas,
   // The game lists servers from the web master and joins them over WebRTC.
@@ -478,6 +511,20 @@ var Module = {
       report.textContent = sent ? 'Report sent, thank you' : 'The report could not be sent';
     };
   },
+  // Replacing the state fires no hashchange, which would reload the page.
+  gamePlace: async (map, host, port, webrtc) => {
+    const place = ++places;
+    let hash = '';
+    if (host) {
+      // A link only opens a listed server. Without a link id that is by its address, which has to name it alone.
+      const at = (await servers()).filter((s) => s?.ip === host && s?.port === port);
+      const id = detail(at.find((s) => detail(s, 'WebRTC') === webrtc), 'Link');
+      if (/^[0-9a-f]{32}$/.test(id)) hash = `#join=${id}`;
+      else if (at.length === 1 && host !== '0.0.0.0' && detail(at[0], 'WebRTC') === webrtc) hash = `#join=${host}:${port}`;
+    } else if (MAP_NAME.test(map)) hash = `#map=${map}`;
+    // The player may have moved on while the list came.
+    if (place === places) history.replaceState(null, '', hash || location.pathname + location.search);
+  },
   // The engine has shut down, and passes the arguments when it did so to start a server.
   gameExit: (server) => {
     if (server) sessionStorage.setItem(SERVER_KEY, server);
@@ -519,6 +566,9 @@ if (serverCmd) {
     sessionStorage.removeItem(SERVER_KEY);
     setTimeout(() => location.reload(), 10000);
   };
+} else {
+  // A link opened in this tab only changes the address.
+  addEventListener('hashchange', () => location.reload());
 }
 
 function load(src) {
@@ -598,6 +648,9 @@ if (matchMedia('(max-width: 800px), (pointer: coarse)').matches) {
   // The system package loader registers itself with Module as it runs, so it goes before the engine.
   (serverCmd ? Promise.resolve() : welcome())
     .then(sync)
+    // A server tab has its own first argument.
+    .then(() => serverCmd ? null : linked())
+    .then((first) => first && Module.arguments.unshift(first))
     .then(() => load('system.js'))
     .then(() => load('UT2004.js'))
     .then(() => canvas.focus())

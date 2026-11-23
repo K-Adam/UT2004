@@ -357,6 +357,47 @@ static bool FindContent(void)
 extern "C" int ut_next_frame();
 extern "C" void ut_exit(const char* ServerCmd);
 extern "C" void ut_error(const char* Message, const char* ReportUrl, const char* ReportLog);
+extern "C" void ut_place(const char* Map, const char* Host, int Port, const char* WebRtc);
+
+// Tells the page when the player gets to a local map, a server or back to the menu, so its address can link there.
+// The engine has no notification that comes after a level change, so this looks once a frame.
+static void ReportPlace( UEngine* Engine )
+{
+	UGameEngine* Game = Cast<UGameEngine>( Engine );
+	// The link of a server that is being joined stays in the address.
+	if( !Game || Game->GPendingLevel )
+		return;
+
+	// LastURL would not do, it keeps the last game after a return to the menu.
+	const TCHAR *Map = TEXT(""), *Host = TEXT(""), *WebRtc = TEXT("");
+	INT Port = 0;
+	ULevel* Level = Game->GLevel;
+	if( Level && Level!=Game->GEntry )
+	{
+		BYTE NetMode = Level->GetLevelInfo()->NetMode;
+		if( NetMode==NM_Standalone )
+			Map = *Level->URL.Map;
+		else if( NetMode==NM_Client && Level->NetDriver )
+		{
+			// A demo plays as a client too, without a connection.
+			Host = *Level->URL.Host;
+			Port = Level->URL.Port;
+			WebRtc = Level->URL.GetOption( TEXT("WebRTC="), TEXT("") );
+		}
+	}
+
+	// The first report also goes out for the menu, which is where a join from the page's address ends when it fails.
+	// Hosts the web master lists at one address differ in their WebRTC details alone.
+	static FString LastMap, LastHost, LastWebRtc;
+	static INT LastPort = -1;
+	if( LastMap==Map && LastHost==Host && LastPort==Port && LastWebRtc==WebRtc )
+		return;
+	LastMap = Map;
+	LastHost = Host;
+	LastPort = Port;
+	LastWebRtc = WebRtc;
+	ut_place( &appToUtf8(Map)(0), &appToUtf8(Host)(0), Port, &appToUtf8(WebRtc)(0) );
+}
 #endif
 
 #include "CrashReport.h"
@@ -505,6 +546,7 @@ inline void	CMainLoop::RunLoop(void)
 	// Enforce optional maximum tick rate.
 	guard(EnforceTickRate);
 #if __EMSCRIPTEN__
+	ReportPlace( Engine );
 	// The browser shows the frame and runs its events only while the game waits for the next one.
 	// It also tells when the page's Stop server button was pressed.
 	if( ut_next_frame() )
