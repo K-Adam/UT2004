@@ -2,12 +2,12 @@ class FixInputSettings extends UT2K4Tab_IForceSettings;
 
 var automated GUISectionBackground i_BG4;
 var automated moComboBox co_VirtualJoystick;
-var automated moCheckBox ch_Gyro, ch_VJSwap;
+var automated moCheckBox ch_Gyro, ch_PadInvertY, ch_VJSwap;
 var automated moSlider sl_VJScale;
 var() localized string VirtualJoystickText[3];
 
 var int iVJ;
-var bool bGyro, bVJSwap;
+var bool bGyro, bPadInvertY, bVJSwap;
 var float fVJScale;
 
 const VIEWPORT = "ini:Engine.Engine.ViewportManager";
@@ -31,6 +31,7 @@ event InitComponent(GUIController MyController, GUIComponent MyOwner)
 
 	i_BG1.ManageComponent(co_VirtualJoystick);
 	i_BG1.ManageComponent(ch_Gyro);
+	i_BG1.ManageComponent(ch_PadInvertY);
 
 	i_BG4.ManageComponent(sl_VJScale);
 	i_BG4.ManageComponent(ch_VJSwap);
@@ -61,6 +62,10 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 		bGyro = bool(PC.ConsoleCommand("get" @ VIEWPORT @ "PadGyro"));
 		ch_Gyro.SetComponentValue(bGyro, true);
 		break;
+	case ch_PadInvertY:
+		bPadInvertY = bool(PC.ConsoleCommand("get" @ VIEWPORT @ "PadInvertY"));
+		ch_PadInvertY.SetComponentValue(bPadInvertY, true);
+		break;
 	case sl_VJScale:
 		fVJScale = float(PC.ConsoleCommand("get" @ VIEWPORT @ "VirtualJoystickScale"));
 		sl_VJScale.SetComponentValue(fVJScale, true);
@@ -85,6 +90,9 @@ function InternalOnChange(GUIComponent Sender)
 	case ch_Gyro:
 		bGyro = ch_Gyro.IsChecked();
 		break;
+	case ch_PadInvertY:
+		bPadInvertY = ch_PadInvertY.IsChecked();
+		break;
 	case sl_VJScale:
 		fVJScale = sl_VJScale.GetValue();
 		break;
@@ -103,6 +111,7 @@ function SaveSettings()
 	PC = PlayerOwner();
 	PC.ConsoleCommand("set" @ VIEWPORT @ "VirtualJoystick" @ iVJ);
 	PC.ConsoleCommand("set" @ VIEWPORT @ "PadGyro" @ bGyro);
+	PC.ConsoleCommand("set" @ VIEWPORT @ "PadInvertY" @ bPadInvertY);
 	PC.ConsoleCommand("set" @ VIEWPORT @ "VirtualJoystickScale" @ fVJScale);
 	PC.ConsoleCommand("set" @ VIEWPORT @ "VirtualJoystickSwap" @ bVJSwap);
 }
@@ -114,6 +123,7 @@ function ResetClicked()
 	ViewportClass = class(DynamicLoadObject(GetNativeClassName("Engine.Engine.ViewportManager"), class'Class'));
 	ViewportClass.static.ResetConfig("VirtualJoystick");
 	ViewportClass.static.ResetConfig("PadGyro");
+	ViewportClass.static.ResetConfig("PadInvertY");
 	ViewportClass.static.ResetConfig("VirtualJoystickScale");
 	ViewportClass.static.ResetConfig("VirtualJoystickSwap");
 
@@ -186,6 +196,19 @@ defaultproperties
 	End Object
 	ch_Gyro=GyroCheck
 
+	Begin Object class=moCheckBox Name=PadInvertYCheck
+		Caption="Invert Look Stick"
+		Hint="Pushing the look stick up looks down. Applies to gamepads and the virtual joystick."
+		IniOption="@Internal"
+		CaptionWidth=0.9
+		bSquare=true
+		ComponentJustification=TXTA_Left
+		OnLoadINI=InternalOnLoadINI
+		OnChange=InternalOnChange
+		TabOrder=18
+	End Object
+	ch_PadInvertY=PadInvertYCheck
+
 	Begin Object class=moSlider Name=VJScaleSlider
 		Caption="Size"
 		Hint="Makes the on-screen sticks and buttons smaller or larger."
@@ -199,7 +222,7 @@ defaultproperties
 		SliderCaptionStyleName=""
 		OnLoadINI=InternalOnLoadINI
 		OnChange=InternalOnChange
-		TabOrder=18
+		TabOrder=19
 	End Object
 	sl_VJScale=VJScaleSlider
 
@@ -212,7 +235,7 @@ defaultproperties
 		ComponentJustification=TXTA_Left
 		OnLoadINI=InternalOnLoadINI
 		OnChange=InternalOnChange
-		TabOrder=19
+		TabOrder=20
 	End Object
 	ch_VJSwap=VJSwapCheck
 

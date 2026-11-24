@@ -4,7 +4,7 @@ var automated GUISectionBackground sb_Display, sb_Options;
 var automated moComboBox co_Resolution, co_Reflections;
 var automated moCheckBox ch_Fullscreen, ch_Shadows, ch_Antialiasing, ch_AmbientOcclusion, ch_ContactShadows, ch_DepthOfField, ch_VolumetricFog, ch_GlobalIllumination, ch_HeatHaze, ch_MotionBlur, ch_SmoothTerrain, ch_ImprovedFoliage;
 var automated moSlider sl_Gamma;
-var() localized string ResolutionText[2], ReflectionsText[2];
+var() localized string ResolutionText[3], ReflectionsText[2];
 
 function InitComponent(GUIController MyController, GUIComponent MyOwner)
 {
@@ -12,6 +12,7 @@ function InitComponent(GUIController MyController, GUIComponent MyOwner)
 
 	co_Resolution.AddItem(ResolutionText[0]);
 	co_Resolution.AddItem(ResolutionText[1]);
+	co_Resolution.AddItem(ResolutionText[2]);
 	co_Resolution.ReadOnly(true);
 	co_Reflections.AddItem(ReflectionsText[0]);
 	co_Reflections.AddItem(ReflectionsText[1]);
@@ -42,7 +43,7 @@ function InternalOnLoadINI(GUIComponent Sender, string s)
 	switch (Sender)
 	{
 	case co_Resolution:
-		co_Resolution.SilentSetIndex(int(int(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ResolutionScale")) < 100));
+		co_Resolution.SilentSetIndex(Clamp((112 - int(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ResolutionScale"))) / 25, 0, 2));
 		break;
 	case co_Reflections:
 		co_Reflections.SilentSetIndex(int(bool(PC.ConsoleCommand("get ini:Engine.Engine.RenderDevice ScreenSpaceReflections"))));
@@ -211,7 +212,7 @@ defaultproperties
 
 	Begin Object class=moComboBox Name=ResolutionCombo
 		Caption="Resolution"
-		Hint="75% renders the 3D scene at three quarters of the window size, the HUD stays sharp."
+		Hint="75% and 50% render the 3D scene at a fraction of the window size, the HUD stays sharp."
 		IniOption="@Internal"
 		CaptionWidth=0.55
 		bHeightFromComponent=false
@@ -408,6 +409,7 @@ defaultproperties
 
 	ResolutionText(0)="Full"
 	ResolutionText(1)="75%"
+	ResolutionText(2)="50%"
 	ReflectionsText(0)="Low"
 	ReflectionsText(1)="Normal"
 

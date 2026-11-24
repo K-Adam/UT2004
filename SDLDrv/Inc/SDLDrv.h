@@ -63,6 +63,7 @@ class USDLClient : public UClient, public FNotifyHook
 	FLOAT               PadTurnBoost;
 	UBOOL               PadGyro;
 	FLOAT               PadGyroSensitivity;
+	UBOOL               PadInvertY;
 	INT                 VirtualJoystick;
 	FLOAT               VirtualJoystickScale;
 	UBOOL               VirtualJoystickSwap;

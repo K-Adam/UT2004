@@ -1002,6 +1002,9 @@ void USDLViewport::UpdateGamepad( UBOOL InMenu, FLOAT DeltaSeconds )
             FLOAT DeadZone = Clamp( Client->PadDeadZone, 0.f, 0.9f );
             ShapeStick( V[SDL_GAMEPAD_AXIS_LEFTX], V[SDL_GAMEPAD_AXIS_LEFTY], DeadZone, 1.f );
             FLOAT Look = ShapeStick( V[SDL_GAMEPAD_AXIS_RIGHTX], V[SDL_GAMEPAD_AXIS_RIGHTY], DeadZone, Max( Client->PadLookExponent, 0.1f ) );
+            // A space fighter binds the look stick's Y to throttle.
+            if( Client->PadInvertY && !Actor->bIsSpaceFighter )
+                V[SDL_GAMEPAD_AXIS_RIGHTY] = -V[SDL_GAMEPAD_AXIS_RIGHTY];
             // Holding the look stick at the edge ramps up the turn rate, so fine aim and quick turns both work.
             PadEdgeTime = Look > 0.95f ? PadEdgeTime + DeltaSeconds : 0.f;
             V[SDL_GAMEPAD_AXIS_RIGHTX] *= 1.f + Client->PadTurnBoost * Clamp( (PadEdgeTime - 0.15f) / 0.3f, 0.f, 1.f );

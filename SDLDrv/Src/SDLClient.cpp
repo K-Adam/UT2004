@@ -49,6 +49,7 @@ void USDLClient::StaticConstructor()
 	new(GetClass(),TEXT("PadTurnBoost"),         RF_Public)UFloatProperty(CPP_PROPERTY(PadTurnBoost),        TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("PadGyro"),              RF_Public)UBoolProperty(CPP_PROPERTY(PadGyro),              TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("PadGyroSensitivity"),   RF_Public)UFloatProperty(CPP_PROPERTY(PadGyroSensitivity),  TEXT("Joystick"), CPF_Config );
+	new(GetClass(),TEXT("PadInvertY"),           RF_Public)UBoolProperty(CPP_PROPERTY(PadInvertY),           TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("VirtualJoystick"),      RF_Public)UIntProperty(CPP_PROPERTY(VirtualJoystick),       TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("VirtualJoystickScale"), RF_Public)UFloatProperty(CPP_PROPERTY(VirtualJoystickScale), TEXT("Joystick"), CPF_Config );
 	new(GetClass(),TEXT("VirtualJoystickSwap"),  RF_Public)UBoolProperty(CPP_PROPERTY(VirtualJoystickSwap),  TEXT("Joystick"), CPF_Config );
