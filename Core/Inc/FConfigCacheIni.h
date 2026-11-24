@@ -197,6 +197,28 @@ public:
 		}
 		unguard;
 	}
+	// Adds the keys this file lacks from Defaults, with every value of a list. Values it has stay.
+	// An "<object> <class>" section belongs to an object the game can delete, such as a map list, so it is not brought back.
+	void AddMissing( const FConfigFile& Defaults )
+	{
+		guard(FConfigFile::AddMissing);
+		for( TConstIterator It(Defaults); It; ++It )
+		{
+			FConfigSection* Section = Find( It.Key() );
+			if( !Section && It.Key().InStr(TEXT(" "))!=INDEX_NONE )
+				continue;
+			if( !Section )
+				Section = &Set( *It.Key(), FConfigSection() );
+			TArray<FString> Missing;
+			for( FConfigSection::TConstIterator It2(It.Value()); It2; ++It2 )
+				if( !Section->Find( It2.Key() ) && Missing.FindItemIndex( It2.Key() )==INDEX_NONE )
+					new(Missing)FString( It2.Key() );
+			for( FConfigSection::TConstIterator It2(It.Value()); It2; ++It2 )
+				if( Missing.FindItemIndex( It2.Key() )!=INDEX_NONE )
+					Section->Add( *It2.Key(), *It2.Value() );
+		}
+		unguard;
+	}
 	// Script and servers set config strings, a line break in one would add sections and keys of their choosing.
 	static FString SingleLine( const FString& S )
 	{
@@ -264,6 +286,14 @@ public:
 		{
 			Result = &Set( Filename, FConfigFile() );
 			Result->Read( Filename );
+			// The game and user inis are written once from the defaults, so keys added to those later come from there.
+			const TCHAR* Defaults = appStricmp( Filename, *SystemIni )==0 ? TEXT("Default.ini") : appStricmp( Filename, *UserIni )==0 ? TEXT("DefUser.ini") : NULL;
+			if( Defaults && appStricmp( Filename, Defaults )!=0 )
+			{
+				FConfigFile DefaultFile;
+				DefaultFile.Read( Defaults );
+				Result->AddMissing( DefaultFile );
+			}
 		}
 		return Result;
 

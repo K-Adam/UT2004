@@ -131,8 +131,15 @@ UTVUplink::~UTVUplink()
 void UTVUplink::TryConnect ()
 {
 	UplinkState = MSUS_WaitingChallenge;
-	MasterServerName = "utmaster.openspy.net";
-	MasterServerPort = 28902;
+	// The game's own master list, any entry of it like the script uplink picks
+	FString Entry;
+	GConfig->GetString( TEXT("IpDrv.MasterServerLink"), TEXT("MasterServerList"), Entry );
+	MasterServerPort = 0;
+	if( !Parse( *Entry, TEXT("Address="), MasterServerName ) || !Parse( *Entry, TEXT("Port="), MasterServerPort ) )
+	{
+		debugf( TEXT("Uplink: No master server in MasterServerList") );
+		return;
+	}
 	Resolve (*MasterServerName);
 }
 

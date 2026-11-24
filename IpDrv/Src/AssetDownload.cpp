@@ -62,9 +62,8 @@ static size_t ReceiveBody( char* Data, size_t Size, size_t Count, void* Download
 void UAssetDownload::StaticConstructor()
 {
 	guard(UAssetDownload::StaticConstructor);
+	// An emptied key turns the step off.
 	new(GetClass(),TEXT("URL"),RF_Public)UStrProperty(CPP_PROPERTY(DownloadParams), TEXT("Settings"), CPF_Config );
-	// The ini is written once from Default.ini, so one from before the key has none and keeps the default. An emptied key turns the step off.
-	DownloadParams = TEXT("https://assets.ut2004.dev/web/");
 	unguard;
 }
 

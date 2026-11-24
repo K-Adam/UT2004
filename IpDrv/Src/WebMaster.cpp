@@ -203,12 +203,11 @@ FString WebMasterURL()
 	return Url;
 }
 
-// The ini is written once from Default.ini, so one from before the key has none and keeps the default. An emptied key means no server.
+// An emptied key means no server.
 FString WebMasterStun()
 {
 	FString Stun;
-	if( !GConfig->GetString( TEXT("IpDrv.MasterServerLink"), TEXT("StunServer"), Stun ) )
-		Stun = TEXT("stun.cloudflare.com:3478");
+	GConfig->GetString( TEXT("IpDrv.MasterServerLink"), TEXT("StunServer"), Stun );
 	return Stun;
 }
 

@@ -757,19 +757,11 @@ static UEngine* InitEngine()
 		debugf(TEXT("Forcing use of OpenGLDrv instead of %s."),*Renderer);
 		GConfig->SetString(TEXT("Engine.Engine"), TEXT("RenderDevice"), TEXT("OpenGLDrv.OpenGLRenderDevice"));
 	}
-	// Older inis name a controller class that no longer exists, and lack the page that replaced it.
+	// Older inis name a controller class that no longer exists. The page that replaced it comes from DefUser.ini.
 	if( GConfig->GetStr(TEXT("Engine.Engine"),TEXT("GUIController"),TEXT("System"))==TEXT("GUI2K4Fix.FixGUIController") )
 	{
 		debugf(TEXT("Replacing the removed GUI2K4Fix.FixGUIController."));
 		GConfig->SetString(TEXT("Engine.Engine"), TEXT("GUIController"), TEXT("GUI2K4.UT2K4GUIController"));
-		FString AutoLoad;
-		// An ini entry replaces the whole default list, so the chat page goes in with it.
-		if( !GConfig->GetString(TEXT("GUI2K4.UT2K4GUIController"), TEXT("AutoLoad"), AutoLoad, GUserIni) )
-		{
-			const TCHAR* Menus[] = { TEXT("GUI2K4.UT2K4InGameChat"), TEXT("GUI2K4Fix.FixMenuSetup") };
-			for( INT i=0; i<ARRAY_COUNT(Menus); i++ )
-				GConfig->SetString(TEXT("GUI2K4.UT2K4GUIController"), TEXT("AutoLoad"), *FString::Printf(TEXT("(MenuClassName=\"%s\",bPreInitialize=True)"), Menus[i]), GUserIni, 0);
-		}
 	}
 
 	// EXEC from command-line
