@@ -446,7 +446,7 @@ class CORE_API FCriticalSection
 {
 public:
 	FCriticalSection();
-	~FCriticalSection() noexcept(false);
+	~FCriticalSection();
 
 	void Lock();
 	void Unlock();

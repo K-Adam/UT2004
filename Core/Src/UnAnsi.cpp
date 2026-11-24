@@ -6,6 +6,14 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
+// The standard headers go before the engine's, whose macros (check, clock, min, max) break them
+#pragma pack(push,8)
+#include <chrono>
+#include <ctime>
+#include <mutex>
+#include <thread>
+#pragma pack(pop)
+
 // Core includes.
 #include "CorePrivate.h"
 
@@ -35,38 +43,148 @@
 	Time.
 -----------------------------------------------------------------------------*/
 
-//
-// String timestamp.
-// !! Note to self: Move to UnVcWin32.cpp
-// !! Make Linux version.
-//
+CORE_API DOUBLE appSeconds()
+{
+	static const std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
+	return std::chrono::duration<DOUBLE>( std::chrono::steady_clock::now() - Start ).count();
+}
+
+// 100 ns ticks. Nanoseconds would wrap the DWORD every 4 seconds, too soon for SavePackage and the script StopWatch.
+CORE_API DWORD appCycles()
+{
+	typedef std::chrono::duration<QWORD,std::ratio<1,10000000>> FTicks;
+	return (DWORD)std::chrono::duration_cast<FTicks>( std::chrono::steady_clock::now().time_since_epoch() ).count();
+}
+
+// 0 gives up the time slice, as Sleep(0) does
+CORE_API void appSleep( FLOAT Seconds )
+{
+	if( Seconds > 0.f )
+		std::this_thread::sleep_for( std::chrono::duration<DOUBLE>( Seconds ) );
+	else
+		std::this_thread::yield();
+}
+
+// localtime is not thread safe, and C++17 has no portable thread safe one
+static void LocalTime( time_t Time, tm& Out )
+{
 #if _WIN32
+	localtime_s( &Out, &Time );
+#else
+	localtime_r( &Time, &Out );
+#endif
+}
+
+CORE_API void appSystemTime( INT& Year, INT& Month, INT& DayOfWeek, INT& Day, INT& Hour, INT& Min, INT& Sec, INT& MSec )
+{
+	std::chrono::system_clock::time_point Now = std::chrono::system_clock::now();
+	tm Local;
+	LocalTime( std::chrono::system_clock::to_time_t( Now ), Local );
+	Year		= Local.tm_year + 1900;
+	Month		= Local.tm_mon + 1;
+	DayOfWeek	= Local.tm_wday;
+	Day			= Local.tm_mday;
+	Hour		= Local.tm_hour;
+	Min			= Local.tm_min;
+	Sec			= Local.tm_sec;
+	MSec		= (INT)(std::chrono::duration_cast<std::chrono::milliseconds>( Now.time_since_epoch() ).count() % 1000);
+}
+
+// The format Windows always wrote, demo files carry it
 CORE_API const TCHAR* appTimestamp()
 {
-	guard(appTimestamp);
-	static TCHAR Result[1024];
-	*Result = 0;
-#if UNICODE
-	if( GUnicodeOS )
-	{
-		_wstrdate( Result );
-		appStrcat( Result, TEXT(" ") );
-		_wstrtime( Result + appStrlen(Result) );
-	}
-	else
-#endif
-	{
-		ANSICHAR Temp[1024]="";
-		_strdate( Temp );
-		appStrcpy( Result, appFromAnsi(Temp) );
-		appStrcat( Result, TEXT(" ") );
-		_strtime( Temp );
-		appStrcat( Result, appFromAnsi(Temp) );
-	}
+	tm Local;
+	LocalTime( time( NULL ), Local );
+	ANSICHAR Text[32];
+	strftime( Text, sizeof(Text), "%m/%d/%y %H:%M:%S", &Local );
+	TCHAR* Result = appStaticString1024();
+	appStrcpy( Result, appFromAnsi( Text ) );
 	return Result;
+}
+
+/*-----------------------------------------------------------------------------
+	File cache.
+-----------------------------------------------------------------------------*/
+
+// Days since the file was written, 0 when it can't be read
+static INT GetFileAgeDays( const TCHAR* Filename )
+{
+#if _WIN32
+	struct _stat Buf;
+	if( _wstat( Filename, &Buf ) )
+		return 0;
+#else
+	struct stat Buf;
+	if( stat( appUnixPath( Filename ), &Buf ) )
+		return 0;
+#endif
+	return (INT)(difftime( time( NULL ), Buf.st_mtime ) / 86400.0);
+}
+
+CORE_API void appCleanFileCache()
+{
+	guard(appCleanFileCache);
+	FString Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("*.tmp"), *GSys->CachePath );
+	TArray<FString> Found = GFileManager->FindFiles( *Temp, 1, 0 );
+	for( INT i=0; i<Found.Num(); i++ )
+	{
+		Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("%s"), *GSys->CachePath, *Found(i) );
+		debugf( TEXT("Deleting temporary file: %s"), *Temp );
+		GFileManager->Delete( *Temp );
+	}
+
+	if( GSys->PurgeCacheDays )
+	{
+		Found = GFileManager->FindFiles( *(GSys->CachePath * TEXT("*") + GSys->CacheExt), 1, 0 );
+		for( INT i=0; i<Found.Num(); i++ )
+		{
+			Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("%s"), *GSys->CachePath, *Found(i) );
+			// The cache path is relative to the file manager's folders, not to the working directory
+			INT DiffDays = GetFileAgeDays( *GFileManager->ExpandPath(*Temp) );
+			if( DiffDays > GSys->PurgeCacheDays )
+			{
+				debugf( TEXT("Purging outdated file from cache: %s (%i days old)"), *Temp, DiffDays );
+				GFileManager->Delete( *Temp );
+			}
+		}
+	}
 	unguard;
 }
-#endif
+
+/*-----------------------------------------------------------------------------
+	Locking.
+-----------------------------------------------------------------------------*/
+
+// Recursive, the audio stream manager locks again in calls it makes while it holds the lock
+FCriticalSection::FCriticalSection()
+:	Handle( new std::recursive_mutex )
+{}
+
+FCriticalSection::~FCriticalSection()
+{
+	delete (std::recursive_mutex*)Handle;
+}
+
+void FCriticalSection::Lock()
+{
+	((std::recursive_mutex*)Handle)->lock();
+}
+
+void FCriticalSection::Unlock()
+{
+	((std::recursive_mutex*)Handle)->unlock();
+}
+
+FScopeCriticalSection::FScopeCriticalSection( FCriticalSection* InCriticalSection )
+:	CriticalSection( InCriticalSection )
+{
+	CriticalSection->Lock();
+}
+
+FScopeCriticalSection::~FScopeCriticalSection()
+{
+	CriticalSection->Unlock();
+}
 
 //
 // Get a GMT Ref

@@ -95,6 +95,8 @@ CORE_API FString appClipboardPaste();
 // The client sets these to the system clipboard, without them the clipboard only works inside the game.
 CORE_API extern void (*GClipboardCopy)( const TCHAR* Str );
 CORE_API extern FString (*GClipboardPaste)();
+// Opens a link where Core has no way of its own, the client sets it
+CORE_API extern UBOOL (*GLaunchURL)( const TCHAR* URL );
 
 /*-----------------------------------------------------------------------------
 	Guard macros for call stack display.
@@ -273,6 +275,9 @@ CORE_API FString appGetGMTRef();
 -----------------------------------------------------------------------------*/
 
 CORE_API const TCHAR* appCmdLine();
+// What a launcher passes appInit: the arguments after the first First, the executable counting as one.
+// It allocates nothing, appInit sets up the allocator.
+CORE_API void appArgsToCmdLine( INT argc, char** argv, INT First, TCHAR* Out, INT MaxLen );
 CORE_API const TCHAR* appBaseDir();
 CORE_API const TCHAR* appPackage();
 CORE_API const TCHAR* appComputerName();
@@ -282,15 +287,8 @@ CORE_API const TCHAR* appUserName();
 	Timing functions.
 -----------------------------------------------------------------------------*/
 
-#if !DEFINED_appCycles
 CORE_API DWORD appCycles();
-#endif
-
-#if !DEFINED_appSeconds
 CORE_API DOUBLE appSeconds();
-#endif
-
-
 CORE_API void appSystemTime( INT& Year, INT& Month, INT& DayOfWeek, INT& Day, INT& Hour, INT& Min, INT& Sec, INT& MSec );
 CORE_API const TCHAR* appTimestamp();
 CORE_API void appSleep( FLOAT Seconds );
@@ -361,7 +359,9 @@ CORE_API const TCHAR* appFromUnicode( const UNICHAR* Str, TCHAR* TCh=NULL, INT m
 CORE_API UBOOL appIsPureAnsi( const TCHAR* Str );
 // Null terminated, &Result(0) is the C string
 CORE_API TArray<ANSICHAR> appToUtf8( const TCHAR* Str );
+CORE_API void appToUtf8( const TCHAR* Str, ANSICHAR* Out, INT MaxLen );
 CORE_API FString appFromUtf8( const ANSICHAR* Str );
+CORE_API void appFromUtf8( const ANSICHAR* Str, TCHAR* Out, INT MaxLen );
 
 CORE_API TCHAR* appStrcpy( TCHAR* Dest, const TCHAR* Src );
 CORE_API INT appStrcpy( const TCHAR* String );

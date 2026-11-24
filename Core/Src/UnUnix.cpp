@@ -24,7 +24,6 @@
 // System includes.
 #include <sys/param.h>
 #include <unistd.h>
-#include <pwd.h>
 #include <dirent.h>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -32,7 +31,6 @@
 
 #include <dlfcn.h>
 
-#include <pthread.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <spawn.h>
@@ -881,68 +879,11 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
     return 1;
 }
 
-
-
-// Interface for recording loading errors in the editor
-CORE_API const void EdClearLoadErrors()
-{
-	GEdLoadErrors.Empty();
-}
-
-
 /*-----------------------------------------------------------------------------
-	USystem.
+	Commands.
 -----------------------------------------------------------------------------*/
 
-//
-// System manager.
-//
-static void Recurse()
-{
-	guard(Recurse);
-	Recurse();
-	unguard;
-}
-USystem::USystem()
-:	SavePath	( E_NoInit )
-,	CachePath	( E_NoInit )
-,	CacheExt	( E_NoInit )
-,	Paths		( E_NoInit )
-,	Suppress	( E_NoInit )
-,   CacheRecordPath( E_NoInit )
-,	MusicPath	( E_NoInit )
-,	SpeechPath	( E_NoInit )
-// amb ---
-,   LicenseeMode (1) 
-// --- amb
-{}
-void USystem::StaticConstructor()
-{
-	guard(USystem::StaticConstructor);
-
-	new(GetClass(),TEXT("PurgeCacheDays"),      RF_Public)UIntProperty   (CPP_PROPERTY(PurgeCacheDays     ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("SavePath"),            RF_Public)UStrProperty   (CPP_PROPERTY(SavePath           ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("CacheExt"),            RF_Public)UStrProperty   (CPP_PROPERTY(CacheExt           ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("SpeechPath"),          RF_Public)UStrProperty   (CPP_PROPERTY(SpeechPath         ), TEXT("Options"), CPF_Config );
-
-	UArrayProperty* A = new(GetClass(),TEXT("Paths"),RF_Public)UArrayProperty( CPP_PROPERTY(Paths), TEXT("Options"), CPF_Config );
-	A->Inner = new(A,TEXT("StrProperty0"),RF_Public)UStrProperty;
-
-	UArrayProperty* B = new(GetClass(),TEXT("Suppress"),RF_Public)UArrayProperty( CPP_PROPERTY(Suppress), TEXT("Options"), CPF_Config );
-	B->Inner = new(B,TEXT("NameProperty0"),RF_Public)UNameProperty;
-
-	UArrayProperty* C = new(GetClass(),TEXT("CacheRecordPath"),RF_Public)UArrayProperty( CPP_PROPERTY(CacheRecordPath), TEXT("Options"), CPF_Config );
-	C->Inner = new(C,TEXT("StrProperty1"),RF_Public)UStrProperty;
-
-	UArrayProperty* D = new(GetClass(),TEXT("MusicPath"),RF_Public)UArrayProperty( CPP_PROPERTY(MusicPath), TEXT("Options"), CPF_Config );
-	D->Inner = new(D,TEXT("StrProperty2"),RF_Public)UStrProperty;
-
-	unguard;
-}
-
-static bool FindBinaryInPath(FString &cmd);
-
-UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
+UBOOL appPlatformExec( const TCHAR* Cmd, FOutputDevice& Ar )
 {
 	if( ParseCommand(&Cmd,TEXT("MEMSTAT")) )
 	{
@@ -977,93 +918,20 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		GUnixSpawnOnExit = new TCHAR[appStrlen(Cmd) + 1];
 		appStrcpy( GUnixSpawnOnExit, Cmd );
 #else
-        if ((GIsClient) && (appStrlen(Cmd) == 0))  // just restarting client?
-        {
-            GUnixSpawnOnExit = new TCHAR[128];
-            appStrcpy(GUnixSpawnOnExit, TEXT("./ut2004-bin"));
-            appRequestExit( 0 );
-            return 1;
-        }
-
-		// Fork out a new process using Cmd as arguments.
-		TCHAR* EndArg0 = appStrstr( Cmd, TEXT(" ") );
-		INT CmdLen = appStrlen( Cmd );
-		INT RestLen = ((EndArg0 != NULL) ? appStrlen( EndArg0 ) : 0);
-        #define RELAUNCH_ARRAY 1024
-		TCHAR Arg0[RELAUNCH_ARRAY];
-        INT max = (CmdLen - RestLen) + 1;
-        if (max > RELAUNCH_ARRAY)
-            max = RELAUNCH_ARRAY;
-		appStrncpy( Arg0, Cmd, max );
-        Arg0[RELAUNCH_ARRAY - 1] = 0;  // just in case.
-
-        INT arraylen = RELAUNCH_ARRAY + 128;
-        FString xterm(TEXT(""));
-
-            xterm = TEXT("xterm");
-            if (FindBinaryInPath(xterm))
-            {
-                arraylen += xterm.Len();
-                xterm += TEXT(" -e ");
-            }
-            else
-            {
-                xterm = TEXT("");
-            }
-
-            if (xterm.Len())
-            {
-                GUnixSpawnOnExit = new TCHAR[arraylen];
-                appStrcpy(GUnixSpawnOnExit, *xterm);
-                appStrcat(GUnixSpawnOnExit, TEXT("./ucc-bin server "));
-                appStrcat(GUnixSpawnOnExit, Arg0);
-            }
-            else
-            {
-                // Without a terminal ucc-bin would run unseen, the launcher shows a tray icon for its server.
-                GUnixSpawnOnExit = new TCHAR[CmdLen + 32];
-                appStrcpy(GUnixSpawnOnExit, TEXT("./ut2004-bin "));
-                appStrcat(GUnixSpawnOnExit, Cmd);
-            }
+		// As on Windows: the same executable reads the command from the file, so no quoting is lost on the way.
+		// Relative, so the file manager puts it where the new process reads it.
+		if( *Cmd )
+			verify(appSaveStringToFile( FString(Cmd), TEXT("ServerCommand.txt"), GFileManager ));
+		const TCHAR* Args = *Cmd ? TEXT("COMMAND=ServerCommand.txt") : TEXT("");
+		GUnixSpawnOnExit = new TCHAR[appStrlen(Args) + 1];
+		appStrcpy( GUnixSpawnOnExit, Args );
 #endif
 
         appRequestExit( 0 );
 		return 1;
 	}
-	else if( ParseCommand( &Cmd, TEXT("DEBUG") ) )
-	{
-		if( ParseCommand(&Cmd,TEXT("CRASH")) )
-		{
-			appErrorf( TEXT("%s"), TEXT("Unreal crashed at your request") );
-			return 1;
-		}
-		else if( ParseCommand( &Cmd, TEXT("GPF") ) )
-		{
-			Ar.Log( TEXT("Unreal crashing with voluntary GPF") );
-			*(int *)NULL = 123;
-			return 1;
-		}
-		else if( ParseCommand( &Cmd, TEXT("RECURSE") ) )
-		{
-			Ar.Logf( TEXT("Recursing") );
-			Recurse();
-			return 1;
-		}
-		else if( ParseCommand( &Cmd, TEXT("EATMEM") ) )
-		{
-			Ar.Log( TEXT("Eating up all available memory") );
-			while( 1 )
-			{
-				void* Eat = appMalloc(65536,TEXT("EatMem"));
-				memset( Eat, 0, 65536 );
-			}
-			return 1;
-		}
-		else return 0;
-	}
 	else return 0;
 }
-IMPLEMENT_CLASS(USystem);
 
 /*-----------------------------------------------------------------------------
 	Exit.
@@ -1377,6 +1245,8 @@ static void HandleSignal( int Signal )
 				debugf(TEXT("Unreal Call Stack: %s"), *GuardBackTrace);
 			#endif
 
+			// As HandleError does. It stops the static classes destroyed at exit from logging through the freed name table.
+			GIsCriticalError = 1;
 			appExit();
 		}
 		exit(1);
@@ -1430,151 +1300,24 @@ static void HandleInterrupt( int Signal )
 
 
 /*-----------------------------------------------------------------------------
-	Timing.
------------------------------------------------------------------------------*/
-
-//
-// String timestamp.
-//
-CORE_API const TCHAR* appTimestamp()
-{
-	guard(appTimestamp);
-
-	TCHAR* 		Result = appStaticString1024();
-	time_t		CurTime;
-	struct tm*	SysTime;
-
-	CurTime = time( NULL );
-	SysTime = localtime( &CurTime );
-	ANSICHAR Text[64];
-	strftime( Text, sizeof(Text), "%a %b %e %H:%M:%S %Y", SysTime );
-	appStrcpy( Result, ANSI_TO_TCHAR(Text) );
-	return Result;
-
-	unguard;
-}
-
-#if !DEFINED_appCycles
-// Microseconds, GSecondsPerCycle is set to match in appPlatformInit.
-CORE_API DWORD appCycles()
-{
-	return (DWORD)(QWORD)(appSeconds() * 1000000.0);
-}
-#endif
-
-
-//
-// Get time in seconds. Origin is arbitrary.
-//
-#if !DEFINED_appSeconds
-CORE_API DOUBLE appSeconds()
-{
-	static timespec Start;
-	timespec Now;
-	clock_gettime( CLOCK_MONOTONIC, &Now );
-	if( !Start.tv_sec && !Start.tv_nsec )
-		Start = Now;
-	return (Now.tv_sec - Start.tv_sec) + (Now.tv_nsec - Start.tv_nsec) / 1000000000.0;
-}
-#endif
-
-
-
-
-//
-// Return the system time.
-//
-CORE_API void appSystemTime( INT& Year, INT& Month, INT& DayOfWeek, INT& Day, INT& Hour, INT& Min, INT& Sec, INT& MSec )
-{
-	guard(appSystemTime);
-
-	time_t			CurTime;
-	struct tm		*St;		// System time.
-	struct timeval	Tv;			// Use timeval to get milliseconds.
-
-	gettimeofday( &Tv, NULL );
-	CurTime = time( NULL );
-	St = localtime( &CurTime );
-
-	Year		= St->tm_year + 1900;
-	Month		= St->tm_mon + 1;
-	DayOfWeek	= St->tm_wday;
-	Day			= St->tm_mday;
-	Hour		= St->tm_hour;
-	Min			= St->tm_min;
-	Sec			= St->tm_sec;
-	MSec		= (INT) (Tv.tv_usec / 1000);
-
-	unguard;
-}
-
-CORE_API void appSleep( FLOAT Seconds )
-{
-	guard(appSleep);
-
-	INT SleepTime = (INT) (Seconds * 1000000);
-	usleep( SleepTime );
-
-	unguard;
-}
-
-/*-----------------------------------------------------------------------------
 	Link functions.
 -----------------------------------------------------------------------------*/
 
-static bool FindBinaryInPath(FString &cmd)
+
+
+// Arguments arrive in UTF-8. One that holds a space loses its quotes, as it always did here.
+CORE_API void appArgsToCmdLine( INT argc, char** argv, INT First, TCHAR* Out, INT MaxLen )
 {
-    INT binpos = cmd.InStr(TEXT(" "));
-    FString bin((binpos == -1) ? cmd : cmd.Left(binpos));
-
-    if (bin.Len() == 0)
-        return(false);
-
-    if (bin.InStr(TEXT("/")) != -1)  // path specified; don't examine $PATH.
-        return(access(appToAnsi(*bin), X_OK) != -1);
-
-    const char *_envr = getenv("PATH");
-    if (_envr == NULL)
-    {
-        debugf(TEXT("No $PATH environment var set"));
-        return(false);
-    }
-
-    FString envr(_envr);
-
-    while (true)
-    {
-        INT pos = envr.InStr(TEXT(":"));
-        FString path((pos == -1) ? envr : envr.Left(pos));
-        path += TEXT("/");
-
-        FString binpath = path;
-        binpath += bin;
-
-        char realized[MAXPATHLEN];
-        if (realpath(appToAnsi(*binpath), realized) != NULL)
-        {
-            struct stat statbuf;
-            if (stat(realized, &statbuf) != -1)
-            {
-                /* dirs are usually "executable", but aren't programs. */
-                if (!S_ISDIR(statbuf.st_mode))
-                {
-                    if (access(realized, X_OK) != -1)
-                    {
-                        cmd = FString(realized) + cmd.Mid(binpos);
-                        return(true);
-                    }
-                }
-            }
-        }
-
-        if (pos == -1)
-            break;
-        envr = envr.Mid(pos + 1);
-    }
-
-    return(false);
+	INT Len = 0;
+	// A separator needs room for something after it
+	for( INT i=First; i<argc && Len<MaxLen-2; i++ )
+	{
+		if( i>First )
+			Out[Len++] = ' ';
+		appFromUtf8( argv[i], Out+Len, MaxLen-Len );
+		Len += appStrlen( Out+Len );
+	}
+	Out[Len] = 0;
 }
 
 
@@ -1588,17 +1331,18 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 	guard(appLaunchURL);
 
 #if __ANDROID__
-	// There is no xdg-open, and the spawn API below needs API 34.
+	// No xdg-open here, the client opens it. A server without a client cannot.
+	UBOOL Failed = !GLaunchURL || !GLaunchURL( URL );
 	if( Error )
-		*Error = LocalizeError(TEXT("UrlFailed"),TEXT("Core"));
+		*Error = Failed ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
 #elif __EMSCRIPTEN__
-	EM_ASM( window.open(UTF8ToString($0), '_blank', 'noopener'), appToAnsi(URL) );
+	EM_ASM( window.open(UTF8ToString($0), '_blank', 'noopener'), &appToUtf8(URL)(0) );
 	if( Error )
 		*Error = TEXT("");
 #else
 	// HandleChild reaps the process.
 	char Url[PATH_MAX];
-	appToAnsi( URL, Url, sizeof(Url) );
+	appToUtf8( URL, Url, sizeof(Url) );
 	char Opener[] = "xdg-open";
 	char* Argv[] = { Opener, Url, NULL };
 	// The browser outlives the game, it must not keep its sockets, log and audio device open.
@@ -1613,69 +1357,6 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 	if( Error )
 		*Error = Failed ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
 #endif
-
-	unguard;
-}
-
-/*-----------------------------------------------------------------------------
-	File finding.
------------------------------------------------------------------------------*/
-
-//
-// Clean out the file cache.
-//
-static INT GetFileAgeDays( const TCHAR* Filename )
-{
-	guard(GetFileAgeDays);
-	struct stat Buf;
-	INT Result = 0;
-
-	Result = stat(TCHAR_TO_ANSI(Filename),&Buf);
-	if( Result==0 )
-	{
-		time_t CurrentTime, FileTime;
-		FileTime = Buf.st_mtime;
-		time( &CurrentTime );
-		DOUBLE DiffSeconds = difftime( CurrentTime, FileTime );
-		return (INT)(DiffSeconds / 60.0 / 60.0 / 24.0);
-	}
-	return 0;
-	unguard;
-}
-
-CORE_API void appCleanFileCache()
-{
-	guard(appCleanFileCache);
-
-	// Delete all temporary files.
-	guard(DeleteTemps);
-	FString Temp = FString::Printf( TEXT("%s%s*.tmp"), *GSys->CachePath, PATH_SEPARATOR );
-	TArray<FString> Found = GFileManager->FindFiles( *Temp, 1, 0 );
-	for( INT i=0; i<Found.Num(); i++ )
-	{
-		Temp = FString::Printf( TEXT("%s%s%s"), *GSys->CachePath, PATH_SEPARATOR, *Found(i) );
-		debugf( TEXT("Deleting temporary file: %s"), *Temp );
-		GFileManager->Delete( *Temp );
-	}
-	unguard;
-
-	// Delete cache files that are no longer wanted.
-	guard(DeleteExpired);
-	TArray<FString> Found = GFileManager->FindFiles( *(GSys->CachePath * TEXT("*") + GSys->CacheExt), 1, 0 );
-	if( GSys->PurgeCacheDays )
-	{
-		for( INT i=0; i<Found.Num(); i++ )
-		{
-			FString Temp = FString::Printf( TEXT("%s%s%s"), *GSys->CachePath, PATH_SEPARATOR, *Found(i) );
-			INT DiffDays = GetFileAgeDays( *Temp );
-			if( DiffDays > GSys->PurgeCacheDays )
-			{
-				debugf( TEXT("Purging outdated file from cache: %s (%i days old)"), *Temp, DiffDays );
-				GFileManager->Delete( *Temp );
-			}
-		}
-	}
-	unguard;
 
 	unguard;
 }
@@ -1708,14 +1389,23 @@ CORE_API const TCHAR* appBaseDir()
 {
 	guard(appBaseDir);
 	static TCHAR BaseDir[PATH_MAX]=TEXT("");
-    ANSICHAR AnsiBaseDir[PATH_MAX];
-
 	if( !BaseDir[0] )
 	{
-		// If the executable isn't launched from its own directory, then the
-		// dynamic linker won't be able to find the shared libraries.
-		getcwd( AnsiBaseDir, sizeof(AnsiBaseDir) );
-        appStrcpy( BaseDir, ANSI_TO_TCHAR(AnsiBaseDir));
+		ANSICHAR Dir[PATH_MAX] = "";
+#if !__ANDROID__ && !__EMSCRIPTEN__
+		// The folder of the executable, as on Windows, so the game starts from anywhere. On Android and the web the engine
+		// is a library and the launcher has changed into the folder.
+		ssize_t Len = readlink( "/proc/self/exe", Dir, sizeof(Dir)-1 );
+		// A path that fills the buffer may be cut off
+		Dir[Len>0 && Len<(ssize_t)sizeof(Dir)-1 ? Len : 0] = 0;
+		if( char* Slash = strrchr( Dir, '/' ) )
+			*Slash = 0;
+		else
+			Dir[0] = 0;
+#endif
+		if( !Dir[0] )
+			getcwd( Dir, sizeof(Dir) );
+		appFromUtf8( Dir, BaseDir, ARRAY_COUNT(BaseDir) );
 		appStrcat( BaseDir, TEXT("/") );
 	}
 	return BaseDir;
@@ -1797,80 +1487,6 @@ void appPlatformPreInit()
 }
 
 
-typedef struct
-{
-    pthread_mutex_t mutex;
-    pthread_t tid;
-    INT refcount;
-} pthread_mutex_block;
-
-FCriticalSection::FCriticalSection()
-{
-	guard(FCriticalSection::FCriticalSection);
-	pthread_mutex_block *block = new pthread_mutex_block;
-	int rc = pthread_mutex_init(&block->mutex, NULL);
-	check(rc == 0);
-    block->refcount = 0;
-    block->tid = 0;
-    Handle = block;
-	unguard;
-}
-
-FCriticalSection::~FCriticalSection() noexcept(false)
-{
-	guard(FCriticalSection::~FCriticalSection);
-	pthread_mutex_block *block = (pthread_mutex_block *) Handle;
-	int rc = pthread_mutex_destroy(&block->mutex);
-	check(rc == 0);
-    delete block;
-	unguard;
-}
-
-void FCriticalSection::Lock()
-{
-	pthread_mutex_block *block = (pthread_mutex_block *) Handle;
-    pthread_t self = pthread_self();
-    if (self == block->tid)
-    {
-        block->refcount++;
-    }
-    else
-    {
-	    int rc = pthread_mutex_lock(&block->mutex);
-	    check(rc == 0);
-        check(block->refcount == 0);
-        block->tid = self;
-        block->refcount = 1;
-    }
-}
-
-void FCriticalSection::Unlock()
-{
-	pthread_mutex_block *block = (pthread_mutex_block *) Handle;
-    pthread_t self = pthread_self();
-    check(self == block->tid);
-    block->refcount--;
-    check(block->refcount >= 0);
-    if (block->refcount == 0)
-	{
-        block->tid = 0;
-        int rc = pthread_mutex_unlock(&block->mutex);
-	    check(rc == 0);
-    }
-}
-
-FScopeCriticalSection::FScopeCriticalSection( FCriticalSection* InCriticalSection )
-{
-	CriticalSection = InCriticalSection;
-	CriticalSection->Lock();
-}
-
-FScopeCriticalSection::~FScopeCriticalSection()
-{
-	CriticalSection->Unlock();
-}
-
-
 #define DESIRED_FILE_HANDLES 1024
 void appPlatformInit()
 {
@@ -1879,23 +1495,19 @@ void appPlatformInit()
 	// System initialization.
 	GSys = new USystem;
 	GSys->AddToRoot();
+	const TCHAR* Home = GFileManager->CalcHomeDir();
 	const char* XdgCache = getenv("XDG_CACHE_HOME");
 	if( XdgCache && XdgCache[0]=='/' )
-		GSys->CachePath = FString(appFromAnsi(XdgCache)) * TEXT("ut2004");
+		GSys->CachePath = appFromUtf8(XdgCache) * TEXT("ut2004");
+	// Without a home folder the cache stays next to the game, as on Windows
+	else if( Home==appBaseDir() )
+		GSys->CachePath = FString(Home) + TEXT("../Cache");
 	else
-	{
-		const char* Home = getenv("HOME");
-		if( !Home || Home[0]!='/' )
-		{
-			struct passwd* Pwd = getpwuid( getuid() );
-			Home = Pwd ? Pwd->pw_dir : "/tmp";
-		}
-		GSys->CachePath = FString(appFromAnsi(Home)) * TEXT(".cache") * TEXT("ut2004");
-	}
+		GSys->CachePath = FString(Home) + TEXT("../../.cache/ut2004");
 	// Old mods such as AntiTCC 1.19 locate package files by the ".." that starts a retail relative path.
 	// Relative to the file manager's base dir, because that is where it resolves writes.
 	{
-		FString BaseStr = GFileManager->CalcHomeDir();
+		FString BaseStr = Home;
 		if( BaseStr.Right(1) != TEXT("/") )
 			BaseStr += TEXT("/");
 		const TCHAR* Base = *BaseStr;
@@ -1922,8 +1534,6 @@ void appPlatformInit()
 	ExitCodeMap = new TMap<pid_t,int>;
 
 	debugf( NAME_Init, TEXT("OS Type=%s"), GMachineOS );
-
-	GSecondsPerCycle = 0.000001;
 
 	struct sigaction SigAction;
 
@@ -2039,98 +1649,32 @@ void appPlatformPreExit()
 
 void appPlatformExit()
 {
-    if (GUnixSpawnOnExit != NULL)
-    {
-        FString fstrcmd(GUnixSpawnOnExit);
-        TArray<FString> args;
-
-        int startstr = 0;
-        int max = fstrcmd.Len();
-
-        for (int i = 0; i < max; i++)
-        {
-            char ch = (char) fstrcmd[i];
-            if (ch == ' ')
-            {
-                if ( (i == 0) ||
-                     (fstrcmd[i-1] == ' ') ||
-                     (fstrcmd[i-1] == '\"') ||
-                     (fstrcmd[i-1] == '\'') )
-                {
-                    startstr = i + 1;
-                    continue;
-                }
-
-    		    new(args)FString( fstrcmd.Mid(startstr, i - startstr) );
-                startstr = i + 1;
-            }
-
-            else if ((ch == '\"') || (ch == '\''))
-            {
-                if (startstr != i)
-    		        new(args)FString( fstrcmd.Mid(startstr, i - startstr) );
-
-                int j = i + 1;
-                while ((j < max) && ((char) fstrcmd[j] != ch))
-                    j++;
-
-                startstr = j + 1;
-
-                if (j == max)  // uh...oh well.
-                {
-                    if (j > i + 1)
-			            new(args)FString( fstrcmd.Mid(i+1) );
-                    break;
-                }
-
-                if (j > i + 1)
-                {
-			        new(args)FString( fstrcmd.Mid(i+1, (j - i) - 1) );
-                    i = j;  // will increment past delimiter in next loop.
-                }
-            }
-        }
-
-        if (startstr < max)
-    	    new(args)FString( fstrcmd.Mid(startstr) );
-
-
-        char *cmd = new char[args(0).Len() + 1];
-        appToAnsi(*(args(0)), cmd);
-        char **ansiargs = new char *[args.Num() + 1];
-        for (int i = 0; i < args.Num(); i++)
-        {
-            ansiargs[i] = new char[args(i).Len() + 1];
-            appToAnsi(*args(i), ansiargs[i]);
-        }
-        ansiargs[args.Num()] = NULL;
-
-        int rc = fork();
-        if (rc == -1)
-        {
-            fprintf(stderr, "fork() failed!\n errno (%d) [%s].\n",
-	            errno, strerror(errno));
-            _exit(42);
-        }
-        else if (rc > 0)  // parent: die.
-        {
-            _exit(0);
-        }
-
-        appSleep(1);
-        execv(cmd, ansiargs);  // hail mary.
-
-        // if you hit this...there were problems.
-        fprintf(stderr, "execv() failed.\nerrno (%d) [%s].\n Command line:\n  ",
-                errno, strerror(errno));
-
-        for (int x = 0; ansiargs[x]; x++)
-            fprintf(stderr, "%s ", ansiargs[x]);
-        fprintf(stderr, "\n\n");
-
-        fflush(stderr);
-        _exit(42);
-    }
+	// Android and the web hand the command to their launcher instead
+#if !__ANDROID__ && !__EMSCRIPTEN__
+	if( !GUnixSpawnOnExit )
+		return;
+	char Exe[PATH_MAX], Arg[64];
+	ssize_t Len = readlink( "/proc/self/exe", Exe, sizeof(Exe)-1 );
+	if( Len<=0 || Len>=(ssize_t)sizeof(Exe)-1 )
+	{
+		fprintf( stderr, "Relaunching failed, the executable was not found\n" );
+		return;
+	}
+	Exe[Len] = 0;
+	// The new process reads the inis, which appExit would otherwise write after it started
+	if( GConfig )
+		GConfig->Flush( 0 );
+	appToUtf8( GUnixSpawnOnExit, Arg, sizeof(Arg) );
+	char* Argv[] = { Exe, *Arg ? Arg : NULL, NULL };
+	// The new process must not keep this one's sockets, log and audio device open
+	posix_spawn_file_actions_t Actions;
+	posix_spawn_file_actions_init( &Actions );
+	posix_spawn_file_actions_addclosefrom_np( &Actions, 3 );
+	pid_t Pid;
+	if( INT Error = posix_spawn( &Pid, Exe, &Actions, NULL, Argv, environ ) )
+		fprintf( stderr, "Relaunching %s failed: %s\n", Exe, strerror(Error) );
+	posix_spawn_file_actions_destroy( &Actions );
+#endif
 }
 
 /*-----------------------------------------------------------------------------
@@ -2187,13 +1731,13 @@ static bool find_alternate_filecase(char *Path)
 
 
 // Convert pathname to Unix format.
-char* appUnixPath( const char* Path )
+// File names on disk are UTF-8
+CORE_API char* appUnixPath( const TCHAR* Path )
 {
 	guard(appUnixPath);
 	static char UnixPath[1024];
 	char* Cur = UnixPath;
-	strncpy( UnixPath, Path, 1024 );
-    UnixPath[1023] = '\0';
+	appToUtf8( Path, UnixPath, ARRAY_COUNT(UnixPath) );
 
 	while( Cur = strchr( Cur, '\\' ) )
 		*Cur = '/';
@@ -2265,15 +1809,6 @@ extern "C" char* strupr( char* s )
 		s[i] = toupper(s[i]);
 	return s;
 }
-
-
-/*-----------------------------------------------------------------------------
-	Stuff.
------------------------------------------------------------------------------*/
-
-CORE_API const void EdLoadErrorf( INT Type, const TCHAR* Fmt, ... )
-{ }
-
 
 #endif
 

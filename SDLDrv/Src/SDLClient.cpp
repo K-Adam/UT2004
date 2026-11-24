@@ -75,6 +75,11 @@ static void SDLClipboardCopy( const TCHAR* Str )
 	}
 }
 
+static UBOOL SDLLaunchURL( const TCHAR* URL )
+{
+	return SDL_OpenURL( &appToUtf8(URL)(0) );
+}
+
 static FString SDLClipboardPaste()
 {
 	FString Result;
@@ -163,6 +168,7 @@ void USDLClient::Init( UEngine* InEngine )
     atexit(sdl_atexit_handler);
 	GClipboardCopy = SDLClipboardCopy;
 	GClipboardPaste = SDLClipboardPaste;
+	GLaunchURL = SDLLaunchURL;
 	GRumble = SDLRumble;
 
 	// Community mappings for pads SDL does not know, loaded before PostEditChange opens the pad.
@@ -395,6 +401,7 @@ void USDLClient::Destroy()
 	CloseDeviceHaptic();
 	GClipboardCopy = NULL;
 	GClipboardPaste = NULL;
+	GLaunchURL = NULL;
 	GRumble = NULL;
 
     SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);

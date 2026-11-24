@@ -146,7 +146,6 @@ typedef DWORD PTRINT;
 #define FORCE_ANSI_LOG           0
 
 #if defined(NO_UNICODE_OS_SUPPORT) || !defined(UNICODE)
-#define TCHAR_CALL_OS(funcW,funcA) (funcA)
 #define TCHAR_TO_ANSI(str) str
 #define ANSI_TO_TCHAR(str) str
 
@@ -162,11 +161,9 @@ typedef DWORD PTRINT;
     #define _UNICODE 1
 
     #if defined(NO_ANSI_OS_SUPPORT)
-	    #define TCHAR_CALL_OS(funcW,funcA) (funcW)
         #define TCHAR_TO_ANSI(str) str
 	    #define ANSI_TO_TCHAR(str) str
     #else
-	    #define TCHAR_CALL_OS(funcW,funcA) (GUnicodeOS ? (funcW) : (funcA))
     	#define TCHAR_TO_ANSI(str) unixToANSI((ANSICHAR*)appAlloca(unixGetSizeANSI(str)),str)
     	#define ANSI_TO_TCHAR(str) unixToUNICODE((TCHAR*)appAlloca(unixGetSizeUNICODE(str)),str)
     #endif
@@ -234,7 +231,6 @@ extern "C"
 
 // Module name
 extern ANSICHAR GModule[32];
-extern CORE_API DOUBLE GSecondsPerCycle;
 
 char *strlwr(char *str);
 

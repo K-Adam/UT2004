@@ -298,58 +298,96 @@ CORE_API UBOOL appIsPureAnsi( const TCHAR* Str )
 	return 1;
 }
 
-// TCHAR is UTF-16 on every platform. Input that is not valid gives "?" for the whole string.
-CORE_API TArray<ANSICHAR> appToUtf8( const TCHAR* Str )
+// TCHAR is UTF-16 on every platform. Emit gets each byte, false for input that is not valid UTF-16.
+template<class F> static UBOOL EncodeUtf8( const TCHAR* Str, F Emit )
 {
-	TArray<ANSICHAR> Out;
 	for( ; *Str; Str++ )
 	{
 		DWORD C = (_WORD)*Str;
 		if( C>=0xD800 && C<0xDC00 && (_WORD)Str[1]>=0xDC00 && (_WORD)Str[1]<0xE000 )
 			C = 0x10000 + ((C-0xD800)<<10) + ((_WORD)*++Str-0xDC00);
 		else if( C>=0xD800 && C<0xE000 )
-		{
-			Out.Empty();
-			Out.AddItem( '?' );
-			break;
-		}
+			return 0;
 		INT Extra = C<0x80 ? 0 : C<0x800 ? 1 : C<0x10000 ? 2 : 3;
-		Out.AddItem( (ANSICHAR)(Extra ? ((0xF0<<(3-Extra)) | (C>>(6*Extra))) : C) );
+		Emit( (ANSICHAR)(Extra ? ((0xF0<<(3-Extra)) | (C>>(6*Extra))) : C) );
 		while( Extra-- )
-			Out.AddItem( (ANSICHAR)(0x80 | ((C>>(6*Extra)) & 0x3F)) );
+			Emit( (ANSICHAR)(0x80 | ((C>>(6*Extra)) & 0x3F)) );
+	}
+	return 1;
+}
+
+// Input that is not valid gives "?" for the whole string
+CORE_API TArray<ANSICHAR> appToUtf8( const TCHAR* Str )
+{
+	TArray<ANSICHAR> Out;
+	if( !EncodeUtf8( Str, [&Out]( ANSICHAR C ) { Out.AddItem( C ); } ) )
+	{
+		Out.Empty();
+		Out.AddItem( '?' );
 	}
 	Out.AddItem( 0 );
 	return Out;
 }
 
-CORE_API FString appFromUtf8( const ANSICHAR* Str )
+// Allocates nothing, for file names on the way to the system. Empty when the text is not valid or does not fit,
+// a shorter or made up name could be another file.
+CORE_API void appToUtf8( const TCHAR* Str, ANSICHAR* Out, INT MaxLen )
+{
+	INT Len = 0;
+	UBOOL Valid = EncodeUtf8( Str, [&]( ANSICHAR C )
+	{
+		if( Len<MaxLen-1 )
+			Out[Len] = C;
+		Len++;
+	});
+	Out[Valid && Len<MaxLen ? Len : 0] = 0;
+}
+
+// Emit gets each UTF-16 unit, false for input that is not valid UTF-8
+template<class F> static UBOOL DecodeUtf8( const ANSICHAR* Str, F Emit )
 {
 	static const DWORD Smallest[] = { 0, 0x80, 0x800, 0x10000 };
-	TArray<TCHAR> Out;
 	for( const BYTE* P=(const BYTE*)Str; *P; )
 	{
 		INT Extra = *P<0x80 ? 0 : (*P&0xE0)==0xC0 ? 1 : (*P&0xF0)==0xE0 ? 2 : (*P&0xF8)==0xF0 ? 3 : -1;
 		if( Extra<0 )
-			return TEXT("?");
+			return 0;
 		DWORD C = *P++ & (Extra ? 0x3F>>Extra : 0x7F);
 		for( INT i=0; i<Extra; i++ )
 		{
 			// The terminator is no continuation byte, so this stops at the end
 			if( (*P&0xC0)!=0x80 )
-				return TEXT("?");
+				return 0;
 			C = (C<<6) | (*P++ & 0x3F);
 		}
 		if( C<Smallest[Extra] || C>0x10FFFF || (C>=0xD800 && C<0xE000) )
-			return TEXT("?");
+			return 0;
 		if( C>=0x10000 )
 		{
-			Out.AddItem( (TCHAR)(0xD800 + ((C-0x10000)>>10)) );
+			Emit( (TCHAR)(0xD800 + ((C-0x10000)>>10)) );
 			C = 0xDC00 + (C & 0x3FF);
 		}
-		Out.AddItem( (TCHAR)C );
+		Emit( (TCHAR)C );
 	}
+	return 1;
+}
+
+CORE_API FString appFromUtf8( const ANSICHAR* Str )
+{
+	TArray<TCHAR> Out;
+	if( !DecodeUtf8( Str, [&Out]( TCHAR C ) { Out.AddItem( C ); } ) )
+		return TEXT("?");
 	Out.AddItem( 0 );
 	return FString( &Out(0) );
+}
+
+// Allocates nothing, launchers call it before appInit sets up the allocator
+CORE_API void appFromUtf8( const ANSICHAR* Str, TCHAR* Out, INT MaxLen )
+{
+	INT Len = 0;
+	if( !DecodeUtf8( Str, [&]( TCHAR C ) { if( Len<MaxLen-1 ) Out[Len++] = C; } ) )
+		Len = 0, Out[MaxLen>1 ? Len++ : Len] = '?';
+	Out[Len] = 0;
 }
 
 //
@@ -1738,6 +1776,7 @@ CORE_API UBOOL appSaveStringToFile( const FString& String, const TCHAR* Filename
 
 void (*GClipboardCopy)( const TCHAR* Str ) = NULL;
 FString (*GClipboardPaste)() = NULL;
+UBOOL (*GLaunchURL)( const TCHAR* URL ) = NULL;
 static FString GClipboardText;
 
 CORE_API void appClipboardCopy( const TCHAR* Str )
@@ -2098,23 +2137,7 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 			c=0, e++;
 	}}
 
-	// Command line.
-	#if _WIN32
-		if( *InCmdLine=='\"' )
-		{
-			InCmdLine++;
-			while( *InCmdLine && *InCmdLine!='\"' )
-				InCmdLine++;
-			if( *InCmdLine )
-				InCmdLine++;
-		}
-		while( *InCmdLine && *InCmdLine!=' ' )
-			InCmdLine++;
-		if( *InCmdLine )
-			InCmdLine++;
-	#endif
-
-	appStrcpy( GCmdLine, InCmdLine );
+	appStrncpy( GCmdLine, InCmdLine, ARRAY_COUNT(GCmdLine) );
 
 	// Error history.
 	appStrcpy( GErrorHist, TEXT("General protection fault!\r\n\r\nHistory: ") );
@@ -2138,7 +2161,11 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 	{
 		FString	Command;
 		verify(appLoadFileToString(Command,CommandFile,GFileManager));
-		appStrcpy(GCmdLine,*Command);
+		GFileManager->Delete(CommandFile);
+		appStrncpy(GCmdLine,*Command,ARRAY_COUNT(GCmdLine));
+		// The file manager chose its folders from the command line, the file's -nohomedir counts too. The process that
+		// wrote it may have used the other folder.
+		GFileManager->Init(1);
 		GFileManager->Delete(CommandFile);
 	}
 
@@ -2469,6 +2496,146 @@ void UnGuardBlock::GetBackTrace(FString &str)
     }
 }
 #endif
+
+/*-----------------------------------------------------------------------------
+	USystem.
+-----------------------------------------------------------------------------*/
+
+static int CDECL StringCompare( const void* A, const void* B )
+{
+	return appStricmp( **(*(FString**)A), **(*(FString**)B) );
+}
+
+#if _MSC_VER
+#pragma warning (push)
+#pragma warning (disable : 4717)
+#endif
+static void Recurse(UBOOL B)
+{
+	guard(Recurse);
+
+	if(B)
+		Recurse(B);
+
+	unguard;
+}
+#if _MSC_VER
+#pragma warning (pop)
+#endif
+USystem::USystem()
+:	SavePath	( E_NoInit )
+,	CachePath	( E_NoInit )
+,	CacheExt	( E_NoInit )
+,	Paths		( E_NoInit )
+,	Suppress	( E_NoInit )
+,   CacheRecordPath( E_NoInit )
+,	MusicPath	( E_NoInit )
+,	SpeechPath	( E_NoInit )
+,   LicenseeMode (1)
+{}
+void USystem::StaticConstructor()
+{
+	guard(USystem::StaticConstructor);
+
+	new(GetClass(),TEXT("PurgeCacheDays"),      RF_Public)UIntProperty   (CPP_PROPERTY(PurgeCacheDays    ), TEXT("Options"), CPF_Config );
+	new(GetClass(),TEXT("SavePath"),            RF_Public)UStrProperty   (CPP_PROPERTY(SavePath          ), TEXT("Options"), CPF_Config );
+	new(GetClass(),TEXT("CacheExt"),            RF_Public)UStrProperty   (CPP_PROPERTY(CacheExt          ), TEXT("Options"), CPF_Config );
+	new(GetClass(),TEXT("SpeechPath"),          RF_Public)UStrProperty   (CPP_PROPERTY(SpeechPath        ), TEXT("Options"), CPF_Config );
+
+	UArrayProperty* A = new(GetClass(),TEXT("Paths"),RF_Public)UArrayProperty( CPP_PROPERTY(Paths), TEXT("Options"), CPF_Config );
+	A->Inner = new(A,TEXT("StrProperty0"),RF_Public)UStrProperty;
+
+	UArrayProperty* B = new(GetClass(),TEXT("Suppress"),RF_Public)UArrayProperty( CPP_PROPERTY(Suppress), TEXT("Options"), CPF_Config );
+	B->Inner = new(B,TEXT("NameProperty0"),RF_Public)UNameProperty;
+
+	UArrayProperty* C = new(GetClass(),TEXT("CacheRecordPath"),RF_Public)UArrayProperty( CPP_PROPERTY(CacheRecordPath), TEXT("Options"), CPF_Config );
+	C->Inner = new(C,TEXT("StrProperty1"),RF_Public)UStrProperty;
+
+	UArrayProperty* D = new(GetClass(),TEXT("MusicPath"),RF_Public)UArrayProperty( CPP_PROPERTY(MusicPath), TEXT("Options"), CPF_Config );
+	D->Inner = new(D,TEXT("StrProperty2"),RF_Public)UStrProperty;
+
+	unguard;
+}
+UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
+{
+	if( ParseCommand(&Cmd,TEXT("CONFIGHASH")) )
+	{
+		GConfig->Dump( Ar );
+		return 1;
+	}
+	else if( ParseCommand( &Cmd, TEXT("DEBUG") ) )
+	{
+		if( ParseCommand(&Cmd,TEXT("CRASH")) )
+		{
+			appErrorf( TEXT("%s"), TEXT("Unreal crashed at your request") );
+			return 1;
+		}
+		else if( ParseCommand(&Cmd,TEXT("SLEEP")) )
+		{
+			debugf( TEXT("Sleeping") );
+			appSleep(3);
+			return 1;
+		}
+		else if( ParseCommand( &Cmd, TEXT("GPF") ) )
+		{
+			Ar.Log( TEXT("Unreal crashing with voluntary GPF") );
+			*(int *)NULL = 123;
+			return 1;
+		}
+		else if( ParseCommand( &Cmd, TEXT("RECURSE") ) )
+		{
+			Ar.Logf( TEXT("Recursing") );
+			Recurse(1);
+			return 1;
+		}
+		else if( ParseCommand( &Cmd, TEXT("EATMEM") ) )
+		{
+			Ar.Log( TEXT("Eating up all available memory") );
+			while( 1 )
+			{
+				void* Eat = appMalloc(65536,TEXT("EatMem"));
+				memset( Eat, 0, 65536 );
+			}
+			return 1;
+		}
+		else return 0;
+	}
+	else if( ParseCommand(&Cmd,TEXT("DIR")) )		// DIR [path\pattern]
+	{
+		for( INT Pass=0; Pass<2; Pass++ )
+		{
+			TArray<FString> Names = GFileManager->FindFiles( Cmd, Pass, !Pass );
+			TArray<FString*> Sorted;
+			for( INT x=0; x<Names.Num(); x++ )
+				Sorted.AddItem( &Names(x) );
+			if( Sorted.Num() )
+				appQsort( &Sorted(0), Sorted.Num(), sizeof(FString*), StringCompare );
+			for( INT x=0; x<Sorted.Num(); x++ )
+				Ar.Logf( Pass ? TEXT("%s") : TEXT("[%s]"), **Sorted(x) );
+		}
+		return 1;
+	}
+	else return appPlatformExec( Cmd, Ar );
+}
+IMPLEMENT_CLASS(USystem);
+
+// Interface for recording loading errors in the editor
+CORE_API const void EdClearLoadErrors()
+{
+	GEdLoadErrors.Empty();
+}
+
+CORE_API const void EdLoadErrorf( INT Type, const TCHAR* Fmt, ... )
+{
+	TCHAR TempStr[4096]=TEXT("");
+	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
+
+	for( INT x = 0 ; x < GEdLoadErrors.Num() ; ++x )
+		if( GEdLoadErrors(x) == FEdLoadError( Type, TempStr ) )
+			return;
+
+	new( GEdLoadErrors )FEdLoadError( Type, TempStr );
+}
 
 /*-----------------------------------------------------------------------------
 	The End.

@@ -122,33 +122,11 @@ int main( int argc, char* argv[] )
 	{
 		GIsGuarded = 1;
 
-		#if !_WIN32
-		// Set module name.
 		strcpy( GModule, "ucc" );
-		#endif
-		
-		// Parse command line.
-		TCHAR CmdLine[1024], *CmdLinePtr=CmdLine;
-		*CmdLinePtr = 0;
-		#if _WIN32
-			ANSICHAR* Ch = GetCommandLineA();
-			while( *Ch && *Ch!=' ' )
-				Ch++;
-			while( *Ch==' ' )
-				Ch++;
-			while( *Ch )
-				*CmdLinePtr++ = *Ch++;
-			*CmdLinePtr++ = 0;
-		#else
-			for( INT i=2; i<argc; i++ )
-			{
-				if( i>2 )
-					appStrcat( CmdLine, TEXT(" ") );
-				appStrcat( CmdLine, ANSI_TO_TCHAR(argv[i]) );
-			}
-		#endif
 
-
+		// The executable and the commandlet name go
+		TCHAR CmdLine[4096];
+		appArgsToCmdLine( argc, argv, 2, CmdLine, ARRAY_COUNT(CmdLine) );
 
 		// Init engine core.
 		appInit( TEXT("UT2004"), CmdLine, &Malloc, &Log, &Error, &Warn, &FileManager, FConfigCacheIni::Factory, 1 );

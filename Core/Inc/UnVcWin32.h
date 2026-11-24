@@ -161,12 +161,10 @@ typedef unsigned long PTRINT;
 
 // OS unicode function calling.
 #if defined(NO_UNICODE_OS_SUPPORT) || !defined(UNICODE)
-	#define TCHAR_CALL_OS(funcW,funcA) (funcA)
 	#define TCHAR_TO_ANSI(str) str
 	#define ANSI_TO_TCHAR(str) str
 	inline CORE_API TCHAR* winAnsiToTCHAR( char* str ) { return str; }
 #elif defined(NO_ANSI_OS_SUPPORT)
-	#define TCHAR_CALL_OS(funcW,funcA) (funcW)
 	#define TCHAR_TO_ANSI(str) str
 	#define ANSI_TO_TCHAR(str) str
 	inline CORE_API TCHAR* winAnsiToTCHAR( char* str ) { return str; }
@@ -175,7 +173,6 @@ typedef unsigned long PTRINT;
 	CORE_API INT winGetSizeANSI( const UNICHAR* InUCh );
 	CORE_API UNICHAR* winToUNICODE( UNICHAR* Ch, const ANSICHAR* InUCh, INT Count );
 	CORE_API INT winGetSizeUNICODE( const ANSICHAR* InACh );
-	#define TCHAR_CALL_OS(funcW,funcA) (GUnicodeOS ? (funcW) : (funcA))
 	#define TCHAR_TO_ANSI(str) winToANSI((ANSICHAR*)appAlloca(winGetSizeANSI(str)),str,winGetSizeANSI(str))
 	#define TCHAR_TO_OEM(str) winToOEM((ANSICHAR*)appAlloca(winGetSizeANSI(str)),str,winGetSizeANSI(str))
 	#define ANSI_TO_TCHAR(str) winToUNICODE((TCHAR*)appAlloca(sizeof(UNICHAR)*winGetSizeUNICODE(str)),str,winGetSizeUNICODE(str))

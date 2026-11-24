@@ -267,9 +267,7 @@ UObject* UTrueTypeFontFactory::FactoryCreateNew
 	INT nHeight = -appRound(Height * (FLOAT)GetDeviceCaps(tempDC, LOGPIXELSY) / 72.0);
 	DeleteDC( tempDC );
 
-	HFONT F = TCHAR_CALL_OS(
-		CreateFont(nHeight, 0, 0, 0, Style, Italic, Underline, 0, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, AntiAlias ? ANTIALIASED_QUALITY : NONANTIALIASED_QUALITY, VARIABLE_PITCH, *FontName), // sjs
-		CreateFontA(nHeight, 0, 0, 0, Style, Italic, Underline, 0, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, AntiAlias ? ANTIALIASED_QUALITY : NONANTIALIASED_QUALITY, VARIABLE_PITCH, TCHAR_TO_ANSI(*FontName)) ); // sjs
+	HFONT F = CreateFont(nHeight, 0, 0, 0, Style, Italic, Underline, 0, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, AntiAlias ? ANTIALIASED_QUALITY : NONANTIALIASED_QUALITY, VARIABLE_PITCH, *FontName); // sjs
 	if( !F )
 	{
 		Warn->Logf( NAME_Error, TEXT("CreateFont failed: %s"), appGetSystemErrorMessage() );

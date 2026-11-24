@@ -139,7 +139,7 @@ static void InitSplash(const TCHAR *filename)
     if (!SDL_Init(SDL_INIT_VIDEO))
         return;
 
-    SDL_Surface *bmp = SDL_LoadBMP(appToAnsi(filename));
+    SDL_Surface *bmp = SDL_LoadBMP(&appToUtf8(filename)(0));
     if (bmp == NULL)
         return;
 
@@ -225,7 +225,7 @@ static void PumpServerTray(void)
 #else
         FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + FString(Log.Filename);
 #endif
-        SDL_OpenURL(appToAnsi(*Path));
+        SDL_OpenURL(&appToUtf8(*Path)(0));
     }
     if (SDL_GetAtomicInt(&TrayStop))
         appRequestExit(0);
@@ -852,25 +852,12 @@ int main(int argc, char **argv)
 	// SDL would yield on every swap under JSPI, the main loop already waits for each animation frame.
 	SDL_SetHint( SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0" );
 #endif
-	TCHAR CmdLine[1024] = TEXT("");
-#ifdef _WIN32
-	// appInit skips the executable name on Windows, as GetCommandLine starts with it.
-	appStrncpy( CmdLine, GetCommandLine(), ARRAY_COUNT(CmdLine) );
-#else
-    if (argc >= 2)
-    {
-	    appStrncpy(CmdLine, appFromAnsi(argv[1]), ARRAY_COUNT(CmdLine));
-	    for (INT i = 2; i < argc && appStrlen(CmdLine) + strlen(argv[i]) + 1 < ARRAY_COUNT(CmdLine); i++)
-    	{
-       		appStrcat(CmdLine, TEXT(" "));
-    		appStrcat(CmdLine, appFromAnsi(argv[i]));
-    	}
-    }
-#endif
+	TCHAR CmdLine[4096];
+	appArgsToCmdLine( argc, argv, 1, CmdLine, ARRAY_COUNT(CmdLine) );
 	return RunEngine( CmdLine );
 }
 
-int RunEngine( TCHAR* CmdLine )
+int RunEngine( const TCHAR* CmdLine )
 {
 	// Remember instance.
 	INT ErrorLevel = 0;
@@ -879,7 +866,7 @@ int RunEngine( TCHAR* CmdLine )
 #ifdef _WIN32
 	hInstance = GetModuleHandle( NULL );
 #endif
-	strcpy( GModule, appToAnsi(TEXT("UT2004")) );
+	strcpy( GModule, "UT2004" );
 	appStrcpy( GPackage, appPackage() );
 
 	// Begin guarded code.
@@ -920,7 +907,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 		UBOOL HasContent = !GIsClient || FindContent();
 
 		// Figure out whether to show log or splash screen.
-		UBOOL ShowLog = ParseParam(CmdLine,TEXT("LOG"));
+		UBOOL ShowLog = ParseParam(appCmdLine(),TEXT("LOG"));
 
 		TCHAR *LogoFName = appStaticString1024();
 		if( !Parse( appCmdLine(), TEXT("-USERLOGO="), LogoFName, 1024 ) )
@@ -932,8 +919,8 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 		if( GFileManager->FileSize(*Filename)<0 )
 			Filename = FString(TEXT("../Help")) * GPackage + TEXT("Logo.bmp"); // gam
 		if( HasContent && (!ShowLog) &&
-            (!ParseParam(CmdLine,TEXT("server"))) &&
-            (!ParseParam(CmdLine,TEXT("nosplash"))) )
+            (!ParseParam(appCmdLine(),TEXT("server"))) &&
+            (!ParseParam(appCmdLine(),TEXT("nosplash"))) )
 			InitSplash( *Filename );
 
 		// Benchmarking/ movie recording.
@@ -970,7 +957,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 
 			// Optionally Exec an exec file
 			FString Temp;
-			if( Parse(CmdLine, TEXT("EXEC="), Temp) )
+			if( Parse(appCmdLine(), TEXT("EXEC="), Temp) )
 			{
 				Temp = FString(TEXT("exec ")) + Temp;
 				if( Engine->Client && Engine->Client->Viewports.Num() && Engine->Client->Viewports(0) )
@@ -1023,16 +1010,12 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 					new(Names) FString( appComputerName() );
 #ifndef __ANDROID__
 					// Unix has no login name without a terminal, the home folder carries it there. On Android that folder is the app's.
-					// The Unix log carries engine paths byte by byte, so the folder is looked for in both readings.
 					if( const char* Home = SDL_GetUserFolder( SDL_FOLDER_HOME ) )
 					{
-						FString Folders[2] = { FString( appFromUtf8( Home ) ), FString( appFromAnsi( Home ) ) };
-						for( FString& Folder : Folders )
-						{
-							while( Folder.Right(1) == TEXT("/") || Folder.Right(1) == TEXT("\\") )
-								Folder = Folder.LeftChop(1);
-							new(Names) FString( Folder.Mid( Max( Folder.InStr( TEXT("/"), 1 ), Folder.InStr( TEXT("\\"), 1 ) ) + 1 ) );
-						}
+						FString Folder = appFromUtf8( Home );
+						while( Folder.Right(1) == TEXT("/") || Folder.Right(1) == TEXT("\\") )
+							Folder = Folder.LeftChop(1);
+						new(Names) FString( Folder.Mid( Max( Folder.InStr( TEXT("/"), 1 ), Folder.InStr( TEXT("\\"), 1 ) ) + 1 ) );
 					}
 #endif
 					FString Player;
@@ -1091,7 +1074,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 #endif
 #if __EMSCRIPTEN__
 	ANSICHAR PageServerCmd[1024];
-	appToAnsi( ServerCmd, PageServerCmd, ARRAY_COUNT(PageServerCmd) );
+	appToUtf8( ServerCmd, PageServerCmd, ARRAY_COUNT(PageServerCmd) );
 #endif
 
 	// Final shut down.

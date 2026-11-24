@@ -22,7 +22,7 @@ Revision history:
 #include "Engine.h"
 #include "UnRender.h"
 
-int RunEngine( TCHAR* CmdLine );
+int RunEngine( const TCHAR* CmdLine );
 
 #ifdef __ANDROID__
 // SDLLaunchAndroid.cpp

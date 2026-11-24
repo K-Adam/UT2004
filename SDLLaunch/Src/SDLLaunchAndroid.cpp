@@ -14,7 +14,7 @@
 // It gets the GL ES 3 context OpenGLDrv asks for, so the window's EGL config suits that one too.
 void InitSplash(const TCHAR *filename)
 {
-    SDL_Surface *bmp = filename ? SDL_LoadBMP(appToAnsi(filename)) : NULL;
+    SDL_Surface *bmp = filename ? SDL_LoadBMP(&appToUtf8(filename)(0)) : NULL;
     if (bmp == NULL || !SDL_Init(SDL_INIT_VIDEO))
     {
         SDL_DestroySurface(bmp);

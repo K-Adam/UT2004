@@ -7,7 +7,8 @@
 ============================================================================*/
 
 // Pathnames.
-char* appUnixPath( const char* Path );
+// UNICHAR, the TCHAR it is comes later in Core.h
+CORE_API char* appUnixPath( const UNICHAR* Path );
 
 // String functions.
 int stricmp( const char* s, const char* t );

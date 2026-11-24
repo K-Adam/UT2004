@@ -16,14 +16,10 @@ Revision history:
 
 #if __UNIX__
 #undef clock
-#include <pthread.h>
-#define Sleep(x) usleep(x * 1000)
-#define ExitThread(x)
-static void *FileStreamingThread( void* Arg );
 #include "FFileManagerUnix.h"
-#else
-static DWORD STDCALL FileStreamingThread( void* Arg );
 #endif
+
+static void FileStreamingThread( FALAudioStreamManager* StreamManager );
 
 static void FreeStreams( FALAudioStreamManager* StreamManager )
 {
@@ -389,19 +385,9 @@ void FALAudioStreamManager::Init()
 {
 	guard(FALAudioStreamManager::Init);
 
-#if __EMSCRIPTEN__
-	// No threads without SharedArrayBuffer, UALAudioSubsystem::Update reads the chunks instead.
-#elif __UNIX__
-	pthread_t FileStreamingThreadId = 0;
-	int rc = pthread_create(&FileStreamingThreadId, NULL,
-	                        FileStreamingThread, this);
-	check(rc == 0);
-	if (rc == 0)
-		pthread_detach(FileStreamingThreadId);
-#else
-	HANDLE hThread = CreateThread( NULL, 0, FileStreamingThread, this, 0, &FileStreamingThreadId );
-	check(hThread);
-	CloseHandle( hThread );
+	// No threads without SharedArrayBuffer on the web, UALAudioSubsystem::Update reads the chunks instead
+#if !__EMSCRIPTEN__
+	std::thread( FileStreamingThread, this ).detach();
 #endif
 
 	unguard;
@@ -439,29 +425,20 @@ void FALAudioStreamManager::ReadChunks()
 	Streaming Thread.
 ------------------------------------------------------------------------------------*/
 
-#if __UNIX__
-static void *FileStreamingThread( void* Arg )
-#else
-static DWORD STDCALL FileStreamingThread( void* Arg )
-#endif
+static void FileStreamingThread( FALAudioStreamManager* StreamManager )
 {
-	FALAudioStreamManager* StreamManager = (FALAudioStreamManager*) Arg;
-
 	while( StreamManager->Destroyed == 0)
 	{
 		StreamManager->ReadChunks();
 
 		// Don't eat up too much CPU time.
-		Sleep(50);
+		appSleep( 0.05f );
 	}
 
 	// No longer have to worry about syncronisation at this point.
 	FreeStreams( StreamManager );
 
 	StreamManager->Destroyed = 2;
-	
-	ExitThread( 0 );
-	return 0;
 }
 
 /*-----------------------------------------------------------------------------

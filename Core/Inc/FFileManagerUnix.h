@@ -263,7 +263,6 @@ public:
              (appStrlen(FakeFilename) + appStrlen(BaseDir) >= PATH_MAX) )
             return NULL;
 
-        char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 		FILE* File = NULL;
 
@@ -271,16 +270,14 @@ public:
         {
     		appStrcpy( tmp, BaseDir );
             appStrcat( tmp, FakeFilename );
-            unixToANSI( ansipath, tmp );
-    		char *Filename = appUnixPath(ansipath);
+    		char *Filename = appUnixPath(tmp);
             if (!isdir(Filename))
                 File = fopen(Filename, "rb");
         }
 
         if ( File == NULL )
         {
-            unixToANSI( ansipath, FakeFilename );
-            char *Filename = appUnixPath(ansipath);
+            char *Filename = appUnixPath(FakeFilename);
             if (!isdir(Filename))
             {
 #if __EMSCRIPTEN__
@@ -329,7 +326,6 @@ public:
              (appStrlen(FakeFilename) + appStrlen(BaseDir) >= PATH_MAX) )
             return NULL;
 
-        char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 		int File = -1;
         struct stat statbuf;
@@ -338,16 +334,14 @@ public:
         {
     		appStrcpy( tmp, BaseDir );
             appStrcat( tmp, FakeFilename );
-            unixToANSI( ansipath, tmp );
-    		char* Filename = appUnixPath(ansipath);
+    		char* Filename = appUnixPath(tmp);
             if (!isdir(Filename))
     		    File = open(Filename, O_RDONLY, S_IRUSR | S_IWUSR);
         }
 
         if ( File < 0 )  // not in homedir? try game dir.
         {
-            unixToANSI( ansipath, FakeFilename );
-            char *Filename = appUnixPath(ansipath);
+            char *Filename = appUnixPath(FakeFilename);
             if (!isdir(Filename))
 		        File = open(Filename, O_RDONLY, S_IRUSR | S_IWUSR);
         }
@@ -370,13 +364,11 @@ public:
              (appStrlen(FakeFilename) + appStrlen(BaseDir) >= PATH_MAX) )
             return NULL;
 
-        char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
 		appStrcpy( tmp, FakeFilename[0]=='/' ? TEXT("") : BaseDir );
         appStrcat( tmp, FakeFilename );
-        unixToANSI( ansipath, tmp );
-		char* Filename = appUnixPath(ansipath);
+		char* Filename = appUnixPath(tmp);
 
         if (BaseDir[0])  // might need to build dirs in $HOME...
         {
@@ -408,7 +400,7 @@ public:
 		if( File < 0 )
 		{
 			if( Flags & FILEWRITE_NoFail )
-				appErrorf( TEXT("Failed to write: %s"), &Filename );
+				appErrorf( TEXT("Failed to write: %s"), FakeFilename );
 			return NULL;
 		}
 		return new(TEXT("UnixFileWriter"))FArchiveFileWriter(File,Error);
@@ -423,13 +415,11 @@ public:
              (appStrlen(FakeFilename) + appStrlen(BaseDir) >= PATH_MAX) )
             return 0;
 
-        char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
 		appStrcpy( tmp, FakeFilename[0]=='/' ? TEXT("") : BaseDir );
         appStrcat( tmp, FakeFilename );
-        unixToANSI( ansipath, tmp );
-		char* Filename = appUnixPath(ansipath);
+		char* Filename = appUnixPath(tmp);
 		if( EvenReadOnly )
 			chmod(Filename, S_IREAD | S_IWRITE);
 		return(unlink(Filename)==0 || (errno==ENOENT && !RequireExists));
@@ -447,9 +437,7 @@ public:
         if( FileSize( Filename ) < 0 )
             return( 0 );
 
-        char ansipath[PATH_MAX];
-        unixToANSI(ansipath, Filename);
-		return (access(appUnixPath(ansipath), W_OK) != 0);
+		return (access(appUnixPath(Filename), W_OK) != 0);
 		unguard;
     }
     // --- gam
@@ -473,7 +461,6 @@ public:
              (appStrlen(FakePath) + appStrlen(BaseDir) >= PATH_MAX) )
             return 0;
 
-        char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
 		appStrcpy( tmp, FakePath[0]=='/' ? TEXT("") : BaseDir );
@@ -481,8 +468,7 @@ public:
 		if( Tree )
 			return FFileManagerGeneric::MakeDirectory( Path, Tree );
 
-        unixToANSI(ansipath, tmp);
-		return mkdir(appUnixPath(ansipath), S_IREAD | S_IWRITE | S_IEXEC)==0 || errno==EEXIST;
+		return mkdir(appUnixPath(tmp), S_IREAD | S_IWRITE | S_IEXEC)==0 || errno==EEXIST;
 		unguard;
 	}
 	UBOOL DeleteDirectory( const TCHAR* FakePath, UBOOL RequireExists=0, UBOOL Tree=0 )
@@ -493,7 +479,6 @@ public:
              (appStrlen(FakePath) + appStrlen(BaseDir) >= PATH_MAX) )
             return 0;
 
-        char ansipath[PATH_MAX];
         TCHAR tmp[PATH_MAX];
 
 		appStrcpy( tmp, FakePath[0]=='/' ? TEXT("") : BaseDir );	
@@ -501,9 +486,7 @@ public:
 		if( Tree )
 			return FFileManagerGeneric::DeleteDirectory( Path, RequireExists, Tree );
 
-        unixToANSI(ansipath, tmp);
-
-		return rmdir(appUnixPath(ansipath))==0 || (errno==ENOENT && !RequireExists);
+		return rmdir(appUnixPath(tmp))==0 || (errno==ENOENT && !RequireExists);
 		unguard;
 	}
 	TArray<FString> FindFiles( const TCHAR* FakeFilename, UBOOL Files, UBOOL Directories )
@@ -531,10 +514,7 @@ public:
              (appStrlen(Filename) >= PATH_MAX) )
             return 0;
 
-        char ansipath[PATH_MAX];
-        unixToANSI(ansipath, Filename);
-
-		return chdir(appUnixPath(ansipath))==0;
+		return chdir(appUnixPath(Filename))==0;
 		unguard;
 	}
 	FString GetDefaultDirectory()
@@ -543,9 +523,20 @@ public:
 		{
 			ANSICHAR Buffer[PATH_MAX]="";
 			getcwd( Buffer, ARRAY_COUNT(Buffer) );
-			return appFromAnsi( Buffer );
+			return appFromUtf8( Buffer );
 		}
 		unguard;
+	}
+	// Reads open the player's copy in the home folder first, a path expands to that copy when there is one
+	FString ExpandPath( const TCHAR* Path )
+	{
+		if( BaseDir[0] && Path[0]!='/' )
+		{
+			FString Own = FString(BaseDir) + Path;
+			if( access( appUnixPath( *Own ), F_OK )==0 )
+				return Own;
+		}
+		return FFileManager::ExpandPath( Path );
 	}
 	// gam ---
 	INT CompareFileTimes( const TCHAR* FileA, const TCHAR* FileB )
@@ -554,10 +545,10 @@ public:
 	
 		struct stat StatA, StatB;
 
-		if( stat( appToAnsi( FileA ), &StatA ) != 0 )
+		if( stat( appUnixPath( FileA ), &StatA ) != 0 )
 		    return 0;
 
-		if( stat( appToAnsi( FileB ), &StatB ) != 0 )
+		if( stat( appUnixPath( FileB ), &StatB ) != 0 )
 		    return 0;
 		    
         return( INT(StatB.st_mtime - StatA.st_mtime) );
@@ -573,48 +564,38 @@ public:
             appStrcpy(BaseDir, CalcHomeDir());
 	}
 
+    // Without a home folder that can be written, the files stay next to the game
     const TCHAR *CalcHomeDir(void)
     {
         if (ParseParam(appCmdLine(),TEXT("nohomedir")))
             return(appBaseDir());
 
-	    char *Home = getenv("HOME");
-    	if ( Home == NULL )
-    	{
-    	    uid_t id = getuid();
-    		struct passwd *pwd;
-    
-    		setpwent();
-    		while( (pwd = getpwent()) != NULL )
-    		{
-    		    if( pwd->pw_uid == id )
-    			{
-    			    Home = pwd->pw_dir;
-    				break;
-    			}
-    		}
-    		endpwent();
-    	}
+        const char* Home = getenv("HOME");
+        if( !Home || Home[0]!='/' )
+        {
+            struct passwd* Pwd = getpwuid( getuid() );
+            Home = Pwd ? Pwd->pw_dir : NULL;
+        }
+        // Room for /.ut2004/System/ after it
+        if( !Home || Home[0]!='/' || strlen(Home)>900 )
+            return appBaseDir();
 
-    	TCHAR* tmp = appStaticString1024();
-    	appStrcpy( tmp, appFromAnsi(Home) );
-
-		appStrcat( tmp, TEXT("/.ut2004") );
-
-        mkdir(appToAnsi(tmp), S_IRWXU);
+        TCHAR* tmp = appStaticString1024();
+        appFromUtf8( Home, tmp, 1024 );
+        // A path that is not UTF-8 decodes to "?", a real one starts with /
+        if( tmp[0]!='/' )
+            return appBaseDir();
+        appStrcat( tmp, TEXT("/.ut2004") );
+        ANSICHAR Utf8[PATH_MAX];
+        appToUtf8( tmp, Utf8, ARRAY_COUNT(Utf8) );
+        mkdir( Utf8, S_IRWXU );
         appStrcat( tmp, TEXT("/System") );
-        mkdir(appToAnsi(tmp), S_IRWXU);
-
-        // If STILL not accessible don't use it.
-        if ( access( appToAnsi(tmp), F_OK ) == -1 )
-        {
-        }
-        else
-        {
-            appStrcat( tmp, TEXT("/") );
-        }
-
-        return(tmp);
+        appToUtf8( tmp, Utf8, ARRAY_COUNT(Utf8) );
+        mkdir( Utf8, S_IRWXU );
+        if( !Utf8[0] || access( Utf8, W_OK )!=0 )
+            return appBaseDir();
+        appStrcat( tmp, TEXT("/") );
+        return tmp;
     }
 
 
@@ -625,8 +606,7 @@ protected:
 	{
 		guard(FFileManagerUnix::SearchDirectory);
 		char Path[PATH_MAX], Pattern[PATH_MAX];
-		unixToANSI( Pattern, Filename );
-		strcpy( Path, appUnixPath(Pattern) );
+		strcpy( Path, appUnixPath(Filename) );
 
 		char* Slash = strrchr( Path, '/' );
 		strcpy( Pattern, Slash ? Slash + 1 : Path );
@@ -649,7 +629,10 @@ protected:
 			struct stat Info;
 			if( stat( Full, &Info ) != 0 || !(S_ISDIR( Info.st_mode ) ? Directories : Files) )
 				continue;
-			FString Name( appFromAnsi( Entry->d_name ) );
+			// A name an older build wrote in Latin-1 does not decode
+			FString Name( appFromUtf8( Entry->d_name ) );
+			if( Name==TEXT("?") && strcmp( Entry->d_name, "?" )!=0 )
+				continue;
 			if( Result.FindItemIndex( Name ) == INDEX_NONE )
 				new(Result)FString( Name );
 		}

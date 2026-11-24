@@ -1334,7 +1334,12 @@ void MEAPI KCreateAssetDB(MeAssetDB** db, McdGeomMan** gm)
 					char *data = (char*)chararray.GetData();
 					char *out = (char*)MeMemoryAPI.create(512);
 
+					// The toolkit opens it with fopen, which takes UTF-8 on Unix and the code page on Windows
+#if __UNIX__
+					strncpy(out, appUnixPath((TCHAR *) data), 512);
+#else
 					strncpy(out, appToAnsi((TCHAR *) data), 512);
+#endif
 
 					char *filename = (char*)MeMemoryAPI.create(strlen(out)+32);
 					filename[0] = 0;

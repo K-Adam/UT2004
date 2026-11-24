@@ -390,7 +390,11 @@ void UStreamInterface::LoadPlaylist( FString& FileName, TArray<FString>& Lines, 
 		return;
 	}
 
-	Result.ParseIntoArray( LINE_TERMINATOR, &Lines );
+	// A playlist saved on either system reads the same on both
+	Result.ParseIntoArray( TEXT("\n"), &Lines );
+	for( INT i=0; i<Lines.Num(); i++ )
+		if( Lines(i).Right(1)==TEXT("\r") )
+			Lines(i) = Lines(i).LeftChop(1);
 
 	unguard;
 }

@@ -1,3 +1,8 @@
+// Before the engine headers, whose macros break the standard ones
+#pragma pack(push,8)
+#include <filesystem>
+#pragma pack(pop)
+
 #include "TestEngine.h"
 
 #if __STATIC_LINK
@@ -176,4 +181,59 @@ TEST( Engine, MapChangesDoNotLeak )
 		EXPECT_LE( Objects[i], Objects[i-6] + Objects[i-6]/20 );
 		EXPECT_LE( Pointers[i], Pointers[i-6] + 64 );
 	}
+}
+
+TEST( Core, Timing )
+{
+	DOUBLE Seconds = appSeconds();
+	DWORD Cycles = appCycles();
+	appSleep( 0.1f );
+	DOUBLE Elapsed = appSeconds() - Seconds;
+	DOUBLE CycleSeconds = (DWORD)(appCycles() - Cycles) * GSecondsPerCycle;
+	EXPECT_GE( Elapsed, 0.099 );
+	EXPECT_LT( Elapsed, 1.0 );
+	EXPECT_NEAR( Elapsed, CycleSeconds, 0.02 );
+
+	// The format demo files carry, 9 stands for a digit
+	const TCHAR* Pattern = TEXT("99/99/99 99:99:99");
+	FString Stamp = appTimestamp();
+	ASSERT_EQ( appStrlen(Pattern), Stamp.Len() );
+	for( INT i=0; Pattern[i]; i++ )
+		EXPECT_TRUE( Pattern[i]=='9' ? appIsDigit((*Stamp)[i]) : (*Stamp)[i]==Pattern[i] ) << i;
+}
+
+TEST( Core, SharedSystemCommands )
+{
+	FStringOutputDevice Out;
+	EXPECT_TRUE( GSys->Exec( TEXT("DIR Core.int"), Out ) );
+	EXPECT_NE( -1, Out.InStr( TEXT("Core.int") ) ) << TCHAR_TO_ANSI(*Out);
+	EXPECT_TRUE( GSys->Exec( TEXT("MEMSTAT"), Out ) );
+	EXPECT_FALSE( GSys->Exec( TEXT("NOSUCHSYSTEMCOMMAND"), Out ) );
+}
+
+TEST( Core, CachePurgesOldFiles )
+{
+	// A folder of its own, the cleanup would take the player's real downloads too
+	FString CachePath = GSys->CachePath;
+	INT Days = GSys->PurgeCacheDays;
+	GSys->CachePath = TEXT("PurgeTestCache");
+	GFileManager->MakeDirectory( *GSys->CachePath );
+	GSys->PurgeCacheDays = 30;
+	FString Old = GSys->CachePath * (FString(TEXT("old")) + GSys->CacheExt), New = GSys->CachePath * (FString(TEXT("new")) + GSys->CacheExt);
+	ASSERT_TRUE( appSaveStringToFile( TEXT("x"), *Old, GFileManager ) );
+	ASSERT_TRUE( appSaveStringToFile( TEXT("x"), *New, GFileManager ) );
+	std::filesystem::path Real = std::filesystem::u8path( &appToUtf8( *GFileManager->ExpandPath( *Old ) )(0) );
+	std::filesystem::last_write_time( Real, std::filesystem::last_write_time( Real ) - std::chrono::hours( 24*40 ) );
+	appCleanFileCache();
+	EXPECT_LT( GFileManager->FileSize( *Old ), 0 );
+	EXPECT_GE( GFileManager->FileSize( *New ), 0 );
+	GFileManager->DeleteDirectory( *GSys->CachePath, 0, 1 );
+	GSys->CachePath = CachePath;
+	GSys->PurgeCacheDays = Days;
+}
+
+// The launcher passes the arguments after the executable and appInit keeps all of them. The engine test starts with the map.
+TEST( Core, CommandLineStartsWithTheFirstArgument )
+{
+	EXPECT_EQ( 0, appStrncmp( appCmdLine(), TEXT("DM-Rankin"), 9 ) ) << TCHAR_TO_ANSI(appCmdLine());
 }

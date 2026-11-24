@@ -480,7 +480,11 @@ void USDLViewport::OpenWindow( PTRINT InParentWindow, UBOOL IsTemporary, INT New
         else
         {
             // Please note we don't create this file...
-            TextToSpeechObject = open(appToAnsi(*(C->TextToSpeechFile)), O_WRONLY);
+#ifdef _WIN32
+            TextToSpeechObject = _wopen(*C->TextToSpeechFile, O_WRONLY);
+#else
+            TextToSpeechObject = open(appUnixPath(*C->TextToSpeechFile), O_WRONLY);
+#endif
             if (TextToSpeechObject != -1)
                 debugf(TEXT("TTS: Opened file \"%s\" for text-to-speech output."), *(C->TextToSpeechFile));
             else

@@ -15,6 +15,8 @@
 
 extern void appPlatformPreInit();
 extern void appPlatformInit();
+// The USystem console commands that differ per platform, false when Cmd is none of them
+extern UBOOL appPlatformExec( const TCHAR* Cmd, FOutputDevice& Ar );
 extern void appPlatformPreExit();
 extern void appPlatformExit();
 

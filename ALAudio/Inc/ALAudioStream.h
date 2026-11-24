@@ -120,7 +120,6 @@ public:
 	FALAudioStream*			First;
 	FALAudioStream*			Last;
 
-	DWORD					FileStreamingThreadId;
 	// Shared with the streaming thread.
 	std::atomic<INT>		Destroyed;
 };

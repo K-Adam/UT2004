@@ -53,17 +53,14 @@ int main( int argc, char* argv[] )
 {
 	testing::InitGoogleTest( &argc, argv );
 
-	TCHAR CmdLine[1024] = TEXT("");
-	#if _WIN32
-		// appInit drops the first token there.
-		appStrcpy( CmdLine, TEXT("ut_tests") );
-	#else
-		strcpy( GModule, "ut_tests" );
-	#endif
+	// From argv, which gtest has taken its own flags out of
+	strcpy( GModule, "ut_tests" );
+	TCHAR CmdLine[4096] = TEXT("");
 	for( INT i=1; i<argc; i++ )
 	{
-		appStrcat( CmdLine, TEXT(" ") );
-		appStrcat( CmdLine, ANSI_TO_TCHAR(argv[i]) );
+		if( i>1 )
+			appStrncat( CmdLine, TEXT(" "), ARRAY_COUNT(CmdLine) );
+		appStrncat( CmdLine, ANSI_TO_TCHAR(argv[i]), ARRAY_COUNT(CmdLine) );
 	}
 
 	GIsStarted = 1;

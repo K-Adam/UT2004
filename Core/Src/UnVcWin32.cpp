@@ -116,18 +116,8 @@ CORE_API const TCHAR* appGetSystemErrorMessage( INT Error )
 	*Msg = 0;
 	if( Error==0 )
 		Error = GetLastError();
-#if UNICODE
-	if( !GUnicodeOS )
-	{
-		ANSICHAR ACh[1024];
-		FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM, NULL, Error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), ACh, 1024, NULL );
-		appStrcpy( Msg, appFromAnsi(ACh) );
-	}
-	else
-#endif
-	{
-		FormatMessage( FORMAT_MESSAGE_FROM_SYSTEM, NULL, Error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Msg, 1024, NULL );
-	}
+	FormatMessage( FORMAT_MESSAGE_FROM_SYSTEM, NULL, Error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Msg, 1024, NULL );
+
 	if( appStrchr(Msg,'\r') )
 		*appStrchr(Msg,'\r')=0;
 	if( appStrchr(Msg,'\n') )
@@ -137,66 +127,10 @@ CORE_API const TCHAR* appGetSystemErrorMessage( INT Error )
 }
 
 /*-----------------------------------------------------------------------------
-	USystem.
+	Commands.
 -----------------------------------------------------------------------------*/
 
-int CDECL StringCompare(const void *A, const void *B)
-{
-	return appStricmp( **(*(FString**)A), **(*(FString**)B) );
-}
-
-//
-// System manager.
-//
-#pragma warning (push)
-#pragma warning (disable : 4717)
-static void Recurse(UBOOL B)
-{
-	guard(Recurse);
-
-	if(B)
-		Recurse(B);
-
-	unguard;
-}
-#pragma warning (pop)
-USystem::USystem()
-:	SavePath	( E_NoInit )
-,	CachePath	( E_NoInit )
-,	CacheExt	( E_NoInit )
-,	Paths		( E_NoInit )
-,	Suppress	( E_NoInit )
-,   CacheRecordPath( E_NoInit )
-,	MusicPath	( E_NoInit )
-,	SpeechPath	( E_NoInit )
-// amb ---
-,   LicenseeMode (1) 
-// --- amb
-{}
-void USystem::StaticConstructor()
-{
-	guard(USystem::StaticConstructor);
-
-	new(GetClass(),TEXT("PurgeCacheDays"),      RF_Public)UIntProperty   (CPP_PROPERTY(PurgeCacheDays    ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("SavePath"),            RF_Public)UStrProperty   (CPP_PROPERTY(SavePath          ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("CacheExt"),            RF_Public)UStrProperty   (CPP_PROPERTY(CacheExt          ), TEXT("Options"), CPF_Config );
-	new(GetClass(),TEXT("SpeechPath"),          RF_Public)UStrProperty   (CPP_PROPERTY(SpeechPath        ), TEXT("Options"), CPF_Config );
-
-	UArrayProperty* A = new(GetClass(),TEXT("Paths"),RF_Public)UArrayProperty( CPP_PROPERTY(Paths), TEXT("Options"), CPF_Config );
-	A->Inner = new(A,TEXT("StrProperty0"),RF_Public)UStrProperty;
-
-	UArrayProperty* B = new(GetClass(),TEXT("Suppress"),RF_Public)UArrayProperty( CPP_PROPERTY(Suppress), TEXT("Options"), CPF_Config );
-	B->Inner = new(B,TEXT("NameProperty0"),RF_Public)UNameProperty;
-
-	UArrayProperty* C = new(GetClass(),TEXT("CacheRecordPath"),RF_Public)UArrayProperty( CPP_PROPERTY(CacheRecordPath), TEXT("Options"), CPF_Config );
-	C->Inner = new(C,TEXT("StrProperty1"),RF_Public)UStrProperty;
-
-	UArrayProperty* D = new(GetClass(),TEXT("MusicPath"),RF_Public)UArrayProperty( CPP_PROPERTY(MusicPath), TEXT("Options"), CPF_Config );
-	D->Inner = new(D,TEXT("StrProperty2"),RF_Public)UStrProperty;
-
-	unguard;
-}
-UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
+UBOOL appPlatformExec( const TCHAR* Cmd, FOutputDevice& Ar )
 {
 	if( ParseCommand(&Cmd,TEXT("MEMSTAT")) )
 	{
@@ -204,11 +138,6 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		GlobalMemoryStatus(&B);
 		Ar.Logf( TEXT("Memory available: Phys=%iK/%iK Pagef=%iK/%iK Virt=%iK/%iK"), B.dwAvailPhys/1024, B.dwTotalPhys/1024, B.dwAvailPageFile/1024, B.dwTotalPageFile/1024, B.dwAvailVirtual/1024, B.dwTotalVirtual/1024 );
 		Ar.Logf( TEXT("Memory load = %i%%"), B.dwMemoryLoad );
-		return 1;
-	}
-	else if( ParseCommand(&Cmd,TEXT("CONFIGHASH")) )
-	{
-		GConfig->Dump( Ar );
 		return 1;
 	}
 	else if( ParseCommand( &Cmd, TEXT("RELAUNCH") ) )
@@ -223,82 +152,16 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 		}
 		else Params = 0;
 
-		PTRINT	Result;
-#if UNICODE
-		if( !GUnicodeOS )
-		{
-			ANSICHAR ThisFile[256];
-			GetModuleFileNameA( NULL, ThisFile, ARRAY_COUNT(ThisFile) );
-			debugf( TEXT("GetModuleFileName returned %s"), appFromAnsi(ThisFile) );
-			Result = (PTRINT)ShellExecuteA( NULL, "open", ThisFile, Params ? "COMMAND=ServerCommand.txt" : "", TCHAR_TO_ANSI(appBaseDir()), SW_SHOWNORMAL );
-		}
-		else
-#endif
-		{
-			TCHAR ThisFile[256];
-			GetModuleFileName( NULL, ThisFile, ARRAY_COUNT(ThisFile) );
-			debugf( TEXT("GetModuleFileName returned %s"), ThisFile );
-			Result = (PTRINT)ShellExecute( NULL, TEXT("open"), ThisFile, Params ? TEXT("COMMAND=ServerCommand.txt") : TEXT(""), appBaseDir(), SW_SHOWNORMAL );
-		}
+		TCHAR ThisFile[256];
+		GetModuleFileName( NULL, ThisFile, ARRAY_COUNT(ThisFile) );
+		debugf( TEXT("GetModuleFileName returned %s"), ThisFile );
+		PTRINT Result = (PTRINT)ShellExecute( NULL, TEXT("open"), ThisFile, Params ? TEXT("COMMAND=ServerCommand.txt") : TEXT(""), appBaseDir(), SW_SHOWNORMAL );
 		debugf(TEXT("ShellExecute result: %i"),(INT) Result);
 		appRequestExit( 0 );
 		return 1;
 	}
-	else if( ParseCommand( &Cmd, TEXT("DEBUG") ) )
-	{
-		if( ParseCommand(&Cmd,TEXT("CRASH")) )
-		{
-			appErrorf( TEXT("%s"), TEXT("Unreal crashed at your request") );
-			return 1;
-		}
-		else if( ParseCommand(&Cmd,TEXT("SLEEP")) )
-		{
-			debugf( TEXT("Sleeping") );
-			appSleep(3);
-			return 1;
-		}
-		else if( ParseCommand( &Cmd, TEXT("GPF") ) )
-		{
-			Ar.Log( TEXT("Unreal crashing with voluntary GPF") );
-			*(int *)NULL = 123;
-			return 1;
-		}
-		else if( ParseCommand( &Cmd, TEXT("RECURSE") ) )
-		{
-			Ar.Logf( TEXT("Recursing") );
-			Recurse(1);
-			return 1;
-		}
-		else if( ParseCommand( &Cmd, TEXT("EATMEM") ) )
-		{
-			Ar.Log( TEXT("Eating up all available memory") );
-			while( 1 )
-			{
-				void* Eat = appMalloc(65536,TEXT("EatMem"));
-				memset( Eat, 0, 65536 );
-			}
-			return 1;
-		}
-		else return 0;
-	}
-	else if( ParseCommand(&Cmd,TEXT("DIR")) )		// DIR [path\pattern]
-	{
-		for( INT Pass=0; Pass<2; Pass++ )
-		{
-			TArray<FString> Names = GFileManager->FindFiles( Cmd, Pass, !Pass );
-			TArray<FString*> Sorted;
-			for( INT x=0; x<Names.Num(); x++ )
-				Sorted.AddItem( &Names(x) );
-			if( Sorted.Num() )
-				appQsort( &Sorted(0), Sorted.Num(), sizeof(FString*), StringCompare );
-			for( INT x=0; x<Sorted.Num(); x++ )
-				Ar.Logf( Pass ? TEXT("%s") : TEXT("[%s]"), **Sorted(x) );
-		}
-		return 1;
-	}
 	else return 0;
 }
-IMPLEMENT_CLASS(USystem);
 
 /*-----------------------------------------------------------------------------
 	DLLs.
@@ -333,7 +196,7 @@ static void* GetDllHandleHelper( const TCHAR* Filename )
     }
 #endif
 
-	return TCHAR_CALL_OS(LoadLibraryW(Filename),LoadLibraryA(TCHAR_TO_ANSI(Filename)));
+	return LoadLibraryW(Filename);
 }
 
 CORE_API void* appGetDllHandle( const TCHAR* Filename )
@@ -407,26 +270,6 @@ CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... )
 	unguard;
 }
 
-// Interface for recording loading errors in the editor
-CORE_API const void EdClearLoadErrors()
-{
-	GEdLoadErrors.Empty();
-}
-
-CORE_API const void EdLoadErrorf( INT Type, const TCHAR* Fmt, ... )
-{
-	TCHAR TempStr[4096]=TEXT("");
-	GET_VARARGS( TempStr, ARRAY_COUNT(TempStr), Fmt, Fmt );
-
-	// Check to see if this error already exists ... if so, don't add it.
-	// NOTE : for some reason, I can't use AddUniqueItem here or it crashes
-	for( INT x = 0 ; x < GEdLoadErrors.Num() ; ++x )
-		if( GEdLoadErrors(x) == FEdLoadError( Type, TempStr ) )
-			return;
-
-	new( GEdLoadErrors )FEdLoadError( Type, TempStr );
-}
-
 //
 // Break the debugger.
 //
@@ -442,92 +285,10 @@ void appDebugBreak()
 //
 UBOOL appIsDebuggerPresent()
 {
-	UBOOL Result = 0;
-    OSVERSIONINFO WinVersion;
-    WinVersion.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-    // IsDebuggerPresent doesn't exist under 95, so we will only test for it under NT+
-    if( GetVersionEx(&WinVersion) && WinVersion.dwPlatformId == VER_PLATFORM_WIN32_NT)
-    {
-        HINSTANCE KernLib =  LoadLibraryEx( TEXT("kernel32.dll"), NULL, 0);
-        if( KernLib )
-        {
-            FARPROC lIsDebuggerPresent = GetProcAddress( KernLib, "IsDebuggerPresent" );
-            if( lIsDebuggerPresent && lIsDebuggerPresent() )
-                Result = 1;
-
-            FreeLibrary( KernLib ); // gam
-        }
-    }
-	return Result;
+	return IsDebuggerPresent();
 }
 
 
-
-/*-----------------------------------------------------------------------------
-	Timing.
------------------------------------------------------------------------------*/
-
-//
-// Get time in seconds. Origin is arbitrary.
-//
-#if !DEFINED_appSeconds
-CORE_API DOUBLE appSeconds()
-{
-	static LARGE_INTEGER Frequency, Start;
-	if( !Frequency.QuadPart )
-	{
-		QueryPerformanceFrequency( &Frequency );
-		QueryPerformanceCounter( &Start );
-	}
-	LARGE_INTEGER Counter;
-	QueryPerformanceCounter( &Counter );
-	return (DOUBLE)(Counter.QuadPart - Start.QuadPart) / (DOUBLE)Frequency.QuadPart;
-}
-#endif
-
-//
-// Return performance counter ticks passed. Origin is arbitrary.
-//
-CORE_API DWORD appCycles()
-{
-	LARGE_INTEGER Counter;
-	QueryPerformanceCounter( &Counter );
-	return Counter.LowPart;
-}
-
-//
-// Sleep this thread for Seconds, 0.0 means release the current
-// timeslice to let other threads get some attention.
-//
-CORE_API void appSleep( FLOAT Seconds )
-{
-	guard(appSleep);
-	Sleep( (DWORD)(Seconds * 1000.0) );
-	unguard;
-}
-
-//
-// Return the system time.
-//
-CORE_API void appSystemTime( INT& Year, INT& Month, INT& DayOfWeek, INT& Day, INT& Hour, INT& Min, INT& Sec, INT& MSec )
-{
-	guard(appSystemTime);
-
-	SYSTEMTIME st;
-	GetLocalTime( &st );
-
-	Year		= st.wYear;
-	Month		= st.wMonth;
-	DayOfWeek	= st.wDayOfWeek;
-	Day			= st.wDay;
-	Hour		= st.wHour;
-	Min			= st.wMinute;
-	Sec			= st.wSecond;
-	MSec		= st.wMilliseconds;
-
-	unguard;
-}
 
 /*-----------------------------------------------------------------------------
 	Link functions.
@@ -542,7 +303,7 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 {
 	guard(appLaunchURL);
 
-	PTRINT Code = (PTRINT)TCHAR_CALL_OS(ShellExecuteW(NULL,TEXT("open"),URL,Parms?Parms:TEXT(""),TEXT(""),SW_SHOWNORMAL),ShellExecuteA(NULL,"open",TCHAR_TO_ANSI(URL),Parms?TCHAR_TO_ANSI(Parms):"","",SW_SHOWNORMAL));
+	PTRINT Code = (PTRINT)ShellExecuteW(NULL,TEXT("open"),URL,Parms?Parms:TEXT(""),TEXT(""),SW_SHOWNORMAL);
 	if( Error )
 		*Error = Code<=32 ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
 	unguard;
@@ -563,28 +324,14 @@ void *appCreateProc( const TCHAR* URL, const TCHAR* Parms )
 	Attr.lpSecurityDescriptor = NULL;
 	Attr.bInheritHandle = TRUE;
 
-#if UNICODE
-	if( GUnicode && !GUnicodeOS )
-	{
-		STARTUPINFOA StartupInfoA = { sizeof(STARTUPINFO), NULL, NULL, NULL,
-			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-			NULL, NULL, NULL, NULL, SW_HIDE, NULL, NULL,
-			NULL, NULL, NULL };
-		if( !CreateProcessA( NULL, TCHAR_TO_ANSI(CommandLine), &Attr, &Attr, TRUE, DETACHED_PROCESS | REALTIME_PRIORITY_CLASS,
-			NULL, NULL, &StartupInfoA, &ProcInfo ) )
-			return NULL;
-	}
-	else
-#endif
-	{
-		STARTUPINFO StartupInfo = { sizeof(STARTUPINFO), NULL, NULL, NULL,
-			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-			NULL, NULL, NULL, NULL, SW_HIDE, NULL, NULL,
-			NULL, NULL, NULL };
-		if( !CreateProcess( NULL, CommandLine, &Attr, &Attr, TRUE, DETACHED_PROCESS | REALTIME_PRIORITY_CLASS,
-			NULL, NULL, &StartupInfo, &ProcInfo ) )
-			return NULL;
-	}
+	STARTUPINFO StartupInfo = { sizeof(STARTUPINFO), NULL, NULL, NULL,
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+		NULL, NULL, NULL, NULL, SW_HIDE, NULL, NULL,
+		NULL, NULL, NULL };
+	if( !CreateProcess( NULL, CommandLine, &Attr, &Attr, TRUE, DETACHED_PROCESS | REALTIME_PRIORITY_CLASS,
+		NULL, NULL, &StartupInfo, &ProcInfo ) )
+		return NULL;
+
 	return (void*)ProcInfo.hProcess;
 
 	unguard;
@@ -595,121 +342,6 @@ UBOOL appGetProcReturnCode( void* ProcHandle, INT* ReturnCode )
 	guard(appGetProcReturnCode);
 	return GetExitCodeProcess( (HANDLE)ProcHandle, (DWORD*)ReturnCode ) && *((DWORD*)ReturnCode) != STILL_ACTIVE;
 	unguard;
-}
-
-/*-----------------------------------------------------------------------------
-	File finding.
------------------------------------------------------------------------------*/
-
-//
-// Clean out the file cache.
-//
-INT GetFileAgeDays( const TCHAR* Filename )
-{
-	guard(GetFileAgeDays);
-	struct _stat Buf;
-	INT Result = 0;
-#if UNICODE
-	if( GUnicodeOS )
-	{
-		Result = _wstat(Filename,&Buf);
-	}
-	else
-#endif
-	{
-		Result = _stat(TCHAR_TO_ANSI(Filename),&Buf);
-	}
-	if( Result==0 )
-	{
-		time_t CurrentTime, FileTime;
-		FileTime = Buf.st_mtime;
-		time( &CurrentTime );
-		DOUBLE DiffSeconds = difftime( CurrentTime, FileTime );
-		return DiffSeconds / 60.0 / 60.0 / 24.0;
-	}
-	return 0;
-	unguard;
-}
-
-CORE_API void appCleanFileCache()
-{
-	guard(appCleanFileCache);
-	// Delete all temporary files.
-	guard(DeleteTemps);
-	FString Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("*.tmp"), *GSys->CachePath );
-	TArray<FString> Found = GFileManager->FindFiles( *Temp, 1, 0 );
-	for( INT i=0; i<Found.Num(); i++ )
-	{
-		Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("%s"), *GSys->CachePath, *Found(i) );
-		debugf( TEXT("Deleting temporary file: %s"), *Temp );
-		GFileManager->Delete( *Temp );
-	}
-	unguard;
-
-	// Delete cache files that are no longer wanted.
-	guard(DeleteExpired);
-	TArray<FString> Found = GFileManager->FindFiles( *(GSys->CachePath * TEXT("*") + GSys->CacheExt), 1, 0 );
-	if( GSys->PurgeCacheDays )
-	{
-		for( INT i=0; i<Found.Num(); i++ )
-		{
-			FString Temp = FString::Printf( TEXT("%s") PATH_SEPARATOR TEXT("%s"), *GSys->CachePath, *Found(i) );
-			INT DiffDays = GetFileAgeDays( *GFileManager->ExpandPath(*Temp) );
-			if( DiffDays > GSys->PurgeCacheDays )
-			{
-				debugf( TEXT("Purging outdated file from cache: %s (%i days old)"), *Temp, DiffDays );
-				GFileManager->Delete( *Temp );
-			}
-		}
-	}
-	unguard;
-	unguard;
-}
-
-/*-----------------------------------------------------------------------------
-	File Streaming.
------------------------------------------------------------------------------*/
-#pragma pack (push,8)
-#include "vorbis/codec.h"
-#include "vorbis/vorbisfile.h"
-#pragma pack (pop)
-
-
-FCriticalSection::FCriticalSection()
-{
-	guard(FCriticalSection::FCriticalSection);
-	Handle = new CRITICAL_SECTION;
-	InitializeCriticalSection( (CRITICAL_SECTION*) Handle );
-	unguard;
-}
-
-FCriticalSection::~FCriticalSection() noexcept(false)
-{
-	guard(FCriticalSection::~FCriticalSection);
-	DeleteCriticalSection( (CRITICAL_SECTION*) Handle );
-	delete (CRITICAL_SECTION*) Handle;
-	unguard;
-}
-
-void FCriticalSection::Lock()
-{
-	EnterCriticalSection( (CRITICAL_SECTION*) Handle );
-}
-
-void FCriticalSection::Unlock()
-{
-	LeaveCriticalSection( (CRITICAL_SECTION*) Handle );
-}
-
-FScopeCriticalSection::FScopeCriticalSection( FCriticalSection* InCriticalSection )
-{
-	CriticalSection = InCriticalSection;
-	CriticalSection->Lock();
-}
-
-FScopeCriticalSection::~FScopeCriticalSection()
-{
-	CriticalSection->Unlock();
 }
 
 /*-----------------------------------------------------------------------------
@@ -742,18 +374,8 @@ CORE_API const TCHAR* appBaseDir()
 	if( !Result[0] )
 	{
 		// Get directory this executable was launched from.
-#if UNICODE
-		if( GUnicode && !GUnicodeOS )
-		{
-			ANSICHAR ACh[256];
-			GetModuleFileNameA( hInstance, ACh, ARRAY_COUNT(ACh) );
-			MultiByteToWideChar( CP_ACP, 0, ACh, -1, Result, ARRAY_COUNT(Result) );
-		}
-		else
-#endif
-		{
-			GetModuleFileName( hInstance, Result, ARRAY_COUNT(Result) );
-		}
+		GetModuleFileName( hInstance, Result, ARRAY_COUNT(Result) );
+
 		INT i;
 		for( i=appStrlen(Result)-1; i>0; i-- )
 			if( Result[i-1]==PATH_SEPARATOR[0] || Result[i-1]=='/' )
@@ -772,18 +394,8 @@ CORE_API const TCHAR* appComputerName()
 	if( !Result[0] )
 	{
 		DWORD Size=ARRAY_COUNT(Result);
-#if UNICODE
-		if( GUnicode && !GUnicodeOS )
-		{
-			ANSICHAR ACh[ARRAY_COUNT(Result)];
-			GetComputerNameA( ACh, &Size );
-			MultiByteToWideChar( CP_ACP, 0, ACh, -1, Result, ARRAY_COUNT(Result) );
-		}
-		else
-#endif
-		{
-			GetComputerName( Result, &Size );
-		}
+		GetComputerName( Result, &Size );
+
 		TCHAR *c, *d;
 		for( c=Result, d=Result; *c!=0; c++ )
 			if( appIsAlnum(*c) )
@@ -802,18 +414,8 @@ CORE_API const TCHAR* appUserName()
 	if( !Result[0] )
 	{
 		DWORD Size=ARRAY_COUNT(Result);
-#if UNICODE
-		if( GUnicode && !GUnicodeOS )
-		{
-			ANSICHAR ACh[ARRAY_COUNT(Result)];
-			GetUserNameA( ACh, &Size );
-			MultiByteToWideChar( CP_ACP, 0, ACh, -1, Result, ARRAY_COUNT(Result) );
-		}
-		else
-#endif
-		{
-			GetUserName( Result, &Size );
-		}
+		GetUserName( Result, &Size );
+
 		TCHAR *c, *d;
 		for( c=Result, d=Result; *c!=0; c++ )
 			if( appIsAlnum(*c) )
@@ -826,37 +428,31 @@ CORE_API const TCHAR* appUserName()
 
 CORE_API ANSICHAR GModule[32];
 
+// The rest of the line as typed. Rebuilding it from argv would lose the quoting Parse reads, and argv is in the ANSI code page.
+CORE_API void appArgsToCmdLine( INT argc, char** argv, INT First, TCHAR* Out, INT MaxLen )
+{
+	const TCHAR* Ch = GetCommandLineW();
+	for( INT i=0; i<First; i++ )
+	{
+		while( appIsSpace(*Ch) )
+			Ch++;
+		for( UBOOL Quoted=0; *Ch && (Quoted || !appIsSpace(*Ch)); Ch++ )
+			if( *Ch=='\"' )
+				Quoted = !Quoted;
+	}
+	while( appIsSpace(*Ch) )
+		Ch++;
+	appStrncpy( Out, Ch, MaxLen );
+}
+
+
 // Get launch package base name.
 CORE_API const TCHAR* appPackage()
 {
 	guard(appPackage);
-	static TCHAR Result[256]=TEXT("");
-	if( !Result[0] && GModule[0] )
-		appStrcpy( Result, ANSI_TO_TCHAR(GModule) );
-	if( !Result[0] )
-	{
-		TCHAR Tmp[256], *End=Tmp;
-#if UNICODE
-		if( GUnicode && !GUnicodeOS )
-		{
-			ANSICHAR ACh[ARRAY_COUNT(Result)];
-			GetModuleFileNameA( NULL, ACh, ARRAY_COUNT(ACh) );
-			MultiByteToWideChar( CP_ACP, 0, ACh, -1, Tmp, ARRAY_COUNT(Tmp) );
-		}
-		else
-#endif
-		{
-			GetModuleFileName( NULL, Tmp, ARRAY_COUNT(Tmp) );
-		}
-		while( appStrchr(End,PATH_SEPARATOR[0]) )
-			End = appStrchr(End,PATH_SEPARATOR[0])+1;
-		while( appStrchr(End,'/') )
-			End = appStrchr(End,'/')+1;
-		if( appStrchr(End,'.') )
-			*appStrchr(End,'.') = 0;
-		appStrcpy( Result, End );
-	}
-	return Result;
+	// Every launcher sets the module name
+	static TCHAR Result[256];
+	return appStrcpy( Result, ANSI_TO_TCHAR(GModule) );
 	unguard;
 }
 
@@ -874,76 +470,14 @@ void appPlatformPreInit()
 	// This also has the undocumented side effect of affecting sleep granularity on current versions of Windows.
 	timeBeginPeriod( 1 );
 
-	// Check Windows version.
-	guard(GetWindowsVersion);
-	DWORD dwPlatformId, dwMajorVersion, dwMinorVersion, dwBuildNumber;
-#if UNICODE
-	if( GUnicode && !GUnicodeOS )
-	{
-		OSVERSIONINFOA Version;
-		Version.dwOSVersionInfoSize = sizeof(OSVERSIONINFOA);
-		GetVersionExA(&Version);
-		dwPlatformId   = Version.dwPlatformId;
-		dwMajorVersion = Version.dwMajorVersion;
-		dwMinorVersion = Version.dwMinorVersion;
-		dwBuildNumber  = Version.dwBuildNumber;
-	}
-	else
-#endif
-	{
-		OSVERSIONINFO Version;
-		Version.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-		GetVersionEx(&Version);
-		dwPlatformId   = Version.dwPlatformId;
-		dwMajorVersion = Version.dwMajorVersion;
-		dwMinorVersion = Version.dwMinorVersion;
-		dwBuildNumber  = Version.dwBuildNumber;
-	}
-	if( dwPlatformId==VER_PLATFORM_WIN32_NT )
-	{
-	    if( dwMajorVersion == 5 )
-	    {
-            if( dwMinorVersion == 0 )
-            {
-    		    debugf( NAME_Init, TEXT("Detected: Microsoft Windows 2000 %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber );
-        	    appSprintf( GMachineOS, TEXT("Windows 2000 %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber ); // gam
-				GRunningOS = OS_WIN2K;
-        	}
-            else
-            {
-    		    debugf( NAME_Init, TEXT("Detected: Microsoft Windows XP %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber );
-        	    appSprintf( GMachineOS, TEXT("Windows XP %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber ); // gam
-				GRunningOS = OS_WINXP;
-        	}
-    	}
-    	else
-    	{
-    		debugf( NAME_Init, TEXT("Detected: Microsoft Windows NT %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber );
-        	appSprintf( GMachineOS, TEXT("Windows NT %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber ); // gam
-			GRunningOS = OS_WINNT;
-        }
-
-		GUnicodeOS = 1;
-	}
-	else if( dwPlatformId==VER_PLATFORM_WIN32_WINDOWS && (dwMajorVersion>4 || dwMinorVersion>=10) )
-	{
-		debugf( NAME_Init, TEXT("Detected: Microsoft Windows 98 %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber );
-    	appSprintf( GMachineOS, TEXT("Windows 98 %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber ); // gam
-		GRunningOS = OS_WIN98;
-	}
-	else if( dwPlatformId==VER_PLATFORM_WIN32_WINDOWS )
-	{
-		debugf( NAME_Init, TEXT("Detected: Microsoft Windows 95 %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber );
-    	appSprintf( GMachineOS, TEXT("Windows 95 %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber ); // gam
-		GRunningOS = OS_WIN95;
-	}
-	else
-	{
-		debugf( NAME_Init, TEXT("Detected: Windows %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber );
-    	appSprintf( GMachineOS, TEXT("Windows %u.%u (Build: %u)"), dwMajorVersion, dwMinorVersion, dwBuildNumber ); // gam
-		GRunningOS = OS_UNKNOWN;
-	}
-	unguard;
+	// Every supported Windows is NT to the masters. Without a manifest GetVersionEx reports 6.2 on newer ones.
+	OSVERSIONINFO Version;
+	Version.dwOSVersionInfoSize = sizeof(Version);
+	GetVersionEx( &Version );
+	appSprintf( GMachineOS, TEXT("Windows NT %u.%u (Build: %u)"), Version.dwMajorVersion, Version.dwMinorVersion, Version.dwBuildNumber );
+	debugf( NAME_Init, TEXT("Detected: Microsoft %s"), GMachineOS );
+	GRunningOS = OS_WINNT;
+	GUnicodeOS = 1;
 
 	unguard;
 }
@@ -999,11 +533,6 @@ void appPlatformInit()
 	debugf( NAME_Init, TEXT("CPU Page size=%i, Processors=%i"), SI.dwPageSize, SI.dwNumberOfProcessors );
     appSprintf( GMachineCPU, TEXT("%i processors"), SI.dwNumberOfProcessors );
 	unguard;
-
-	// Performance counter ticks are the cycle unit for appCycles().
-	LARGE_INTEGER Frequency;
-	QueryPerformanceFrequency( &Frequency );
-	GSecondsPerCycle = 1.0 / (DOUBLE)Frequency.QuadPart;
 
 	// Get memory.
 	guard(GetMemory);

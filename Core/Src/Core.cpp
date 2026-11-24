@@ -140,7 +140,7 @@ CORE_API TCHAR					GTrue[64]=TEXT("True");			/* Localized "true" text */
 CORE_API TCHAR					GFalse[64]=TEXT("False");		/* Localized "false" text */
 CORE_API TCHAR					GNone[64]=TEXT("None");			/* Localized "none" text */
 CORE_API TCHAR                  GCdPath[256]=TEXT("");			/* Cd path, if any */
-CORE_API DOUBLE					GSecondsPerCycle=1.0;			/* Seconds per appCycles() tick */
+CORE_API DOUBLE					GSecondsPerCycle=1e-7;			/* Seconds per appCycles() tick */
 CORE_API DOUBLE					GTempDouble=0.0;				/* Used during development for timing */
 CORE_API void					(*GTempFunc)(void*)=NULL;		/* Used during development for debug hooks */
 CORE_API QWORD					GTicks=1;						/* Number of non-persistent ticks thus far in this level, for profiling */
@@ -258,7 +258,8 @@ FString FFileManager::ExpandPath( const TCHAR* Path )
         {
             INT SlashPoint = Max( NewPath.InStr( TEXT("\\"), 1 ), NewPath.InStr( TEXT("/"), 1 ) );
 
-            if( SlashPoint > 0 )
+            // At 0 it is the root of a Unix path, which the dots may reach
+            if( SlashPoint >= 0 )
                 NewPath = NewPath.Left( SlashPoint );
 
             ParsePoint += 3;

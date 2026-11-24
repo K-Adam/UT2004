@@ -21,31 +21,6 @@
 #include "EnginePrivate.h"
 
 /*-----------------------------------------------------------------------------
-	Win32 Registry access
------------------------------------------------------------------------------*/
-
-#if _WIN32
-#define RegOpenKeyX(a,b,c)				TCHAR_CALL_OS(RegOpenKeyW(a,b,c),RegOpenKeyA(a,TCHAR_TO_ANSI(b),c))
-static inline LONG RegQueryValueExX( HKEY hKey, LPCTSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData )
-{
-#if UNICODE
-	if( !GUnicodeOS )
-	{
-		ANSICHAR* ACh = (ANSICHAR*)appAlloca(*lpcbData);
-		LONG Result = RegQueryValueExA( hKey, TCHAR_TO_ANSI(lpValueName), lpReserved, lpType, (BYTE*)ACh, lpcbData );
-		if( Result==ERROR_SUCCESS )
-			MultiByteToWideChar( CP_ACP, 0, ACh, -1, (TCHAR*)lpData, *lpcbData );
-		return Result;
-	}
-	else
-#endif
-	{
-		return RegQueryValueEx( hKey, lpValueName, lpReserved, lpType, lpData, lpcbData );
-	}
-}
-#endif
-
-/*-----------------------------------------------------------------------------
 	GetRealCDKey
 -----------------------------------------------------------------------------*/
 
@@ -71,19 +46,19 @@ static FString GetRealCDKey()
 	if( GConfig->GetString( TEXT("Engine.Engine"), TEXT("Product"), Temp, ARRAY_COUNT(Temp) ) )
 		Product = Temp;
 	HKEY hKey = NULL;
-	bool RegOpened = ( RegOpenKeyX( HKEY_LOCAL_MACHINE, *FString::Printf(TEXT("Software\\Unreal Technology\\Installed Apps\\%s"),*Product), &hKey )==ERROR_SUCCESS );
+	bool RegOpened = ( RegOpenKeyW( HKEY_LOCAL_MACHINE, *FString::Printf(TEXT("Software\\Unreal Technology\\Installed Apps\\%s"),*Product), &hKey )==ERROR_SUCCESS );
 
 // 32-bit installer on the retail disc doesn't have access to root of registry...
 #ifdef _WIN64
 	if (!RegOpened)
-		RegOpened = ( RegOpenKeyX( HKEY_LOCAL_MACHINE, *FString::Printf(TEXT("Software\\Wow6432Node\\Unreal Technology\\Installed Apps\\%s"),*Product), &hKey )==ERROR_SUCCESS );
+		RegOpened = ( RegOpenKeyW( HKEY_LOCAL_MACHINE, *FString::Printf(TEXT("Software\\Wow6432Node\\Unreal Technology\\Installed Apps\\%s"),*Product), &hKey )==ERROR_SUCCESS );
 #endif
 
 	if (RegOpened)
 	{
 		TCHAR Buffer[4096]=TEXT("");
 		DWORD Type=REG_SZ, BufferSize=sizeof(Buffer);
-		if( RegQueryValueExX( hKey, TEXT("CDKey"), 0, &Type, (BYTE*)Buffer, &BufferSize )==ERROR_SUCCESS && Type==REG_SZ )
+		if( RegQueryValueExW( hKey, TEXT("CDKey"), 0, &Type, (BYTE*)Buffer, &BufferSize )==ERROR_SUCCESS && Type==REG_SZ )
 		{
 			// force the intermediate characters in the cdkey to be -'s.
 			if( appStrlen(Buffer) >= 23 )

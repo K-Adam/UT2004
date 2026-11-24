@@ -413,7 +413,7 @@ void UGUIController::execLaunchURL( FFrame& Stack, RESULT_DECL )
 		return;
 	}
 
-	if (TargetURL.Caps().Left(7) != TEXT("HTTP://") )
+	if (TargetURL.Caps().Left(7) != TEXT("HTTP://") && TargetURL.Caps().Left(8) != TEXT("HTTPS://") )
 	{
 		GWarn->Logf(TEXT("Bad URL [%s]"), *TargetURL);
 		return;
@@ -421,8 +421,11 @@ void UGUIController::execLaunchURL( FFrame& Stack, RESULT_DECL )
 
 	guard(ExternalURL);
 
+	// The browser opens beside the game. On Android it takes the screen, and the toggle would be saved to the ini.
+#if !__ANDROID__
 	if ( Master->Client->Viewports(0)->IsFullscreen() )
 		Master->Client->Viewports(0)->Exec(TEXT("togglefullscreen"));
+#endif
 
 	appLaunchURL( *TargetURL, TEXT("") );
 
