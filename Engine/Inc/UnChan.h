@@ -147,6 +147,10 @@ class ENGINE_API UActorChannel : public UChannel
 	void SetChannelActor( AActor* InActor );
 };
 
+// Server side rules for remote calls.
+ENGINE_API void ProcessClientCall( APawn*& MarginPawn, AActor* Actor, UFunction* Function, BYTE* Parms );
+ENGINE_API void FilterRemoteCall( APlayerController* Receiver, UFunction* Function, BYTE* Parms );
+
 /*-----------------------------------------------------------------------------
 	File transfer channel.
 -----------------------------------------------------------------------------*/

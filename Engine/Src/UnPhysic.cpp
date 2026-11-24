@@ -32,6 +32,12 @@ void AActor::execAutonomousPhysics( FFrame& Stack, RESULT_DECL )
 	Acceleration.Y = 0.1f * int(10 * Acceleration.Y);
 	Acceleration.Z = 0.1f * int(10 * Acceleration.Z);
 
+	// Some ServerMove states pass the client's time gap through uncapped.
+	APawn* P = Cast<APawn>(this);
+	APlayerController* PC = P ? Cast<APlayerController>(P->Controller) : NULL;
+	if( Role==ROLE_Authority && PC && !P->IsLocallyControlled() )
+		DeltaSeconds = Min( DeltaSeconds, PC->MaxResponseTime );
+
 	// Perform physics.
 	if( Physics!=PHYS_None )
 		performPhysics( DeltaSeconds );

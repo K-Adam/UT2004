@@ -92,6 +92,7 @@ class ENGINE_API UNetConnection : public UPlayer
 	INT				TickCount;				// Count of ticks.
 	UBOOL			PassedChallenge;		// Whether client has passed the challenge/response mechanism.
 	UBOOL			ChallengeSent;			// Until then Challenge is zero and its response a known constant.
+	APawn*			MarginPawn;				// Pawn whose acknowledgement last reset the speed check, only compared.
 
 	// Merge info.
 	FBitWriterMark  LastStart;				// Most recently sent bunch start.

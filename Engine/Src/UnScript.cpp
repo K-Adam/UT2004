@@ -3018,6 +3018,8 @@ static inline void InternalProcessRemoteFunction
 			Stack->Step( Stack->Object, (BYTE*)Parms + It->Offset );
 		checkSlow(*Stack->Code==EX_EndFunctionParms);
 	}
+	if( IsServer )
+		FilterRemoteCall( Connection->Actor, Function, (BYTE*)Parms );
 	for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(Function); It && (It->PropertyFlags & (CPF_Parm|CPF_ReturnParm))==CPF_Parm; ++It )
 	{
 		if( Connection->PackageMap->ObjectToIndex(*It)!=INDEX_NONE )

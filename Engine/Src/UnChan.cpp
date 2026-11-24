@@ -1034,7 +1034,10 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 			{
 				// The bClientDemoNetFunc flag gets cleared in ProcessDemoRecFunction
 				Actor->bClientDemoNetFunc = 1;
-				Actor->ProcessEvent( Function, Parms );
+				if( Connection->Driver->ServerConnection )
+					Actor->ProcessEvent( Function, Parms );
+				else
+					ProcessClientCall( Connection->MarginPawn, Actor, Function, Parms );
 			}
 
 			// Destroy the parameters.

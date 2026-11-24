@@ -19,6 +19,23 @@ function bool AdminLogin( PlayerController P, string Username, string Password )
 	return bOk;
 }
 
+function int CheckID( string CDHash )
+{
+	if ( class'BanList'.static.IsSharedID(CDHash) )
+		return 0;
+	return Super.CheckID(CDHash);
+}
+
+function bool BanPlayer( PlayerController C, optional bool bSession )
+{
+	return class'BanList'.static.BanPlayer(self, C, bSession);
+}
+
+function bool KickBanPlayer( PlayerController P )
+{
+	return class'BanList'.static.KickBanPlayer(self, P);
+}
+
 event PreLogin( string Options, string Address, string PlayerID, out string Error, out string FailCode, bool bSpectator )
 {
 	if ( Throttle.PreLoginBlocked(self, Options, Address, Error, FailCode) )

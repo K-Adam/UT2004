@@ -11,6 +11,28 @@ Revision history:
 
 IMPLEMENT_CLASS(ASecurity);
 
+static const TCHAR* BaseName( const TCHAR* Path )
+{
+	const TCHAR* Base = Path;
+	for( ; *Path; Path++ )
+		if( *Path=='/' || *Path=='\\' )
+			Base = Path+1;
+	return Base;
+}
+
+// Only a loaded package is hashed, from where it was loaded, so a server can't probe other files on the client's disk.
+static FString LoadedPackageFile( const TCHAR* Path )
+{
+	TArray<UObject*> Loaders = UObject::GetLoaderList();
+	for( INT i=0; i<Loaders.Num(); i++ )
+	{
+		const FString& File = CastChecked<ULinker>( Loaders(i) )->Filename;
+		if( !appStricmp( BaseName(*File), BaseName(Path) ) )
+			return File;
+	}
+	return TEXT("");
+}
+
 //
 // Perform various aspects of Cheat Protection
 //
@@ -85,7 +107,8 @@ void ASecurity::execNativePerform( FFrame& Stack, RESULT_DECL )
 
 		case 2:	// Return a full MD5 on a file
 			{
-				FArchive* MD5Ar = GFileManager->CreateFileReader( *Param1 );
+				FString File = LoadedPackageFile( *Param1 );
+				FArchive* MD5Ar = File.Len() ? GFileManager->CreateFileReader( *File ) : NULL;
 				int BytesToRead;
 				if( !MD5Ar )
 				{
@@ -263,7 +286,9 @@ void ASecurity::execLocalPerform( FFrame& Stack, RESULT_DECL )
 
 		case 2:	// Return a full MD5 on a file
 			{
-				FArchive* MD5Ar = GFileManager->CreateFileReader( *Param1 );
+				// Downloaded script runs this on clients, a dedicated server may hash its own files.
+				FString File = GIsClient ? LoadedPackageFile( *Param1 ) : Param1;
+				FArchive* MD5Ar = File.Len() ? GFileManager->CreateFileReader( *File ) : NULL;
 				int BytesToRead;
 				if( !MD5Ar )
 				{
@@ -378,7 +403,7 @@ void ASecurity::execLocalPerform( FFrame& Stack, RESULT_DECL )
 				UGameEngine* GE = Cast<UGameEngine>(XLevel->Engine);
 				for (INT j=0;j<GE->PackageValidation.Num();j++)
 				{
-					if (GE->PackageValidation(j)->PackageID = Guid)
+					if (GE->PackageValidation(j)->PackageID == Guid)
 					{
 						for (INT k=0;k<GE->PackageValidation(j)->AllowedIDs.Num(); k++)
 						{
@@ -423,4 +448,6 @@ void ASecurity::execLocalPerform( FFrame& Stack, RESULT_DECL )
 
 	unguardexec;
 }
+// AntiTCC servers call it on their mutator, and it reads nothing an Actor lacks.
+static BYTE GLocalPerformOnActors = GRegisterNative( INDEX_NONE, (Native)&ASecurity::execLocalPerform, &AActor::StaticClass );
 

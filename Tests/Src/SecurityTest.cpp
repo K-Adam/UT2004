@@ -8,6 +8,8 @@
 #pragma pack(pop)
 
 #include "TestEngine.h"
+#include "UnNet.h"
+#include "UnLinker.h"
 
 static FString Repeat( const TCHAR* Text, INT Count )
 {
@@ -777,6 +779,168 @@ TEST( Security, ForgedPackageIsRepairedOnLoad )
 	EXPECT_TRUE( Object->GetStateFrame()->Node==Plain );
 	EXPECT_TRUE( Object->GetStateFrame()->StateNode==Plain );
 	EXPECT_TRUE( TakeRefusal( Package ) );
+}
+
+static UClass* LoadActorClass( const TCHAR* Name )
+{
+	return UObject::StaticLoadClass( AActor::StaticClass(), NULL, Name, NULL, LOAD_NoWarn, NULL );
+}
+
+// Spawning one would log it into the running game.
+static APlayerController* NewRemotePlayer( APawn* Pawn )
+{
+	APlayerController* PC = ConstructObject<APlayerController>( APlayerController::StaticClass() );
+	PC->PlayerReplicationInfo = ConstructObject<APlayerReplicationInfo>( APlayerReplicationInfo::StaticClass() );
+	PC->XLevel = GTestEngine->GLevel;
+	PC->Level = GTestEngine->GLevel->GetLevelInfo();
+	if( Pawn )
+	{
+		PC->Pawn = Pawn;
+		Pawn->Controller = PC;
+	}
+	return PC;
+}
+
+static APawn* SpawnPawn()
+{
+	ULevel* Level = GTestEngine->GLevel;
+	FVector Start( 0, 0, 0 );
+	for( INT i=0; i<Level->Actors.Num(); i++ )
+		if( Level->Actors(i) && Level->Actors(i)->IsA( APlayerStart::StaticClass() ) )
+		{
+			Start = Level->Actors(i)->Location;
+			break;
+		}
+	return (APawn*)Level->SpawnActor( LoadActorClass( TEXT("XGame.xPawn") ), NAME_None, Start, FRotator(0,0,0), NULL, 1 );
+}
+
+TEST( Security, RemoteCallsThatResetTheSpeedCheck )
+{
+	APawn* Pawn = SpawnPawn();
+	ASSERT_TRUE( Pawn );
+	APlayerController* PC = NewRemotePlayer( Pawn );
+
+	// Running ahead of the server, as a speed hack does.
+	const FLOAT Ahead = 0.5f;
+	UFunction* Ack = PC->FindFunctionChecked( FName(TEXT("ServerAcknowledgePossession")) );
+	BYTE Parms[64] = {};
+	ASSERT_LE( (INT)Ack->ParmsSize, (INT)sizeof(Parms) );
+	APawn* MarginPawn = NULL;
+	auto Acknowledge = [&]( APawn* P )
+	{
+		PC->TimeMargin = Ahead;
+		*(APawn**)Parms = P;
+		ProcessClientCall( MarginPawn, PC, Ack, Parms );
+	};
+	Acknowledge( Pawn );
+	EXPECT_LT( PC->TimeMargin, Ahead ) << "a new pawn must reset the speed check";
+	Acknowledge( Pawn );
+	EXPECT_EQ( Ahead, PC->TimeMargin ) << "a repeated acknowledgement reset the speed check";
+	Acknowledge( NULL );
+	EXPECT_EQ( NULL, PC->AcknowledgedPawn ) << "the call must still run";
+	Acknowledge( Pawn );
+	EXPECT_EQ( Ahead, PC->TimeMargin ) << "acknowledging None in between reset the speed check";
+
+	UFunction* Short = PC->FindFunctionChecked( FName(TEXT("ServerShortTimeout")) );
+	PC->bShortConnectTimeOut = 1;
+	PC->TimeMargin = Ahead;
+	ProcessClientCall( MarginPawn, PC, Short, NULL );
+	EXPECT_EQ( Ahead, PC->TimeMargin ) << "a repeated short timeout reset the speed check";
+
+	Pawn->Controller = NULL;
+	GTestEngine->GLevel->DestroyActor( Pawn );
+}
+
+TEST( Security, BanInfoHidesAddressFromPlayers )
+{
+	UClass* Class = LoadActorClass( TEXT("XGame.xPlayer") );
+	ASSERT_TRUE( Class );
+	UFunction* Function = FindField<UFunction>( Class, TEXT("ClientReceiveBan") );
+	ASSERT_TRUE( Function );
+	const TCHAR Sep[] = { 27, 0 };
+	FString Hash = FString(TEXT("3")) + Sep + TEXT("0123456789abcdef0123456789abcdef") + Sep;
+	FString Parms = Hash + TEXT("192.0.2.7:7777");
+	FilterRemoteCall( NULL, Function, (BYTE*)&Parms );
+	EXPECT_STREQ( TCHAR_TO_ANSI( *(Hash + TEXT("0")) ), TCHAR_TO_ANSI( *Parms ) );
+}
+
+TEST( Security, ServerCapsAutonomousPhysics )
+{
+	APawn* Pawn = SpawnPawn();
+	ASSERT_TRUE( Pawn );
+	APlayerController* PC = NewRemotePlayer( Pawn );
+	Pawn->SetCollision( 0, 0 );
+	Pawn->bCollideWorld = 0;
+	Pawn->setPhysics( PHYS_Flying );
+	FVector Start = Pawn->Location;
+	UFunction* Function = Pawn->FindFunctionChecked( FName(TEXT("AutonomousPhysics")) );
+	auto Move = [&]( FLOAT Seconds )
+	{
+		GTestEngine->GLevel->FarMoveActor( Pawn, Start, 0, 1 );
+		Pawn->Velocity = FVector( 0, 0, 200 );
+		Pawn->Acceleration = FVector( 0, 0, 0 );
+		// ProcessEvent skips numbered natives.
+		BYTE Code[6] = { EX_FloatConst };
+		appMemcpy( Code+1, &Seconds, sizeof(FLOAT) );
+		Code[5] = EX_EndFunctionParms;
+		FFrame Stack( Pawn );
+		Stack.Code = Code;
+		(Pawn->*Function->Func)( Stack, NULL );
+		return Pawn->Location;
+	};
+	FVector Capped = Move( PC->MaxResponseTime );
+	FVector Forged = Move( 5.f );
+	EXPECT_GT( (Capped - Start).Size(), 1.f );
+	EXPECT_LT( (Forged - Capped).Size(), 0.01f ) << "a forged time stamp gap ran unbounded physics";
+
+	Pawn->Controller = NULL;
+	GTestEngine->GLevel->DestroyActor( Pawn );
+}
+
+TEST( Security, FileHashOnlyForLoadedPackages )
+{
+	ASecurity* Security = (ASecurity*)GTestEngine->GLevel->SpawnActor( ASecurity::StaticClass() );
+	ASSERT_TRUE( Security );
+	auto Hash = [&]( const FString& Path )
+	{
+		struct { INT SecType; FString Param1; FString Param2; TArray<FString> Results; } Parms;
+		Parms.SecType = 2;
+		Parms.Param1 = Path;
+		Security->ProcessEvent( Security->FindFunctionChecked( FName(TEXT("LocalPerform")) ), &Parms );
+		return Parms.Results.Num();
+	};
+	// Only a client is restricted.
+	GIsClient = 1;
+	EXPECT_EQ( 0, Hash( TEXT("Default.ini") ) );
+	EXPECT_EQ( 1, Hash( TEXT("Elsewhere/Engine.u") ) );
+	GIsClient = 0;
+	GTestEngine->GLevel->DestroyActor( Security );
+}
+
+// All keyless clients share one ID.
+TEST( Security, KeylessIdIsNeverBanned )
+{
+	// AccessControl has no C++ class.
+	UObject* Access = *(UObject**)&GTestEngine->GLevel->GetLevelInfo()->Game->AccessControl;
+	ASSERT_TRUE( Access && !appStricmp( Access->GetClass()->GetName(), TEXT("FixAccessControl") ) );
+	UArrayProperty* Banned = FindField<UArrayProperty>( Access->GetClass(), TEXT("BannedIDs") );
+	ASSERT_TRUE( Banned );
+	TArray<FString>& IDs = *(TArray<FString>*)((BYTE*)Access + Banned->Offset);
+	TArray<FString> Old = IDs;
+	IDs.Empty();
+	new(IDs)FString( TEXT("0aa1700a23b72d6d8cf32fc70dda27ed Keyless") );
+	new(IDs)FString( TEXT("0123456789abcdef0123456789abcdef Cheater") );
+	auto Check = [&]( const TCHAR* ID )
+	{
+		struct { FString CDHash; INT Result; } Parms;
+		Parms.CDHash = ID;
+		Parms.Result = -1;
+		Access->ProcessEvent( Access->FindFunctionChecked( FName(TEXT("CheckID")) ), &Parms );
+		return Parms.Result;
+	};
+	EXPECT_EQ( 0, Check( TEXT("0aa1700a23b72d6d8cf32fc70dda27ed") ) );
+	EXPECT_EQ( 2, Check( TEXT("0123456789abcdef0123456789abcdef") ) );
+	IDs = Old;
 }
 
 // The query script answers each request in a datagram, the engine caps what one datagram can set off.

@@ -1297,6 +1297,10 @@ void ULevel::NotifyReceivedText( UNetConnection* Connection, const TCHAR* Text )
 		}
 		else if( ParseCommand(&Text,TEXT("AUTH")) )
 		{
+			// The hash is the player ID, fixed once logged in.
+			if( Connection->PassedChallenge )
+				return;
+
 			FString GlobalMD5;
 
             Parse( Text, TEXT("HASH="), Connection->CDKeyHash );

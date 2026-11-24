@@ -12,7 +12,7 @@ set(ENGINE_SRC
   UnModel.cpp UnModelLight.cpp UnMover.cpp UnNavigationPoint.cpp UnNetDrv.cpp UnOctree.cpp
   UnPackageCheckInfo.cpp UnParams.cpp UnParticleEmitter.cpp UnParticleSystem.cpp UnPath.cpp
   UnPawn.cpp UnPenLev.cpp UnPhysic.cpp UnPlayer.cpp UnPlayInfo.cpp UnPrim.cpp UnProjector.cpp
-  UnReach.cpp UnRebuildTools.cpp UnRender.cpp UnRenderBatch.cpp UnRenderBSP.cpp
+  UnReach.cpp UnRebuildTools.cpp UnRemoteCallGuard.cpp UnRender.cpp UnRenderBatch.cpp UnRenderBSP.cpp
   UnRenderEditorActor.cpp UnRenderLight.cpp UnRenderPool.cpp UnRenderResource.cpp
   UnRenderStaticMesh.cpp UnRenderUtil.cpp UnRenderVisibility.cpp UnRoute.cpp UnSceneManager.cpp
   UnScript.cpp UnScriptedTexture.cpp UnSecurity.cpp UnShadowProjector.cpp UnSkeletalMesh.cpp
