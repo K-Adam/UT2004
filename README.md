@@ -19,7 +19,7 @@ The [releases](https://github.com/K-Adam/UT2004/releases) carry a build for each
 |---|---|
 | `UT2004-<version>-win64.msi` | Windows x64 installer, for everyone on the PC or only for you. Remove it under Installed apps. |
 | `UT2004-<version>-win64.zip` | The same without an installer. Unpack it and start `System/UT2004.exe`. |
-| `UT2004-<version>-linux64.tar.gz`, `-linux-arm64.tar.gz` | Linux x64 and arm64, built on Ubuntu 22.04. Unpack it and run `./install.sh` (or `sudo ./install.sh --system` for everyone), then start `ut2004`. The installed folder has an `uninstall.sh`. SDL 3 is included, the other libraries come from your distribution: OpenAL, Vorbis, Bullet, squish, OpenGL ES, speexdsp, OpenSSL and curl. |
+| `UT2004-<version>-linux64.tar.gz`, `-linux-arm64.tar.gz` | Linux x64 and arm64, built on Ubuntu 22.04. Unpack it and run `./install.sh` (or `sudo ./install.sh --system` for everyone), then start `ut2004`. The installed folder has an `uninstall.sh`. SDL 3 is included, the other libraries come from your distribution: OpenAL, Vorbis, Bullet, OpenGL ES, speexdsp, libgomp, OpenSSL and curl. |
 | `UT2004-<version>-android.apk` | Android 9 or newer on arm64. |
 | `UT2004-<version>-web.zip` | The files of the web page. Only the page at `ut2004.dev` gets the hosted content: on another domain the browser blocks the downloads from `assets.ut2004.dev`, and on localhost the page looks for a local content link instead. In both cases it offers to import a zip of a retail install. Only pages on the origins the web master allows get the server list and can host or join games through it. |
 

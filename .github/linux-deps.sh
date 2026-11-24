@@ -4,7 +4,7 @@ set -e
 SUDO=$(command -v sudo || true)
 export DEBIAN_FRONTEND=noninteractive
 $SUDO apt-get update
-$SUDO apt-get install -y --no-install-recommends ca-certificates git cmake patch \
+$SUDO apt-get install -y --no-install-recommends ca-certificates git cmake \
   build-essential ninja-build pkg-config zlib1g-dev libvorbis-dev libopenal-dev libbullet-dev \
   libbullet-extras-dev libgles-dev libsquish-dev libssl-dev libcurl4-openssl-dev nlohmann-json3-dev libspeexdsp-dev libgtest-dev \
   libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev \

@@ -19,6 +19,9 @@ env:
   VCPKG_COMMIT: 4702e381dbbd9b54d3f7e1eb565cd8981c1814cd
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
   VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
+  EMSDK_VERSION: 7.0.0
+  NDK_VERSION: 28.2.13676358
+  WIX_VERSION: 7.0.1
 
 jobs:
   setup:
@@ -81,10 +84,10 @@ jobs:
       matrix:
         include:
           - { name: win64, os: windows-2022, preset: win64, build: win64-release, test: true }
-          - { name: linux64, os: ubuntu-22.04, preset: linux64, build: linux64-release, test: true }
-          - { name: linux-arm64, os: ubuntu-22.04-arm, preset: linux64, build: linux64-release, test: true }
-          - { name: web, os: ubuntu-24.04, preset: web, build: web-release }
-          - { name: android, os: ubuntu-24.04, preset: android-arm64, build: android-arm64-release }
+          - { name: linux64, os: ubuntu-22.04, preset: linux64, build: linux64-release, linux: true, test: true }
+          - { name: linux-arm64, os: ubuntu-22.04-arm, preset: linux64, build: linux64-release, linux: true, test: true }
+          - { name: web, os: ubuntu-24.04, preset: web, build: web-release, ninja: true }
+          - { name: android, os: ubuntu-24.04, preset: android-arm64, build: android-arm64-release, ninja: true }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -99,21 +102,21 @@ jobs:
         run: echo "ARCHIVE=UT2004-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}-${{ matrix.name }}" >> "$GITHUB_ENV"
 
       - name: Linux packages
-        if: startsWith(matrix.name, 'linux')
+        if: matrix.linux
         run: sh .github/linux-deps.sh
       - name: Ninja
-        if: matrix.name == 'web' || matrix.name == 'android'
+        if: matrix.ninja
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
 
       - name: vcpkg cache
-        if: "!startsWith(matrix.name, 'linux')"
+        if: "!matrix.linux"
         uses: actions/cache@v4
         with:
           path: vcpkg-cache
           key: vcpkg-${{ matrix.name }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json', 'triplets/**', 'ports/**') }}
           restore-keys: vcpkg-${{ matrix.name }}-
       - name: vcpkg
-        if: "!startsWith(matrix.name, 'linux')"
+        if: "!matrix.linux"
         run: |
           git clone https://github.com/microsoft/vcpkg
           git -C vcpkg checkout -q $VCPKG_COMMIT
@@ -123,9 +126,9 @@ jobs:
       - name: emsdk
         if: matrix.name == 'web'
         run: |
-          git clone --depth 1 --branch 7.0.0 https://github.com/emscripten-core/emsdk
-          emsdk/emsdk install 7.0.0
-          emsdk/emsdk activate 7.0.0
+          git clone --depth 1 --branch $EMSDK_VERSION https://github.com/emscripten-core/emsdk
+          emsdk/emsdk install $EMSDK_VERSION
+          emsdk/emsdk activate $EMSDK_VERSION
           echo "EMSDK=$PWD/emsdk" >> "$GITHUB_ENV"
 
       - name: JDK
@@ -143,8 +146,8 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" "platforms;android-36" > /dev/null
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "platforms;android-36" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           # Only a release needs the release key, every other build signs with the debug key.
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             # Without the key the release would carry the debug signature, without the digest it would trust whatever the content URL serves.
@@ -158,10 +161,10 @@ jobs:
       - name: WiX
         if: matrix.name == 'win64'
         run: |
-          dotnet tool install --global wix --version 7.0.1
+          dotnet tool install --global wix --version $WIX_VERSION
           echo "$USERPROFILE/.dotnet/tools" >> "$GITHUB_PATH"
           "$USERPROFILE/.dotnet/tools/wix" eula accept wix7
-          "$USERPROFILE/.dotnet/tools/wix" extension add -g WixToolset.UI.wixext/7.0.1 WixToolset.Util.wixext/7.0.1
+          "$USERPROFILE/.dotnet/tools/wix" extension add -g WixToolset.UI.wixext/$WIX_VERSION WixToolset.Util.wixext/$WIX_VERSION
 
       - name: Content
         if: matrix.test
@@ -183,20 +186,17 @@ jobs:
 
       - name: Test
         if: matrix.test
-        run: ctest --test-dir build/${{ matrix.preset }} -C Release --output-on-failure --timeout 600
+        run: ctest --preset ${{ matrix.preset }}
 
       - name: Package
         run: |
           mkdir out
           case ${{ matrix.name }} in
             win64)
-              cpack --config build/win64/CPackConfig.cmake -C Release -G ZIP -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE
+              cpack --preset win64 -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE
               cmake --build --preset win64-release --target msi
               cp build/win64/UT2004.msi out/$ARCHIVE.msi ;;
-            linux*)
-              # SDL 3 is not in the distributions yet, so the one built here goes along.
-              cp -L /usr/local/lib/libSDL3.so.0 build/linux64/System/
-              cpack --config build/linux64/CPackConfig.cmake -C Release -G TGZ -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE ;;
+            linux*) cpack --preset linux64 -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE ;;
             web) (cd build/web/site && zip -r ../../../out/$ARCHIVE.zip .) ;;
             android) cp build/android-arm64/UT2004.apk out/$ARCHIVE.apk ;;
           esac

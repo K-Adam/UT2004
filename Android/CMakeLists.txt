@@ -14,7 +14,7 @@ add_custom_target(ut_apk
           ${CMAKE_SYSROOT}/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/libc++_shared.so ${UT_JNILIBS}
   COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/pack_assets.py --out ${CMAKE_BINARY_DIR}/assets
           --source ${CMAKE_SOURCE_DIR} --scripts ${UT_SCRIPTS_DIR}
-  COMMAND ${UT_GRADLE} --project-dir ${CMAKE_CURRENT_SOURCE_DIR} -PutBuild=${CMAKE_BINARY_DIR} assembleRelease
+  COMMAND ${UT_GRADLE} --project-dir ${CMAKE_CURRENT_SOURCE_DIR} -PutBuild=${CMAKE_BINARY_DIR} -PutVersion=${UT_VERSION} assembleRelease
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/gradle/outputs/apk/release/app-release.apk ${CMAKE_BINARY_DIR}/UT2004.apk
   DEPENDS SDLLaunch
   USES_TERMINAL VERBATIM)

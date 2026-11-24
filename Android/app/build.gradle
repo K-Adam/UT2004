@@ -29,7 +29,7 @@ android {
         minSdk 28
         targetSdk 36
         versionCode utVersionCode
-        versionName '3369'
+        versionName project.findProperty('utVersion') ?: 'develop'
     }
     sourceSets.main {
         jniLibs.srcDirs = [new File(utBuild, 'jniLibs')]
