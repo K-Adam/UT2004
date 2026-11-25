@@ -9,7 +9,6 @@ Revision history:
 #include <time.h>  // dodging a macro clash with Unix C runtime headers...
 
 #if !__EMSCRIPTEN__
-// Before the engine headers, whose operator delete the standard library headers would redeclare.
 #include "SDLLaunchContent.h"
 #endif
 #include "SDLLaunchPrivate.h"
@@ -34,11 +33,6 @@ extern "C" {HINSTANCE hInstance;}
 #endif
 extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
 
-#if __STATIC_LINK && defined(_MSC_VER)
-// Statically linked third-party libraries allocate in their static constructors, and the engine's global operator new routes
-// that through GMalloc. This file's globals initialize in the library phase before theirs, EarlyMalloc sets GMalloc there.
-#pragma init_seg(lib)
-#endif
 // Memory allocator.
 #ifdef _DEBUG
 	#include "FMallocDebug.h"
@@ -46,10 +40,6 @@ extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
 #else
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
-#endif
-
-#if __STATIC_LINK
-static FEarlyMalloc EarlyMalloc EARLY_INIT_PRIORITY = &Malloc;
 #endif
 
 // Log file.

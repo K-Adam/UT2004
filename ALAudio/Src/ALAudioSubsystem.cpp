@@ -1321,7 +1321,7 @@ UBOOL FALSoundSource::Update( FLOAT DeltaTime )
 		{
 			AudioSubsystem->StreamManager->DestroyStream( Buffer->AudioStream, 0 );
 			Buffer->AudioStream		= NULL;
-			delete Buffer->AudioStreamData;
+			delete[] Buffer->AudioStreamData;
 			Buffer->AudioStreamData = NULL;
 
 			// Let PlayerController know that stream finished.
@@ -1535,7 +1535,7 @@ FALSoundBuffer* FALSoundBuffer::Init( USound* Sound, UALAudioSubsystem* AudioSub
 			}
 			AudioSubsystem->Buffers.AddItem( Buffer );
 			Buffer->Sound = Sound;
-			delete Data;
+			delete[] Data;
 
 			// Request more chunks.
 			Buffer->AudioStreamData = new BYTE[Buffer->AudioStream->GetChunkSize()];
@@ -1673,7 +1673,7 @@ void FALSoundBuffer::Reset()
 		AudioStream = NULL;
 	}
 
-	delete AudioStreamData;
+	delete[] AudioStreamData;
 	AudioStreamData = NULL;
 
 	unguard;

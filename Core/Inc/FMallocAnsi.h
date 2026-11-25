@@ -6,13 +6,7 @@
 		* Created by Tim Sweeney
 =============================================================================*/
 
-// Padding stays because some script classes overrun their allocation by four bytes on 64-bit and the cause is still unknown.
 #include "Core.h"
-#if PLATFORM_64BITS
-#define MALLOC_PADDING 32
-#else
-#define MALLOC_PADDING 0
-#endif
 
 //
 // ANSI C memory allocator.
@@ -25,7 +19,7 @@ public:
 	{
 		guard(FMallocAnsi::Malloc);
 		check(Size>=0);
-		void* Ptr = malloc( Size + MALLOC_PADDING );
+		void* Ptr = malloc( Size );
 		check(Ptr);
 		return Ptr;
 		unguard;
@@ -38,11 +32,11 @@ public:
 if ((PTRINT) Ptr < 0x1000) Ptr = NULL;
 		if( Ptr && NewSize )
 		{
-			Result = realloc( Ptr, NewSize + MALLOC_PADDING );
+			Result = realloc( Ptr, NewSize );
 		}
 		else if( NewSize )
 		{
-			Result = malloc( NewSize + MALLOC_PADDING );
+			Result = malloc( NewSize );
 		}
 		else
 		{

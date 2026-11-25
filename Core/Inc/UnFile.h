@@ -494,45 +494,14 @@ CORE_API void appMemzero( void* Dest, INT Count );
 #define appFree       GMalloc->Free
 #define appRealloc    GMalloc->Realloc
 
-//
-// C++ style memory allocation.
-//
+// Plain delete frees these, so they take the standard allocator, not GMalloc.
 inline void* operator new( size_t Size, const TCHAR* Tag )
 {
-	guardSlow(new);
-	return appMalloc( Size, Tag );
-	unguardSlow;
+	return ::operator new( Size );
 }
-inline void* operator new( size_t Size )
-{
-	guardSlow(new);
-	return appMalloc( Size, TEXT("new") );
-	unguardSlow;
-}
-inline void operator delete( void* Ptr )
-{
-	guardSlow(delete);
-	appFree( Ptr );
-	unguardSlow;
-}
-
 inline void* operator new[]( size_t Size, const TCHAR* Tag )
 {
-	guardSlow(new);
-	return appMalloc( Size, Tag );
-	unguardSlow;
-}
-inline void* operator new[]( size_t Size )
-{
-	guardSlow(new);
-	return appMalloc( Size, TEXT("new") );
-	unguardSlow;
-}
-inline void operator delete[]( void* Ptr )
-{
-	guardSlow(delete);
-	appFree( Ptr );
-	unguardSlow;
+	return ::operator new[]( Size );
 }
 
 /*-----------------------------------------------------------------------------

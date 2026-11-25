@@ -489,7 +489,7 @@ class UMasterCommandlet : public UCommandlet
 				Starts[i] = NULL;
 			}
 		}
-		delete Starts;
+		delete[] Starts;
 
 		return 1;
 		unguard;

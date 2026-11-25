@@ -104,7 +104,7 @@ if(MSVC)
   target_compile_options(ut_common INTERFACE
     $<$<COMPILE_LANGUAGE:CXX>:/Zc:wchar_t- /Zc:forScope /permissive /Zc:strictStrings- /EHa>
     /Zp4 /W3 /MP /guard:cf
-    /wd4005 /wd4244 /wd4267 /wd4305 /wd4996 /wd4595 /wd4291 /wd4838 /wd4311 /wd4312 /wd4302)
+    /wd4005 /wd4244 /wd4267 /wd4305 /wd4996 /wd4291 /wd4838 /wd4311 /wd4312 /wd4302)
   target_link_libraries(ut_common INTERFACE legacy_stdio_definitions)
   # Old prebuilt libs request VC6/7 CRT variants by name.
   target_link_options(ut_common INTERFACE /guard:cf $<$<EQUAL:${CMAKE_SIZEOF_VOID_P},4>:/SAFESEH:NO>

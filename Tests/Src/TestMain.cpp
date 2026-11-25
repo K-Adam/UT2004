@@ -27,14 +27,6 @@ static FOutputDeviceTestError Error;
 #include "FFeedbackContextAnsi.h"
 static FFeedbackContextAnsi Warn;
 
-// gtest and the linked libraries allocate in their static constructors, and the engine's global operator new routes
-// that through GMalloc. This file's globals initialize before theirs, EarlyMalloc sets GMalloc there.
-#ifdef _MSC_VER
-#pragma init_seg(lib)
-#define TEST_INIT_FIRST
-#else
-#define TEST_INIT_FIRST __attribute__((init_priority(101)))
-#endif
 #if _WIN32
 	#include "FFileManagerWindows.h"
 	static FFileManagerWindowsHome FileManager;
@@ -44,8 +36,6 @@ static FFeedbackContextAnsi Warn;
 #endif
 #include "FMallocAnsi.h"
 static FMallocAnsi Malloc;
-struct FTestEarlyMalloc { FTestEarlyMalloc() { GMalloc = &Malloc; } };
-static FTestEarlyMalloc EarlyMalloc TEST_INIT_FIRST;
 
 #include "FConfigCacheIni.h"
 

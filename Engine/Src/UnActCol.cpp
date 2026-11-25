@@ -889,7 +889,7 @@ FCollisionHash::~FCollisionHash()
 
 	// Free all collision links.
 	for( INT i=0; i<LinksToFree.Num(); i++ )
-		appFree( LinksToFree(i) );
+		delete[] LinksToFree(i);
 
 #if TIME_HASH
 	debugf(TEXT(" -- Hash PrimTest -- "));

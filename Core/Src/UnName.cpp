@@ -156,7 +156,7 @@ void FName::StaticExit()
 	// Kill all names.
 	for( INT i=0; i<Names.Num(); i++ )
 		if( Names(i) )
-			delete Names(i);
+			appFree( Names(i) );
 
 	// Empty tables.
 	Names.Empty();
@@ -205,7 +205,7 @@ void FName::DeleteEntry( INT i )
 	*HashLink = (*HashLink)->HashNext;
 
 	// Delete it.
-	delete NameEntry;
+	appFree( NameEntry );
 	Names(i) = NULL;
 	Available.AddItem( i );
 

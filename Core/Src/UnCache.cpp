@@ -115,9 +115,9 @@ void FMemCache::Exit( UBOOL FreeMemory )
 		CheckState();
 
 		// Release all memory.
-		delete ItemMemory;
+		delete[] ItemMemory;
 		if( FreeMemory )
-			appFree( CacheMemory );
+			delete[] CacheMemory;
 
 		// Success.
 		Initialized = 0;

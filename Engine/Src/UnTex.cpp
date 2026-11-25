@@ -576,11 +576,9 @@ void UTexture::CreateMips( UBOOL FullMips, UBOOL Downsample, UBOOL SpecialBorder
 						}
 					}
 				}
-				if( TrueSource )
-					delete TrueSource; 
+				delete[] TrueSource;
 			}
-			if( TrueDest )
-				delete TrueDest;
+			delete[] TrueDest;
 		}
 	}
 	unguardobj;

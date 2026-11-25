@@ -56,11 +56,6 @@ FOutputDeviceAnsiError Error;
 #include "FFeedbackContextAnsi.h"
 FFeedbackContextAnsi Warn;
 
-#if __STATIC_LINK && defined(_MSC_VER)
-// Statically linked third-party libraries allocate in their static constructors, and the engine's global operator new routes
-// that through GMalloc. This file's globals initialize in the library phase before theirs, EarlyMalloc sets GMalloc there.
-#pragma init_seg(lib)
-#endif
 // File manager.
 #if _WIN32
 	#include "FFileManagerWindows.h"
@@ -72,10 +67,6 @@ FFeedbackContextAnsi Warn;
 	FFileManagerUnix FileManager;
 	#include "FMallocAnsi.h"
 	FMallocAnsi Malloc;
-#endif
-
-#if __STATIC_LINK
-static FEarlyMalloc EarlyMalloc EARLY_INIT_PRIORITY = &Malloc;
 #endif
 
 // Config.

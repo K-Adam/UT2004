@@ -44,7 +44,8 @@ static MeAssetInstance* KAssetInstanceCreate(MeAssetFactory *af,
 {
 	guard(KAssetInstanceCreate);
 
-    MeAssetInstance *ins = (MeAssetInstance*)MeMemoryAPI.create(sizeof(MeAssetInstance));
+    // MeAssetInstanceDestroy frees it with delete.
+    MeAssetInstance *ins = new MeAssetInstance{};
     
     const char *assetName = MeFAssetGetName(asset);
     char *key = 0;

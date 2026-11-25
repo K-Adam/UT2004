@@ -108,109 +108,6 @@ void KActorContactGen(AActor* actor, UBOOL gen)
 	unguard;
 }
 
-/********************* COPIED FROM TOOLKIT ***********************/
-
-#define TM_STACK_SIZE 1000
-#define MAX_ENTRY_COUNT 1000
-#define CONTACT_BUFFER_SIZE 1000
-#define MAX_PAIR_COUNT 1000
-#define AGGREGATE_ARRAY_COUNT 16
-#define AGGREGATE_ARRAY_SIZE 800 // 128
-#define ATOMIC_ARRAY_SIZE 1024
-
-static McdBatchContext* KBatchContextCreate(McdFramework *frame)
-{
-	guard(KBatchContextCreate);
-
-    int i;
-
-    McdBatchContext *context;
-    
-    context = (McdBatchContext *)MeMemoryAPI.create(sizeof(McdBatchContext));
-    context->frame = frame;
-    context->typeCount = context->frame->geometryRegisteredCountMax;
-
-    context->tmArray = (MeMatrix4 *)
-        MeMemoryAPI.createAligned(sizeof(MeMatrix4)*TM_STACK_SIZE,MeALIGNTO);
-    context->tmTrack = (MeMatrix4Ptr **)
-        MeMemoryAPI.create(sizeof(MeMatrix4Ptr *)*TM_STACK_SIZE);
-    context->tmMaxCount = TM_STACK_SIZE;
-
-    context->table = (McdBatchEntry **)MeMemoryAPI.create(sizeof(McdBatchEntry *) * 
-        context->typeCount * context->typeCount); 
-
-    context->entryArray = (McdBatchEntry *)MeMemoryAPI.create(sizeof(McdBatchEntry) * MAX_ENTRY_COUNT);
-    context->maxEntryCount = MAX_ENTRY_COUNT;
-
-    context->pairData = (McdBatchPairData *)MeMemoryAPI.create(sizeof(McdBatchPairData) * MAX_PAIR_COUNT);
-    context->pairDataMaxCount = MAX_PAIR_COUNT;
-
-    context->pools = (McdBatchContactPool *)MeMemoryAPI.create((AGGREGATE_ARRAY_COUNT+1)*sizeof(McdBatchContactPool));
-    context->poolMaxCount = AGGREGATE_ARRAY_COUNT+1;
-    context->pools[0].contacts = (McdContact *)MeMemoryAPI.create(ATOMIC_ARRAY_SIZE * sizeof(McdContact));
-    context->pools[0].contactMaxCount = ATOMIC_ARRAY_SIZE;
-
-    for(i=1;i<=AGGREGATE_ARRAY_COUNT;i++)
-    {
-        context->pools[i].contacts = (McdContact *)MeMemoryAPI.create(AGGREGATE_ARRAY_SIZE * sizeof(McdContact));
-        context->pools[i].contactMaxCount = AGGREGATE_ARRAY_SIZE;
-    }
-    return context;
-
-	unguard;
-}
-
-static MstBridgeID KBridgeCreate(McdFrameworkID frame, const unsigned int maxMaterials)
-{
-	guard(KBridgeCreate);
-
-    unsigned int nElements, i;
-    MstMaterialPair* p;
-    MstBridgeID b = (MstBridgeID)MeMemoryAPI.create(sizeof(MstBridge));
-
-    if(!b)
-    {
-        MeWarning(0, "MstBridgeCreate: Could not allocate memory for bridge.");
-        return b;
-    }
-
-    /* Initialise material pool */
-    b->maxMaterials = maxMaterials;
-    nElements = MeUpperDiagonalSize(b->maxMaterials);
-    b->materialPairArray = (MstMaterialPair *)
-        MeMemoryAPI.create(nElements * sizeof (MstMaterialPair));
-
-    /* Set all material pairs to the default contact params. */
-    p = b->materialPairArray;
-    for(i=0; i<nElements; i++)
-    {
-        MdtContactParamsReset(&(p->cp));
-
-        /* Set contact callback to null. */
-        p->contactCB = NULL;
-        p->intersectCB = NULL;
-        p->pairCB = NULL;
-        p++;
-    }
-
-    /* Material '0' is used as default */
-    b->usedMaterials = 1;
-
-    /* Allocate ModelPair buffer. */
-    b->pairs = McdModelPairContainerCreate(50);
-    b->context = KBatchContextCreate(frame);
-
-    /* Allocate McdContact buffer. */
-    b->contactsMaxCount = 50;
-    b->contacts = (McdContact*)
-        MeMemoryAPI.create(b->contactsMaxCount * sizeof(McdContact));
-
-    /* Set callbacks for body enable/disable. */
-    return b;
-
-	unguard;
-}
-
 /********************* CONTACTS ***********************/
 // Do we always assume world geometry (blocking volumes etc.) have friction of 1.
 #define WORLD_FRICTION_ONE (1)
@@ -1317,7 +1214,8 @@ void MEAPI KInitLevelKarma(ULevel* level)
     guard(Bridge);
     KSetSecName(TEXT("KARMA: MSTBRIDGE"));
 
-    level->KBridge = KBridgeCreate(KGData->Framework, K_materialsMaxCount);
+    level->KBridge = MstBridgeCreate(KGData->Framework, K_materialsMaxCount);
+    level->KBridge->context = McdBatchContextCreate(KGData->Framework);
     MstBridgeSetModelPairBufferSize(level->KBridge, K_bridgeModelPairBufferSize);
 
     unguard;
@@ -1481,6 +1379,7 @@ void MEAPI KTermLevelKarma(ULevel* level)
     /* Then remove bridge/space/world. */
     if(level->KBridge)   
     {
+        McdBatchContextDestroy(level->KBridge->context);
         MstBridgeDestroy(level->KBridge);
         level->KBridge = NULL;
     }
