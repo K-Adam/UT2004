@@ -287,6 +287,9 @@ class CORE_API UStruct : public UField
 	// Size of the largest struct that extends this one, 0 when none was linked. Script hands such a value to
 	// code that names this struct.
 	INT					DerivedSize;
+	// What the load check found at a code offset: the function a call by name was found as, NULL when its object's
+	// class lacks it, or the type an array element of a value is read as. Empty for script that was not checked.
+	TMap<INT,UField*>	ScriptFields;
 
 	// Constructors.
 	UStruct( ENativeConstructor, INT InSize, const TCHAR* InName, const TCHAR* InPackageName, DWORD InFlags, UStruct* InSuperStruct );

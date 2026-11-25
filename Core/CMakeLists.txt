@@ -1,5 +1,5 @@
 set(CORE_SRC Core.cpp UExporter.cpp UFactory.cpp UnAnsi.cpp UnArc.cpp UnBits.cpp UnCache.cpp
-    UnClass.cpp UnCoreNative.cpp UnCoreNet.cpp UnCorSc.cpp UnLinker.cpp UnMath.cpp
+    UnClass.cpp UnCoreNative.cpp UnCoreNet.cpp UnCorSc.cpp UnLinker.cpp UnMath.cpp UnVerify.cpp
     UnMem.cpp UnMisc.cpp UnName.cpp UnObj.cpp UnProp.cpp)
 if(WIN32)
   ut_module(Core SHARED

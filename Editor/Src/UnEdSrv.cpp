@@ -4207,6 +4207,7 @@ UBOOL UEditorEngine::Exec_Class( const TCHAR* Str, FOutputDevice& Ar )
 						{
 							It->Dependencies.Empty();
 							It->Script.Empty();
+							It->ScriptFields.Empty();
 						}
 					}
 				}

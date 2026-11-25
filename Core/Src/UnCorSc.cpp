@@ -379,6 +379,7 @@ static void SkipNullContext( FFrame& Stack, RESULT_DECL )
 	// variable or function, its real size is known.
 	BYTE Token = *Stack.Code;
 	UObject* Field = NULL;
+	UBOOL Named = 1;
 	if( Token==EX_InstanceVariable || Token==EX_DefaultVariable || Token==EX_StructMember || Token==EX_FinalFunction || Token==EX_DelegateFunction )
 	{
 		BYTE* Expr = Stack.Code++;
@@ -389,9 +390,25 @@ static void SkipNullContext( FFrame& Stack, RESULT_DECL )
 		Field = GNativeFunction( Token );
 	else if( Token>=EX_ExtendedNative )
 		Field = GNativeFunction( (Token-EX_ExtendedNative)*0x100 + Stack.Code[1] );
+	// The load check found the function of a call by name, or none to call, and the element an index reads.
+	else
+	{
+		INT Offset = Stack.Code - Stack.Node->Script.GetTypedData();
+		UBOOL Element = Token==EX_ArrayElement || Token==EX_DynArrayElement;
+		UField** Found = Element ? Stack.Node->ScriptFields.Find( GContextElementKey(Offset) ) : NULL;
+		if( !Found )
+			Found = Stack.Node->ScriptFields.Find( Offset );
+		if( Found )
+			Field = *Found;
+		else if( !Element )
+			Named = 0;
+	}
+	// Without the field the size is not known, and the result holds a value of its type already.
+	if( Named && !Field )
+		Size = 0;
 	if( Field )
 	{
-		UDelegateProperty* Delegate = Cast<UDelegateProperty>( Field );
+		UDelegateProperty* Delegate = Token==EX_DelegateFunction ? Cast<UDelegateProperty>( Field ) : NULL;
 		UFunction* Function = Delegate ? Delegate->Function : Cast<UFunction>( Field );
 		UProperty* Property = Function ? Function->GetReturnProperty() : Delegate ? NULL : Cast<UProperty>( Field );
 		// A stored 0 means the original engine left the result alone, as it does for strings.
@@ -418,6 +435,7 @@ static void StepContext( FFrame& Stack, UObject* Context, RESULT_DECL )
 	Stack.Code += 3;
 	GContextCall = Stack.Code;
 	Stack.Step( Context, Result );
+	GContextCall = NULL;
 	if( GCallMissed )
 	{
 		GCallMissed = 0;
@@ -476,6 +494,24 @@ static inline UBOOL IsParm( FFrame& Stack, UFunction* Function, UProperty* Prope
 		return 1;
 	Stack.Logf( NAME_Critical, TEXT("Too many arguments for %s"), Function->GetFullName() );
 	return 0;
+}
+
+// A base that is no variable leaves the address of whatever its call evaluated last. The load check found the
+// type such a base is indexed as. Plain variables, the usual base, skip the lookup.
+static UProperty* ValueBase( FFrame& Stack, BYTE* Element )
+{
+	BYTE Token = *Stack.Code;
+	if( !Stack.Node->ScriptFields.Num() || Token==EX_LocalVariable || Token==EX_InstanceVariable || Token==EX_DefaultVariable )
+		return NULL;
+	UField** Found = Stack.Node->ScriptFields.Find( Element - Stack.Node->Script.GetTypedData() );
+	return Found ? (UProperty*)*Found : NULL;
+}
+
+static void ClearProperty()
+{
+	GPropAddr = NULL;
+	GProperty = NULL;
+	GPropObject = NULL;
 }
 
 // Evaluates the arguments of a call that is not made.
@@ -579,10 +615,23 @@ IMPLEMENT_FUNCTION( UObject, EX_ClassContext, execClassContext );
 void UObject::execArrayElement( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execArrayElement);
+	BYTE* Element = Stack.Code - 1;
 
 	// Get array index expression.
 	INT Index=0;
 	Stack.Step( Stack.Object, &Index );
+
+	if( UProperty* Value = ValueBase( Stack, Element ) )
+	{
+		BYTE* Array = (BYTE*)appAlloca( Value->GetSize() );
+		appMemzero( Array, Value->GetSize() );
+		Stack.Step( this, Array );
+		if( Result )
+			Value->CopySingleValue( Result, Array + Clamp(Index,0,Value->ArrayDim-1)*Value->ElementSize );
+		Value->DestroyValue( Array );
+		ClearProperty();
+		return;
+	}
 
 	// Get base element (must be a variable!!).
 	GProperty = NULL;
@@ -639,10 +688,26 @@ IMPLEMENT_FUNCTION( UObject, EX_DebugInfo, execDebugInfo );
 void UObject::execDynArrayElement( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execDynArrayElement);
+	BYTE* Element = Stack.Code - 1;
 
 	// Get array index expression.
 	INT Index=0;
 	Stack.Step( Stack.Object, &Index );
+
+	if( UProperty* Inner = ValueBase( Stack, Element ) )
+	{
+		FArray Array;
+		Stack.Step( this, &Array );
+		BYTE* Data = (BYTE*)Array.GetData();
+		if( Result && Index>=0 && Index<Array.Num() )
+			Inner->CopySingleValue( Result, Data + Index*Inner->ElementSize );
+		else if( Result )
+			appMemzero( Result, Inner->ElementSize );
+		for( INT i=0; i<Array.Num(); i++ )
+			Inner->DestroyValue( Data + i*Inner->ElementSize );
+		ClearProperty();
+		return;
+	}
 
 	GProperty = NULL;
 	Stack.Step( this, NULL );
@@ -1200,33 +1265,65 @@ IMPLEMENT_FUNCTION( UObject, EX_Context, execContext );
 // Function calls //
 ////////////////////
 
-// Finds the function of a call by name. The object behind a context may be of a class that lacks it, then the
-// context skips the call as it does for None. The arguments cannot be evaluated without the function.
-static UFunction* FindCall( UObject* Object, FFrame& Stack, UBOOL Global )
+// An iterator reads its loop's end after its arguments and a skipping native reads the size of an argument. The
+// compiler calls such functions directly, a call it does not fix would read them from other bytecode.
+UBOOL GNeedsFixedCall( UFunction* Function )
+{
+	if( Function->FunctionFlags & FUNC_Iterator )
+		return 1;
+	for( UProperty* P=Cast<UProperty>(Function->Children); P && (P->PropertyFlags & CPF_Parm) && (Function->FunctionFlags & FUNC_Native); P=Cast<UProperty>(P->Next) )
+		if( P->PropertyFlags & CPF_SkipParm )
+			return 1;
+	return 0;
+}
+
+// A call by name runs only a function that takes the parameters the load check found for it, else it is skipped.
+// The object behind a context may be of a class that lacks it, then the context skips the call as it does for None.
+static void CallByName( UObject* Object, FFrame& Stack, RESULT_DECL, UBOOL Global )
 {
 	BYTE* Call = Stack.Code - 1;
 	FName Name = Stack.ReadName();
 	UFunction* Function = Object->FindFunction( Name, Global );
 	UBOOL UnderContext = Call==GContextCall;
 	GContextCall = NULL;
+	UFunction* Checked = NULL;
+	if( Stack.Node->ScriptFields.Num() )
+	{
+		UField** Found = Stack.Node->ScriptFields.Find( Call - Stack.Node->Script.GetTypedData() );
+		Checked = Found ? (UFunction*)*Found : NULL;
+		if( Function && !(Checked && GSameParms(Function,Checked,1)) )
+		{
+			// A package built against another version of its base may make such a call every tick.
+			static TMap<UFunction*,UBOOL> Warned;
+			if( !Warned.Find(Function) )
+			{
+				Warned.Set( Function, 1 );
+				Stack.Logf( NAME_Warning, TEXT("%s does not take the parameters of %s"), Function->GetFullName(), Checked ? Checked->GetFullName() : *Name );
+			}
+			Function = NULL;
+		}
+	}
 	if( !Function && UnderContext )
 	{
 		Stack.Logf( NAME_Warning, TEXT("%s has no function %s"), Object->GetFullName(), *Name );
 		GCallMissed = 1;
 	}
+	else if( !Function && Checked )
+		SkipCall( Stack, Checked );
 	else if( !Function )
 		Stack.Logf( NAME_Critical, TEXT("Failed to find function %s in %s"), *Name, Object->GetFullName() );
-	return Function;
+	else
+	{
+		if( GNeedsFixedCall(Function) )
+			Stack.Logf( NAME_Critical, TEXT("%s is called by name"), Function->GetFullName() );
+		Object->CallFunction( Stack, Result, Function );
+	}
 }
 
 void UObject::execVirtualFunction( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execVirtualFunction);
-
-	// Call the virtual function.
-	if( UFunction* Function = FindCall( this, Stack, 0 ) )
-		CallFunction( Stack, Result, Function );
-
+	CallByName( this, Stack, Result, 0 );
 	unguardexecSlow;
 }
 IMPLEMENT_FUNCTION( UObject, EX_VirtualFunction, execVirtualFunction );
@@ -1255,9 +1352,7 @@ void UObject::execGlobalFunction( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execGlobalFunction);
 
-	// Call global version of virtual function.
-	if( UFunction* Function = FindCall( this, Stack, 1 ) )
-		CallFunction( Stack, Result, Function );
+	CallByName( this, Stack, Result, 1 );
 
 	unguardexecSlow;
 }
@@ -1267,9 +1362,9 @@ IMPLEMENT_FUNCTION( UObject, EX_GlobalFunction, execGlobalFunction );
 // Delegates         //
 ///////////////////////
 
-static UBOOL SameType( UProperty* P, UProperty* Q, UBOOL Classes )
+static UBOOL SameType( UProperty* P, UProperty* Q, UBOOL Classes, UBOOL Dims=1 )
 {
-	if( P->GetClass()!=Q->GetClass() || P->ElementSize!=Q->ElementSize || P->ArrayDim!=Q->ArrayDim )
+	if( P->GetClass()!=Q->GetClass() || P->ElementSize!=Q->ElementSize || (Dims && P->ArrayDim!=Q->ArrayDim) )
 		return 0;
 	if( UStructProperty* Struct = Cast<UStructProperty>(P) )
 		return Struct->Struct==((UStructProperty*)Q)->Struct;
@@ -1308,12 +1403,14 @@ void UObject::execDelegateFunction( FFrame& Stack, RESULT_DECL )
 	// Look up delegate property
 	UProperty* DelegateProperty = (UProperty*)Stack.ReadObject();
 	FName DelegateName = Stack.ReadName();
+	// The load check passed this call's arguments against what the delegate declares.
+	UDelegateProperty* Declared = Cast<UDelegateProperty>( DelegateProperty );
+	if( !Declared || !Declared->Function )
+		Stack.Logf( NAME_Critical, TEXT("%s is not a delegate"), DelegateProperty->GetFullName() );
+	UFunction* Signature = Declared->Function;
 	if( !HasField(this,Stack,DelegateProperty,NULL) )
 	{
-		UDelegateProperty* Signature = Cast<UDelegateProperty>( DelegateProperty );
-		if( !Signature || !Signature->Function )
-			Stack.Logf( NAME_Critical, TEXT("%s is not a delegate"), DelegateProperty->GetFullName() );
-		SkipCall( Stack, Signature->Function );
+		SkipCall( Stack, Signature );
 		return;
 	}
 	FScriptDelegate* Delegate = (FScriptDelegate*)((BYTE*)this + DelegateProperty->Offset);
@@ -1322,10 +1419,11 @@ void UObject::execDelegateFunction( FFrame& Stack, RESULT_DECL )
 		Delegate->Object = NULL;
 		Delegate->FunctionName = NAME_None;
 	}
-	// Any name can be put into a delegate, so the target has to exist and take what this call passes.
-	UFunction* Signature = FindFunctionChecked( DelegateName );
+	// Any name can be put into a delegate, so the target has to exist and take what the delegate declares.
 	UObject* Target = Delegate->Object ? Delegate->Object : this;
-	UFunction* Function = Delegate->Object ? Target->FindFunction( Delegate->FunctionName ) : Signature;
+	UFunction* Function = Target->FindFunction( Delegate->Object ? Delegate->FunctionName : DelegateName );
+	if( Function && GNeedsFixedCall(Function) )
+		Stack.Logf( NAME_Critical, TEXT("%s is called through a delegate"), Function->GetFullName() );
 	if( Function && GSameParms(Function,Signature) )
 		Target->CallFunction( Stack, Result, Function );
 	else
@@ -1360,7 +1458,10 @@ void UObject::execLetDelegate( FFrame& Stack, RESULT_DECL )
 	GPropObject = NULL;
 	Stack.Step( Stack.Object, NULL ); // Variable.
 	FScriptDelegate* DelegateAddr = (FScriptDelegate*)GPropAddr;
+	// A value skipped through None leaves it as it is.
 	FScriptDelegate Delegate;
+	Delegate.Object = NULL;
+	Delegate.FunctionName = NAME_None;
 	Stack.Step( Stack.Object, &Delegate );
 	if( DelegateAddr )
 	{
@@ -5247,11 +5348,13 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
 
 			BYTE* Param = NewStack.Locals + Property->Offset;
 			Stack.Step( Stack.Object, Param );
-			if( (Property->PropertyFlags & CPF_OutParm) && GPropAddr && Out<Outs+MAX_FUNC_PARMS )
+			// The value is copied back to the address the argument left, which a function decided at run time may
+			// not have checked to be a variable that holds it. A single parameter may go to an element of an array.
+			if( (Property->PropertyFlags & CPF_OutParm) && GPropAddr && GProperty && SameType(GProperty,Property,0,Property->ArrayDim>1) && Out<Outs+MAX_FUNC_PARMS )
 			{
 				Out->PropAddr = GPropAddr;
 				Out->Property = Property;
-				Out->Variable = GProperty ? GProperty : Property;
+				Out->Variable = GProperty;
 				Out++;
 				if ( GPropObject && GProperty && (GProperty->PropertyFlags & CPF_Net) )
 					GPropObject->NetDirty(GProperty);
@@ -5303,8 +5406,7 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 	&&	!(ObjectFlags & SingularFlag) )
 	{
 		ObjectFlags |= SingularFlag;
-		BYTE Buffer[1024];//!!hardcoded size
-		appMemzero( Buffer, sizeof(FString) );//!!
+		BYTE Buffer[MAX_STRING_CONST_SIZE];
 #if DO_GUARD
 		if( ++Recurse > RECURSE_LIMIT )
 		{
@@ -5314,8 +5416,13 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 			Stack.Logf( NAME_Critical, TEXT("Infinite script recursion (%i calls) detected"), RECURSE_LIMIT );
 		}
 #endif
+		// Each statement's value lands on what the one before left, the load check keeps it to what an empty string
+		// covers.
 		while( *Stack.Code != EX_Return )
+		{
+			appMemzero( Buffer, sizeof(FString) );
 			Stack.Step( Stack.Object, Buffer );
+		}
 		Stack.Code++;
 		Stack.Step( Stack.Object, Result );
 

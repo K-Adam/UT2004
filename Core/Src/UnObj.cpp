@@ -571,9 +571,13 @@ void UObject::Serialize( FArchive& Ar )
 		{
 			if( !StateFrame )
 				StateFrame = new(TEXT("ObjectStateFrame")) FStateFrame( this );
-			Ar << StateFrame->Node << StateFrame->StateNode;
+			Ar << *(UObject**)&StateFrame->Node << *(UObject**)&StateFrame->StateNode;
 			Ar << StateFrame->ProbeMask;
 			Ar << StateFrame->LatentAction;
+			// Maps saved by editing tools can name an object of another kind here, and retail plays them, so
+			// such an object is put in no state without refusing the map.
+			UBOOL Stale = Ar.IsLoading() && ((StateFrame->Node && !((UObject*)StateFrame->Node)->IsA(UStruct::StaticClass()))
+			||	(StateFrame->StateNode && !((UObject*)StateFrame->StateNode)->IsA(UState::StaticClass())));
 			// State code runs on this object and function lookup goes through the state's table, so both
 			// must be the class, one above it, or a state of those.
 			UBOOL Foreign = 0;
@@ -590,7 +594,8 @@ void UObject::Serialize( FArchive& Ar )
 			{
 				StateFrame->Node = StateFrame->StateNode = GetClass();
 				StateFrame->LatentAction = 0;
-				GRefuseScript( this, TEXT("is in a state of another class") );
+				if( !Stale )
+					GRefuseScript( this, TEXT("is in a state of another class") );
 			}
 			if( StateFrame->Node )
 			{
@@ -602,9 +607,13 @@ void UObject::Serialize( FArchive& Ar )
 				// A class holds no state code to go on in.
 				if( Foreign || StateFrame->Node->GetClass()==UClass::StaticClass() )
 					Offset = INDEX_NONE;
-				if( Offset!=INDEX_NONE )
-					if( Offset<0 || Offset>=StateFrame->Node->Script.Num() )
-						appErrorf( TEXT("%s: Offset mismatch: %i %i"), GetFullName(), Offset, StateFrame->Node->Script.Num() );
+				// The interpreter decodes the next token from here.
+				TArray<BYTE> Starts;
+				if( Offset!=INDEX_NONE && Ar.IsLoading() && !(GScriptStatements(StateFrame->Node,Starts) && Offset>=0 && Offset<Starts.Num() && Starts(Offset)) )
+				{
+					GRefuseScript( this, TEXT("goes on in the middle of a statement") );
+					Offset = INDEX_NONE;
+				}
 				StateFrame->Code = Offset!=INDEX_NONE ? &StateFrame->Node->Script(Offset) : NULL;
 			}
 			else StateFrame->Code = NULL;

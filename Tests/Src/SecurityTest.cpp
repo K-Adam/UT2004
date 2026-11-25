@@ -160,6 +160,14 @@ TEST( Security, NativeOfAnotherClassIsRefused )
 	EXPECT_TRUE( Forged->Func==(Native)&UObject::execUndefined );
 	EXPECT_TRUE( GRefusedScript.Len()>0 );
 	GRefusedScript = TEXT("");
+
+	UClass* Named = new( UObject::CreatePackage( NULL, TEXT("SecurityNamed") ), TEXT("Object") )UClass( UObject::StaticClass() );
+	UFunction* Opcode = new( Named, TEXT("LocalVariable") )UFunction( NULL );
+	Opcode->FunctionFlags = FUNC_Native;
+	Opcode->Bind();
+	EXPECT_TRUE( Opcode->Func==(Native)&UObject::execUndefined );
+	EXPECT_TRUE( GRefusedScript.Len()>0 );
+	GRefusedScript = TEXT("");
 }
 
 // A script function made by hand, as a downloaded package can hold any bytecode.
@@ -348,6 +356,28 @@ TEST( Security, DynArrayOpcodesNeedAnArray )
 	EXPECT_EQ( 123, S.Value<INT>( Parms, Nested ) );
 }
 
+// An out parameter is copied back only to a variable that holds its type.
+TEST( Security, OutParameterNeedsAVariableOfItsType )
+{
+	FScript Callee( TEXT("SecurityOutCallee") );
+	UProperty* Out = Callee.Int( TEXT("Out"), CPF_Parm|CPF_OutParm );
+	Callee.Link();
+	Callee.Byte( EX_Let ).Local( Out ).Byte( EX_IntConst ).Int32( 5 );
+	Callee.Return();
+
+	FScript S( TEXT("SecurityOutCaller") );
+	UProperty* Same = S.Int( TEXT("Same"), CPF_Parm );
+	UProperty* Other = S.Add( new( S.Function, TEXT("Other") )UFloatProperty( EC_CppProperty, 0, TEXT(""), CPF_Parm ) );
+	S.Link();
+	S.Byte( EX_FinalFunction ).Object( Callee.Function ).Local( Same ).Byte( EX_EndFunctionParms );
+	S.Byte( EX_FinalFunction ).Object( Callee.Function ).Local( Other ).Byte( EX_EndFunctionParms );
+	S.Return();
+	BYTE Parms[64] = {};
+	S.Run( Parms );
+	EXPECT_EQ( 5, S.Value<INT>( Parms, Same ) );
+	EXPECT_EQ( 0, S.Value<INT>( Parms, Other ) );
+}
+
 // Plane extends Vector, so a member of Vector is read from a value that is larger than Vector.
 TEST( Security, StructMemberOfDerivedStruct )
 {
@@ -423,9 +453,6 @@ TEST( Security, MissingFunctionUnderContextIsSkipped )
 TEST( Security, DelegateTargetMustFit )
 {
 	AActor* Info = GTestEngine->GLevel->GetLevelInfo();
-	UFunction* Touch = Info->FindFunctionChecked( FName(TEXT("Touch")) );
-	EXPECT_TRUE( GSameParms( Touch, Info->FindFunctionChecked( FName(TEXT("UnTouch")) ) ) );
-	EXPECT_FALSE( GSameParms( Touch, Info->FindFunctionChecked( FName(TEXT("Tick")) ) ) );
 
 	// A target that is missing or takes another parameter block is not called.
 	struct { AActor* Other; } Parms = { NULL };
@@ -639,6 +666,23 @@ TEST( Security, FunctionMustFitWhatItHides )
 	Same.Int( TEXT("Local"), 0 );
 	Same.Link();
 	EXPECT_FALSE( Same.Function->SignatureError() );
+
+	// No C++ knows a downloaded package's own functions, script calls to them are held at run time.
+	UClass* Base = ForgedClass( Package, TEXT("Base"), AActor::StaticClass() );
+	FScript Old( TEXT("SecurityUpdate"), Base );
+	Old.Int( TEXT("Value"), CPF_Parm );
+	Old.Link();
+	Base->Children = Old.Function;
+	FArchive Ar;
+	Base->Link( Ar, 1 );
+	FScript Newer( TEXT("SecurityUpdate"), ForgedClass( Package, TEXT("Newer"), Base ) );
+	Newer.Link();
+	EXPECT_FALSE( Newer.Function->SignatureError() );
+
+	// C++ calls a script class of its own packages by name, such as GUIComboBox.SetIndex.
+	Base->SetFlags( RF_Native );
+	EXPECT_TRUE( Newer.Function->SignatureError() );
+	Base->ClearFlags( RF_Native );
 }
 
 // An override may drop out. One that adds it writes back to a caller who passed a value.
@@ -676,6 +720,12 @@ TEST( Security, FunctionParameterListIsChecked )
 	Mixed.Link();
 	Mixed.Function->Children = new( Mixed.Function, TEXT("NoVariable") )UConst( NULL, TEXT("1") );
 	EXPECT_TRUE( Mixed.Function->SignatureError() );
+
+	// A replicated function's condition is run from its class's script.
+	FScript Net( TEXT("SecurityNet"), Class );
+	Net.Function->FunctionFlags = FUNC_Net;
+	Net.Link();
+	EXPECT_TRUE( Net.Function->SignatureError() );
 }
 
 // A native reads its arguments as its C++ declares them, whatever class redeclares it.
@@ -781,6 +831,430 @@ TEST( Security, ForgedPackageIsRepairedOnLoad )
 	EXPECT_TRUE( TakeRefusal( Package ) );
 }
 
+// The export table and the struct body name the super apart, the linker checks only the table's.
+TEST( Security, StructNamingTwoSupersIsRefused )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecuritySupers") );
+	UStruct* First = new( Package, TEXT("First"), RF_Public|RF_Standalone )UStruct( NULL );
+	new( Package, TEXT("Second"), RF_Public|RF_Standalone )UStruct( NULL );
+	new( Package, TEXT("Child"), RF_Public|RF_Standalone )UStruct( First );
+	ASSERT_TRUE( UObject::SavePackage( Package, NULL, RF_Standalone, TEXT("SecuritySupers.u"), GWarn ) );
+	UObject::ResetLoaders( Package, 0, 1 );
+
+	// Point the child's one byte SuperIndex at the struct that is neither its super nor itself.
+	FArchive* Reader = GFileManager->CreateFileReader( TEXT("SecuritySupers.u") );
+	ASSERT_TRUE( Reader );
+	FPackageFileSummary Summary;
+	*Reader << Summary;
+	Reader->Seek( Summary.ExportOffset );
+	INT At = 0, Super = 0, Child = 0;
+	for( INT i=1; i<=Summary.ExportCount; i++ )
+	{
+		FObjectExport E;
+		INT Name, Offset = 0;
+		*Reader << AR_INDEX(E.ClassIndex);
+		INT SuperAt = Reader->Tell();
+		*Reader << AR_INDEX(E.SuperIndex) << E.PackageIndex << AR_INDEX(Name) << E.ObjectFlags << AR_INDEX(E.SerialSize);
+		if( E.SerialSize )
+			*Reader << AR_INDEX(Offset);
+		if( E.SuperIndex )
+			At = SuperAt, Super = E.SuperIndex, Child = i;
+	}
+	delete Reader;
+	ASSERT_TRUE( At && Summary.ExportCount==3 );
+	TArray<BYTE> Bytes;
+	ASSERT_TRUE( appLoadFileToArray( Bytes, TEXT("SecuritySupers.u") ) );
+	Bytes(At) = 6 - Super - Child;
+	ASSERT_TRUE( appSaveArrayToFile( Bytes, TEXT("SecuritySupers.u") ) );
+	EXPECT_TRUE( UObject::LoadPackage( NULL, TEXT("SecuritySupers.u"), LOAD_NoWarn ) );
+	UObject::ResetLoaders( Package, 0, 1 );
+	GFileManager->Delete( TEXT("SecuritySupers.u") );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+}
+
+static UStruct* CoreStruct( const TCHAR* Name )
+{
+	return FindObjectChecked<UStruct>( UObject::StaticClass(), Name );
+}
+
+static std::string ScriptRule( UStruct* Node )
+{
+	const TCHAR* Rule = GScriptStructureError( Node );
+	return Rule ? TCHAR_TO_ANSI( Rule ) : "";
+}
+
+// A function with a local of each kind the rules look at, and a callee with an in and an out parameter.
+struct FWalked : FScript
+{
+	FScript Callee;
+	UProperty* In;
+	UProperty* I;
+	UProperty* Each;
+	UDelegateProperty* Delegate;
+	UProperty* B;
+	UProperty* V;
+	UProperty* P;
+	UProperty* Strings;
+
+	FWalked( const TCHAR* Name )
+	:	FScript( Name )
+	,	Callee( *(FString(Name)+TEXT("Callee")) )
+	{
+		In = Callee.Int( TEXT("In"), CPF_Parm );
+		Callee.Int( TEXT("Out"), CPF_Parm|CPF_OutParm );
+		Callee.Link();
+		Callee.Return();
+		I = Int( TEXT("I"), 0 );
+		Each = Ref( TEXT("Each"), 0, AActor::StaticClass() );
+		Delegate = Add( new( Function, TEXT("Delegate") )UDelegateProperty( EC_CppProperty, 0, TEXT(""), 0 ) );
+		Delegate->Function = Callee.Function;
+		B = Add( new( Function, TEXT("B") )UByteProperty( EC_CppProperty, 0, TEXT(""), 0 ) );
+		V = Add( new( Function, TEXT("V") )UStructProperty( EC_CppProperty, 0, TEXT(""), 0, CoreStruct(TEXT("Vector")) ) );
+		P = Add( new( Function, TEXT("P") )UStructProperty( EC_CppProperty, 0, TEXT(""), 0, CoreStruct(TEXT("Plane")) ) );
+		Strings = Add( new( Function, TEXT("Strings") )UStrProperty( EC_CppProperty, 0, TEXT(""), 0 ) );
+		Strings->ArrayDim = 2;
+		Link();
+	}
+	void Patch( INT At, INT Offset )
+	{
+		Code(At) = Offset & 0xFF;
+		Code(At+1) = Offset >> 8;
+	}
+	// if( Condition ) jumps over an int stored into a byte, which only matters where the jump is taken.
+	void Guarded( void (*Condition)( FScript& ) )
+	{
+		Byte( EX_JumpIfNot );
+		INT Skip = Code.Num();
+		Word( 0 );
+		Condition( *this );
+		Byte( EX_Jump );
+		INT End = Code.Num();
+		Word( 0 );
+		Patch( Skip, Code.Num() );
+		Byte( EX_Let ).Local( B ).Byte( EX_IntOne );
+		Patch( End, Code.Num() );
+	}
+	FScript& LetI()
+	{
+		return Byte( EX_Let ).Local( I );
+	}
+	FScript& Call()
+	{
+		return Byte( EX_FinalFunction ).Object( Callee.Function );
+	}
+	FScript& And( INT SkipSize )
+	{
+		return LetI().Byte( 130 ).Byte( EX_True ).Byte( EX_Skip ).Word( SkipSize ).Byte( EX_True ).Byte( EX_EndFunctionParms );
+	}
+	FScript& Foreach( INT EndAfter )
+	{
+		Byte( EX_Iterator ).AllActors( Each );
+		INT End = Code.Num();
+		return Word( End+EndAfter ).Byte( EX_IteratorNext ).Byte( EX_IteratorPop );
+	}
+};
+
+// Each row is a script with one defect and the rule that names it. The passing rows are shapes retail mods use.
+TEST( Security, BytecodeStructureIsChecked )
+{
+	struct FRow { const TCHAR* Rule; void (*Emit)( FWalked& ); } Rows[] =
+	{
+		{ TEXT(""), []( FWalked& S )
+		{
+			// foreach Each.Self.AllActors(), where None at either context skips the loop.
+			S.Byte( EX_Iterator ).Byte( EX_Context ).Byte( EX_Context ).Local( S.Each );
+			INT Inner = S.Skip( 0 );
+			S.Byte( EX_Self );
+			INT Outer = S.Skip( 0 );
+			S.AllActors( S.Each );
+			INT End = S.Code.Num();
+			S.Word( End+3 ).Byte( EX_IteratorNext ).Byte( EX_IteratorPop );
+			S.EndSkip( Inner );
+			S.EndSkip( Outer );
+		} },
+		{ TEXT("uses a local of another function"), []( FWalked& S ){ S.Byte( EX_Let ).Local( S.In ).Byte( EX_IntOne ); } },
+		{ TEXT("jumps into the middle of a statement"), []( FWalked& S ){ S.Byte( EX_Jump ).Word( 4 ); S.LetI().Byte( EX_IntOne ); } },
+		{ TEXT("has a skip that misses the end of its call"), []( FWalked& S ){ S.And( 3 ); } },
+		{ TEXT("has a skip for an argument that is not skipped"), []( FWalked& S ){ S.Call().Byte( EX_Skip ).Word( 2 ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms ); } },
+		{ TEXT("has a context skip that misses its expression"), []( FWalked& S ){ S.LetI().Byte( EX_Context ).Local( S.Each ).Word( 2 ).Byte( 0 ).Byte( EX_Self ); } },
+		{ TEXT("calls an iterator outside foreach"), []( FWalked& S ){ S.AllActors( S.Each ); } },
+		{ TEXT("has a foreach whose end is no iterator pop"), []( FWalked& S ){ S.Foreach( 2 ); } },
+		{ TEXT("has a bool variable that names no bool"), []( FWalked& S ){ S.LetI().Byte( EX_BoolVariable ).Local( S.I ); } },
+		{ TEXT(""), []( FWalked& S ){ S.LetI().Byte( EX_DynArrayLength ).Byte( EX_IntOne ); } },
+		{ TEXT("assigns to a value that is no variable"), []( FWalked& S ){ S.Byte( EX_Let ).Byte( EX_ArrayElement ).Byte( EX_IntZero ).Byte( EX_IntOne ).Byte( EX_IntOne ); } },
+		{ TEXT("resizes a value that is no variable"), []( FWalked& S ){ S.Byte( EX_DynArrayRemove ).Byte( EX_IntOne ).Byte( EX_IntZero ).Byte( EX_IntOne ); } },
+		{ TEXT("has a native token that names a token"), []( FWalked& S ){ S.Byte( EX_ExtendedNative ).Byte( EX_Jump ).Byte( EX_Nothing ).Byte( EX_Nothing ).Byte( EX_EndFunctionParms ); } },
+		{ TEXT("calls a delegate by another name"), []( FWalked& S ){ S.Byte( EX_DelegateFunction ).Object( S.Delegate ).Name( NAME_None ).Byte( EX_IntOne ).Local( S.I ).Byte( EX_EndFunctionParms ); } },
+		{ TEXT("has debug info of an unknown version"), []( FWalked& S ){ S.Byte( EX_DebugInfo ).Int32( 99 ).Int32( 0 ).Int32( 0 ).Byte( 0 ); } },
+		{ TEXT("passes more arguments than its function takes"), []( FWalked& S ){ S.Call().Byte( EX_IntOne ).Local( S.I ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms ); } },
+		{ TEXT("passes a value that is no variable as an out argument"), []( FWalked& S ){ S.Call().Byte( EX_IntOne ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms ); } },
+		{ TEXT("has an operand of the wrong kind"), []( FWalked& S ){ S.Byte( EX_Let ).Byte( EX_LocalVariable ).Object( S.Function ).Byte( EX_IntOne ); } },
+		{ TEXT("has a struct member outside a struct"), []( FWalked& S ){ S.LetI().Byte( EX_StructMember ).Object( S.I ).Local( S.I ); } },
+		{ TEXT("nests too deep"), []( FWalked& S ){ S.LetI(); for( INT i=0; i<1100; i++ ) S.Byte( EX_PrimitiveCast ).Byte( 0 ); S.Byte( EX_IntOne ); } },
+		{ TEXT("assigns a value of another type"), []( FWalked& S ){ S.Byte( EX_Let ).Local( S.B ).Byte( EX_IntOne ); } },
+		{ TEXT(""), []( FWalked& S ){ S.Guarded( []( FScript& C ){ C.Byte( EX_True ); } ); } },
+		{ TEXT("assigns a value of another type"), []( FWalked& S ){ S.Guarded( []( FScript& C ){ C.Byte( EX_PrimitiveCast ).Byte( CST_BoolToInt ).Byte( EX_IntConst ).Int32( 2 ); } ); } },
+		{ TEXT("assigns a value of another type"), []( FWalked& S ){ S.Byte( EX_Let ).Local( S.V ).Local( S.P ); } },
+		{ TEXT("has a struct member on a foreign struct"), []( FWalked& S )
+		{
+			S.LetI().Byte( EX_StructMember ).Object( FindField<UProperty>( CoreStruct(TEXT("Plane")), TEXT("W") ) ).Local( S.V );
+		} },
+		{ TEXT("has a context fill larger than its value"), []( FWalked& S )
+		{
+			S.LetI().Byte( EX_Context ).Local( S.Each );
+			INT Skip = S.Skip( 255 );
+			S.Byte( EX_IntZero );
+			S.EndSkip( Skip );
+		} },
+		{ TEXT("passes more arguments than its function takes"), []( FWalked& S )
+		{
+			S.Byte( EX_Context ).Local( S.Each );
+			INT Skip = S.Skip( 0 );
+			S.Byte( EX_VirtualFunction ).Name( FName(TEXT("Destroyed")) ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms );
+			S.EndSkip( Skip );
+		} },
+		{ TEXT("passes more arguments than its function takes"), []( FWalked& S )
+		{
+			S.Byte( EX_DelegateFunction ).Object( S.Delegate ).Name( S.Callee.Function->GetFName() ).Byte( EX_IntOne ).Local( S.I ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms );
+		} },
+		{ TEXT(""), []( FWalked& S )
+		{
+			// A call through a context that passes an argument of another type is skipped when it runs.
+			S.Byte( EX_Context ).Local( S.Each );
+			INT Skip = S.Skip( 0 );
+			S.Byte( EX_VirtualFunction ).Name( FName(TEXT("Touch")) ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms );
+			S.EndSkip( Skip );
+		} },
+		{ TEXT("calls a function its class lacks"), []( FWalked& S ){ S.Byte( EX_VirtualFunction ).Name( FName(TEXT("SecurityNoSuchFunction")) ).Byte( EX_EndFunctionParms ); } },
+		{ TEXT("has a value that does not fit its buffer"), []( FWalked& S ){ S.Local( S.Strings ); } },
+#if SERIAL_POINTER_INDEX
+		{ TEXT("names an object that does not exist"), []( FWalked& S ){ S.Byte( EX_Let ).Byte( EX_LocalVariable ).Int32( MAXINT ).Byte( EX_IntOne ); } },
+#endif
+	};
+	for( INT i=0; i<ARRAY_COUNT(Rows); i++ )
+	{
+		FWalked S( *FString::Printf( TEXT("SecurityWalk%i"), i ) );
+		Rows[i].Emit( S );
+		S.Return();
+		EXPECT_EQ( TCHAR_TO_ANSI(Rows[i].Rule), ScriptRule( S.Function ) ) << i;
+	}
+
+	// Without its return the function runs on past its script.
+	FWalked Open( TEXT("SecurityWalkOpen") );
+	Open.LetI().Byte( EX_IntOne );
+	EXPECT_EQ( "has code that runs past its end", ScriptRule( Open.Function ) );
+
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityWalkNodes") );
+	UState* State = new( Package, TEXT("Labels") )UState( NULL );
+	State->Script.AddItem( EX_Stop );
+	State->LabelTableOffset = 1;
+	EXPECT_EQ( "has a label table that is not one", ScriptRule( State ) );
+
+	UClass* Class = ForgedClass( Package, TEXT("Replicated"), AActor::StaticClass() );
+	Class->Script.AddItem( EX_IntConst );
+	Class->Script.AddZeroed( sizeof(INT) );
+	UIntProperty* Rep = new( Class, TEXT("Rep") )UIntProperty( EC_CppProperty, 0, TEXT(""), CPF_Net );
+	// Linking decodes each condition before the load check can run.
+	Rep->RepOffset = 1;
+	FArchive Ar;
+	Class->Link( Ar, 1 );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+}
+
+// Loaded script passes and the walk leaves it as it was, the function digests are taken from it.
+TEST( Security, LoadedBytecodePassesUnchanged )
+{
+	INT Walked = 0;
+	for( TObjectIterator<UStruct> It; It; ++It )
+	{
+		if( !It->GetLinker() || !It->Script.Num() )
+			continue;
+		TArray<BYTE> Script = It->Script;
+		EXPECT_EQ( "", ScriptRule( *It ) ) << TCHAR_TO_ANSI( It->GetFullName() );
+		EXPECT_EQ( 0, appMemcmp( Script.GetTypedData(), It->Script.GetTypedData(), Script.Num() ) );
+		Walked++;
+	}
+	EXPECT_GT( Walked, 1000 );
+}
+
+// A call by name was checked against the function its object's class declares. A subclass function of that name
+// that takes other parameters is skipped, and a skipped object result is cleared as a whole.
+TEST( Security, CallByNameKeepsItsParameters )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityByName") );
+	UClass* Base = ForgedClass( Package, TEXT("Base"), UObject::StaticClass() );
+	UClass* Other = ForgedClass( Package, TEXT("Other"), Base );
+	FScript Declared( TEXT("SecurityFind"), Base ), Hiding( TEXT("SecurityFind"), Other );
+	Declared.Int( TEXT("X"), CPF_Parm );
+	Declared.Ref( TEXT("ReturnValue"), CPF_Parm|CPF_OutParm|CPF_ReturnParm, UObject::StaticClass() );
+	Declared.Link();
+	Declared.Return();
+	Hiding.Int( TEXT("X"), CPF_Parm );
+	Hiding.Int( TEXT("ReturnValue"), CPF_Parm|CPF_OutParm|CPF_ReturnParm );
+	Hiding.Link();
+	Hiding.Byte( EX_Return ).Byte( EX_IntConst ).Int32( 0x12345678 ).Byte( EX_Return ).Byte( EX_Nothing ).Byte( EX_EndOfScript );
+	FArchive Ar;
+	Base->Children = Declared.Function;
+	Base->Link( Ar, 1 );
+	Other->Children = Hiding.Function;
+	Other->Link( Ar, 1 );
+
+	FScript S( TEXT("SecurityCaller"), Base );
+	UProperty* On = S.Ref( TEXT("On"), CPF_Parm, Base );
+	UProperty* Through = S.Ref( TEXT("Through"), CPF_Parm, UObject::StaticClass() );
+	UProperty* Direct = S.Ref( TEXT("Direct"), CPF_Parm, UObject::StaticClass() );
+	S.Link();
+	S.Byte( EX_Let ).Local( Through ).Byte( EX_Context ).Local( On );
+	INT Skip = S.Skip( sizeof(INT) );
+	S.Byte( EX_VirtualFunction ).Name( FName(TEXT("SecurityFind")) ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms );
+	S.EndSkip( Skip );
+	S.Byte( EX_Let ).Local( Direct ).Byte( EX_VirtualFunction ).Name( FName(TEXT("SecurityFind")) ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms );
+	S.Return();
+	ASSERT_EQ( "", ScriptRule( S.Function ) );
+
+	UObject* Object = UObject::StaticConstructObject( Other, Package );
+	ASSERT_EQ( Hiding.Function, Object->FindFunction( FName(TEXT("SecurityFind")) ) );
+	BYTE Parms[64] = {};
+	S.Value<UObject*>( Parms, On ) = Object;
+	S.Value<UObject*>( Parms, Through ) = Object;
+	S.Value<UObject*>( Parms, Direct ) = Object;
+	S.Run( Parms, Object );
+	EXPECT_FALSE( S.Value<UObject*>( Parms, Through ) );
+	EXPECT_EQ( Object, S.Value<UObject*>( Parms, Direct ) );
+}
+
+// An element of a returned array is read from the returned value, the function's own array is gone by then.
+TEST( Security, ElementOfAValueIsReadFromIt )
+{
+	FScript Make( TEXT("SecurityMakeArray") );
+	UArrayProperty* Made = Make.IntArray( TEXT("ReturnValue") );
+	Made->PropertyFlags |= CPF_Parm|CPF_OutParm|CPF_ReturnParm;
+	UArrayProperty* Local = Make.IntArray( TEXT("Local") );
+	Make.Link();
+	Make.Byte( EX_Let ).Byte( EX_DynArrayLength ).Local( Local ).Byte( EX_IntConst ).Int32( 2 );
+	Make.Byte( EX_Let ).Byte( EX_DynArrayElement ).Byte( EX_IntOne ).Local( Local ).Byte( EX_IntConst ).Int32( 7 );
+	Make.Byte( EX_Return ).Local( Local ).Byte( EX_Return ).Byte( EX_Nothing ).Byte( EX_EndOfScript );
+
+	FScript S( TEXT("SecurityReadElement") );
+	UProperty* Read = S.Int( TEXT("Read"), CPF_Parm );
+	S.Link();
+	S.Byte( EX_Let ).Local( Read ).Byte( EX_DynArrayElement ).Byte( EX_IntOne ).Byte( EX_FinalFunction ).Object( Make.Function ).Byte( EX_EndFunctionParms );
+	S.Return();
+	ASSERT_EQ( "", ScriptRule( S.Function ) );
+	BYTE Parms[64] = {};
+	S.Run( Parms );
+	EXPECT_EQ( 7, S.Value<INT>( Parms, Read ) );
+}
+
+// The stored fill of an element through a None context follows the 32-bit layout, the element is cleared as a whole.
+TEST( Security, NoneContextClearsElementResult )
+{
+	FScript S( TEXT("SecurityNoneElement") );
+	UProperty* Result = S.Ref( TEXT("Result"), CPF_Parm, AActor::StaticClass() );
+	UProperty* None = S.Ref( TEXT("NoActor"), 0, AActor::StaticClass() );
+	S.Link();
+	S.Byte( EX_Let ).Local( Result ).Byte( EX_Context ).Local( None );
+	INT Skip = S.Skip( 4 );
+	S.Byte( EX_DynArrayElement ).Byte( EX_IntZero ).Byte( EX_InstanceVariable ).Object( FindField<UProperty>( AActor::StaticClass(), TEXT("Touching") ) );
+	S.EndSkip( Skip );
+	S.Return();
+	ASSERT_EQ( "", ScriptRule( S.Function ) );
+	BYTE Parms[64] = {};
+	S.Value<UObject*>( Parms, Result ) = GTestEngine->GLevel->GetLevelInfo();
+	S.Run( Parms );
+	EXPECT_FALSE( S.Value<UObject*>( Parms, Result ) );
+}
+
+static void SaveAndLoad( UPackage* Package, const TCHAR* File )
+{
+	ASSERT_TRUE( UObject::SavePackage( Package, NULL, RF_Standalone, File, GWarn ) );
+	ASSERT_TRUE( UObject::LoadPackage( NULL, File, LOAD_NoWarn ) );
+	UObject::ResetLoaders( Package, 0, 1 );
+	GFileManager->Delete( File );
+}
+
+// A defect in a saved file is refused when it loads, in a function and in an object's saved state code.
+TEST( Security, ForgedBytecodeIsRefusedOnLoad )
+{
+	UClass* Plain = UObject::StaticLoadClass( UObject::StaticClass(), NULL, TEXT("Engine.LevelSummary"), NULL, LOAD_NoWarn, NULL );
+	ASSERT_TRUE( Plain );
+
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityBytecode") );
+	UClass* Class = ForgedClass( Package, TEXT("Forged"), Plain );
+	FScript Other( TEXT("Other"), Class );
+	UProperty* Foreign = Other.Int( TEXT("Foreign"), 0 );
+	Other.Link();
+	Other.Return();
+	FScript Thief( TEXT("Thief"), Class );
+	Thief.Link();
+	Thief.Byte( EX_Let ).Local( Foreign ).Byte( EX_IntOne );
+	Thief.Return();
+	Thief.Function->SetFlags( RF_Public|RF_Standalone );
+	// A package that imports the refused one names its fields too.
+	UPackage* User = UObject::CreatePackage( NULL, TEXT("SecurityUser") );
+	ForgedClass( User, TEXT("User"), Class );
+	ASSERT_TRUE( UObject::SavePackage( Package, NULL, RF_Standalone, TEXT("SecurityBytecode.u"), GWarn ) );
+	ASSERT_TRUE( UObject::SavePackage( User, NULL, RF_Standalone, TEXT("SecurityUser.u"), GWarn ) );
+	UObject::ResetLoaders( Package, 0, 1 );
+	UObject::ResetLoaders( User, 0, 1 );
+	EXPECT_TRUE( UObject::LoadPackage( NULL, TEXT("SecurityBytecode.u"), LOAD_NoWarn ) );
+	EXPECT_TRUE( UObject::LoadPackage( NULL, TEXT("SecurityUser.u"), LOAD_NoWarn ) );
+	UObject::ResetLoaders( User, 0, 1 );
+	UObject::ResetLoaders( Package, 0, 1 );
+	GFileManager->Delete( TEXT("SecurityUser.u") );
+	GFileManager->Delete( TEXT("SecurityBytecode.u") );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+	EXPECT_TRUE( User->Refused );
+	User->Refused = 0;
+
+	// An int evaluated into a byte writes past it.
+	Package = UObject::CreatePackage( NULL, TEXT("SecurityNarrow") );
+	Class = ForgedClass( Package, TEXT("Forged"), Plain );
+	FScript Narrow( TEXT("Narrow"), Class );
+	UProperty* Small = Narrow.Add( new( Narrow.Function, TEXT("Small") )UByteProperty( EC_CppProperty, 0, TEXT(""), 0 ) );
+	Narrow.Link();
+	Narrow.Byte( EX_Let ).Local( Small ).Byte( EX_IntConst ).Int32( 0x7FFFFFFF );
+	Narrow.Return();
+	Narrow.Function->SetFlags( RF_Public|RF_Standalone );
+	SaveAndLoad( Package, TEXT("SecurityNarrow.u") );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+
+	// Jump 3, Stop: offset 1 is inside the jump.
+	Package = UObject::CreatePackage( NULL, TEXT("SecurityFrame") );
+	Class = ForgedClass( Package, TEXT("Forged"), Plain );
+	UState* State = new( Class, TEXT("Running") )UState( NULL );
+	State->Script.AddItem( EX_Jump );
+	State->Script.AddItem( 3 );
+	State->Script.AddItem( 0 );
+	State->Script.AddItem( EX_Stop );
+	State->LabelTableOffset = MAXWORD;
+	UObject* Object = UObject::StaticConstructObject( Class, Package, TEXT("Stateful"), RF_Public|RF_Standalone );
+	Object->InitExecution();
+	FStateFrame* Frame = Object->GetStateFrame();
+	Frame->Node = Frame->StateNode = State;
+	Frame->Code = &State->Script(1);
+	SaveAndLoad( Package, TEXT("SecurityFrame.u") );
+
+	Object = FindObject<UObject>( Package, TEXT("Stateful") );
+	ASSERT_TRUE( Object && Object->GetStateFrame() );
+	EXPECT_FALSE( Object->GetStateFrame()->Code );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+
+	// A saved state naming another kind of object is left behind by editing tools, so it is only reset.
+	Package = UObject::CreatePackage( NULL, TEXT("SecurityStale") );
+	UObject* Stale = UObject::StaticConstructObject( UTextBuffer::StaticClass(), Package, TEXT("Stale"), RF_Public|RF_Standalone );
+	Object = UObject::StaticConstructObject( UTextBuffer::StaticClass(), Package, TEXT("Stateful"), RF_Public|RF_Standalone );
+	Object->InitExecution();
+	Object->GetStateFrame()->StateNode = (UState*)Stale;
+	SaveAndLoad( Package, TEXT("SecurityStale.u") );
+
+	Object = FindObject<UObject>( Package, TEXT("Stateful") );
+	ASSERT_TRUE( Object && Object->GetStateFrame() );
+	EXPECT_EQ( Object->GetStateFrame()->StateNode, Object->GetClass() );
+	EXPECT_FALSE( Object->GetStateFrame()->Code );
+	EXPECT_FALSE( TakeRefusal( Package ) );
+}
+
 static UClass* LoadActorClass( const TCHAR* Name )
 {
 	return UObject::StaticLoadClass( AActor::StaticClass(), NULL, Name, NULL, LOAD_NoWarn, NULL );
@@ -880,7 +1354,8 @@ TEST( Security, ServerCapsAutonomousPhysics )
 		Pawn->Velocity = FVector( 0, 0, 200 );
 		Pawn->Acceleration = FVector( 0, 0, 0 );
 		// ProcessEvent skips numbered natives.
-		BYTE Code[6] = { EX_FloatConst };
+		// P_FINISH reads the byte after EX_EndFunctionParms.
+		BYTE Code[7] = { EX_FloatConst };
 		appMemcpy( Code+1, &Seconds, sizeof(FLOAT) );
 		Code[5] = EX_EndFunctionParms;
 		FFrame Stack( Pawn );

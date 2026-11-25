@@ -4800,6 +4800,7 @@ INT FScriptCompiler::CompileDeclaration( FToken& Token, UBOOL& NeedSemicolon )
 
 		// Init variables.
 		Class->Script.Empty();
+		Class->ScriptFields.Empty();
 		Class->Children			= NULL;
 		Class->Next				= NULL;
 		Class->HashNext			= NULL;
@@ -6320,6 +6321,7 @@ void FScriptCompiler::CompileSecondPass( UStruct* Node )
 	PushNest( NewNest, Node->GetName(), Node );
 	check(TopNode==Node);
 	TopNode->Script.Empty();
+	TopNode->ScriptFields.Empty();
 
 	// Propagate function replication flags down, since they aren't known until the second pass.
 	UFunction* TopFunction = Cast<UFunction>( TopNode );
@@ -6606,6 +6608,7 @@ UBOOL FScriptCompiler::CompileScript
 		// First pass.
 		guard(InitFirstPass);
 		Class->Script.Empty();
+		Class->ScriptFields.Empty();
 		Class->Defaults.Empty();
 		Class->Dependencies.Empty();
 		Class->PropertiesSize = 0;
@@ -6634,6 +6637,7 @@ UBOOL FScriptCompiler::CompileScript
 
 		// Replace the script.
 		Class->Script.Empty();
+		Class->ScriptFields.Empty();
 
 		// Init the replication defs.
 		for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(Class); It && It.GetStruct()==Class; ++It )
@@ -6680,6 +6684,7 @@ UBOOL FScriptCompiler::CompileScript
 
 			// Stub out the script.
 			Class->Script.Empty();
+			Class->ScriptFields.Empty();
 			Class->ClassFlags |= CLASS_Parsed;
 			unguard;
 		}
@@ -6761,6 +6766,7 @@ UBOOL FScriptCompiler::CompileScript
 		// Invalidate this class and scrap its dependencies.
 		Class->ClassFlags &= ~(CLASS_Parsed | CLASS_Compiled);
 		Class->Script.Empty();
+		Class->ScriptFields.Empty();
 		Class->Dependencies.Empty();
 
 		unguard;

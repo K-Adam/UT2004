@@ -2926,7 +2926,9 @@ void AActor::ProcessState( FLOAT DeltaSeconds )
 		INT NumCode=0;
 		while( !bDeleteMe && GetStateFrame()->Code && !GetStateFrame()->LatentAction && !bBadStateCode )
 		{
+			// The load check keeps a statement's value to what an empty string covers.
 			BYTE Buffer[MAX_STRING_CONST_SIZE];
+			appMemzero( Buffer, sizeof(FString) );
 			GetStateFrame()->Step( this, Buffer );
 			if ( NumCode++ > 1000000 )
 			{

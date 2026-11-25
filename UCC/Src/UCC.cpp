@@ -269,6 +269,8 @@ int main( int argc, char* argv[] )
 					GIsEditor = Default->IsEditor;
 					GLazyLoad = Default->LazyLoad;
 					UCommandlet* Commandlet = ConstructObject<UCommandlet>( Class );
+					// Commandlets collect garbage in Main and are read after it.
+					Commandlet->AddToRoot();
 					Commandlet->InitExecution();
 					Commandlet->ParseParms( appCmdLine() );
 					Commandlet->Main( appCmdLine() );

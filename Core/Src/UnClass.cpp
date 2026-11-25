@@ -477,6 +477,8 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 	UProperty** PropertyLinkPtr    = &PropertyLink;
 	UProperty** ConfigLinkPtr      = &ConfigLink;
 	UProperty** ConstructorLinkPtr = &ConstructorLink;
+	TArray<BYTE> Starts;
+	UBOOL Walked = 0;
 	for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> ItC(this); ItC; ++ItC )
 	{
 		if( (ItC->PropertyFlags & CPF_Net) && !GIsEditor )
@@ -484,21 +486,32 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 			ItC->RepOwner = *ItC;
 			FArchive TempAr;
 			INT iCode = ItC->RepOffset;
-			ItC->GetOwnerClass()->SerializeExpr( iCode, TempAr );
-			Map.Set( *ItC, iCode );
-			for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> ItD(this); *ItD!=*ItC; ++ItD )
+			UClass* Owner = ItC->GetOwnerClass();
+			// The walk below decodes from the offset. An inherited condition was checked when its class linked.
+			if( Owner==this && !Walked )
 			{
-				if( ItD->PropertyFlags & CPF_Net )
+				GScriptStatements( this, Starts );
+				Walked = 1;
+			}
+			UBOOL Bad = Owner==this ? !(iCode<Starts.Num() && Starts(iCode)) : GIsRefused(Owner);
+			if( Owner==this && Bad )
+				GRefuseScript( Owner, TEXT("has a replication condition in the middle of an expression") );
+			if( !Bad )
+			{
+				Owner->SerializeExpr( iCode, TempAr );
+				for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> ItD(this); *ItD!=*ItC; ++ItD )
 				{
+					// A refused condition is left out of the map.
 					INT* iCodePtr = Map.Find( *ItD );
-					check(iCodePtr);
 					if
-					(	iCode-ItC->RepOffset==*iCodePtr-ItD->RepOffset
-					&&	appMemcmp(&ItC->GetOwnerClass()->Script(ItC->RepOffset),&ItD->GetOwnerClass()->Script(ItD->RepOffset),iCode-ItC->RepOffset)==0 )
+					(	iCodePtr
+					&&	iCode-ItC->RepOffset==*iCodePtr-ItD->RepOffset
+					&&	appMemcmp(&Owner->Script(ItC->RepOffset),&ItD->GetOwnerClass()->Script(ItD->RepOffset),iCode-ItC->RepOffset)==0 )
 					{
 						ItD->RepOwner = ItC->RepOwner;
 					}
 				}
+				Map.Set( *ItC, iCode );
 			}
 		}
 		if( ItC->PropertyFlags & CPF_NeedCtorLink )
@@ -706,6 +719,7 @@ void UStruct::Destroy()
 {
 	guard(UStruct::Destroy);
 	Script.Empty();
+	ScriptFields.Empty();
 	Super::Destroy();
 	unguard;
 }
@@ -766,6 +780,7 @@ void UStruct::Serialize( FArchive& Ar )
 	if( Ar.IsLoading() )
 	{
 		Script.Empty();
+		ScriptFields.Empty();
 		Script.Add( ScriptSize );
 	}
 	INT iCode = 0;
@@ -865,7 +880,9 @@ void UState::Serialize( FArchive& Ar )
 		if( !Ended )
 		{
 			LabelTableOffset = MAXWORD;
-			GRefuseScript( this, TEXT("has a label table that leaves the script") );
+			// Maps saved by editing tools leave an offset on states without code, and retail plays them.
+			if( Script.Num() )
+				GRefuseScript( this, TEXT("has a label table that leaves the script") );
 		}
 	}
 
@@ -1385,10 +1402,13 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
     { \
         CHECK_SCRIPT_SPACE(sizeof(INT)); \
         T x = NULL; \
-        if (!Ar.IsLoading()) \
-            x = (T) GSerializedPointers[*(INT*)&Script(iCode)]; \
+        INT Index = *(INT*)&Script(iCode); \
+        UBOOL Known = Ar.IsLoading() || (Index>=0 && Index<GTotalSerializedPointers); \
+        if (!Ar.IsLoading() && Known) \
+            x = (T) GSerializedPointers[Index]; \
         Ar << x; \
-        *(INT*)&Script(iCode) = SerialPointerIndex(x); \
+        if (Known) \
+            *(INT*)&Script(iCode) = SerialPointerIndex(x); \
         iCode += sizeof (INT); \
     }
 #endif
@@ -1707,6 +1727,8 @@ void UStruct::PostLoad()
 {
 	guard(UStruct::PostLoad);
 	Super::PostLoad();
+	if( const TCHAR* Rule = GScriptStructureError(this) )
+		GRefuseScript( this, Rule );
 	unguard;
 }
 
@@ -1764,6 +1786,17 @@ void UFunction::PostLoad()
 	unguard;
 }
 static UPackage* TopPackage( UObject* Object );
+// C++ only calls by name the functions of packages it was built with, which hold its native classes.
+static UBOOL CppMayCall( UFunction* Function )
+{
+	while( Function->GetSuperFunction() )
+		Function = Function->GetSuperFunction();
+	UPackage* Package = TopPackage( Function );
+	for( UClass* Class=Function->GetOwnerClass(); Class; Class=Class->GetSuperClass() )
+		if( (Class->GetFlags() & RF_Native) && TopPackage(Class)==Package )
+			return 1;
+	return 0;
+}
 const TCHAR* UFunction::SignatureError()
 {
 	// Callers size and fill the parameter block from the leading parameters, 16 bits wide.
@@ -1810,6 +1843,10 @@ const TCHAR* UFunction::SignatureError()
 			// The compiler lets a private name be used again with any parameters. Calls to it still go by
 			// name, so only the package that made both can know what arrives.
 			if( (Hidden->FunctionFlags & FUNC_Private) && !Natives && TopPackage(Hidden)==TopPackage(this) )
+				continue;
+			// A script call by name is skipped at run time when the function it finds takes other parameters
+			// than the one the load check gave it, as a package built against another version of its base does.
+			if( !Natives && !((Hidden->FunctionFlags ^ FunctionFlags) & FUNC_Iterator) && !CppMayCall(Hidden) )
 				continue;
 			return TEXT("takes other parameters than the function it hides");
 		}
@@ -1942,19 +1979,24 @@ void UFunction::Bind()
 	else if( iNative != 0 )
 	{
 		// The package picks the number, so it must name a native of this class, not an opcode or another class's
-		// native. A number without a native stays bound to the unknown code handler.
+		// native. A number without a native stays bound to the unknown code handler. Parameters are compared
+		// with the declaration in SignatureError, so without one only the declaring class may bind it.
 		UClass* NativeClass = iNative>=EX_FirstNative ? GNativeClass(iNative) : NULL;
-		if( NativeClass && GetOwnerClass()->IsChildOf(NativeClass) )
+		if( NativeClass && GetOwnerClass()->IsChildOf(NativeClass) && (GNativeFunction(iNative) || GetOwnerClass()==NativeClass) )
 			Func = GUncheckedNative(iNative);
 		else if( iNative>=EX_FirstNative && !NativeClass )
 			Func = &UObject::execUndefined;
 		else
 			RefuseNative( this );
 	}
+	else if( !(GetOwnerClass()->GetFlags() & RF_Native) )
+	{
+		// Natives are looked up by class name alone, so a package class named Object would reach the opcode
+		// handlers. UClass::Bind already holds a native class to the one this build registered.
+		RefuseNative( this );
+	}
 	else
 	{
-		// Static builds look natives up by name alone, so a package class named like a native class would bind
-		// its code.
 		TCHAR Proc[256];
 		appSprintf( Proc, TEXT("int%sexec%s"), GetOwnerClass()->GetNameCPP(), GetName() );
 		UPackage* ClassPackage = GetOwnerClass()->GetOuterUPackage();

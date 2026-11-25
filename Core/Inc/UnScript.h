@@ -32,12 +32,20 @@ extern CORE_API BYTE GLatentNatives[];
 // Whether two functions take and return the same parameter block, so one can be called in place of the other.
 // With Override A is called in place of B by name: it may drop out, and object parameters are of the same class.
 CORE_API UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override=0 );
+// Iterators and skipping natives read bytecode a call by name does not have.
+UBOOL GNeedsFixedCall( UFunction* Function );
 // The script function that declares a numbered native.
 UFunction* GNativeFunction( INT iNative );
 // Turns down the package of an object whose layout the loader had to repair.
 CORE_API void GRefuseScript( UObject* Culprit, const TCHAR* Rule );
 UBOOL GIsRefused( UObject* Object );
 CORE_API void GDisableRefusedScript( TArray<UObject*>& Loaded );
+CORE_API const TCHAR* GScriptStructureError( UStruct* Node );
+// Marks where each statement that can run starts, by the grammar alone, for checks made before the batch has loaded.
+UBOOL GScriptStatements( UStruct* Node, TArray<BYTE>& Starts );
+// The ScriptFields key of the element an array opcode reads as a context's member, apart from the opcode's own.
+inline INT GContextElementKey( INT Offset ) { return -1-Offset; }
+
 extern CORE_API Native GCasts[];
 BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 
@@ -118,9 +126,13 @@ extern CORE_API FFrame* GIteratorFrame;
 	BYTE B=0, Buffer[MAX_STRING_CONST_SIZE]; \
 	BYTE *StartCode = Stack.Code; \
 	do {
+// Each statement's value lands on what the one before left, the load check keeps it to what an empty string covers.
 #define POST_ITERATOR \
 		while( (B=*Stack.Code)!=EX_IteratorPop && B!=EX_IteratorNext ) \
+		{ \
+			appMemzero( Buffer, sizeof(FString) ); \
 			Stack.Step( Stack.Object, Buffer ); \
+		} \
 		if( *Stack.Code++==EX_IteratorNext ) \
 			Stack.Code = StartCode; \
 	} while( B != EX_IteratorPop ); \
