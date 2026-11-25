@@ -377,6 +377,9 @@ class ENGINE_API UTexture : public UBitmapMaterial
 	void SetLastUpdateTime(DOUBLE T) { __LastUpdateTime = T; }
 };
 
+// The DXT texture from HDTextures/hdtextures.ini a renderer draws in place of this retail one, NULL for none.
+ENGINE_API FTexture* FindTextureReplacement(UTexture* Texture);
+
 //
 // Cubemap.
 //

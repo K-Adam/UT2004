@@ -66,7 +66,7 @@ if(UT_ASSETS_DIR AND NOT ANDROID AND NOT EXISTS ${CMAKE_BINARY_DIR}/assets)
 endif()
 # Copies rather than links, as the game writes CacheRecords.ucl next to the script packages and assets stays the only link.
 set(UT_STAGE_DIRS "")
-foreach(dir Help Web KarmaData Foliage)
+foreach(dir Help Web KarmaData Foliage HDTextures)
   # Older configures linked these, removing the link leaves its target alone.
   if(IS_SYMLINK ${CMAKE_BINARY_DIR}/${dir})
     if(CMAKE_HOST_WIN32)
@@ -429,7 +429,7 @@ if(TARGET UCC)
   # The physics submodule and the fetched libraries have install rules of their own, the archive only takes this component.
   set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME game)
   include(InstallRequiredSystemLibraries)
-  install(DIRECTORY System Help KarmaData Web Foliage DESTINATION .)
+  install(DIRECTORY System Help KarmaData Web Foliage HDTextures DESTINATION .)
   install(DIRECTORY ${UT_SYSTEM_DIR}/ DESTINATION System USE_SOURCE_PERMISSIONS
     FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll" PATTERN "*.so" PATTERN "*.so.*" PATTERN "*-bin"
     PATTERN "ut_tests*" EXCLUDE)

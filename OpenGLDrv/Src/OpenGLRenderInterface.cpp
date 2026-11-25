@@ -56,6 +56,12 @@ void FOpenGLRenderInterface::PopState()
 
 FOpenGLTexture* FOpenGLRenderInterface::CacheTexture(FBaseTexture* Texture)
 {
+	// A replacement the GPU cannot take compressed would be decompressed to four or eight times its size.
+	FTexture* Plain = Texture->GetTextureInterface();
+	if( UTexture* Retail = Plain ? Plain->GetUTexture() : NULL )
+		if( FTexture* Replacement = FindTextureReplacement(Retail) )
+			if( Replacement->GetFormat() == TEXF_DXT1 ? RenDev->SupportsDXT1 : RenDev->SupportsDXT35 )
+				Texture = Replacement;
 	FOpenGLTexture* Result = (FOpenGLTexture*)RenDev->GetCachedResource(Texture->GetCacheId());
 	if( !Result )
 		Result = new FOpenGLTexture(RenDev,Texture->GetCacheId());

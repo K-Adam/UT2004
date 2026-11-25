@@ -18,7 +18,7 @@ set(ENGINE_SRC
   UnScript.cpp UnScriptedTexture.cpp UnSecurity.cpp UnShadowProjector.cpp UnSkeletalMesh.cpp
   UnSkeletalMeshCollision.cpp UnSkeletalTools.cpp UnSparkEmitter.cpp UnSpriteEmitter.cpp
   UnStatGraph.cpp UnStaticMesh.cpp UnStaticMeshBuild.cpp UnStaticMeshCollision.cpp UnStats.cpp
-  UnSVehicle.cpp UnTerrain.cpp UnTerrainTools.cpp UnTex.cpp UnTrace.cpp UnTrailEmitter.cpp UnTrunk.cpp UnURL.cpp
+  UnSVehicle.cpp UnTerrain.cpp UnTerrainTools.cpp UnTex.cpp UnTexReplace.cpp UnTrace.cpp UnTrailEmitter.cpp UnTrunk.cpp UnURL.cpp
   UnVehicle.cpp UnVertMesh.cpp UnVoiceChat.cpp UnVolume.cpp USpline.cpp UStreamInterface.cpp
   xDataObject.cpp xForceFeedback.cpp xParticleMgr.cpp)
 

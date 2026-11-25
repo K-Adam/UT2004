@@ -18,6 +18,7 @@ def collect(source, scripts, prefix=''):
     files += walk(scripts, 'Scripts', {'.u', '.ucl'})
     files += walk(os.path.join(source, 'KarmaData'), prefix + 'KarmaData')
     files += walk(os.path.join(source, 'Foliage'), prefix + 'Foliage')
+    files += walk(os.path.join(source, 'HDTextures'), prefix + 'HDTextures')
     for f in ('ut2004logo.bmp', 'Unreal.bmp'):
         files.append((os.path.join(source, 'Help', f), prefix + 'Help/' + f))
     return files
