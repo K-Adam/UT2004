@@ -96,7 +96,7 @@ struct FPropertyTag
 	// Serializer.
 	friend FArchive& operator<<( FArchive& Ar, FPropertyTag& Tag )
 	{
-#ifdef _DEBUG
+#ifdef UT_DEBUG
 		static TCHAR PrevTag[NAME_SIZE]=TEXT("");
 #endif
 		guard(FPropertyTag<<);
@@ -109,7 +109,7 @@ struct FPropertyTag
 		Ar << Tag.Name;
 		if( Tag.Name == NAME_None )
 			return Ar;
-#ifdef _DEBUG
+#ifdef UT_DEBUG
 		appStrcpy( PrevTag, *Tag.Name );
 #endif
 		unguard;
@@ -183,7 +183,7 @@ struct FPropertyTag
 		}
 		else Tag.ArrayIndex = 0;
 		return Ar;
-#ifdef _DEBUG
+#ifdef UT_DEBUG
 		unguardf(( TEXT("(After %s)"), PrevTag ));
 #else
 		unguard;

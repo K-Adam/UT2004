@@ -5081,7 +5081,7 @@ void UObject::PurgeGarbage()
 		{
 			debugfSlow( NAME_DevGarbage, TEXT("Garbage collected object %i: %s"), i, GObjObjects(i)->GetFullName() );
 			// gam ---
-			#ifdef _DEBUG
+			#ifdef UT_DEBUG
 			    FName LastObjectName = GObjObjects(i)->GetFName();
 			    checkSlow( LastObjectName.IsValid() );
 			    FName LastObjectClassName = GObjObjects(i)->GetClass()->GetFName();

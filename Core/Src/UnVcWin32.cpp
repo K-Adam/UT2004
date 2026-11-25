@@ -494,7 +494,7 @@ BOOL WINAPI CtrlCHandler( DWORD dwCtrlType )
 	}
 	return 1;
 }
-#ifndef _DEBUG
+#ifndef UT_DEBUG
 #pragma optimize( "g", off ) // Fix CPU brand string mangling in release mode
 #endif
 void appPlatformInit()
@@ -552,7 +552,7 @@ void appPlatformInit()
 
 	unguard;
 }
-#ifndef _DEBUG
+#ifndef UT_DEBUG
 #pragma optimize("", on)
 #endif
 

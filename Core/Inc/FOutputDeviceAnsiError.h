@@ -25,7 +25,7 @@ public:
 	void Serialize( const TCHAR* Msg, enum EName Event )
 	{
 
-#if _DEBUG
+#if UT_DEBUG
 		if( appIsDebuggerPresent() )
 		{	
 			// Just display info and break the debugger.

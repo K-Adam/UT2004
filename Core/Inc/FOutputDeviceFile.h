@@ -163,7 +163,7 @@ public:
 					WriteRaw( Data );
 					WriteRaw( LINE_TERMINATOR );
 #endif
-#ifdef _DEBUG
+#ifdef UT_DEBUG
 #if _WIN32
 					TCHAR Temp[1024];
 

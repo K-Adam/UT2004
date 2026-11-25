@@ -100,14 +100,14 @@ void ShowBanner( FOutputDevice& Warn )
 
 int main( int argc, char* argv[] )
 {
-    #if ((__UNIX__) && (defined _DEBUG))
+    #if ((__UNIX__) && (defined UT_DEBUG))
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
     #endif
 
 	INT ErrorLevel = 0;
 	GIsStarted     = 1;
-#ifndef _DEBUG
+#ifndef UT_DEBUG
 	try
 #endif
 	{
@@ -293,7 +293,7 @@ int main( int argc, char* argv[] )
 		appPreExit();
 		GIsGuarded = 0;
 	}
-#ifndef _DEBUG
+#ifndef UT_DEBUG
 	catch( ... )
 	{
 		// Crashed.

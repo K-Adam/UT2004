@@ -27,7 +27,7 @@
 
 // Optimization macros (preceeded by #pragma).
 #define DISABLE_OPTIMIZATION optimize("",off)
-#ifdef _DEBUG
+#ifdef UT_DEBUG
 	#define ENABLE_OPTIMIZATION  optimize("",off)
 #else
 	#define ENABLE_OPTIMIZATION  optimize("",on)

@@ -34,7 +34,7 @@ extern "C" {HINSTANCE hInstance;}
 extern "C" {TCHAR GPackage[64]=TEXT("SDLLaunch");}
 
 // Memory allocator.
-#ifdef _DEBUG
+#ifdef UT_DEBUG
 	#include "FMallocDebug.h"
 	FMallocDebug Malloc;
 #else
@@ -852,7 +852,7 @@ int RunEngine( const TCHAR* CmdLine )
 	appStrcpy( GPackage, appPackage() );
 
 	// Begin guarded code.
-#ifndef _DEBUG
+#ifndef UT_DEBUG
 	try
 	{
 #endif
@@ -960,7 +960,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 
 		appPreExit();
 		GIsGuarded = 0;
-#ifndef _DEBUG
+#ifndef UT_DEBUG
 	}
 	catch( ... )
 	{

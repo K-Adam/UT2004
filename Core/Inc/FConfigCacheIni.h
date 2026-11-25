@@ -491,7 +491,7 @@ public:
 		Ar.Log( TEXT("Files map:") );
 		TMap<FString,FConfigFile>::Dump( Ar );
 
-#ifdef _DEBUG
+#ifdef UT_DEBUG
 		// rjp --
 		for ( TMapBase<FString,FConfigFile>::TIterator It(*this); It; ++It )
 		{

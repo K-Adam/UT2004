@@ -108,7 +108,7 @@ CORE_API extern UBOOL (*GLaunchURL)( const TCHAR* URL );
 // Meant to be enabled in release builds.
 //
 
-#if ((_DEBUG) && (!DO_PORTABLE_GUARD_BLOCKS)) || !DO_GUARD
+#if ((UT_DEBUG) && (!DO_PORTABLE_GUARD_BLOCKS)) || !DO_GUARD
   #if __UNIX__
     #define guard(func)			{
   #else
@@ -159,7 +159,7 @@ CORE_API extern UBOOL (*GLaunchURL)( const TCHAR* URL );
 // For showing calling stack when errors occur in performance-critical functions.
 // Meant to be disabled in release builds.
 //
-#if defined(_DEBUG) || !DO_GUARD || !DO_GUARD_SLOW
+#if defined(UT_DEBUG) || !DO_GUARD || !DO_GUARD_SLOW
 	#define guardSlow(func)		{
 	#define unguardfSlow(msg)	}
 	#define unguardSlow			}
