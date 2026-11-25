@@ -649,11 +649,12 @@ void FkDOPNode::SplitTriangleList(TArray<FStaticMeshVertex>& Vertices,INT Start,
         {
             FLOAT Dot;
 			// Find all the triangles to the "left" of the splitting plane
+			// Rounding can put the mean above every centroid, so the bound is tested before the read.
             do
 			{
-                Dot = BuildTriangles(++Left).Centroid | PlaneNormals[BestPlane];
+                ++Left;
 			}
-            while (Dot < BestMean && Left < Right);
+            while (Left < Right && (BuildTriangles(Left).Centroid | PlaneNormals[BestPlane]) < BestMean);
 			// Find all the triangles to the "right" of the splitting plane
             do
 			{
@@ -1276,7 +1277,7 @@ void FkDOPTree::SphereQuery(FkDOPSphereQuery& Query)
 	guard(FkDOPTree::SphereQuery);
 
 	// Check the query box overlaps the root node KDOP. If so, run query recursively.
-	if( Query.Nodes(0).BoundingVolume.AABBOverlapCheck( Query.LocalBox ) )
+	if( Query.Nodes.Num() && Query.Nodes(0).BoundingVolume.AABBOverlapCheck( Query.LocalBox ) )
 	{
 		Query.Nodes(0).SphereQuery( Query );
 	}

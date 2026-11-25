@@ -10,6 +10,7 @@
 #include "TestEngine.h"
 #include "UnNet.h"
 #include "UnLinker.h"
+#include "UnFractal.h"
 
 static FString Repeat( const TCHAR* Text, INT Count )
 {
@@ -1457,4 +1458,229 @@ TEST( Security, GamespyQueryReplyLimit )
 
 	closesocket( Socket );
 	GTestEngine->GLevel->DestroyActor( Query );
+}
+
+// A triangle with one leaf, a two-plane collision hull and a light map, as the BSP build leaves them.
+static UModel* ValidModel( UObject* Outer, FName Name=NAME_None )
+{
+	UModel* Model = ConstructObject<UModel>( UModel::StaticClass(), Outer, Name, RF_Public|RF_Standalone );
+	for( INT i=0; i<3; i++ )
+	{
+		Model->Points.AddItem( FVector( i, i*i, 0 ) );
+		Model->Vectors.AddItem( FVector( i==0, i==1, i==2 ) );
+		Model->Verts(Model->Verts.AddZeroed()).pVertex = i;
+	}
+	FBspSurf& Surf = Model->Surfs(Model->Surfs.AddZeroed());
+	Surf.vTextureU = 1;
+	Surf.vTextureV = 2;
+	FBspNode& Node = Model->Nodes(Model->Nodes.AddZeroed());
+	Node.NumVertices = 3;
+	Node.iBack = Node.iFront = Node.iPlane = Node.iRenderBound = Node.iLeaf[1] = INDEX_NONE;
+	Node.iCollisionBound = 0;
+	Node.iLightMap = 0;
+	for( INT i=0; i<8; i++ )
+		Model->LeafHulls.AddItem( i==0 ? 0x40000000 : i==1 ? INDEX_NONE : 0 );
+	Model->Leaves.AddItem( FLeaf( 0, INDEX_NONE, INDEX_NONE, 1 ) );
+	FLightMap* LightMap = new(Model->LightMaps) FLightMap( NULL, 0, 0 );
+	LightMap->iTexture = LightMap->OffsetX = LightMap->OffsetY = 0;
+	LightMap->SizeX = LightMap->SizeY = 16;
+	new(LightMap->Bitmaps) FLightBitmap( NULL, 8, 0, 15, 15 );
+	FLightMapTexture* Texture = new(Model->LightMapTextures) FLightMapTexture( NULL );
+	Texture->LightMaps.AddItem( 0 );
+	Texture->Revision = 1;
+	return Model;
+}
+
+TEST( Security, LoadedModelIsChecked )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityModel") );
+	EXPECT_FALSE( ValidModel( Package )->CheckLoaded() );
+	void (*Edits[])( UModel* ) =
+	{
+		[]( UModel* M ){ M->Nodes(0).iSurf = 1; },
+		[]( UModel* M ){ M->Nodes(0).NumVertices = 2; },
+		[]( UModel* M ){ FBspNode Copy = M->Nodes(0); M->Nodes(M->Nodes.AddZeroed()) = Copy; M->Nodes(0).iBack = M->Nodes(0).iFront = 1; },
+		[]( UModel* M ){ M->LeafHulls.Remove( 7 ); },
+		[]( UModel* M ){ FBspNode Copy = M->Nodes(0); for( INT i=0; i<=FBspNode::MAX_DEPTH; i++ ){ INT Child = M->Nodes.AddItem( Copy ); M->Nodes(i).iFront = Child; } },
+		[]( UModel* M ){ FBspNode Copy = M->Nodes(0); INT A = M->Nodes.AddItem( Copy ), B = M->Nodes.AddItem( Copy ); M->Nodes(A).iPlane = B; M->Nodes(B).iPlane = A; },
+		[]( UModel* M ){ M->Lights.AddItem( GTestEngine->GLevel->GetLevelInfo() ); M->Leaves(0).iPermeating = 0; },
+		[]( UModel* M ){ M->LightMaps(0).OffsetX = LIGHTMAP_TEXTURE_WIDTH-8; },
+		[]( UModel* M ){ M->LightMaps(0).Bitmaps(0).Bits.Remove( 0 ); },
+	};
+	for( INT i=0; i<ARRAY_COUNT(Edits); i++ )
+	{
+		UModel* Model = ValidModel( Package );
+		Edits[i]( Model );
+		EXPECT_TRUE( Model->CheckLoaded() ) << "edit " << i;
+	}
+}
+
+// The broken model is emptied, which the traces handle, and the package is refused.
+TEST( Security, BrokenModelIsEmptiedOnLoad )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityModelLoad") );
+	ValidModel( Package, TEXT("Model") );
+	SaveAndLoad( Package, TEXT("SecurityModelLoad.u") );
+	UModel* Model = FindObject<UModel>( Package, TEXT("Model") );
+	ASSERT_TRUE( Model );
+	EXPECT_EQ( 1, Model->Nodes.Num() );
+	EXPECT_FALSE( TakeRefusal( Package ) );
+
+	Model->Nodes(0).iSurf = 5;
+	SaveAndLoad( Package, TEXT("SecurityModelLoad.u") );
+	EXPECT_EQ( 0, Model->Nodes.Num() );
+	EXPECT_EQ( 0, Model->NumZones );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+	FCheckResult Hit;
+	EXPECT_TRUE( Model->LineCheck( Hit, NULL, FVector(100,0,0), FVector(-100,0,0), FVector(0,0,0), 0, 0 ) );
+	EXPECT_EQ( 0, Model->PointRegion( GTestEngine->GLevel->GetLevelInfo(), FVector(0,0,0) ).ZoneNumber );
+}
+
+// Vertices past the polygon's array are read and dropped, so the next polygon still loads.
+TEST( Security, PolygonVerticesPastItsArray )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityPolys") );
+	UPolys* Polys = ConstructObject<UPolys>( UPolys::StaticClass(), Package, TEXT("Polys"), RF_Public|RF_Standalone );
+	for( INT i=0; i<2; i++ )
+	{
+		FPoly& Poly = Polys->Element(Polys->Element.AddZeroed());
+		Poly.Init();
+		Poly.NumVertices = i ? 3 : FPoly::MAX_VERTICES+4;
+		Poly.ItemName = i ? FName(TEXT("Second")) : NAME_None;
+	}
+	SaveAndLoad( Package, TEXT("SecurityPolys.u") );
+	ASSERT_EQ( 2, Polys->Element.Num() );
+	EXPECT_EQ( 0, Polys->Element(0).NumVertices );
+	EXPECT_EQ( 3, Polys->Element(1).NumVertices );
+	EXPECT_EQ( FName(TEXT("Second")), Polys->Element(1).ItemName );
+	EXPECT_TRUE( TakeRefusal( Package ) );
+}
+
+// One triangle in one section with its collision tree, as the static mesh build leaves it.
+static UStaticMesh* ValidStaticMesh( UObject* Outer, FName Name=NAME_None )
+{
+	UStaticMesh* Mesh = ConstructObject<UStaticMesh>( UStaticMesh::StaticClass(), Outer, Name, RF_Public|RF_Standalone );
+	Mesh->InternalVersion = 11;
+	new(Mesh->Materials) FStaticMeshMaterial( NULL );
+	FStaticMeshSection* Section = new(Mesh->Sections) FStaticMeshSection();
+	Section->NumTriangles = Section->NumPrimitives = 1;
+	Section->MinVertexIndex = 0;
+	Section->MaxVertexIndex = 2;
+	for( INT i=0; i<3; i++ )
+	{
+		FStaticMeshVertex Vertex;
+		Vertex.Position = FVector( i*64, i==1 ? 64 : 0, 0 );
+		Vertex.Normal = FVector( 0, 0, 1 );
+		Mesh->VertexStream.Vertices.AddItem( Vertex );
+		Mesh->IndexBuffer.Indices.AddItem( i );
+	}
+	FkDOPNode* Node = new(Mesh->kDOPTree.Nodes) FkDOPNode();
+	Node->bIsLeaf = 1;
+	Node->t.NumTriangles = 1;
+	Node->t.StartIndex = 0;
+	new(Mesh->kDOPTree.Triangles) FkDOPCollisionTriangle( 0, 1, 2 );
+	return Mesh;
+}
+
+// One bone and one skinned vertex.
+static USkeletalMesh* ValidSkeletalMesh( UObject* Outer )
+{
+	USkeletalMesh* Mesh = ConstructObject<USkeletalMesh>( USkeletalMesh::StaticClass(), Outer, NAME_None, RF_Public|RF_Standalone );
+	Mesh->InternalVersion = 2;
+	Mesh->RefSkeleton.AddZeroed();
+	FStaticLODModel* LOD = new(Mesh->LODModels) FStaticLODModel();
+	LOD->SmoothVerts.AddZeroed();
+	LOD->SmoothStreamWedges = 1;
+	DWORD Stream[] = { 0, 0, 0, 0xFFFFFFFF };
+	for( INT i=0; i<ARRAY_COUNT(Stream); i++ )
+		LOD->SkinningStream.AddItem( Stream[i] );
+	return Mesh;
+}
+
+TEST( Security, LoadedMeshesAreChecked )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityMeshes") );
+	EXPECT_FALSE( ValidStaticMesh( Package )->CheckLoaded() );
+	void (*StaticEdits[])( UStaticMesh* ) =
+	{
+		[]( UStaticMesh* M ){ M->IndexBuffer.Indices(1) = 3; },
+		[]( UStaticMesh* M ){ M->kDOPTree.Nodes(0).bIsLeaf = 0; },
+	};
+	for( INT i=0; i<ARRAY_COUNT(StaticEdits); i++ )
+	{
+		UStaticMesh* Mesh = ValidStaticMesh( Package );
+		StaticEdits[i]( Mesh );
+		EXPECT_TRUE( Mesh->CheckLoaded() ) << "static mesh edit " << i;
+	}
+
+	EXPECT_FALSE( ValidSkeletalMesh( Package )->CheckLoaded() );
+	// A parent after its child is drawn wrong, as some converted meshes on live servers have it.
+	USkeletalMesh* Late = ValidSkeletalMesh( Package );
+	Late->RefSkeleton.AddZeroed( 2 );
+	Late->RefSkeleton(1).ParentIndex = 2;
+	EXPECT_FALSE( Late->CheckLoaded() );
+	void (*SkeletalEdits[])( USkeletalMesh* ) =
+	{
+		[]( USkeletalMesh* M ){ M->LODModels(0).SkinningStream.Pop(); },
+		[]( USkeletalMesh* M ){ M->LODModels(0).SkinningStream(0) = 6; },
+		[]( USkeletalMesh* M ){ M->RefSkeleton(0).ParentIndex = 1; },
+		[]( USkeletalMesh* M ){ M->RefSkeleton.AddZeroed( 2 ); M->RefSkeleton(1).ParentIndex = 2; M->RefSkeleton(2).ParentIndex = 1; },
+	};
+	for( INT i=0; i<ARRAY_COUNT(SkeletalEdits); i++ )
+	{
+		USkeletalMesh* Mesh = ValidSkeletalMesh( Package );
+		SkeletalEdits[i]( Mesh );
+		EXPECT_TRUE( Mesh->CheckLoaded() ) << "skeletal mesh edit " << i;
+	}
+}
+
+TEST( Security, LoadedTexturesAndEmittersAreChecked )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityTextures") );
+	UTexture* Texture = ConstructObject<UTexture>( UTexture::StaticClass(), Package );
+	Texture->Init( 64, 64 );
+	EXPECT_FALSE( Texture->CheckLoaded() );
+	Texture->Mips(0).USize = 1<<20;
+	EXPECT_TRUE( Texture->CheckLoaded() );
+
+	UBeamEmitter* Beam = ConstructObject<UBeamEmitter>( UBeamEmitter::StaticClass(), Package );
+	EXPECT_FALSE( Beam->CheckLoaded() );
+	Beam->MaxParticles = MAXINT/256;
+	EXPECT_TRUE( Beam->CheckLoaded() );
+
+	UFireTexture* Fire = ConstructObject<UFireTexture>( UFireTexture::StaticClass(), Package );
+	Fire->Init( 64, 64 );
+	// Init leaves the sparks unset, only loaded ones are checked.
+	Fire->Sparks.Empty();
+	Fire->Sparks.AddZeroed();
+	EXPECT_FALSE( Fire->CheckLoaded() );
+	Fire->Sparks(0).X = 64;
+	EXPECT_TRUE( Fire->CheckLoaded() );
+	Fire->Sparks(0).X = 0;
+	Fire->USize = 63;
+	EXPECT_TRUE( Fire->UFractalTexture::CheckLoaded() );
+	UWaveTexture* Water = ConstructObject<UWaveTexture>( UWaveTexture::StaticClass(), Package );
+	Water->Init( 64, 64 );
+	EXPECT_FALSE( Water->CheckLoaded() );
+	Water->NumDrops = MaxDrops+1;
+	EXPECT_TRUE( Water->CheckLoaded() );
+}
+
+// UV sets past the triangle's array are read and dropped when the lazy triangles load, the package still runs.
+TEST( Security, StaticMeshTriangleUVsPastItsArray )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityTriangles") );
+	UStaticMesh* Mesh = ValidStaticMesh( Package, TEXT("Mesh") );
+	FStaticMeshTriangle* Triangle = new(Mesh->RawTriangles) FStaticMeshTriangle;
+	appMemzero( Triangle, sizeof(*Triangle) );
+	Triangle->NumUVs = ARRAY_COUNT(Triangle->UVs[0]) + 4;
+	ASSERT_TRUE( UObject::SavePackage( Package, NULL, RF_Standalone, TEXT("SecurityTriangles.u"), GWarn ) );
+	ASSERT_TRUE( UObject::LoadPackage( NULL, TEXT("SecurityTriangles.u"), LOAD_NoWarn ) );
+	EXPECT_FALSE( TakeRefusal( Package ) );
+	Mesh->RawTriangles.Load();
+	ASSERT_EQ( 1, Mesh->RawTriangles.Num() );
+	EXPECT_EQ( 0, Mesh->RawTriangles(0).NumUVs );
+	EXPECT_FALSE( TakeRefusal( Package ) );
+	UObject::ResetLoaders( Package, 0, 1 );
+	GFileManager->Delete( TEXT("SecurityTriangles.u") );
 }

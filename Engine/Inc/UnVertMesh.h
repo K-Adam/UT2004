@@ -163,6 +163,7 @@ class ENGINE_API UVertMesh : public ULodMesh
 	//  Object interface.
 	void Serialize( FArchive& Ar );	
 	void PostLoad();
+	const TCHAR* CheckLoaded();
 
 	// Constructor.
 	UVertMesh()

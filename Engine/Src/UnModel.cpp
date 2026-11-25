@@ -55,8 +55,16 @@ ENGINE_API FArchive& operator<<( FArchive& Ar, FPoly& Poly )
 	guard(FPoly<<);
 	Ar << AR_INDEX(Poly.NumVertices);
 	Ar << Poly.Base << Poly.Normal << Poly.TextureU << Poly.TextureV;
-	for( INT i=0; i<Poly.NumVertices; i++ )
-		Ar << Poly.Vertex[i];
+	// Extra vertices are still read, a short read would end the game.
+	FVector Extra( 0, 0, 0 );
+	for( INT i=0; i<Poly.NumVertices && !Ar.IsError(); i++ )
+		Ar << (i<FPoly::MAX_VERTICES ? Poly.Vertex[i] : Extra);
+	if( Ar.IsLoading() && (Poly.NumVertices<0 || Poly.NumVertices>FPoly::MAX_VERTICES) )
+	{
+		Poly.NumVertices = 0;
+		if( Ar.LoadingPackage() )
+			GRefuseScript( Ar.LoadingPackage(), TEXT("has a polygon with too many vertices") );
+	}
 	Ar << Poly.PolyFlags;
 	Ar << Poly.Actor << Poly.Material << Poly.ItemName;
 	Ar << AR_INDEX(Poly.iLink) << AR_INDEX(Poly.iBrushPoly);
@@ -160,10 +168,12 @@ void UModel::Serialize( FArchive& Ar )
 	Super::Serialize( Ar );
 
 	Ar << Vectors << Points << Nodes << Surfs << Verts << NumSharedSides << NumZones;
-	if( NumZones<0 || NumZones>FBspNode::MAX_ZONES )
+	UBOOL TooManyZones = NumZones<0 || NumZones>FBspNode::MAX_ZONES;
+	if( TooManyZones && !Ar.LoadingPackage() )
 		appErrorf( TEXT("%s has %i zones"), GetFullName(), NumZones );
-	for( INT i=0; i<NumZones; i++ )
-		Ar << Zones[i];
+	FZoneProperties Extra;
+	for( INT i=0; i<NumZones && !Ar.IsError(); i++ )
+		Ar << (i<FBspNode::MAX_ZONES ? Zones[i] : Extra);
 	Ar << Polys;
 	if( Polys && !Ar.IsTrans() )
 	{
@@ -229,6 +239,152 @@ void UModel::Serialize( FArchive& Ar )
 	if(Ar.Ver() >= 110)
 		Ar << LightMapTextures;
 
+	if( Ar.LoadingPackage() )
+	{
+		const TCHAR* Rule = TooManyZones ? TEXT("has too many zones") : CheckLoaded();
+		if( Rule )
+		{
+			EmptyModel( 1, 0 );
+			GRefuseScript( this, Rule );
+		}
+	}
+
+	unguard;
+}
+
+// The rules follow what the traces, the renderer and the lighting read without checking.
+const TCHAR* UModel::CheckLoaded()
+{
+	guard(UModel::CheckLoaded);
+	#define NONE_OR_IN(i,A) ((i)==INDEX_NONE || (A).IsValidIndex(i))
+	TArray<BYTE> HasParent;
+	HasParent.AddZeroed( Nodes.Num() );
+	for( INT i=0; i<Nodes.Num(); i++ )
+	{
+		const FBspNode& Node = Nodes(i);
+		// Vertices and surfaces no node uses can hold garbage in retail maps, nothing reads them.
+		if( !Surfs.IsValidIndex(Node.iSurf) )
+			return TEXT("has a BSP node on a missing surface");
+		const FBspSurf& Surf = Surfs(Node.iSurf);
+		if( !Points.IsValidIndex(Surf.pBase) || !Vectors.IsValidIndex(Surf.vNormal) || !Vectors.IsValidIndex(Surf.vTextureU) || !Vectors.IsValidIndex(Surf.vTextureV) )
+			return TEXT("has a BSP surface on a missing point");
+		// The renderer draws NumVertices-2 triangles from at least 3 vertices, the build never writes fewer.
+		if( Node.NumVertices && (Node.NumVertices<3 || Node.NumVertices>FBspNode::MAX_FINAL_VERTICES || Node.iVertPool<0 || Node.iVertPool>Verts.Num()-Node.NumVertices) )
+			return TEXT("has a BSP node with missing vertices");
+		for( INT v=0; v<Node.NumVertices; v++ )
+			if( !Points.IsValidIndex(Verts(Node.iVertPool+v).pVertex) )
+				return TEXT("has a BSP vertex on a missing point");
+		// Each node having at most one parent and the root none makes every walk from the root end.
+		const INT Children[3] = { Node.iBack, Node.iFront, Node.iPlane };
+		for( INT c=0; c<3; c++ )
+			if( Children[c]!=INDEX_NONE )
+			{
+				if( Children[c]==0 || !Nodes.IsValidIndex(Children[c]) || HasParent(Children[c]) )
+					return TEXT("has a BSP that is not a tree");
+				HasParent(Children[c]) = 1;
+			}
+		if( Node.iCollisionBound!=INDEX_NONE )
+		{
+			// SetupHulls reads up to 64 planes, then 6 floats of bounds after the next entry.
+			INT Hull = Node.iCollisionBound, Count = 0;
+			if( !LeafHulls.IsValidIndex(Hull) )
+				return TEXT("has a BSP node with a missing collision hull");
+			while( Count<64 && Hull+Count<LeafHulls.Num() && LeafHulls(Hull+Count)!=INDEX_NONE )
+				if( !Nodes.IsValidIndex(LeafHulls(Hull+Count++) & ~0x40000000) )
+					return TEXT("has a collision hull on a missing BSP node");
+			if( Hull+Count+7>LeafHulls.Num() )
+				return TEXT("has a collision hull that does not end");
+		}
+		if( !NONE_OR_IN(Node.iRenderBound,Bounds) )
+			return TEXT("has a BSP node with missing bounds");
+		if( !NONE_OR_IN(Node.iLeaf[0],Leaves) || !NONE_OR_IN(Node.iLeaf[1],Leaves) )
+			return TEXT("has a BSP node in a missing leaf");
+		if( Node.iZone[0]>=FBspNode::MAX_ZONES || Node.iZone[1]>=FBspNode::MAX_ZONES )
+			return TEXT("has a BSP node in a missing zone");
+		if( !NONE_OR_IN(Node.iLightMap,LightMaps) )
+			return TEXT("has a BSP node with a missing light map");
+	}
+	// The walks recurse once per level, and loops over every node follow iPlane, so unreached nodes must not cycle either.
+	TArray<INT> Pending, Depth;
+	Depth.AddZeroed( Nodes.Num() );
+	for( INT i=0; i<Nodes.Num(); i++ )
+		if( !HasParent(i) )
+			Pending.AddItem( i );
+	INT Visited = 0;
+	while( Pending.Num() )
+	{
+		const INT iNode = Pending.Pop();
+		const FBspNode& Node = Nodes(iNode);
+		const INT Children[3] = { Node.iBack, Node.iFront, Node.iPlane };
+		Visited++;
+		for( INT c=0; c<3; c++ )
+			if( Children[c]!=INDEX_NONE )
+			{
+				Depth(Children[c]) = Depth(iNode) + 1;
+				if( Depth(Children[c])>FBspNode::MAX_DEPTH )
+					return TEXT("has a BSP that is too deep");
+				Pending.AddItem( Children[c] );
+			}
+	}
+	if( Visited<Nodes.Num() )
+		return TEXT("has a BSP that is not a tree");
+	// Light lists are walked until a NULL entry.
+	INT LastNull = Lights.Num()-1;
+	while( LastNull>=0 && Lights(LastNull) )
+		LastNull--;
+	for( INT i=0; i<Leaves.Num(); i++ )
+	{
+		const FLeaf& Leaf = Leaves(i);
+		if( (DWORD)Leaf.iZone>=FBspNode::MAX_ZONES )
+			return TEXT("has a BSP leaf in a missing zone");
+		if( Leaf.iPermeating!=INDEX_NONE && (Leaf.iPermeating<0 || Leaf.iPermeating>LastNull) )
+			return TEXT("has a BSP leaf with a light list that does not end");
+	}
+	for( INT i=0; i<LightMaps.Num(); i++ )
+	{
+		const FLightMap& LightMap = LightMaps(i);
+		if( !Surfs.IsValidIndex(LightMap.iSurf) || !LightMapTextures.IsValidIndex(LightMap.iTexture) || (DWORD)LightMap.iZone>=FBspNode::MAX_ZONES )
+			return TEXT("has a light map that names a missing surface, texture or zone");
+		if( LightMap.SizeX<1 || LightMap.SizeY<1 || LightMap.OffsetX<0 || LightMap.OffsetY<0
+		||	LightMap.SizeX>LIGHTMAP_TEXTURE_WIDTH-LightMap.OffsetX || LightMap.SizeY>LIGHTMAP_TEXTURE_HEIGHT-LightMap.OffsetY )
+			return TEXT("has a light map outside its texture");
+		for( INT b=0; b<LightMap.Bitmaps.Num(); b++ )
+		{
+			const FLightBitmap& Bitmap = LightMap.Bitmaps(b);
+			if( Bitmap.LightActor && !((UObject*)Bitmap.LightActor)->IsA(AActor::StaticClass()) )
+				return TEXT("has a light bitmap of something that is not an actor");
+			// The shadow is read Stride bytes a row for SizeY rows, and lit over the rectangle Min to Max.
+			if( Bitmap.MinX<0 || Bitmap.MinY<0 || Bitmap.MaxX<Bitmap.MinX || Bitmap.MaxY<Bitmap.MinY || Bitmap.MaxX>=LightMap.SizeX || Bitmap.MaxY>=LightMap.SizeY
+			||	Bitmap.SizeX!=Bitmap.MaxX-Bitmap.MinX+1 || Bitmap.SizeY!=Bitmap.MaxY-Bitmap.MinY+1
+			||	Bitmap.Stride<1 || Bitmap.SizeX>Bitmap.Stride*8 || (QWORD)Bitmap.Stride*Bitmap.SizeY>(QWORD)Bitmap.Bits.Num() )
+				return TEXT("has a light bitmap outside its light map");
+		}
+	}
+	for( INT i=0; i<LightMapTextures.Num(); i++ )
+	{
+		FLightMapTexture& Texture = LightMapTextures(i);
+		for( INT l=0; l<Texture.LightMaps.Num(); l++ )
+			if( !LightMaps.IsValidIndex(Texture.LightMaps(l)) )
+				return TEXT("has a light map texture with a missing light map");
+		// The renderer draws the stored texture when its revision is current, the build writes it this way.
+		FStaticLightMapTexture& Static = Texture.StaticTexture;
+		if( Static.Revision==Texture.Revision )
+		{
+			if( (Static.Format!=TEXF_DXT1 && Static.Format!=TEXF_DXT3) || Static.Width!=LIGHTMAP_TEXTURE_WIDTH || Static.Height!=LIGHTMAP_TEXTURE_HEIGHT )
+				return TEXT("has a stored light map texture of the wrong size");
+			for( INT Mip=0; Mip<2; Mip++ )
+			{
+				INT Size = (Static.Width>>Mip) * (Static.Height>>Mip) / (Static.Format==TEXF_DXT1 ? 2 : 1);
+				Static.Data[Mip].Load();
+				UBOOL Fits = Static.Data[Mip].Num()==Size;
+				Static.Data[Mip].Unload();
+				if( !Fits )
+					return TEXT("has a stored light map texture of the wrong size");
+			}
+		}
+	}
+	#undef NONE_OR_IN
+	return NULL;
 	unguard;
 }
 void UModel::PostLoad()
@@ -916,26 +1072,21 @@ void UModel::ClearRenderData(URenderDevice* RenDev)
 {
 	guard(UModel::ClearRenderData);
 
-	if(Sections.Num())
+	if(RenDev)
 	{
-		if(RenDev)
-		{
-			// Flush the render data from device memory.
-
-			for(INT SectionIndex = 0;SectionIndex < Sections.Num();SectionIndex++)
-				RenDev->FlushResource(Sections(SectionIndex).Vertices.CacheId);
-		}
-
-		// Clear the render data.
-
-		for(INT NodeIndex = 0;NodeIndex < Nodes.Num();NodeIndex++)
-		{
-			Nodes(NodeIndex).iSection = INDEX_NONE;
-			Nodes(NodeIndex).iFirstVertex = INDEX_NONE;
-		}
-
-		Sections.Empty();
+		for(INT SectionIndex = 0;SectionIndex < Sections.Num();SectionIndex++)
+			RenDev->FlushResource(Sections(SectionIndex).Vertices.CacheId);
 	}
+
+	// A loaded map can name sections it does not have, so this runs without sections too.
+
+	for(INT NodeIndex = 0;NodeIndex < Nodes.Num();NodeIndex++)
+	{
+		Nodes(NodeIndex).iSection = INDEX_NONE;
+		Nodes(NodeIndex).iFirstVertex = INDEX_NONE;
+	}
+
+	Sections.Empty();
 
 	unguard;
 }

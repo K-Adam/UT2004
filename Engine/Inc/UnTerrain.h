@@ -460,6 +460,7 @@ class ENGINE_API ATerrainInfo : public AInfo
 
 	// ATerrainInfo Interface.
 	void SetupSectors();
+	const TCHAR* CheckLoaded();
 	void Update( FLOAT Time, INT StartX=0, INT StartY=0, INT EndX=0, INT EndY=0, UBOOL UpdateLighting=0 );
 	inline INT GetGlobalVertex( INT x, INT y ) { return x + y * HeightmapX; }
 	void Render(
@@ -515,16 +516,19 @@ class ENGINE_API ATerrainInfo : public AInfo
 	void SetHeightmap( INT x, INT y, _WORD w );
 	FColor GetTextureColor( INT x, INT y, UTexture* InTextureMap );
 	void SetTextureColor( INT x, INT y, UTexture* InTextureMap, FColor& Color );
+	// The bitmaps hold HeightmapX*HeightmapY/32 words, rounded down, so the last bits can fall past them.
 	UBOOL GetQuadVisibilityBitmap( INT x, INT y )
 	{
 		INT BitIndex = x + y * HeightmapX;
-		return (QuadVisibilityBitmap(BitIndex>>5) & (1<<(BitIndex&0x1f))) ? 1 : 0;
+		return QuadVisibilityBitmap.IsValidIndex(BitIndex>>5) ? (QuadVisibilityBitmap(BitIndex>>5) & (1<<(BitIndex&0x1f))) != 0 : 1;
 	}
 	void SetQuadVisibilityBitmap( INT x, INT y, UBOOL Visible )
 	{
 		INT BitIndex = x + y * HeightmapX;
 		INT Index = BitIndex>>5;
 		DWORD Bitmask = 1 << (BitIndex&0x1f);
+		if( !QuadVisibilityBitmap.IsValidIndex(Index) )
+			return;
 		if( Visible )
 			QuadVisibilityBitmap(Index) |= Bitmask;
 		else
@@ -533,13 +537,15 @@ class ENGINE_API ATerrainInfo : public AInfo
 	UBOOL GetEdgeTurnBitmap( INT x, INT y )
 	{
 		INT BitIndex = x + y * HeightmapX;
-		return (EdgeTurnBitmap(BitIndex>>5) & (1<<(BitIndex&0x1f))) ? 1 : 0;
+		return EdgeTurnBitmap.IsValidIndex(BitIndex>>5) && (EdgeTurnBitmap(BitIndex>>5) & (1<<(BitIndex&0x1f)));
 	}
 	void SetEdgeTurnBitmap( INT x, INT y, UBOOL Turned )
 	{
 		INT BitIndex = x + y * HeightmapX;
 		INT Index = BitIndex>>5;
 		DWORD Bitmask = 1 << (BitIndex&0x1f);
+		if( !EdgeTurnBitmap.IsValidIndex(Index) )
+			return;
 		if( Turned )
 			EdgeTurnBitmap(Index) |= Bitmask;
 		else
@@ -547,10 +553,8 @@ class ENGINE_API ATerrainInfo : public AInfo
 	}
 	UMaterial* GetQuadDomMaterialBitmap( INT x, INT y )
 	{
-		if(QuadDomMaterialBitmap.Num() > 0)
-			return (UMaterial*)QuadDomMaterialBitmap(x + (y * HeightmapX));
-		else
-			return NULL;
+		INT Index = x + y * HeightmapX;
+		return QuadDomMaterialBitmap.IsValidIndex(Index) ? (UMaterial*)QuadDomMaterialBitmap(Index) : NULL;
 	}
 	FVector HeightmapToWorld( FVector H )
 	{

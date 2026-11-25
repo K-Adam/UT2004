@@ -6,6 +6,7 @@
 	virtual	void PostLoad();
 	virtual void Destroy();
 	virtual void PostEditChange();
+	virtual const TCHAR* CheckLoaded();
 
 	virtual void Initialize( INT InMaxParticles );
 	virtual void CleanUp();

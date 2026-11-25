@@ -468,6 +468,8 @@ public:
 	virtual void PostEditChange();
 	virtual void Serialize(FArchive& Ar);
 	virtual void PostLoad();
+	const TCHAR* CheckLoaded();
+	void Repair( const TCHAR* Rule );
 	virtual void Destroy();
 	virtual void Rename( const TCHAR* NewName=NULL, UObject* NewOuter=NULL );
 

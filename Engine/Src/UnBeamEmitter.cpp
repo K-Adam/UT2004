@@ -22,18 +22,26 @@ void UBeamEmitter::PostEditChange()
 	guard(UBeamEmitter::PostEditChange);
 	Super::PostEditChange();
 	CleanUp();
-	HighFrequencyPoints = Max( 2, HighFrequencyPoints );
-	LowFrequencyPoints	= Max( 2, LowFrequencyPoints );
 	Initialize( MaxParticles );
 	unguard;
 }
 
+
+const TCHAR* UBeamEmitter::CheckLoaded()
+{
+	if( (QWORD)Max(MaxParticles,0) * Max(Max(HighFrequencyPoints,LowFrequencyPoints),2) * 6 * Max(RotatingSheets,1) > MAXINT/256 )
+		return TEXT("has a beam too large to draw");
+	return Super::CheckLoaded();
+}
 
 // Initializes the Emitter.
 void UBeamEmitter::Initialize( INT InMaxParticles )
 {
 	guard(UBeamEmitter::Initialize);
 	Super::Initialize( InMaxParticles );
+	// Packages saved without PostEditChange can hold fewer points than a beam is drawn with.
+	HighFrequencyPoints = Max( 2, HighFrequencyPoints );
+	LowFrequencyPoints	= Max( 2, LowFrequencyPoints );
 	if ( RotatingSheets )
 		SheetsUsed = RotatingSheets;
 	else
@@ -320,11 +328,11 @@ void UBeamEmitter::SpawnParticle( INT Index, FLOAT SpawnTime, INT Flags, INT Spa
 		&&   (BranchProbability.GetRand() >= appFrand()) 
 		)
 		{
-			if ( BranchEmitter >= 0 )
+			if ( Owner->Emitters.IsValidIndex(BranchEmitter) && Owner->Emitters(BranchEmitter) )
 			{
 				UParticleEmitter* OtherEmitter = Owner->Emitters(BranchEmitter);
 				
-				if ( OtherEmitter->Initialized && OtherEmitter != this ) //&& SpawnTime ) //!! vogel: ?!
+				if ( OtherEmitter->Initialized && OtherEmitter->MaxActiveParticles > 0 && OtherEmitter != this ) //&& SpawnTime ) //!! vogel: ?!
 				{
 					// In case OtherEmitter hasn't been ticked yet.
 					OtherEmitter->Owner = Owner;

@@ -104,6 +104,7 @@ public:
 	enum {MAX_NODE_VERTICES=16};	// Max vertices in a Bsp node, pre clipping.
 	enum {MAX_FINAL_VERTICES=24};	// Max vertices in a Bsp node, post clipping.
 	enum {MAX_ZONES=64};			// Max zones per level.
+	enum {MAX_DEPTH=2048};			// The walks recurse once per level, this keeps them well inside an 8 MB stack.
 
 	// Persistent information.
 	FPlane			Plane;			// 16 Plane the node falls into (X, Y, Z, W).
@@ -492,10 +493,16 @@ class ENGINE_API UPolys : public UObject
 			Ar << DbNum << DbMax;
 			if( Ar.IsLoading() )
 			{
-				Element.Empty( DbNum );
-				Element.AddZeroed( DbNum );
+				if( DbNum<0 )
+				{
+					Ar.SetError();
+					DbNum = 0;
+				}
+				Element.Empty( Min( DbNum, Min( Ar.RemainingBytes(), 65536 ) ) );
+				for( INT i=0; i<DbNum && !Ar.IsError(); i++ )
+					Ar << Element(Element.AddZeroed());
 			}
-			for( INT i=0; i<Element.Num(); i++ )
+			else for( INT i=0; i<Element.Num(); i++ )
 				Ar << Element(i);
 		}
 		unguard;

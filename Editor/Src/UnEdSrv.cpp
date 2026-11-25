@@ -3966,7 +3966,7 @@ UBOOL UEditorEngine::Exec_Texture( const TCHAR* Str, FOutputDevice& Ar )
 					{
 						Texture->Palette = new( Texture->GetOuter(), NAME_None, RF_Public )UPalette;
 						Texture->Palette->Colors.Add( 256 );
-						for( INT i=0; i<CurrentTexture->Palette->Colors.Num(); i++ )
+						for( INT i=0; i<Min(CurrentTexture->Palette->Colors.Num(),256); i++ )
 							Texture->Palette->Colors(i) = CurrentTexture->Palette->Colors(i);
 					}
 				}

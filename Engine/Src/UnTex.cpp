@@ -192,11 +192,15 @@ static void SerializeMips( UTexture* Texture, FArchive& Ar, TArray<FMipmap>& Mip
 	if( Ar.IsLoading() )
 	{
 		// Load array.
-		INT NewNum;
+		INT NewNum = 0;
 		Ar << AR_INDEX(NewNum);
-		Mips.Empty( NewNum );
-		INT LOD = Texture->DefaultLOD();
-		for( INT i=0; i<NewNum; i++ )
+		if( NewNum<0 )
+		{
+			Ar.SetError();
+			NewNum = 0;
+		}
+		Mips.Empty( Min( NewNum, Min( Ar.RemainingBytes(), 65536 ) ) );
+		for( INT i=0; i<NewNum && !Ar.IsError(); i++ )
 		{
 			UBOOL SavedLazyLoad = GLazyLoad;
 			// Never load texture data until texture upload time.
@@ -231,6 +235,7 @@ void UTexture::Serialize( FArchive& Ar )
 			Mips(i).DataArray.Empty();
 
 	// Serialize the mipmaps.
+	const TCHAR* Rule = NULL;
 	if( Ar.Ver() < 84 && OLDbHasComp )
 	{
 		//!!OLDVER
@@ -242,8 +247,24 @@ void UTexture::Serialize( FArchive& Ar )
 	}
 	else
 	{
-		check(!OLDbHasComp);
+		if( OLDbHasComp )
+		{
+			OLDbHasComp = 0;
+			Rule = TEXT("has a compressed mip table in a new package");
+		}
 		SerializeMips( this, Ar, Mips );
+	}
+
+	if( Ar.LoadingPackage() )
+	{
+		if( !Rule )
+			Rule = CheckLoaded();
+		if( Rule )
+		{
+			// The getters and renderers skip a texture without mips.
+			Mips.Empty();
+			GRefuseScript( this, Rule );
+		}
 	}
 
 	// Refill algorithmic textures.
@@ -258,6 +279,19 @@ void UTexture::Serialize( FArchive& Ar )
 	}
 
 	unguard;
+}
+
+// The size limit keeps the size products in MipFits, GetBytesPerPixel and the renderers within 32 bits.
+const TCHAR* UTexture::CheckLoaded()
+{
+	if( USize<0 || USize>8192 || VSize<0 || VSize>8192 )
+		return TEXT("has a texture size out of range");
+	if( MinLOD<0 )
+		return TEXT("has a negative minimum LOD");
+	for( INT i=0; i<Mips.Num(); i++ )
+		if( Mips(i).USize<0 || Mips(i).USize>8192 || Mips(i).VSize<0 || Mips(i).VSize>8192 )
+			return TEXT("has a mipmap size out of range");
+	return NULL;
 }
 
 // gam ---
@@ -755,6 +789,13 @@ void UPalette::Serialize( FArchive& Ar )
 	if( Ar.Ver()<66 )
 		for( INT i=0; i<Colors.Num(); i++ )
 			Colors(i).A = 255;
+
+	// Indexed readers take any of the 256 entries.
+	if( Ar.LoadingPackage() && Colors.Num()<256 )
+	{
+		Colors.AddZeroed( 256-Colors.Num() );
+		GRefuseScript( this, TEXT("has a palette with fewer than 256 colors") );
+	}
 
 	unguard;
 }
@@ -1462,7 +1503,7 @@ void* FStaticTexture::GetRawTextureData(INT MipIndex)
 {
 	guard(FStaticTexture::GetRawTextureData);
 
-	if( MipIndex >= Texture->Mips.Num() )
+	if( !Texture->Mips.IsValidIndex(MipIndex) )
 		return NULL;
 
 	if(!Texture->bParametric)
@@ -1486,7 +1527,7 @@ void FStaticTexture::UnloadRawTextureData(INT MipIndex)
 {
 	guard(FStaticTexture::UnloadRawTextureData);
 
-	if(!GIsEditor && !Texture->bParametric && MipIndex < Texture->Mips.Num())
+	if(!GIsEditor && !Texture->bParametric && Texture->Mips.IsValidIndex(MipIndex))
 		Texture->Mips(MipIndex).DataArray.Unload();
 
 	unguard;
@@ -1501,7 +1542,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 	guard(FStaticTexture::GetTextureData);
 
 	// Servers often strip texture data from their packages, and a client downloads such a copy when it lacks the full one.
-	if( MipIndex >= Texture->Mips.Num() )
+	if( !Texture->Mips.IsValidIndex(MipIndex) )
 	{
 		debugf(TEXT("WARNING: Texture [%s] has no data."),Texture->GetPathName());
 		return;

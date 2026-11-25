@@ -796,7 +796,9 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 	for(i=0; i<uGeom->ConvexElems.Num(); i++)
 	{
 		FKConvexElem* convexElem = &uGeom->ConvexElems(i);
-		MeVector3* verts = (MeVector3*)MeMemoryALLOCA(convexElem->VertexData.Num() * sizeof(MeVector3));
+		// The vertex count comes from the package, too many for the stack.
+		TArray<MeReal> Verts( convexElem->VertexData.Num() * 3 );
+		MeVector3* verts = (MeVector3*)Verts.GetTypedData();
 		
 		for(j=0; j<convexElem->VertexData.Num(); j++)
 		{

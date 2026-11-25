@@ -252,7 +252,7 @@ void UScriptedTexture::execTextSize(FFrame& Stack,RESULT_DECL)
 		);
 
 	INT Ch = (TCHARU)Font->RemapChar('Q');
-	*SizeY = Font->Characters(Ch).VSize;
+	*SizeY = Font->Characters.IsValidIndex(Ch) ? Font->Characters(Ch).VSize : 0;
 
 	unguard;
 }

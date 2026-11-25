@@ -88,8 +88,19 @@ void UParticleEmitter::PostLoad()
 {
 	guard(UParticleEmitter::PostLoad);
 	Super::PostLoad();
+	if( const TCHAR* Rule = CheckLoaded() )
+	{
+		MaxParticles = 0;
+		GRefuseScript( this, Rule );
+	}
 	Initialize( MaxParticles );
 	unguard;
+}
+
+// Initialize and the renderers size their buffers from these counts.
+const TCHAR* UParticleEmitter::CheckLoaded()
+{
+	return MaxParticles<0 || MaxParticles>MAXINT/256 ? TEXT("has a particle count out of range") : NULL;
 }
 
 void UParticleEmitter::Destroy()
@@ -253,7 +264,7 @@ void UParticleEmitter::SpawnParticle( INT Index, FLOAT SpawnTime, INT Flags, INT
 
 
 	OtherIndex++;
-	if ( AddLocationFromOtherEmitter >= 0 )
+	if ( Owner->Emitters.IsValidIndex(AddLocationFromOtherEmitter) && Owner->Emitters(AddLocationFromOtherEmitter) )
 	{
 		UParticleEmitter* OtherEmitter = Owner->Emitters(AddLocationFromOtherEmitter);
 		if (OtherEmitter->ActiveParticles > 0)
@@ -357,7 +368,7 @@ void UParticleEmitter::SpawnParticle( INT Index, FLOAT SpawnTime, INT Flags, INT
 	if( AddVelocityFromOwner && CoordinateSystem != PTCS_Relative )
 		Particle.Velocity += AddVelocityMultiplierRange.GetRand() * Owner->AbsoluteVelocity;
 
-	if ( AddVelocityFromOtherEmitter >= 0 )
+	if ( Owner->Emitters.IsValidIndex(AddVelocityFromOtherEmitter) && Owner->Emitters(AddVelocityFromOtherEmitter) )
 	{
 		UParticleEmitter* OtherEmitter = Owner->Emitters(AddVelocityFromOtherEmitter);
 		if (OtherEmitter->ActiveParticles > 0)
@@ -770,10 +781,10 @@ INT UParticleEmitter::UpdateParticles( FLOAT DeltaTime )
 			}
 
 			// Spawn particle in another emitter on collision.
-			if ( SpawnFromOtherEmitter >= 0 )
+			if ( Owner->Emitters.IsValidIndex(SpawnFromOtherEmitter) && Owner->Emitters(SpawnFromOtherEmitter) )
 			{
 				UParticleEmitter* OtherEmitter = Owner->Emitters(SpawnFromOtherEmitter);
-				if ( OtherEmitter->Initialized && OtherEmitter->Owner && DeltaTime )
+				if ( OtherEmitter->Initialized && OtherEmitter->MaxActiveParticles > 0 && OtherEmitter->Owner && DeltaTime )
 				{
 					for (INT i=0; i<SpawnAmount; i++)
 					{

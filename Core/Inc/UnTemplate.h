@@ -959,8 +959,7 @@ public:
 	~TLazyArray() noexcept(false)
 	{
 		guard(TLazyArray::~TLazyArray);
-		if( SavedAr )
-			SavedAr->DetachLazyLoader( this );
+		Detach();
 		unguard;
 	}
 	void Load()
@@ -977,6 +976,12 @@ public:
 			SavedAr->Seek( PushedPos );
 		}
 		unguard;
+	}
+	// A repaired array must not be read again from the file.
+	void Detach()
+	{
+		if( SavedAr )
+			SavedAr->DetachLazyLoader( this );
 	}
 	void Unload()
 	{

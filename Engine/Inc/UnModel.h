@@ -514,6 +514,7 @@ class ENGINE_API UModel : public UPrimitive
 	void BuildBound();
 	void Transform( ABrush* Owner );
 	void EmptyModel( INT EmptySurfInfo, INT EmptyPolys );
+	const TCHAR* CheckLoaded();
 	void ShrinkModel();
 	UBOOL PotentiallyVisible( INT iLeaf1, INT iLeaf2 );
 	BYTE FastLineCheck( const FVector& End, const FVector& Start );

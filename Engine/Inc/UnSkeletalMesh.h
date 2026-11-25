@@ -1254,6 +1254,12 @@ class ENGINE_API USkeletalMesh : public ULodMesh
 	void Serialize( FArchive& Ar );
 	virtual void PostLoad();
 	virtual void Destroy();
+	const TCHAR* CheckLoaded();
+	// Released meshes name more sections than materials, those use their own index as the skin.
+	INT SectionSkin( const FSkelMeshSection& Section )
+	{
+		return MeshMaterials.IsValidIndex(Section.MaterialIndex) ? MeshMaterials(Section.MaterialIndex).MaterialIndex : Section.MaterialIndex;
+	}
 
 	// Constructor.
 	USkeletalMesh()
@@ -1374,6 +1380,7 @@ class ENGINE_API UMeshAnimation : public UObject
 	// Object interface.
 	void Serialize( FArchive& Ar );
 	void PostLoad();
+	const TCHAR* CheckLoaded();
 	// Constructor.
 	UMeshAnimation();		
 
@@ -1406,8 +1413,9 @@ class ENGINE_API UMeshAnimation : public UObject
 		guardSlow(UMeshAnimation::GetMovement);
 		for( INT i=0; i<AnimSeqs.Num(); i++ )
 		{
+			// Digesting again can leave more sequences than moves.
 			if( SeqName == AnimSeqs(i).Name )
-				return &Moves(i);
+				return i<Moves.Num() ? &Moves(i) : NULL;
 		}
 		return NULL;
 		unguardSlow;

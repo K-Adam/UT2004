@@ -371,8 +371,11 @@ void AxProcMesh::CalcMeshData(void)
         Vertices(i).Color = FColor(255,255,255,255);
         if( StaticMeshInstance && StaticMeshInstance->ColorStream.Colors.Num()>i )
             Vertices(i).Color = StaticMeshInstance->ColorStream.Colors(i);
-        Vertices(i).U = StaticMesh->UVStreams(0).UVs(i).U;
-        Vertices(i).V = StaticMesh->UVStreams(0).UVs(i).V;
+        if( StaticMesh->UVStreams.Num() )
+        {
+            Vertices(i).U = StaticMesh->UVStreams(0).UVs(i).U;
+            Vertices(i).V = StaticMesh->UVStreams(0).UVs(i).V;
+        }
         pData->vertData(i).force = 0.0f;
         pData->vertData(i).offset = 0.0f;
         pData->vertData(i).wt = 1.0f;
@@ -410,11 +413,12 @@ void AxProcMesh::CalcMeshData(void)
 
 	for( i=0; i<StaticMesh->Sections.Num(); i++ )
     {
+		// The indices are checked for NumPrimitives, retail meshes can have another NumTriangles.
+		if( !StaticMesh->Sections(i).NumPrimitives )
+			continue;
 		int offset = pData->faces.Num();
-		pData->faces.AddZeroed( StaticMesh->Sections(i).NumTriangles );
+		pData->faces.AddZeroed( StaticMesh->Sections(i).NumPrimitives );
 		_WORD* pIndices = &StaticMesh->IndexBuffer.Indices(StaticMesh->Sections(i).FirstIndex);
-        if( StaticMesh->IndexBuffer.Indices.Num() == 0 )
-            break;
 		for( j=0; j<StaticMesh->Sections(i).NumPrimitives; j++ )
         {
             pData->faces(offset+j).verts[0] = pIndices[0];

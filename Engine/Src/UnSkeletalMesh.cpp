@@ -297,7 +297,30 @@ void UMeshAnimation::Serialize( FArchive& Ar )
 	if( !Ar.IsPersistent())
 	{
 	}
+	if( Ar.LoadingPackage() )
+		if( const TCHAR* Rule = CheckLoaded() )
+		{
+			// No sequence is found, so nothing plays.
+			Moves.Empty();
+			AnimSeqs.Empty();
+			GRepairedAsset( this, Rule );
+		}
 	unguardobj;
+}
+
+// GetTrackRotPos reads the key a time falls on, and the first key when there is one or none.
+const TCHAR* UMeshAnimation::CheckLoaded()
+{
+	guard(UMeshAnimation::CheckLoaded);
+	for( INT m=0; m<Moves.Num(); m++ )
+		for( INT t=0; t<Moves(m).AnimTracks.Num(); t++ )
+		{
+			const AnalogTrack& Track = Moves(m).AnimTracks(t);
+			if( Track.KeyTime.Num()<1 || Track.KeyQuat.Num()<Track.KeyTime.Num() || Track.KeyPos.Num()<1 || (Track.KeyPos.Num()>1 && Track.KeyPos.Num()<Track.KeyTime.Num()) )
+				return TEXT("has an animation track with missing keys");
+		}
+	return NULL;
+	unguard;
 }
 IMPLEMENT_CLASS(UMeshAnimation);
 
@@ -485,7 +508,118 @@ void USkeletalMesh::Serialize( FArchive& Ar )
     if ( Ar.Ver() >= 127 )
 		Ar << CollisionStaticMesh;
 
+	if( Ar.LoadingPackage() )
+		if( const TCHAR* Rule = CheckLoaded() )
+		{
+			// One empty LOD model and a version past the raw mesh keep PostLoad from building anything.
+			InternalVersion = Max( InternalVersion, 2 );
+			LODModels.Empty();
+			new(LODModels) FStaticLODModel();
+			for( INT b=0; b<RefSkeleton.Num(); b++ )
+				RefSkeleton(b).ParentIndex = 0;
+			MeshMaterials.Empty();
+			TagAliases.Empty();
+			BoneCollisionSpheres.Empty();
+			BoneCollisionBoxes.Empty();
+			BoneCollisionBoxModels.Empty();
+			RawVerts.Detach();
+			RawNormals.Detach();
+			RawWedges.Detach();
+			RawFaces.Detach();
+			RawInfluences.Detach();
+			RawCollapseWedges.Detach();
+			RawFaceLevel.Detach();
+			GRepairedAsset( this, Rule );
+		}
+
 	unguardobj;
+}
+
+// The rules follow what skinning, drawing, attachment and bone collision read without checking.
+const TCHAR* USkeletalMesh::CheckLoaded()
+{
+	guard(USkeletalMesh::CheckLoaded);
+	// Older meshes and meshes without LOD models are built in PostLoad from raw data this does not check.
+	if( InternalVersion<2 || !LODModels.Num() )
+		return TEXT("has a skeletal mesh without LOD models");
+	// Poses index each bone's parent, and walks up the parents stop at the root. A parent after its child is read
+	// zeroed before it is posed, which draws the bone wrong.
+	for( INT b=0; b<RefSkeleton.Num(); b++ )
+	{
+		if( (DWORD)RefSkeleton(b).ParentIndex>=(DWORD)RefSkeleton.Num() )
+			return TEXT("has a bone with a missing parent");
+		INT Bone = b;
+		for( INT Steps=0; Bone!=0 && Steps<RefSkeleton.Num(); Steps++ )
+			Bone = RefSkeleton(Bone).ParentIndex;
+		if( Bone!=0 )
+			return TEXT("has a bone whose parents never reach the root");
+	}
+	for( INT i=0; i<MeshMaterials.Num(); i++ )
+		if( MeshMaterials(i).MaterialIndex<0 )
+			return TEXT("has a skeletal mesh material with a negative index");
+	if( TagNames.Num()<TagAliases.Num() || TagCoords.Num()<TagAliases.Num() )
+		return TEXT("has an attachment alias without a bone");
+	// Bone collision finds its bone as MatchRefBone does and asserts it is there.
+	auto HasBone = [&]( FName Name )
+	{
+		INT Alias = TagAliases.FindItemIndex( Name );
+		if( Alias!=INDEX_NONE )
+			Name = TagNames(Alias);
+		for( INT b=0; b<RefSkeleton.Num() && Name!=NAME_None; b++ )
+			if( RefSkeleton(b).Name==Name )
+				return 1;
+		return 0;
+	};
+	for( INT i=0; i<BoneCollisionBoxes.Num(); i++ )
+		if( !HasBone( BoneCollisionBoxes(i).BoneName ) )
+			return TEXT("has a collision box on a missing bone");
+	for( INT i=0; i<BoneCollisionSpheres.Num(); i++ )
+		if( !HasBone( BoneCollisionSpheres(i).BoneName ) )
+			return TEXT("has a collision sphere on a missing bone");
+	if( BoneCollisionBoxModels.Num()==BoneCollisionBoxes.Num() && BoneCollisionBoxModels.FindItemIndex( NULL )!=INDEX_NONE )
+		return TEXT("has a collision box without its model");
+	for( INT l=0; l<LODModels.Num(); l++ )
+	{
+		const FStaticLODModel& LOD = LODModels(l);
+		// A dry run of the reader in ComputeSkinVerts, which trusts every count and index in the stream.
+		const TArray<DWORD>& Stream = LOD.SkinningStream;
+		// The duplicates buffer is sized DupVertCount*6 in an INT, and each stored vertex takes a stream entry.
+		// An empty stream is never read, retail leaves a count there.
+		if( Stream.Num() && (LOD.DupVertCount<0 || LOD.DupVertCount>Stream.Num()) )
+			return TEXT("has a skinning stream larger than its buffers");
+		INT Pos = 0, Outputs = 0, Points = 0, Stores = 0;
+		while( Stream.Num() )
+		{
+			if( Pos>=Stream.Num() )
+				return TEXT("has a skinning stream that does not end");
+			const DWORD Op = Stream(Pos);
+			if( Op==0xFFFFFFFF )
+				break;
+			// The top bit stores the result, the next three count the influences, all set copies a stored one.
+			const UBOOL Copy = Op>=0xF0000000, Store = !Copy && (Op>>31);
+			const INT Influences = Copy ? 0 : (Op & 0x60000000) ? ((Op>>28) & 7) + 1 : ((Op>>28) & 1) + 1;
+			const INT Length = Copy ? 3 : Influences + 2;
+			if( Copy && (QWORD)(Op & 0x0FFFFFFF) + 6 > (QWORD)LOD.DupVertCount * 6 )
+				return TEXT("has a skinning stream that copies outside its buffer");
+			if( Pos+Length>Stream.Num() )
+				return TEXT("has a skinning stream that does not end");
+			// Bones are stored times 6, the size of a bone transform in 8 byte steps.
+			for( INT i=0; i<Influences; i++ )
+			{
+				const DWORD Bone = Stream(Pos+i) & 0x0FFF;
+				if( Bone%6 || Bone/6>=(DWORD)RefSkeleton.Num() )
+					return TEXT("has a skinning stream with a missing bone");
+			}
+			Points += Influences!=0;
+			Stores += Store;
+			Outputs++;
+			Pos += Length;
+		}
+		if( Outputs>LOD.SmoothStreamWedges || Points>LOD.SmoothVerts.Num() || Stores>LOD.DupVertCount )
+			return TEXT("has a skinning stream larger than its buffers");
+	}
+	return NULL;
+	unguard;
 }
 
 
@@ -2550,6 +2684,11 @@ INT USkeletalMeshInstance::GetMeshVertsAndNormals( AActor* Owner, TArray<FVector
 	}
 
 	FStaticLODModel* LODModel = &Mesh->LODModels( CurrentLODLevel);	
+	if( !LODModel->SkinningStream.Num() )
+	{
+		Result->Empty();
+		return 0;
+	}
 	INT DummyVerts = 0;
 	GetFrame( Owner, NULL, NULL, 0, DummyVerts, GF_RawVerts ); 
 
@@ -2710,6 +2849,13 @@ void GetTrackRotPos(const MotionChunk* ThisMove, INT Bone, FLOAT Time, FQuat& Ou
 {
 	guardSlow(USkeletalMeshInstance::GetTrackRotPos);
 
+	// Tracks follow the digested bones, which can be fewer than the animation's bones.
+	if( !ThisMove->AnimTracks.IsValidIndex(Bone) )
+	{
+		OutRot = FQuat( 0.f, 0.f, 0.f, 1.f );
+		OutPos = FVector( 0.f, 0.f, 0.f );
+		return;
+	}
 	AnalogTrack& Track = (AnalogTrack&) ThisMove->AnimTracks( Bone );
 
 	INT KeyA,KeyB,Wrap=0,WrapTime=0;
@@ -3080,6 +3226,9 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 	TArray<FCoords> FinalTrafos;	
 	
 	FStaticLODModel* LODModel = &Mesh->LODModels( MInst->CurrentLODLevel );	 // Draw this particular level... 
+	// A level with only rigid parts has an empty stream, without even its end marker.
+	if( !LODModel->SkinningStream.Num() )
+		return;
 	FinalTrafos.Add( MInst->SpaceBases.Num() );   // Special trafo's allowing skin to be transformed directly from the reference pose.
 	Duplicates.Add( LODModel->DupVertCount * 2 * 3 ); // Duplicates-buffer - for vertices that need to be expanded into multiple 'wedges' (vertices with different UV's)
 
@@ -3324,6 +3473,8 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
             for( INT i=0; i<LODModel->Influences.Num(); i++ )
 			{				
 				INT VIdx = LODModel->Influences(i).VertIndex;
+				if( !TempInfs.IsValidIndex(VIdx) )
+					continue;
 				TempInfs(VIdx)++;
 				if( TempBoneIdxs(VIdx) == 0)
 				{
@@ -3482,7 +3633,7 @@ void USkeletalMeshInstance::GetFrame
 	{
 		SamePose = false;
 		TArray<FCoords> RefBases;
-		RefBases.Add( Mesh.RefSkeleton.Num() );
+		RefBases.AddZeroed( Mesh.RefSkeleton.Num() );
 		Mesh.RefBasesInverse.Add( Mesh.RefSkeleton.Num() );
 
 		// Precompute the Mesh.RefBasesInverse.
@@ -3577,7 +3728,7 @@ void USkeletalMeshInstance::GetFrame
 		{
 			// Partial-hierarchy marker assistance.
 			TArray<INT> BoneGraph;
-			BoneGraph.Add(Mesh.RefSkeleton.Num());
+			BoneGraph.AddZeroed(Mesh.RefSkeleton.Num());
 
 			// Arbitrary number of channels 
 			for( INT Channel = 0; Channel < Blends.Num(); Channel++) 
@@ -3727,7 +3878,7 @@ void USkeletalMeshInstance::GetFrame
 									FVector ThisPos,  PrevPos;
 
 									// Does this bone link up at all - if not, assumes cached position.
-									if( BlendLinkup->CachedLinks(b) < 0 )
+									if( !BlendMove->AnimTracks.IsValidIndex( BlendLinkup->CachedLinks(b) ) )
 									{
 										// Ignore trafo for all unknown bone names.
 									}
@@ -4953,7 +5104,7 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 
 			if( Section.TotalFaces )  
 			{						
-				UMaterial*	Material = GetMaterial( SkelMesh->MeshMaterials(Section.MaterialIndex).MaterialIndex, Actor );
+				UMaterial*	Material = GetMaterial( SkelMesh->SectionSkin(Section), Actor );
 				if( bDrawWireframe ) 
 				{
 					DECLARE_STATIC_UOBJECT(
@@ -5126,7 +5277,7 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 				if( Section.MaterialIndex != LastMaterialIndexSet ) 
 				{
 					LastMaterialIndexSet = Section.MaterialIndex;
-					Material = GetMaterial( SkelMesh->MeshMaterials(Section.MaterialIndex).MaterialIndex, Actor );
+					Material = GetMaterial( SkelMesh->SectionSkin(Section), Actor );
 					if( bDrawWireframe ) 
 					{
 						DECLARE_STATIC_UOBJECT
@@ -6022,8 +6173,9 @@ void UAnimNotify_Script::Notify( UMeshInstance *Instance, AActor *Owner )
 		}
 		else
 		{
+			// A package names any function, the notify has no parameters to pass it.
 			UFunction* Function = Owner->FindFunction( NotifyName );
-			if( Function )
+			if( Function && !Function->ParmsSize )
 				Owner->ProcessEvent( Function, NULL );								
 		}
 	}

@@ -38,6 +38,8 @@ UBOOL GNeedsFixedCall( UFunction* Function );
 UFunction* GNativeFunction( INT iNative );
 // Turns down the package of an object whose layout the loader had to repair.
 CORE_API void GRefuseScript( UObject* Culprit, const TCHAR* Rule );
+// Logs an asset the loader emptied, which draws or plays as nothing while its package's script still runs.
+CORE_API void GRepairedAsset( UObject* Culprit, const TCHAR* Rule );
 UBOOL GIsRefused( UObject* Object );
 CORE_API void GDisableRefusedScript( TArray<UObject*>& Loaded );
 CORE_API const TCHAR* GScriptStructureError( UStruct* Node );

@@ -299,11 +299,11 @@ INT USpriteEmitter::FillVertexBuffer( FSpriteParticleVertex* Vertices, FLevelSce
 					if ( UseSubdivisionScale && (SubdivisionScale.Num() > SubDivs) )
 					{
 						FLOAT Offset;
-						if ( --Section == 0 )
+						if ( --Section <= 0 )
 							Offset = 0.f;
 						else
 							Offset = SubdivisionScale( Section - 1 );
-						FLOAT Length = Min(1.f, SubdivisionScale( Section )) - Offset;
+						FLOAT Length = Min(1.f, SubdivisionScale( Max(Section,0) )) - Offset;
 						Alpha  = (RelativeTime - Offset ) / Length;
 					}
 					else

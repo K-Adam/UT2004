@@ -920,7 +920,7 @@ DWORD FFoliage::RenderTrunks(FLevelSceneNode* SceneNode,FDynamicActor* Owner,TLi
 		{
 			FSortedIndexBuffer SortedIndices(StaticMesh,s,Owner->WorldToLocal.TransformFVector(SceneNode->ViewOrigin),StaticMesh->Sections(s).MinVertexIndex);
 			FirstIndex		= RI->SetDynamicIndexBuffer(&SortedIndices,0);
-			NumTriangles	= StaticMesh->Sections(s).NumTriangles;
+			NumTriangles	= StaticMesh->Sections(s).NumPrimitives;
 		}
 		else
 			RI->SetIndexBuffer(Section ? &Section->Indices : &StaticMesh->IndexBuffer,0);

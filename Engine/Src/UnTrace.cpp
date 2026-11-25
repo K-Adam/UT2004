@@ -598,6 +598,8 @@ INT ClipNode( UModel& Model, INT iNode, FVector HitLocation )
 		FBspNode& Node = Model.Nodes(iNode);
 		INT NumVertices = Node.NumVertices;
 		INT iVertPool = Node.iVertPool;
+		if( !NumVertices )
+			return iNode;
 
 		FVector PrevPt = Model.Points(Model.Verts(iVertPool+NumVertices-1).pVertex);
 		FVector Normal = Model.Surfs(Node.iSurf).Plane;

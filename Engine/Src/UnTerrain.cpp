@@ -1541,38 +1541,84 @@ void ATerrainInfo::SetLayerAlpha( FLOAT x, FLOAT y, INT Layer, BYTE Alpha, UText
 	}
 }
 
-#define G16Heightmap( x, y ) (*(_WORD *)(&TerrainMap->Mips(0).DataArray((x+y*TerrainMap->USize)*2)))
+// The heightmap size is a field of its own, so samples are checked against the texture's data.
+static BYTE* HeightmapSample( UTexture* TerrainMap, INT x, INT y, INT Bytes )
+{
+	if( !TerrainMap->Mips.Num() || x<0 || y<0 || x>=TerrainMap->USize )
+		return NULL;
+	TLazyArray<BYTE>& Data = TerrainMap->Mips(0).DataArray;
+	const QWORD Offset = ((QWORD)y * TerrainMap->USize + x) * Bytes;
+	return Offset + Bytes <= (QWORD)Data.Num() ? Data.GetTypedData() + Offset : NULL;
+}
 
 _WORD ATerrainInfo::GetHeightmap( INT x, INT y )
 {
-	_WORD rc;
-
 	switch( TerrainMap->Format )
 	{
 	case TEXF_G16:
-		rc = *(_WORD *)(&TerrainMap->Mips(0).DataArray((x+y*TerrainMap->USize)*2));
-		return INTEL_ORDER16(rc);
+		if( BYTE* Sample = HeightmapSample( TerrainMap, x, y, 2 ) )
+			return INTEL_ORDER16(*(_WORD*)Sample);
+		break;
 
 	case TEXF_P8:
-		return (_WORD)256 * (_WORD)TerrainMap->Mips(0).DataArray(x+y*TerrainMap->USize); 
+		if( BYTE* Sample = HeightmapSample( TerrainMap, x, y, 1 ) )
+			return (_WORD)256 * (_WORD)*Sample;
+		break;
 	}
 	return 0;
 }
 
 void ATerrainInfo::SetHeightmap( INT x, INT y, _WORD w )
 {
-	switch( TerrainMap->Format )
+	if( TerrainMap->Format == TEXF_G16 )
+		if( BYTE* Sample = HeightmapSample( TerrainMap, x, y, 2 ) )
+			*(_WORD*)Sample = w;
+}
+
+// Traces and projectors find a sector by dividing a quad by TerrainSectorSize, so the sectors must be the grid
+// SetupSectors builds over the heightmap texture.
+const TCHAR* ATerrainInfo::CheckLoaded()
+{
+	guard(ATerrainInfo::CheckLoaded);
+	const INT Size = TerrainSectorSize;
+	if( Size<2 || Size>64 )
+		return TEXT("has a terrain sector size out of range");
+	if( TerrainMap ? HeightmapX!=TerrainMap->USize || HeightmapY!=TerrainMap->VSize || HeightmapX>8192 || HeightmapY>8192 : HeightmapX || HeightmapY )
+		return TEXT("has a terrain heightmap of another size than its texture");
+	if( SectorsX!=HeightmapX/Size || SectorsY!=HeightmapY/Size || SectorsX*SectorsY!=Sectors.Num() )
+		return TEXT("has terrain sectors that do not fit");
+	for( INT s=0; s<Sectors.Num(); s++ )
 	{
-	case TEXF_G16:
-		*(_WORD *)(&TerrainMap->Mips(0).DataArray((x+y*TerrainMap->USize)*2)) = w;
-		break;
+		UTerrainSector* S = Sectors(s);
+		const INT X = s % SectorsX, Y = s / SectorsX;
+		if( !S || S->Info!=this || S->OffsetX!=X*Size || S->OffsetY!=Y*Size
+		||	S->QuadsX!=(X<SectorsX-1 ? Size : Size-1) || S->QuadsY!=(Y<SectorsY-1 ? Size : Size-1) )
+			return TEXT("has a terrain sector outside its heightmap");
+		// One visibility bit per sector vertex.
+		const QWORD Bytes = ((QWORD)(S->QuadsX+1) * (S->QuadsY+1) + 7) / 8;
+		for( INT l=0; l<S->LightInfos.Num(); l++ )
+			if( !S->LightInfos(l).LightActor || (QWORD)S->LightInfos(l).VisibilityBitmap.Num() < Bytes )
+				return TEXT("has terrain light bits that do not fit their sector");
 	}
+	return NULL;
+	unguard;
 }
 
 void ATerrainInfo::PostLoad()
 {
 	guard(ATerrainInfo::PostLoad);
 	Super::PostLoad();
+
+	if( const TCHAR* Rule = CheckLoaded() )
+	{
+		// SetupSectors places sectors with the unclamped size and sizes everything from the texture.
+		TerrainSectorSize = Clamp( TerrainSectorSize, 2, 64 );
+		if( TerrainMap && (TerrainMap->USize>8192 || TerrainMap->VSize>8192) )
+			TerrainMap = NULL;
+		Sectors.Empty();
+		SetupSectors();
+		GRefuseScript( this, Rule );
+	}
 
 	// OLDVER Check for moved TerrainInfo
 	FVector CorrectLocation = FVector(HeightmapX/2, HeightmapY/2, 32767).TransformPointBy(ToWorld);
@@ -1592,7 +1638,7 @@ void ATerrainInfo::PostLoad()
 		TerrainMap->Format = TEXF_G16;
 		TerrainMap->Init( HeightmapX, HeightmapY );
 		TerrainMap->PostLoad();
-		appMemcpy( TerrainMap->Mips(0).DataArray.GetTypedData(), OldHeightmap.GetTypedData(), HeightmapX*HeightmapY*2 );
+		appMemcpy( TerrainMap->Mips(0).DataArray.GetTypedData(), OldHeightmap.GetTypedData(), Min( OldHeightmap.Num(), TerrainMap->Mips(0).DataArray.Num() / 2 ) * 2 );
 		OldHeightmap.Empty();
 	}
 
@@ -2033,13 +2079,6 @@ UBOOL ATerrainInfo::LineCheckWithQuad( INT X, INT Y, FCheckResult &Result, const
 	
 	if( bDeleteMe )
 		return 0;
-
-    INT BitIndex = X + Y * HeightmapX;
-    if( !CheckInvisibleQuads )
-    {
-        check( QuadVisibilityBitmap.Num() > (BitIndex>>5) );
-    }
-    check( EdgeTurnBitmap.Num() > (BitIndex>>5) );
 
 	if( !CheckInvisibleQuads && !GetQuadVisibilityBitmap( X, Y ) )
 		return 0;
@@ -3793,13 +3832,13 @@ void ATerrainInfo::execPokeTerrain( FFrame& Stack, RESULT_DECL )
 	FLOAT MaxDepth = - 256 * WorldMaxDepth / TerrainScale.Z;
    
 	INT X1 = Max<INT>( appRound(Center.X-Radius), 0 );
-	INT X2 = Min<INT>( appRound(Center.X+Radius), HeightmapX );
+	INT X2 = Min<INT>( appRound(Center.X+Radius), HeightmapX-1 );
 	INT Y1 = Max<INT>( appRound(Center.Y-Radius), 0 );
-	INT Y2 = Min<INT>( appRound(Center.Y+Radius), HeightmapY );
+	INT Y2 = Min<INT>( appRound(Center.Y+Radius), HeightmapY-1 );
 
 	for( INT y=Y1;y<=Y2;y++ )
 		for( INT x=X1;x<=X2;x++ )
-            G16Heightmap(x,y) = Clamp<INT>( appRound(MaxDepth*appSqrt( Radius*Radius - ((Center.X-x)*(Center.X-x)+(Center.Y-y)*(Center.Y-y)) ) / Radius) + (INT)G16Heightmap(x,y), 0, 65535 );
+			SetHeightmap( x, y, Clamp<INT>( appRound(MaxDepth*appSqrt( Radius*Radius - ((Center.X-x)*(Center.X-x)+(Center.Y-y)*(Center.Y-y)) ) / Radius) + (INT)GetHeightmap(x,y), 0, 65535 ) );
 
 	UpdateVertices( 0, X1, Y1, X2+1, Y2+1 );
 	// The smoothed surface reads two samples beyond a quad.

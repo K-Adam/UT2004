@@ -488,7 +488,57 @@ void UVertMesh::Serialize( FArchive& Ar )
 		Ar << LODChunks[3];
 	}
 
+	if( Ar.LoadingPackage() )
+		if( const TCHAR* Rule = CheckLoaded() )
+		{
+			// Nothing is drawn or animated from an empty mesh.
+			ModelVerts = AnimFrames = 0;
+			Verts.Empty();
+			AnimNormals.Empty();
+			Wedges.Empty();
+			Faces.Empty();
+			FaceLevel.Empty();
+			CollapseWedgeThus.Empty();
+			MeshMaterials.Empty();
+			AnimSeqs.Empty();
+			GRepairedAsset( this, Rule );
+		}
+
 	unguardobj;
+}
+
+// The rules follow what GetFrame, the bounds and Render read without checking.
+const TCHAR* UVertMesh::CheckLoaded()
+{
+	guard(UVertMesh::CheckLoaded);
+	// Frames are ModelVerts apart, and frame 0 is read without a sequence.
+	const QWORD FrameData = (QWORD)Max(AnimFrames,1) * ModelVerts;
+	if( ModelVerts<0 || AnimFrames<0 || FrameData>(QWORD)Verts.Num() || FrameData>(QWORD)AnimNormals.Num() || BoundingBoxes.Num()<AnimFrames )
+		return TEXT("has a vertex mesh with missing frames");
+	for( INT i=0; i<AnimSeqs.Num(); i++ )
+		if( AnimSeqs(i).NumFrames<1 || AnimSeqs(i).StartFrame<0 || AnimSeqs(i).StartFrame>AnimFrames-AnimSeqs(i).NumFrames )
+			return TEXT("has an animation outside its frames");
+	// A wedge past the drawn vertex count is collapsed until one is drawn, so each step goes to a lower vertex.
+	if( CollapseWedgeThus.Num()<Wedges.Num() )
+		return TEXT("has a vertex mesh without its level of detail");
+	for( INT i=0; i<Wedges.Num(); i++ )
+		if( Wedges(i).iVertex>=ModelVerts
+		||	(Wedges(i).iVertex && (CollapseWedgeThus(i)>=Wedges.Num() || Wedges(CollapseWedgeThus(i)).iVertex>=Wedges(i).iVertex)) )
+			return TEXT("has a vertex mesh wedge outside its vertices");
+	if( FaceLevel.Num()<Faces.Num() )
+		return TEXT("has a vertex mesh without its level of detail");
+	for( INT i=0; i<Faces.Num(); i++ )
+	{
+		const FMeshFace& Face = Faces(i);
+		if( Face.iWedge[0]>=Wedges.Num() || Face.iWedge[1]>=Wedges.Num() || Face.iWedge[2]>=Wedges.Num() || Face.MeshMaterialIndex>=MeshMaterials.Num() )
+			return TEXT("has a vertex mesh face outside its wedges");
+	}
+	// Skins are looked up by this index, which is only checked against the top.
+	for( INT i=0; i<MeshMaterials.Num(); i++ )
+		if( MeshMaterials(i).MaterialIndex<0 )
+			return TEXT("has a vertex mesh material with a negative index");
+	return NULL;
+	unguard;
 }
 
 
@@ -915,16 +965,13 @@ void UVertMeshInstance::GetFrame
 			iFrameOffset2 = (Seq->StartFrame + ((iFrame + 1) % Seq->NumFrames)) * Mesh.ModelVerts;
 
 		}
-		else 
-		{
-		}
 
 		// Special case Alpha 0. 
 		if( Alpha <= 0.f )
 		{
 			// Initialize a single frame.
-			FMeshVert* MeshVertex = &Mesh.Verts( iFrameOffset1 );
-			FMeshNorm* MeshNormal = &Mesh.AnimNormals( iFrameOffset1 );
+			FMeshVert* MeshVertex = Mesh.Verts.GetTypedData() + iFrameOffset1;
+			FMeshNorm* MeshNormal = Mesh.AnimNormals.GetTypedData() + iFrameOffset1;
 
 			for( INT i=0; i<VertexNum; i++ )
 			{
@@ -937,11 +984,11 @@ void UVertMeshInstance::GetFrame
 		else
 		{	
 			// Interpolate two frames.
-			FMeshVert* MeshVertex1 = &Mesh.Verts( iFrameOffset1 );
-			FMeshVert* MeshVertex2 = &Mesh.Verts( iFrameOffset2 );
+			FMeshVert* MeshVertex1 = Mesh.Verts.GetTypedData() + iFrameOffset1;
+			FMeshVert* MeshVertex2 = Mesh.Verts.GetTypedData() + iFrameOffset2;
 
-			FMeshNorm* MeshNormal1 = &Mesh.AnimNormals( iFrameOffset1 );
-			FMeshNorm* MeshNormal2 = &Mesh.AnimNormals( iFrameOffset2 );
+			FMeshNorm* MeshNormal1 = Mesh.AnimNormals.GetTypedData() + iFrameOffset1;
+			FMeshNorm* MeshNormal2 = Mesh.AnimNormals.GetTypedData() + iFrameOffset2;
 			
 			for( INT i=0; i<VertexNum; i++ )
 			{
@@ -1199,7 +1246,8 @@ void UVertMeshInstance::Render(FDynamicActor* Owner,FLevelSceneNode* SceneNode,T
 	FLOAT MeshVertLOD  = 530.f * ResolutionBias * Actor->DrawScale3D.GetAbsMax() * Abs(Actor->DrawScale) * Actor->LODBias * VertMesh->MeshScaleMax / DetailDiv;  	
 
 	FLOAT TargetSubset    = Max( (FLOAT)VertMesh->LODMinVerts, (FLOAT)VertMesh->ModelVerts * MeshVertLOD  );
-	VertexSubset          = Min( appRound(TargetSubset), VertMesh->ModelVerts );
+	// The wedge collapse below stops only at a drawn vertex, and vertex 0 always is.
+	VertexSubset          = Max( Min( appRound(TargetSubset), VertMesh->ModelVerts ), 1 );
 
 	// Safety - do we even have this LOD level ?
 	if( VertMesh->LODChunks[0].Sections.Num() == 0)

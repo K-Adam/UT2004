@@ -1864,7 +1864,7 @@ static inline void GetCharSize( UFont* Font, TCHAR InCh, INT& Width, INT& Height
 	Width = 0;
 	Height = 0;
 	INT Ch    = (TCHAR)Font->RemapChar(InCh);
-	if( Ch < Font->Characters.Num() )
+	if( Font->Characters.IsValidIndex(Ch) )
 	{
 		FFontCharacter& Char = Font->Characters(Ch);
 		Width = Char.USize;

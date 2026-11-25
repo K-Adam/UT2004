@@ -6,6 +6,7 @@
 	virtual void Initialize( INT InMaxParticles );
 	virtual void CleanUp();
 	virtual void PostEditChange();
+	virtual const TCHAR* CheckLoaded();
 
 	virtual inline FColor SetInitialPointColor(FColor ParticleColor);
 

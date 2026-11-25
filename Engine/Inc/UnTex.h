@@ -292,6 +292,7 @@ class ENGINE_API UTexture : public UBitmapMaterial
 	void PostLoad();
 	void Destroy();
 	void PostEditChange(); // gam
+	const TCHAR* CheckLoaded();
 	
 	// UBitmap interface.
 	DWORD GetColorsIndex()

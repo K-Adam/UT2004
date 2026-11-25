@@ -114,7 +114,9 @@ INT FindVertexIndex(UStaticMesh* StaticMesh,FVector Position,FVector Normal,FCol
 
 	if(VertexBufferIndex == INDEX_NONE)
 	{
-		check( !OnlyCollision );
+		// Rebuilding collision needs the loaded vertices, the caller refuses the mesh.
+		if( OnlyCollision )
+			return INDEX_NONE;
 
 		// Add a new vertex to the vertex streams.
 
@@ -254,6 +256,20 @@ void UStaticMesh::Build( UBOOL OnlyCollision, FVector* InNormals )
 
 	if(!RawTriangles.Num())
 		RawTriangles.Load();
+
+	// PostLoad builds older meshes from the raw triangles of the file.
+	auto Fail = [&]( const TCHAR* Rule )
+	{
+		Repair( Rule );
+		if( !OnlyCollision )
+			GWarn->EndSlowTask();
+	};
+	for(INT TriangleIndex = 0;TriangleIndex < RawTriangles.Num();TriangleIndex++)
+		if(!Materials.IsValidIndex(RawTriangles(TriangleIndex).MaterialIndex))
+		{
+			Fail( TEXT("has a raw triangle without a material") );
+			return;
+		}
 
 	// Calculate triangle normals.
 
@@ -473,6 +489,12 @@ void UStaticMesh::Build( UBOOL OnlyCollision, FVector* InNormals )
 											Triangle->NumUVs,
 											OnlyCollision
 											);
+
+		if(VertexIndices[0] == INDEX_NONE || VertexIndices[1] == INDEX_NONE || VertexIndices[2] == INDEX_NONE)
+		{
+			Fail( TEXT("has a raw triangle that is not in its vertices") );
+			return;
+		}
 
 		// Reject degenerate triangles.
 

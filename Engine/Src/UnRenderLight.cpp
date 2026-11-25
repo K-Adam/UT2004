@@ -482,13 +482,13 @@ BYTE* Illuminate(BYTE* ShadowMap,FBspSurf& Surf,FLightMap* LightMap,FLightBitmap
 
 		FLOAT	Dot = (Surf.PolyFlags & PF_TwoSided) ? Abs(Surf.Plane | LightDirection) : Max(0.0f,Surf.Plane | LightDirection);
 
-		for(INT Y = 0;Y < LightMap->SizeY;Y++)
+		for(INT Y = 0;Y < SizeY;Y++)
 		{
-			for(INT X = 0;X < LightMap->SizeX;X++)
+			for(INT X = 0;X < SizeX;X++)
 				*Dest++ = appFloor(Dot * *Src++);
 
-			Dest += (DestStride - LightMap->SizeX);
-			Src += (SrcStride - LightMap->SizeX);
+			Dest += (DestStride - SizeX);
+			Src += (SrcStride - SizeX);
 		}
 		unguard;
 	}

@@ -3124,6 +3124,47 @@ void UFractalTexture::PostLoad()
 	VMask = VSize - 1;
 }
 
+// The ticks skip a texture smaller than 8x8.
+static void RefuseFractal( UFractalTexture* Texture, const TCHAR* Rule )
+{
+	Texture->Mips.Empty();
+	Texture->USize = Texture->VSize = 0;
+	GRefuseScript( Texture, Rule );
+}
+
+// Source textures come from any package, so their data is checked before it is read.
+static UBOOL MipHolds( UTexture* Texture, INT Size )
+{
+	if( !Texture || !Texture->Mips.Num() )
+		return 0;
+	if( !Texture->bParametric )
+		Texture->Mips(0).DataArray.Load();
+	return Texture->Mips(0).DataArray.Num() >= Size;
+}
+
+void UFractalTexture::Serialize( FArchive& Ar )
+{
+	guard(UFractalTexture::Serialize);
+	Super::Serialize( Ar );
+	if( Ar.LoadingPackage() )
+		if( const TCHAR* Rule = CheckLoaded() )
+			RefuseFractal( this, Rule );
+	unguard;
+}
+
+// The effects index Mips(0) with UBits and the size masks, as Init sets them up.
+const TCHAR* UFractalTexture::CheckLoaded()
+{
+	// Retail ships empty ones, which the ticks skip.
+	if( !USize && !VSize && !Mips.Num() )
+		return NULL;
+	if( UBits>13 || VBits>13 || USize!=(1<<UBits) || VSize!=(1<<VBits) )
+		return TEXT("has a fractal texture size that is not its power of two");
+	if( !bParametric || !Mips.Num() || Mips(0).USize!=USize || Mips(0).VSize!=VSize )
+		return TEXT("has a fractal texture without its first mipmap");
+	return NULL;
+}
+
 void UFractalTexture::Prime()
 {
 	guard(UFractalTexture::Prime);
@@ -3243,6 +3284,9 @@ void UFireTexture::PostLoad()
 		OldRenderHeat = RenderHeat;
 	}
 
+	// ActiveSparkNum is saved with the texture, while Sparks is not.
+	ActiveSparkNum = Clamp( ActiveSparkNum, 0, Sparks.Num() );
+
 	// Expand/shrink the dynamic array to become
 	// exactly SparksLimit elements.
 	// Acts both at load time and edit time.
@@ -3283,8 +3327,6 @@ void UFireTexture::PostLoad()
 			Sparks.Add( SparksLimit - Sparks.Num() );
 		}
 	}
-	// ActiveSparkNum is saved with the texture, while Sparks is not.
-	ActiveSparkNum = Clamp( ActiveSparkNum, 0, Sparks.Num() );
 
 	unguard;
 }
@@ -3385,11 +3427,32 @@ void UFireTexture::Serialize( FArchive& Ar )
 	}
 	Ar << Sparks;
 
+	if( Ar.LoadingPackage() )
+	{
+		// The padding below is not zeroed, so only the loaded sparks may be active.
+		ActiveSparkNum = Clamp( ActiveSparkNum, 0, Sparks.Num() );
+		if( const TCHAR* Rule = CheckLoaded() )
+			RefuseFractal( this, Rule );
+	}
+
 	// Expand the compacted array again. Sparks.Num() should always be equal to SparksLimit !
+	SparksLimit = Clamp( SparksLimit, MINSPARKSLIMIT, MAXSPARKSLIMIT );
 	if( Sparks.Num() < SparksLimit )
 		Sparks.Add( SparksLimit - Sparks.Num() );
 
 	unguard;
+}
+
+// The spark effects write at X + (Y << UBits) without masking.
+const TCHAR* UFireTexture::CheckLoaded()
+{
+	// CalcSlowFire copies a line into a 256 byte buffer.
+	if( USize>256 )
+		return TEXT("has a fire texture wider than 256");
+	for( INT i=0; i<Sparks.Num(); i++ )
+		if( Sparks(i).X>=USize || Sparks(i).Y>=VSize )
+			return TEXT("has a spark outside the texture");
+	return NULL;
 }
 
 
@@ -3464,6 +3527,27 @@ void UWaterTexture::PostLoad()
 }
 
 
+
+void UWaterTexture::Serialize( FArchive& Ar )
+{
+	guard(UWaterTexture::Serialize);
+	Super::Serialize( Ar );
+	if( Ar.LoadingPackage() )
+		if( const TCHAR* Rule = CheckLoaded() )
+			RefuseFractal( this, Rule );
+	unguard;
+}
+
+// Drops live on the half size wave fields and are written there without masking.
+const TCHAR* UWaterTexture::CheckLoaded()
+{
+	if( NumDrops<0 || NumDrops>MaxDrops )
+		return TEXT("has a drop count out of range");
+	for( INT i=0; i<NumDrops; i++ )
+		if( Drops[i].X>=USize/2 || Drops[i].Y>=VSize/2 )
+			return TEXT("has a drop outside the texture");
+	return NULL;
+}
 
 void UWaterTexture::TouchTexture(INT UPos, INT VPos, FLOAT Magnitude)
 {
@@ -4274,7 +4358,7 @@ void UWetTexture::PostLoad()
 		INT UScaler = UBits - SourceTexture->UBits;
 		INT VScaler = VBits - SourceTexture->VBits;
 
-		if( (UScaler>=0 ) && (VScaler>=0) )
+		if( UScaler>=0 && VScaler>=0 && MipHolds(SourceTexture,(USize>>UScaler)*(VSize>>VScaler)) )
 		{
 			delete[] LocalSourceBitmap;
 			LocalSourceBitmap = new BYTE[ USize * VSize ]; 
@@ -4450,11 +4534,8 @@ void UIceTexture::PostLoad()
 				INT UScaler = UBits - SourceTexture->UBits;
 				INT VScaler = VBits - SourceTexture->VBits;
 
-				if( (UScaler >=0) && (VScaler>=0) )
+				if( UScaler>=0 && VScaler>=0 && MipHolds(SourceTexture,(USize>>UScaler)*(VSize>>VScaler)) )
 				{
-					if(!SourceTexture->bParametric)
-						SourceTexture->Mips(0).DataArray.Load();
-
 					LocalSourceBitmap = Mips(0).DataArray.GetTypedData();  // Our static output image.
 					BYTE* SourceMapAddr = SourceTexture->Mips(0).DataArray.GetTypedData();
 						
@@ -4578,7 +4659,7 @@ void UIceTexture::RenderIce(FLOAT DeltaTime)
 	guard(UIceTexture::RenderIce);
 
     // Safety & update checks. 
-	if( (GlassTexture == NULL) || (SourceTexture == NULL) ) return;
+	if( !MipHolds(GlassTexture,USize*VSize) || !MipHolds(SourceTexture,USize*VSize) ) return;
 
 	MoveIcePosition(DeltaTime);
 

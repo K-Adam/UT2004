@@ -222,7 +222,7 @@ void CreateSkinningStream( FStaticLODModel* NewLOD, USkeletalMesh* ParentMesh )
 			INT LookIdx = InfIdx;
 
 			INT InfluenceCount = 0;
-			while ( (NewLOD->Influences(LookIdx).VertIndex == VertIdx) && ( NewLOD->Influences.Num() > LookIdx) )
+			while ( NewLOD->Influences.Num() > LookIdx && NewLOD->Influences(LookIdx).VertIndex == VertIdx )
 			{			
 				InfluenceCount++;
 				LookIdx++;

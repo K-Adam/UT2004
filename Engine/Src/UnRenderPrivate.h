@@ -506,9 +506,10 @@ public:
 
 	// FIndexBuffer interface.
 
+	// Indices are checked for NumPrimitives, retail meshes can have another NumTriangles.
 	virtual INT GetSize()
 	{
-		return StaticMesh->Sections(SectionIndex).NumTriangles * 3 * sizeof(_WORD);
+		return StaticMesh->Sections(SectionIndex).NumPrimitives * 3 * sizeof(_WORD);
 	}
 	
 	virtual INT GetIndexSize()
@@ -526,10 +527,10 @@ public:
 		FStaticMeshSection*			Section = &StaticMesh->Sections(SectionIndex);
 		_WORD*						Indices = &StaticMesh->IndexBuffer.Indices(Section->FirstIndex);
 		FStaticMeshVertex*			Vertices = StaticMesh->VertexStream.Vertices.GetTypedData();
-		FTriangleSortInfo*			SortedTriangles = New<FTriangleSortInfo>(GSceneMem,Section->NumTriangles);
+		FTriangleSortInfo*			SortedTriangles = New<FTriangleSortInfo>(GSceneMem,Section->NumPrimitives);
 		_WORD						Offset = -Section->MinVertexIndex + MinVertexIndex;
 
-		for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)
+		for(INT TriangleIndex = 0;TriangleIndex < Section->NumPrimitives;TriangleIndex++)
 		{
 			SortedTriangles[TriangleIndex].Indices[0] = Indices[TriangleIndex * 3 + 0] + Offset;
 			SortedTriangles[TriangleIndex].Indices[1] = Indices[TriangleIndex * 3 + 1] + Offset;
@@ -545,9 +546,9 @@ public:
 			SortedTriangles[TriangleIndex].SortKey = appTrunc( Distance );
 		}
 
-		Sort(SortedTriangles,Section->NumTriangles);
+		Sort(SortedTriangles,Section->NumPrimitives);
 
-		for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)
+		for(INT TriangleIndex = 0;TriangleIndex < Section->NumPrimitives;TriangleIndex++)
 		{
 			if(ReverseVertexOrder)
 			{

@@ -291,11 +291,12 @@ void FBspDrawList::AddNode(INT NodeIndex,FDynamicLight** InDynamicLights,INT Num
 
 		Poly.Init();
 
-		for( INT v=0;v<Node.NumVertices;v++ )
+		// A built node can have more vertices than a polygon holds.
+		Poly.NumVertices = Min<INT>(Node.NumVertices,FPoly::MAX_VERTICES);
+		for( INT v=0;v<Poly.NumVertices;v++ )
 			Poly.Vertex[v] = Model->Points(Model->Verts(Node.iVertPool + v).pVertex);
 
 		Poly.Normal = Node.Plane;
-		Poly.NumVertices = Node.NumVertices;
 
 		for( INT p=0;p<6;p++ )
 		{

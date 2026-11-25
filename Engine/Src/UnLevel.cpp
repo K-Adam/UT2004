@@ -37,10 +37,16 @@ void ULevelBase::Serialize( FArchive& Ar )
 		Ar << DbNum << DbMax;
 		if( Ar.IsLoading() )
 		{
-			Actors.Empty( DbNum );
-			Actors.Add( DbNum );
+			if( DbNum<0 )
+			{
+				Ar.SetError();
+				DbNum = 0;
+			}
+			Actors.Empty( Min( DbNum, Min( Ar.RemainingBytes(), 65536 ) ) );
+			for( INT i=0; i<DbNum && !Ar.IsError(); i++ )
+				Ar << Actors(Actors.AddZeroed());
 		}
-		for( INT i=0; i<Actors.Num(); i++ )
+		else for( INT i=0; i<Actors.Num(); i++ )
 			Ar << Actors(i);
 	}
 	
@@ -211,6 +217,12 @@ void ULevel::PostLoad()
 	}
 	LIPSincLevelCount++;
 #endif
+
+	// Light maps are drawn from this level's model, so a level the file names instead is not trusted.
+	for( INT i=0; i<Model->LightMapTextures.Num(); i++ )
+		Model->LightMapTextures(i).Level = this;
+	for( INT i=0; i<Model->LightMaps.Num(); i++ )
+		Model->LightMaps(i).Level = this;
 
 	Model->BuildRenderData();
 

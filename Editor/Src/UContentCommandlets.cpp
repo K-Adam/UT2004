@@ -236,6 +236,10 @@ class ULoadPackage : public UCommandlet
 					continue;
 				}
 
+				// Static mesh triangles stay lazy even here, reading them runs their load check too.
+				for( TObjectIterator<UStaticMesh> It; It; ++It )
+					It->RawTriangles.Load();
+
 				UObject::ResetLoaders( NULL, 0, 1 );
 				UObject::CollectGarbage(RF_Native);
 			}

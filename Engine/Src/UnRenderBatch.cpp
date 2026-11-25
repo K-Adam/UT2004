@@ -581,9 +581,10 @@ public:
 				FVector				LocalViewOrigin = DynamicActor->WorldToLocal.TransformFVector(ViewOrigin);
 				_WORD*				Indices = &Element.Actor->StaticMesh->IndexBuffer.Indices(Section->FirstIndex);
 				FStaticMeshVertex*	Vertices = Element.Actor->StaticMesh->VertexStream.Vertices.GetTypedData();
-				FTriangleSortInfo*	SortedTriangles = New<FTriangleSortInfo>(GSceneMem,Section->NumTriangles);
+				// The buffer is sized from NumPrimitives, retail meshes can have another NumTriangles.
+				FTriangleSortInfo*	SortedTriangles = New<FTriangleSortInfo>(GSceneMem,Section->NumPrimitives);
 
-				for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)
+				for(INT TriangleIndex = 0;TriangleIndex < Section->NumPrimitives;TriangleIndex++)
 				{
 					SortedTriangles[TriangleIndex].Indices[0] = Indices[TriangleIndex * 3 + 0] + Offset;
 					SortedTriangles[TriangleIndex].Indices[1] = Indices[TriangleIndex * 3 + 1] + Offset;
@@ -599,11 +600,11 @@ public:
 					SortedTriangles[TriangleIndex].SortKey = appTrunc( Distance );
 				}
 
-				Sort( SortedTriangles, Section->NumTriangles );
+				Sort( SortedTriangles, Section->NumPrimitives );
 
 				if(DynamicActor->Determinant < 0.0f)
 				{
-					for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)
+					for(INT TriangleIndex = 0;TriangleIndex < Section->NumPrimitives;TriangleIndex++)
 					{
 						*DestIndex++ = SortedTriangles[TriangleIndex].Indices[2];
 						*DestIndex++ = SortedTriangles[TriangleIndex].Indices[1];
@@ -612,7 +613,7 @@ public:
 				}
 				else
 				{
-					for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)
+					for(INT TriangleIndex = 0;TriangleIndex < Section->NumPrimitives;TriangleIndex++)
 					{
 						*DestIndex++ = SortedTriangles[TriangleIndex].Indices[0];
 						*DestIndex++ = SortedTriangles[TriangleIndex].Indices[1];

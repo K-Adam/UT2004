@@ -282,10 +282,17 @@ FArchive& operator<<(FArchive& Ar,FStaticMeshTriangle& T)
 			<< T.Vertices[2]
 			<< T.NumUVs;
 
-		for(INT UVIndex = 0;UVIndex < T.NumUVs;UVIndex++)
-			Ar	<< T.UVs[0][UVIndex]
-				<< T.UVs[1][UVIndex]
-				<< T.UVs[2][UVIndex];
+		// Extra UV sets are still read, a short read would end the game.
+		FStaticMeshUV	Extra;
+		for(INT UVIndex = 0;UVIndex < T.NumUVs && !Ar.IsError();UVIndex++)
+			for(INT VertexIndex = 0;VertexIndex < 3;VertexIndex++)
+				Ar << (UVIndex < ARRAY_COUNT(T.UVs[0]) ? T.UVs[VertexIndex][UVIndex] : Extra);
+		if(Ar.IsLoading() && (T.NumUVs < 0 || T.NumUVs > ARRAY_COUNT(T.UVs[0])))
+		{
+			T.NumUVs = 0;
+			if(Ar.LoadingPackage())
+				GRepairedAsset(Ar.LoadingPackage(),TEXT("has a static mesh triangle with too many UV sets"));
+		}
 
 		Ar	<< T.Colors[0]
 			<< T.Colors[1]
@@ -495,6 +502,88 @@ void UStaticMesh::Serialize(FArchive& Ar)
 			InternalVersion += 2;
 	}
 
+	if(Ar.LoadingPackage())
+		if(const TCHAR* Rule = CheckLoaded())
+			Repair(Rule);
+
+	unguard;
+}
+
+// Leaves an empty mesh that every user draws and collides with as nothing.
+void UStaticMesh::Repair(const TCHAR* Rule)
+{
+	guard(UStaticMesh::Repair);
+	Sections.Empty();
+	VertexStream.Vertices.Empty();
+	ColorStream.Colors.Empty();
+	AlphaStream.Colors.Empty();
+	UVStreams.Empty();
+	IndexBuffer.Indices.Empty();
+	WireframeIndexBuffer.Indices.Empty();
+	kDOPTree.Nodes.Empty();
+	kDOPTree.Triangles.Empty();
+	RawTriangles.Detach();
+	RawTriangles.Empty();
+	GRepairedAsset(this,Rule);
+	unguard;
+}
+
+// The rules follow what rendering, batching, collision and the particle and terrain code read without checking.
+const TCHAR* UStaticMesh::CheckLoaded()
+{
+	guard(UStaticMesh::CheckLoaded);
+	// Such meshes are converted from vertex and index buffer objects this does not check.
+	if(InternalVersion == INDEX_NONE)
+		return TEXT("has a static mesh from before release");
+	// Older meshes are built again from their raw triangles in PostLoad, which Build checks.
+	if(InternalVersion < 10)
+		return NULL;
+	const INT NumVertices = VertexStream.Vertices.Num();
+	// The vertex stream arrays hold 9, a position, a color and up to 7 UV streams.
+	if(UVStreams.Num() > 7)
+		return TEXT("has too many UV streams");
+	for(INT i = 0;i < UVStreams.Num();i++)
+		if((DWORD)UVStreams(i).CoordinateIndex >= 8 || UVStreams(i).UVs.Num() != NumVertices)
+			return TEXT("has a UV stream that does not fit its vertices");
+	if((ColorStream.Colors.Num() && ColorStream.Colors.Num() != NumVertices) || (AlphaStream.Colors.Num() && AlphaStream.Colors.Num() != NumVertices))
+		return TEXT("has a color stream that does not fit its vertices");
+	// Sections are drawn with the material of the same index.
+	if(Sections.Num() > Materials.Num())
+		return TEXT("has a static mesh section without a material");
+	for(INT i = 0;i < Sections.Num();i++)
+	{
+		const FStaticMeshSection& Section = Sections(i);
+		// Only meshes from before release are built with strips, everything else reads sections as lists.
+		if(Section.IsStrip)
+			return TEXT("has a static mesh section stored as a strip");
+		if(!Section.NumPrimitives)
+			continue;
+		const INT NumIndices = Section.NumPrimitives * 3;
+		if(Section.FirstIndex + NumIndices > IndexBuffer.Indices.Num() || Section.MinVertexIndex > Section.MaxVertexIndex || Section.MaxVertexIndex >= NumVertices)
+			return TEXT("has a static mesh section outside its buffers");
+		// Released meshes have indices outside their section's range, which only the GPU reads.
+		for(INT Index = Section.FirstIndex;Index < Section.FirstIndex + NumIndices;Index++)
+			if(IndexBuffer.Indices(Index) >= NumVertices)
+				return TEXT("has a static mesh section outside its vertices");
+	}
+	// Version 10 builds its collision tree again.
+	if(InternalVersion < STATICMESH_VERSION)
+		return NULL;
+	// Every walk starts at node 0 and goes to higher nodes, so it ends.
+	for(INT i = 0;i < kDOPTree.Nodes.Num();i++)
+	{
+		const FkDOPNode& Node = kDOPTree.Nodes(i);
+		if(Node.bIsLeaf ? Node.t.StartIndex + Node.t.NumTriangles > kDOPTree.Triangles.Num()
+		:	Node.n.LeftNode <= i || Node.n.RightNode <= i || Node.n.LeftNode >= kDOPTree.Nodes.Num() || Node.n.RightNode >= kDOPTree.Nodes.Num())
+			return TEXT("has a broken collision tree");
+	}
+	for(INT i = 0;i < kDOPTree.Triangles.Num();i++)
+	{
+		const FkDOPCollisionTriangle& Triangle = kDOPTree.Triangles(i);
+		if(Triangle.v1 >= NumVertices || Triangle.v2 >= NumVertices || Triangle.v3 >= NumVertices || Triangle.MaterialIndex >= Materials.Num())
+			return TEXT("has a collision triangle outside its vertices");
+	}
+	return NULL;
 	unguard;
 }
 

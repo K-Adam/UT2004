@@ -449,7 +449,7 @@ void ASVehicle::PostBeginPlay()
 
 	// Calculate mesh-space bone transforms in the default pose.
 	TArray<FCoords> RefBases;
-	RefBases.Add( smesh->RefSkeleton.Num() );
+	RefBases.AddZeroed( smesh->RefSkeleton.Num() );
 
 	for( INT b=0; b<smesh->RefSkeleton.Num(); b++)
 	{

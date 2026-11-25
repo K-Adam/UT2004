@@ -6,6 +6,7 @@
 	virtual void Initialize( INT InMaxParticles );
 	virtual void CleanUp();
 	virtual void PostEditChange();
+	virtual const TCHAR* CheckLoaded();
 	virtual void UpdateActorHitList();
 
 	virtual void Scale( FLOAT ScaleFactor );

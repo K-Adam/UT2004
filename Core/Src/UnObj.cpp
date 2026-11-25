@@ -5466,7 +5466,7 @@ FArchive& operator<<( FArchive& Ar, FCompactIndex& I )
 						V >>= 7;
 						BYTE B4 = V;
 						Ar << B4;
-						I.Value = B4;
+						I.Value = Ar.IsLoading() ? B4 & 0x0f : B4;
 					}
 					I.Value = (I.Value << 7) + (B3 & 0x7f);
 				}

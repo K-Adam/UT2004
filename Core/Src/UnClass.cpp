@@ -1893,16 +1893,24 @@ UBOOL GIsRefused( UObject* Object )
 	UPackage* Package = GAnyRefused ? TopPackage( Object ) : NULL;
 	return Package && Package->Refused;
 }
-void GRefuseScript( UObject* Culprit, const TCHAR* Rule )
+static void ReportLoadRule( const TCHAR* Verb, UObject* Culprit, const TCHAR* Rule )
 {
 	// The tools would save the repaired object.
 	if( GIsEditor )
 		appErrorf( TEXT("%s %s"), Culprit->GetFullName(), Rule );
-	debugf( NAME_Warning, TEXT("Refused %s: it %s"), Culprit->GetFullName(), Rule );
+	debugf( NAME_Warning, TEXT("%s %s: it %s"), Verb, Culprit->GetFullName(), Rule );
+}
+void GRefuseScript( UObject* Culprit, const TCHAR* Rule )
+{
+	ReportLoadRule( TEXT("Refused"), Culprit, Rule );
 	GRefusedScript = Culprit->GetPathName();
 	if( UPackage* Package = TopPackage(Culprit) )
 		Package->Refused = 1;
 	GAnyRefused = GRefusalPending = 1;
+}
+void GRepairedAsset( UObject* Culprit, const TCHAR* Rule )
+{
+	ReportLoadRule( TEXT("Repaired"), Culprit, Rule );
 }
 void GKeepClass( FArchive& Ar, UObject*& Object, UClass* Class )
 {

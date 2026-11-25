@@ -51,6 +51,15 @@ void UTrailEmitter::PostEditChange()
 	Initialize( MaxParticles );
 }
 
+const TCHAR* UTrailEmitter::CheckLoaded()
+{
+	if( MaxPointsPerTrail<3 )
+		return TEXT("has a trail with fewer than three points");
+	if( (QWORD)Max(MaxParticles,0) * MaxPointsPerTrail * 4 > MAXINT/256 )
+		return TEXT("has a trail too large to draw");
+	return Super::CheckLoaded();
+}
+
 // Initializes the Emitter.
 void UTrailEmitter::Initialize( INT InMaxParticles )
 {

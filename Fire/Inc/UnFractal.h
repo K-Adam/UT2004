@@ -9,6 +9,12 @@
 	Dependencies.
 ----------------------------------------------------------------------------*/
 
+#pragma once
+
+#ifndef FIRE_API
+	#define FIRE_API DLL_IMPORT
+#endif
+
 #include "Engine.h"
 #include "UnFireNative.h"
 
@@ -46,7 +52,7 @@ extern INT 	TotalFrames;
 // warning: Mirrored in FractalTexture.uc.
 //
 
-class DLL_EXPORT_CLASS UFractalTexture : public UTexture
+class FIRE_API UFractalTexture : public UTexture
 {
 	DECLARE_ABSTRACT_CLASS(UFractalTexture,UTexture,0,Fire)
 
@@ -65,6 +71,8 @@ class DLL_EXPORT_CLASS UFractalTexture : public UTexture
 	// UObject interface.	
 	void PostLoad();
 	void PostEditChange() {PostLoad();}
+	void Serialize( FArchive& Ar );
+	const TCHAR* CheckLoaded();
 
 	// UTexture interface.
 	void Init( INT InUSize, INT InVSize );	
@@ -132,7 +140,7 @@ enum DMode
 
 // Information about a single spark.
 // warning: Mirrored in FireTexture.uc.
-class DLL_EXPORT_CLASS FSpark
+class FIRE_API FSpark
 {
 	public:
     BYTE    Type;    // Spark type (ESpark).
@@ -156,7 +164,7 @@ class DLL_EXPORT_CLASS FSpark
 // warning: Mirrored in FireTexture.uc.
 //
 
-class DLL_EXPORT_CLASS UFireTexture : public UFractalTexture
+class FIRE_API UFireTexture : public UFractalTexture
 {
 	DECLARE_CLASS(UFireTexture,UFractalTexture,0,Fire)
 
@@ -195,6 +203,7 @@ class DLL_EXPORT_CLASS UFireTexture : public UFractalTexture
 	// UObject interface.
 	void PostLoad();
 	void Serialize( FArchive& Ar );
+	const TCHAR* CheckLoaded();
 
 	// UTexture interface.
 	void Init( INT InUSize, INT InVSize );
@@ -258,7 +267,7 @@ enum EDrop
 
 
 // Information about a drop of water in a water texture.
-struct DLL_EXPORT_CLASS FDrop
+struct FIRE_API FDrop
 {
     BYTE Type;     // Water drop type (EDrop).
     BYTE Depth;    // Depth.
@@ -274,7 +283,7 @@ struct DLL_EXPORT_CLASS FDrop
 // A Wave texture object.
 // warning: Mirrored in WaterTexture.uc.
 //
-class DLL_EXPORT_CLASS UWaterTexture : public UFractalTexture
+class FIRE_API UWaterTexture : public UFractalTexture
 {
 	DECLARE_ABSTRACT_CLASS(UWaterTexture,UFractalTexture,0,Fire)
 
@@ -307,6 +316,8 @@ class DLL_EXPORT_CLASS UWaterTexture : public UFractalTexture
 	// UObject interface.
 	void PostLoad();
 	void Destroy();
+	void Serialize( FArchive& Ar );
+	const TCHAR* CheckLoaded();
 
 	// UTexture interface.
 	void Init( INT InUSize, INT InVSize );
@@ -330,7 +341,7 @@ class DLL_EXPORT_CLASS UWaterTexture : public UFractalTexture
 	UWaveTexture.
 ----------------------------------------------------------------------------*/
 
-class DLL_EXPORT_CLASS UWaveTexture : public UWaterTexture
+class FIRE_API UWaveTexture : public UWaterTexture
 {
 	DECLARE_CLASS(UWaveTexture,UWaterTexture,0,Fire)
 
@@ -359,7 +370,7 @@ class DLL_EXPORT_CLASS UWaveTexture : public UWaterTexture
 	UFluidTexture.
 ----------------------------------------------------------------------------*/
 
-class DLL_EXPORT_CLASS UFluidTexture : public UWaterTexture
+class FIRE_API UFluidTexture : public UWaterTexture
 {
 	DECLARE_CLASS(UFluidTexture,UWaterTexture,0,Fire)
 
@@ -382,7 +393,7 @@ class DLL_EXPORT_CLASS UFluidTexture : public UWaterTexture
 	UWetTexture.
 ----------------------------------------------------------------------------*/
 
-class DLL_EXPORT_CLASS UWetTexture : public UWaterTexture
+class FIRE_API UWetTexture : public UWaterTexture
 {
 	DECLARE_CLASS(UWetTexture,UWaterTexture,0,Fire)
 
@@ -431,7 +442,7 @@ enum PanningType
 
 // A keypoint for movement.
 // warning: Mirrored in IceTexture.uc.
-struct DLL_EXPORT_CLASS KeyPoint
+struct FIRE_API KeyPoint
 {
 	BYTE    X;       // Keypoint X - fix
 	BYTE    Y;       // Keypoint Y - fix
@@ -448,7 +459,7 @@ struct DLL_EXPORT_CLASS KeyPoint
 // An Ice texture object.
 // warning: Mirrored in IceTexture.uc.
 //
-class DLL_EXPORT_CLASS UIceTexture : public UFractalTexture
+class FIRE_API UIceTexture : public UFractalTexture
 {
 	DECLARE_CLASS(UIceTexture,UFractalTexture,0,Fire)
 
