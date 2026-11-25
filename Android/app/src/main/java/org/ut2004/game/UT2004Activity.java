@@ -72,14 +72,15 @@ public class UT2004Activity extends SDLActivity {
             lanLock.acquire();
         }
         // Android keeps apps at 60 Hz unless they ask, and VSync caps the game at the panel's rate.
+        // A rate is capped at the user's peak refresh setting, a mode id above it drops the panel to 30 Hz.
         Display display = getWindowManager().getDefaultDisplay();
-        Display.Mode current = display.getMode(), best = current;
+        Display.Mode current = display.getMode();
+        float rate = current.getRefreshRate();
         for (Display.Mode mode : display.getSupportedModes())
-            if (mode.getPhysicalWidth() == current.getPhysicalWidth() && mode.getPhysicalHeight() == current.getPhysicalHeight()
-                && mode.getRefreshRate() > best.getRefreshRate())
-                best = mode;
+            if (mode.getPhysicalWidth() == current.getPhysicalWidth() && mode.getPhysicalHeight() == current.getPhysicalHeight())
+                rate = Math.max(rate, mode.getRefreshRate());
         WindowManager.LayoutParams params = getWindow().getAttributes();
-        params.preferredDisplayModeId = best.getModeId();
+        params.preferredRefreshRate = rate;
         getWindow().setAttributes(params);
         // Back and the back gesture work like Escape and open or close the menus. From Android 13 they
         // come through this callback, older versions send KEYCODE_BACK, which SDL maps the same way.

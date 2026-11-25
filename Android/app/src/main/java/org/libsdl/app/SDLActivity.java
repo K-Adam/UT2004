@@ -853,7 +853,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     // Start up the C app thread and enable sensor input for the first time
                     // FIXME: Why aren't we enabling sensor input at start?
 
-                    mSDLThread = new Thread(new SDLMain(), "SDLThread");
+                    // The engine recurses deeply, the other platforms give it 8 MB as well.
+                    mSDLThread = new Thread(null, new SDLMain(), "SDLThread", 8 * 1024 * 1024);
                     mSurface.enableSensor(Sensor.TYPE_ACCELEROMETER, true);
                     mSDLThread.start();
 

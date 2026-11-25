@@ -60,10 +60,13 @@ static INT GpuTier(const TCHAR* Renderer,UBOOL Capable)
 	for( INT i=0; i<ARRAY_COUNT(Known); i++ )
 		if( appStrstr(Renderer,Known[i].Name) )
 			return Known[i].Tier;
-	// Adreno 6xx starts to cope at the 640.
-	const TCHAR* Adreno = appStrstr(Renderer,TEXT("Adreno (TM) "));
-	if( Adreno && appAtoi(Adreno + 12) < 640 )
-		return 2;
+	// Adreno 6xx starts to cope at the 640, later generations at their x25.
+	if( const TCHAR* Adreno = appStrstr(Renderer,TEXT("Adreno (TM) ")) )
+	{
+		INT Model = appAtoi(Adreno + 12);
+		if( Model < 640 || Model % 100 < 25 )
+			return 2;
+	}
 	return Capable ? 0 : 2;
 }
 
@@ -73,6 +76,7 @@ void UOpenGLRenderDevice::DetectOptions()
 	checkSlow(GpuTier(TEXT("ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)"),1) == 0);
 	checkSlow(GpuTier(TEXT("ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)"),1) == 1);
 	checkSlow(GpuTier(TEXT("Adreno (TM) 618"),1) == 2 && GpuTier(TEXT("Adreno (TM) 740"),1) == 0 && GpuTier(TEXT("Mali-G52 MC2"),1) == 2);
+	checkSlow(GpuTier(TEXT("Adreno (TM) 810"),1) == 2 && GpuTier(TEXT("Adreno (TM) 825"),1) == 0);
 	checkSlow(GpuTier(TEXT("llvmpipe (LLVM 15.0.7, 256 bits)"),1) == 3 && GpuTier(TEXT("Mali-G715"),0) == 2);
 
 	INT Tier = GpuTier(appFromAnsi((const ANSICHAR*)glGetString(GL_RENDERER)),SupportsFloatTargets && MaxTextureSize >= 4096);

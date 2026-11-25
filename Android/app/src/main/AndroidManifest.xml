@@ -25,6 +25,8 @@
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
         android:enableOnBackInvokedCallback="true">
 
+        <profileable android:shell="true" />
+
         <activity android:name=".UT2004Activity"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
