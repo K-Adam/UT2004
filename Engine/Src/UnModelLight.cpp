@@ -654,7 +654,7 @@ INT SetupLightMap(ULevel* Level,INT iSurf,INT iZone)
 	// Allocate a new light map.
 
 	FLightMap*	LightMap = new(Model->LightMaps) FLightMap(Level,iSurf,iZone);
-	INT			iLightMap = LightMap - &Model->LightMaps(0);
+	INT			iLightMap = LightMap - Model->LightMaps.GetTypedData();
 
 	LightMap->Revision++;
 
@@ -1171,7 +1171,7 @@ void UModel::Illuminate(AActor* Owner,UBOOL ChangedOnly)
 					}
 		    }
 
-            Sort(&SurfaceLights[LightMap->iSurf](0), SurfaceLights[LightMap->iSurf].Num()); // sjs - sort negative lights
+            Sort(SurfaceLights[LightMap->iSurf].GetTypedData(), SurfaceLights[LightMap->iSurf].Num()); // sjs - sort negative lights
 
 			// Add new light bitmaps.
 			for(INT LightIndex = 0;LightIndex < SurfaceLights[LightMap->iSurf].Num();LightIndex++)
@@ -1300,7 +1300,7 @@ void UModel::CompressLightmaps()
 				TArray<FColor>	TextureData(Width * Height),
 								Mip1(Width / 2 * Height / 2);
 
-				appMemzero(&TextureData(0),TextureData.Num() * sizeof(FColor));
+				appMemzero(TextureData.GetTypedData(),TextureData.Num() * sizeof(FColor));
 				GWarn->StatusUpdatef(TextureIndex,LightMapTextures.Num(),TEXT("Compressing lightmaps..."));
 
 				for(INT LightMapIndex = 0;LightMapIndex < Texture->LightMaps.Num();LightMapIndex++)
@@ -1313,7 +1313,7 @@ void UModel::CompressLightmaps()
 
 				// Save out lightmaps for debugging purposes.
 				if( Options->SaveOutLightmaps )
-					appCreateBitmap( TEXT("LM-"), Width, Height, (DWORD*) &TextureData(0) );
+					appCreateBitmap( TEXT("LM-"), Width, Height, (DWORD*) TextureData.GetTypedData() );
 
 				// nvDXT turned greyscale on together with dithering.
 				if( Options->DitherLightmaps )
@@ -1331,8 +1331,8 @@ void UModel::CompressLightmaps()
 					}
 
 				ETextureFormat	Format = Options->LightmapFormat == TEXF_DXT3 ? TEXF_DXT3 : TEXF_DXT1;
-				CompressDXT(&TextureData(0),Width,Height,Format,Texture->StaticTexture.Data[0]);
-				CompressDXT(&Mip1(0),Width / 2,Height / 2,Format,Texture->StaticTexture.Data[1]);
+				CompressDXT(TextureData.GetTypedData(),Width,Height,Format,Texture->StaticTexture.Data[0]);
+				CompressDXT(Mip1.GetTypedData(),Width / 2,Height / 2,Format,Texture->StaticTexture.Data[1]);
 
 				Texture->StaticTexture.Width	= Width;
 				Texture->StaticTexture.Height	= Height;

@@ -510,7 +510,7 @@ TEST( Security, LatentActionMustBeAPollNative )
 	UStruct* Node = Frame->Node;
 	BYTE* Code = Frame->Code;
 	Frame->Node = S.Function;
-	Frame->Code = &S.Code(0);
+	Frame->Code = S.Code.GetTypedData();
 	Frame->LatentAction = 278;
 	Info->ProcessState( 0.1f );
 	EXPECT_EQ( 0, Frame->LatentAction );

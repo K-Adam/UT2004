@@ -150,7 +150,7 @@ void CheckForConflictingPackageNames()
     }
 
     if( Files.Num() )
-        Sort( &Files(0), Files.Num() );
+        Sort( Files.GetTypedData(), Files.Num() );
 
     for( i = 0; i < Files.Num() - 1; i++)
     {
@@ -185,7 +185,7 @@ template <class T> static void CheckForConflictingNames(TCHAR *WildcardFilter, T
         if( !FilesInPath.Num() )
             continue;
 
-        Sort( &FilesInPath(0), FilesInPath.Num() );
+        Sort( FilesInPath.GetTypedData(), FilesInPath.Num() );
 
         check( PackageWildcard.InStr(TEXT("*")) >= 0 );
         PathPrefix = PackageWildcard.Left( PackageWildcard.InStr( TEXT("*"), 1 ));
@@ -803,7 +803,7 @@ void AnalyzeScripts()
         if( !FilesInPath.Num() )
             continue;
 
-        Sort( &FilesInPath(0), FilesInPath.Num() );
+        Sort( FilesInPath.GetTypedData(), FilesInPath.Num() );
 
         check( PackageWildcard.InStr(TEXT("*")) >= 0 );
         PathPrefix = PackageWildcard.Left( PackageWildcard.InStr( TEXT("*"), 1 ));
@@ -1136,7 +1136,7 @@ void AnalyzeMaps()
         if( !FilesInPath.Num() )
             continue;
 
-        Sort( &FilesInPath(0), FilesInPath.Num() );
+        Sort( FilesInPath.GetTypedData(), FilesInPath.Num() );
 
         check( PackageWildcard.InStr(TEXT("*")) >= 0 );
         PathPrefix = PackageWildcard.Left( PackageWildcard.InStr( TEXT("*"), 1 ));

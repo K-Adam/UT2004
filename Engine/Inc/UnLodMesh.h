@@ -143,7 +143,7 @@ public:
 	// GetStreamData
 	virtual void GetStreamData(void* Dest)
 	{
-		appMemcpy(Dest,&Vertices(0),GetPartialSize() * sizeof(FAnimMeshVertex));
+		appMemcpy(Dest,Vertices.GetTypedData(),GetPartialSize() * sizeof(FAnimMeshVertex));
 	}
 
 	virtual void GetRawStreamData(void ** Dest, INT FirstVertex )

@@ -28,7 +28,7 @@ public:
 
 	UBOOL Load(const TCHAR* Filename)
 	{
-		if( !appLoadFileToArray(File,Filename) || File.Num() < 128 || appMemcmp(&File(0),"DDS ",4) != 0 )
+		if( !appLoadFileToArray(File,Filename) || File.Num() < 128 || appMemcmp(File.GetTypedData(),"DDS ",4) != 0 )
 			return 0;
 		Height	= *(INT*)&File(12);
 		Width	= *(INT*)&File(16);
@@ -123,7 +123,7 @@ public:
 		Components[3] = FVertexComponent(CT_Color,FVF_Instance3);
 		return 4;
 	}
-	virtual void GetStreamData(void* Dest) { appMemcpy(Dest,&Instances(0),GetSize()); }
+	virtual void GetStreamData(void* Dest) { appMemcpy(Dest,Instances.GetTypedData(),GetSize()); }
 	virtual void GetRawStreamData(void** Dest,INT FirstVertex) { *Dest = &Instances(FirstVertex); }
 };
 

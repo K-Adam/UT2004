@@ -508,7 +508,7 @@ class ENGINE_API UVertexBuffer : public UVertexStreamBase
 	UVertexBuffer( DWORD InPolyFlags ) : UVertexStreamBase( sizeof(FUntransformedVertex), InPolyFlags, ST_MISC) {}
 
 	// UVertexStream Interface
-	void* GetData() { return &Vertices(0); }
+	void* GetData() { return Vertices.GetTypedData(); }
 	INT GetDataSize() { return Vertices.Num() * sizeof(FUntransformedVertex); }
 
 	// UObject Interface
@@ -537,7 +537,7 @@ class ENGINE_API UVertexStreamVECTOR : public UVertexStreamBase
 	UVertexStreamVECTOR( DWORD InPolyFlags ) : UVertexStreamBase( sizeof(FVector), InPolyFlags, ST_VECTOR3) {}
 
 	// UVertexStream Interface
-	void* GetData() { return &VectorData(0); }
+	void* GetData() { return VectorData.GetTypedData(); }
 	INT GetDataSize() { return VectorData.Num() * sizeof(FVector); }
 
 	// UObject Interface
@@ -599,7 +599,7 @@ class ENGINE_API UVertexStreamCOLOR : public UVertexStreamBase
 	UVertexStreamCOLOR( DWORD InPolyFlags ) : UVertexStreamBase( sizeof(FColorHack), InPolyFlags, ST_COLOR) {}
 
 	// UVertexStream Interface
-	void* GetData() { return &ColorData(0); }
+	void* GetData() { return ColorData.GetTypedData(); }
 	INT GetDataSize() { return ColorData.Num() * sizeof(FColorHack); }
 
 	// UObject Interface
@@ -636,7 +636,7 @@ class ENGINE_API UVertexStreamUV : public UVertexStreamBase
 	UVertexStreamUV( DWORD InPolyFlags ) : UVertexStreamBase( sizeof(FUV2Data), InPolyFlags, ST_UV2) {}
 
 	// UVertexStream Interface
-	void* GetData() { return &UVData(0); }
+	void* GetData() { return UVData.GetTypedData(); }
 	INT GetDataSize() { return UVData.Num() * sizeof(FUV2Data); }
 
 	// UObject Interface
@@ -684,7 +684,7 @@ class ENGINE_API UVertexStreamPosNormTex : public UVertexStreamBase
 	UVertexStreamPosNormTex( DWORD InPolyFlags ) : UVertexStreamBase( sizeof(FPosNormTexData), InPolyFlags, ST_POSNORMTEX) {}
 
 	// UVertexStream Interface
-	void* GetData() { return &Data(0); }
+	void* GetData() { return Data.GetTypedData(); }
 	INT GetDataSize() { return Data.Num() * sizeof(FPosNormTexData); }
 
 	// UObject Interface

@@ -1336,7 +1336,7 @@ void appLaunchURL( const TCHAR* URL, const TCHAR* Parms, FString* Error )
 	if( Error )
 		*Error = Failed ? LocalizeError(TEXT("UrlFailed"),TEXT("Core")) : TEXT("");
 #elif __EMSCRIPTEN__
-	EM_ASM( window.open(UTF8ToString($0), '_blank', 'noopener'), &appToUtf8(URL)(0) );
+	EM_ASM( window.open(UTF8ToString($0), '_blank', 'noopener'), appToUtf8(URL).GetTypedData() );
 	if( Error )
 		*Error = TEXT("");
 #else

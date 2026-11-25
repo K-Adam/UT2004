@@ -1154,8 +1154,8 @@ void USkeletalMeshInstance::MeshBuildBounds()
 		RawPoints.AddItem(Mesh->RawVerts(i));
 	}
 
-	Mesh->BoundingBox    = FBox   ( &RawPoints(0), RawPoints.Num() );
-	Mesh->BoundingSphere = FSphere( &RawPoints(0), RawPoints.Num() );
+	Mesh->BoundingBox    = FBox   ( RawPoints.GetTypedData(), RawPoints.Num() );
+	Mesh->BoundingSphere = FSphere( RawPoints.GetTypedData(), RawPoints.Num() );
 
 	FBox Temp = Mesh->BoundingBox;
 
@@ -1372,7 +1372,7 @@ void ModelDataReSort( FStaticLODModel* Model )
 	}
 
 	// Sort the weights by Point index....
-	appQsort( &Model->Influences(0), Model->Influences.Num(), sizeof(FVertInfluence), (QSORT_COMPARE)CompareBoneWeight );
+	appQsort( Model->Influences.GetTypedData(), Model->Influences.Num(), sizeof(FVertInfluence), (QSORT_COMPARE)CompareBoneWeight );
 
 	if( 1 ) // influence cleanup 
 	{
@@ -1824,7 +1824,7 @@ INT UMeshAnimation::SortSequencesByName()
 		AnimSeqs(n).Erase();								
 	}	
 
-	appQsort( &ReorderSeqTags(0), ReorderSeqTags.Num(), sizeof(SortSeqTag), (QSORT_COMPARE) CompareSequenceName );
+	appQsort( ReorderSeqTags.GetTypedData(), ReorderSeqTags.Num(), sizeof(SortSeqTag), (QSORT_COMPARE) CompareSequenceName );
 
 	for( INT n=0; n<Moves.Num(); n++)
 	{				

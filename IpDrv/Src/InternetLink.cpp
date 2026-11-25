@@ -725,7 +725,7 @@ void FTcpLink::SendPendingData()
 		INT SendMax = Min<INT>(PendingSend.Num(), FTCPLINK_MAX_SEND_BYTES);
 		if( ThrottleSend )
 			SendMax = Min<INT>(SendMax, BandwidthSendBudget);
-		INT sent = send( SocketData.Socket, (const char*)&PendingSend(0), SendMax, 0 );
+		INT sent = send( SocketData.Socket, (const char*)PendingSend.GetTypedData(), SendMax, 0 );
 		if( sent == PendingSend.Num() )
 		{
 			StatBytesSent += sent;
@@ -813,7 +813,7 @@ INT FTcpLink::Recv( BYTE* Data, INT Count )
 	guard(FTcpLink::Recv);
 	Count = Max( Min( Count, ReceivedData.Num() ), 0 );
 	if( Count )
-		appMemcpy( Data, &ReceivedData(0), Count );
+		appMemcpy( Data, ReceivedData.GetTypedData(), Count );
 	ReceivedData.Remove(0, Count);
 	return Count;
 	unguard;
@@ -822,7 +822,7 @@ INT FTcpLink::Recv( BYTE* Data, INT Count )
 void FTcpLink::PeekData( BYTE*& Data, INT& Count )
 {
 	Count = ReceivedData.Num();
-	Data = &ReceivedData(0);
+	Data = ReceivedData.GetTypedData();
 }
 
 /*-----------------------------------------------------------------------------
@@ -850,7 +850,7 @@ void FArchiveTcpReader::Serialize( void* V, INT Length )
 		return;
 	}
 
-    appMemcpy( V, &Packets(0).PacketData(0), Length );
+    appMemcpy( V, Packets(0).PacketData.GetTypedData(), Length );
 	Packets(0).PacketData.Remove( 0, Length );
 	Packets(0).Length -= Length;
 
@@ -946,9 +946,9 @@ void FArchiveTcpWriter::Flush()
 		INT PacketSize = SendData.Num() - sizeof(INT);
 		PacketSize = INTEL_ORDER32(PacketSize);
 
-		appMemcpy( &SendData(0), &PacketSize, sizeof(INT) );
+		appMemcpy( SendData.GetTypedData(), &PacketSize, sizeof(INT) );
 
-		Link->Send( &SendData(0), SendData.Num() );
+		Link->Send( SendData.GetTypedData(), SendData.Num() );
 
 		SendData.Empty();
 		SendData.Add(sizeof(INT));
@@ -1174,7 +1174,7 @@ FArchiveUdpWriter::FArchiveUdpWriter( FUdpLink* InLink, FIpAddr InDest )
 	INT V = Ver();
 	V = INTEL_ORDER32(V);
 	SendData.Add(sizeof(INT));
-	appMemcpy( &SendData(0), &V, sizeof(INT) );
+	appMemcpy( SendData.GetTypedData(), &V, sizeof(INT) );
 }
 void FArchiveUdpWriter::Serialize( void* V, INT Length )
 {
@@ -1185,13 +1185,13 @@ void FArchiveUdpWriter::Flush()
 {
 	if( SendData.Num() )
 	{
-		Link->SendTo( Dest, &SendData(0), SendData.Num() );
+		Link->SendTo( Dest, SendData.GetTypedData(), SendData.Num() );
 		SendData.Empty();
 	}
 	INT V = Ver();
 	V = INTEL_ORDER32(V);
 	SendData.Add(sizeof(INT));
-	appMemcpy( &SendData(0), &V, sizeof(INT) );
+	appMemcpy( SendData.GetTypedData(), &V, sizeof(INT) );
 }
 INT FArchiveUdpWriter::Tell()
 {

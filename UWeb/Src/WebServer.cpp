@@ -41,7 +41,7 @@ void UWebRequest::execDecodeBase64( FFrame& Stack, RESULT_DECL )
 
 	// The input comes from an unauthenticated client, so its size is not bounded.
 	TArray<TCHAR> DecodedBuffer( (Encoded.Len() + 3) / 4 * 3 + 4 );
-	TCHAR *Decoded = &DecodedBuffer(0);
+	TCHAR *Decoded = DecodedBuffer.GetTypedData();
 
 	FString Base64Map(TEXT("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"));
 	INT ch, i=0, j=0;

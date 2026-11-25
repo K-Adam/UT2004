@@ -145,9 +145,9 @@ static void LogShaderError(GLuint Shader)
 	glGetShaderiv(Shader,GL_SHADER_SOURCE_LENGTH,&Length);
 	TArray<ANSICHAR> Source;
 	Source.AddZeroed(Length + 1);
-	glGetShaderSource(Shader,Length + 1,NULL,&Source(0));
+	glGetShaderSource(Shader,Length + 1,NULL,Source.GetTypedData());
 	// Logged line by line, the log truncates long lines.
-	FString Text(&Source(0));
+	FString Text(Source.GetTypedData());
 	for( INT Pos = Text.InStr(TEXT("\n")); Pos >= 0; Pos = Text.InStr(TEXT("\n")) )
 	{
 		debugf(NAME_Warning,TEXT("    %s"),*Text.Left(Pos));
@@ -213,7 +213,7 @@ UBOOL UOpenGLRenderDevice::LoadProgram(FOpenGLProgram* Program,UBOOL Instanced,c
 		return 0;
 	GLenum	Format;
 	GLint	Status = 0;
-	appMemcpy(&Format,&Data(0),sizeof(Format));
+	appMemcpy(&Format,Data.GetTypedData(),sizeof(Format));
 	GLuint Loaded = glCreateProgram();
 	glProgramBinary(Loaded,Format,&Data(ProgramBinaryHeader),Data.Num() - ProgramBinaryHeader);
 	glGetProgramiv(Loaded,GL_LINK_STATUS,&Status);
@@ -245,7 +245,7 @@ void UOpenGLRenderDevice::SaveProgram(FOpenGLProgram* Program)
 	glGetProgramBinary(Program->Program,Length,&Written,&Format,&Data(ProgramBinaryHeader));
 	if( Written <= 0 )
 		return;
-	appMemcpy(&Data(0),&Format,sizeof(Format));
+	appMemcpy(Data.GetTypedData(),&Format,sizeof(Format));
 	Data(sizeof(GLenum)) = Program->Layouts | Program->SavedLayouts;
 	Data.Remove(ProgramBinaryHeader + Written,Data.Num() - ProgramBinaryHeader - Written);
 	appSaveArrayToFile(Data,*Program->BinaryFile);

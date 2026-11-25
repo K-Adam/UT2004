@@ -411,7 +411,7 @@ public:
 		}
 		else
 		{
-			appMemcpy( &(*this)(0), &Other(0), ArrayNum * sizeof(T) );
+			appMemcpy( GetTypedData(), Other.GetTypedData(), ArrayNum * sizeof(T) );
 		}
 		unguardSlow;
 	}
@@ -423,6 +423,15 @@ public:
 		checkSlow(ArrayNum>=0);
 		checkSlow(ArrayMax>=ArrayNum);
 		Remove( 0, ArrayNum );
+	}
+	// Also valid for an empty array and as a base for an end pointer, which operator() is not.
+	T* GetTypedData()
+	{
+		return (T*)Data;
+	}
+	const T* GetTypedData() const
+	{
+		return (const T*)Data;
 	}
     T& operator()( INT i )
 	{
@@ -513,7 +522,7 @@ public:
 			}
             // gam ---
 			if( A.Num() > 0 )
-			Ar.Serialize( &A(0), A.Num() );
+			Ar.Serialize( A.GetTypedData(), A.Num() );
 			else
 				Ar.Serialize( NULL, 0 );
             // --- gam
@@ -825,7 +834,7 @@ public:
 	{
 		guardSlow(TTransArray::AddZeroed);
 		INT Index = Add(n);
-		appMemzero( &(*this)(Index), n*sizeof(T) );
+		appMemzero( this->GetTypedData()+Index, n*sizeof(T) );
 		return Index;
 		unguardSlow;
 	}
@@ -954,30 +963,6 @@ public:
 			SavedAr->DetachLazyLoader( this );
 		unguard;
 	}
-#if LOAD_ON_DEMAND /* Breaks because of untimely accesses of operator() !! */
-    T& operator()( INT i )
-	{
-		guardSlow(TArray::operator());
-		checkSlow(i>=0);
-		checkSlow(i<=ArrayNum);
-		checkSlow(ArrayMax>=ArrayNum);
-		if( SavedPos>0 )
-			Load();
-		return ((T*)Data)[i];
-		unguardSlow;
-	}
-	const T& operator()( INT i ) const
-	{
-		guardSlow(TArray::operator());
-		checkSlow(i>=0);
-		checkSlow(i<=ArrayNum);
-		checkSlow(ArrayMax>=ArrayNum);
-		if( SavedPos>0 )
-			Load();
-		return ((T*)Data)[i];
-		unguardSlow;
-	}
-#endif
 	void Load()
 	{
 		// Make sure this array is loaded.
@@ -1066,20 +1051,20 @@ public:
 	: TArray<TCHAR>( Other.ArrayNum )
 	{
 		if( ArrayNum )
-			appMemcpy( &(*this)(0), &Other(0), ArrayNum*sizeof(TCHAR) );
+			appMemcpy( GetTypedData(), Other.GetTypedData(), ArrayNum*sizeof(TCHAR) );
 	}
 	FString( const TCHAR* In )
 	: TArray<TCHAR>( *In ? (appStrlen(In)+1) : 0 )
 	{
 		if( ArrayNum )
-			appMemcpy( &(*this)(0), In, ArrayNum*sizeof(TCHAR) );
+			appMemcpy( GetTypedData(), In, ArrayNum*sizeof(TCHAR) );
 	}
 #ifdef UNICODE // separate this out if ANSICHAR != UNICHAR
 	FString( const ANSICHAR* In )
 	: TArray<TCHAR>( *In ? (INT) (strlen(In)+1) : 0 )
     {
 		if( ArrayNum )
-			appMemcpy(&(*this)(0), ANSI_TO_TCHAR(In), ArrayNum*sizeof(TCHAR));
+			appMemcpy(GetTypedData(), ANSI_TO_TCHAR(In), ArrayNum*sizeof(TCHAR));
     }
 #endif
 	FString( ENoInit )
@@ -1095,12 +1080,12 @@ public:
 	explicit FString( DOUBLE Arg, INT Digits=1, INT RightDigits=0, UBOOL LeadZero=1 );
 	FString& operator=( const TCHAR* Other )
 	{
-		if( (Data == NULL) || (&(*this)(0)!=Other) ) // gam
+		if( (Data == NULL) || (GetTypedData()!=Other) ) // gam
 		{
 			ArrayNum = ArrayMax = *Other ? appStrlen(Other)+1 : 0;
 			Realloc( sizeof(TCHAR) );
 			if( ArrayNum )
-				appMemcpy( &(*this)(0), Other, ArrayNum*sizeof(TCHAR) );
+				appMemcpy( GetTypedData(), Other, ArrayNum*sizeof(TCHAR) );
 		}
 		return *this;
 	}
@@ -1111,7 +1096,7 @@ public:
 			ArrayNum = ArrayMax = Other.Num();
 			Realloc( sizeof(TCHAR) );
 			if( ArrayNum )
-				appMemcpy( &(*this)(0), *Other, ArrayNum*sizeof(TCHAR) );
+				appMemcpy( GetTypedData(), *Other, ArrayNum*sizeof(TCHAR) );
 		}
 		return *this;
 	}
@@ -1148,7 +1133,7 @@ public:
 	}
 	const TCHAR* operator*() const
 	{
-		return Num() ? &(*this)(0) : TEXT("");
+		return Num() ? GetTypedData() : TEXT("");
 	}
 	operator UBOOL() const
 	{
@@ -1173,7 +1158,7 @@ public:
 		else if( *Str )
 		{
 			Add( appStrlen(Str)+1 );
-			appStrcpy( &(*this)(0), Str );
+			appStrcpy( GetTypedData(), Str );
 		}
 		}
 		return *this;
@@ -1434,7 +1419,7 @@ private:
 	:	TArray<TCHAR>( InCount ? InCount+1 : 0 )
 	{
 		if( ArrayNum )
-			appStrncpy( &(*this)(0), InSrc, InCount+1 );
+			appStrncpy( GetTypedData(), InSrc, InCount+1 );
 	}
 };
 struct CORE_API FStringNoInit : public FString
@@ -1444,12 +1429,12 @@ struct CORE_API FStringNoInit : public FString
 	{}
 	FStringNoInit& operator=( const TCHAR* Other )
 	{
-		if( (Data == NULL) || (&(*this)(0)!=Other) ) // gam
+		if( (Data == NULL) || (GetTypedData()!=Other) ) // gam
 		{
 			ArrayNum = ArrayMax = *Other ? appStrlen(Other)+1 : 0;
 			Realloc( sizeof(TCHAR) );
 			if( ArrayNum )
-				appMemcpy( &(*this)(0), Other, ArrayNum*sizeof(TCHAR) );
+				appMemcpy( GetTypedData(), Other, ArrayNum*sizeof(TCHAR) );
 		}
 		return *this;
 	}
@@ -1460,7 +1445,7 @@ struct CORE_API FStringNoInit : public FString
 			ArrayNum = ArrayMax = Other.Num();
 			Realloc( sizeof(TCHAR) );
 			if( ArrayNum )
-				appMemcpy( &(*this)(0), *Other, ArrayNum*sizeof(TCHAR) );
+				appMemcpy( GetTypedData(), *Other, ArrayNum*sizeof(TCHAR) );
 		}
 		return *this;
 	}
@@ -1521,7 +1506,7 @@ public:
 	{
 		if( Pos+Length>Bytes.Num() )
 			Bytes.Add( Pos+Length-Bytes.Num() );
-		appMemcpy( &Bytes(Pos), InData, Length );
+		appMemcpy( Bytes.GetTypedData()+Pos, InData, Length );
 		Pos += Length;
 	}
 	INT Tell()
@@ -1569,7 +1554,7 @@ public:
 		check(Pos>=0);
 		check(Num>=0);
 		check(Pos+Num<=Bytes.Num());
-		appMemcpy( Data, &Bytes(Pos), Num );
+		appMemcpy( Data, Bytes.GetTypedData()+Pos, Num );
 		Pos += Num;
 	}
 	INT Tell()
@@ -1852,9 +1837,9 @@ public:
         if( Pairs.Num() )
         {
             if( Reverse )
-                appQsort( &Pairs(0), Pairs.Num(), sizeof(TPair), ReverseSortByKeyCompare );
+                appQsort( Pairs.GetTypedData(), Pairs.Num(), sizeof(TPair), ReverseSortByKeyCompare );
             else
-                appQsort( &Pairs(0), Pairs.Num(), sizeof(TPair), SortByKeyCompare );
+                appQsort( Pairs.GetTypedData(), Pairs.Num(), sizeof(TPair), SortByKeyCompare );
 
             Rehash();
         }
@@ -1891,9 +1876,9 @@ public:
         if( Pairs.Num() )
         {
             if( Reverse )
-                appQsort( &Pairs(0), Pairs.Num(), sizeof(TPair), ReverseSortByValueCompare );
+                appQsort( Pairs.GetTypedData(), Pairs.Num(), sizeof(TPair), ReverseSortByValueCompare );
             else
-                appQsort( &Pairs(0), Pairs.Num(), sizeof(TPair), SortByValueCompare );
+                appQsort( Pairs.GetTypedData(), Pairs.Num(), sizeof(TPair), SortByValueCompare );
 
             Rehash();
         }

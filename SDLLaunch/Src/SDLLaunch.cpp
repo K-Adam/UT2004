@@ -139,7 +139,7 @@ static void InitSplash(const TCHAR *filename)
     if (!SDL_Init(SDL_INIT_VIDEO))
         return;
 
-    SDL_Surface *bmp = SDL_LoadBMP(&appToUtf8(filename)(0));
+    SDL_Surface *bmp = SDL_LoadBMP(appToUtf8(filename).GetTypedData());
     if (bmp == NULL)
         return;
 
@@ -225,7 +225,7 @@ static void PumpServerTray(void)
 #else
         FString Path = Log.Filename[0] == '/' ? FString(Log.Filename) : FString(GFileManager->CalcHomeDir()) + FString(Log.Filename);
 #endif
-        SDL_OpenURL(&appToUtf8(*Path)(0));
+        SDL_OpenURL(appToUtf8(*Path).GetTypedData());
     }
     if (SDL_GetAtomicInt(&TrayStop))
         appRequestExit(0);
@@ -278,7 +278,7 @@ static bool ContentFolderFits(const FString& Folder)
     if (appStrlen(appBaseDir()) + Folder.Len() + 24 <= 255)
         return true;
     FString Message = FString::Printf(TEXT("The path of this folder is too long for the game:\n%s"), *Folder);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "UT2004", &appToUtf8(*Message)(0), NULL);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "UT2004", appToUtf8(*Message).GetTypedData(), NULL);
     return false;
 }
 
@@ -291,7 +291,7 @@ static void DownloadContent(void)
         End--;
     TArray<ANSICHAR> Root = appToUtf8(*Folder.Left(Max(End - 1, 0)));
     FInstall I = {};
-    I.Root = &Root(0);
+    I.Root = Root.GetTypedData();
     I.Src = UT_FULL_URL;
     bool Ok = InstallFull(I);
     CloseSetupScreen();
@@ -401,7 +401,7 @@ static void ReportPlace( UEngine* Engine )
 	LastHost = Host;
 	LastPort = Port;
 	LastWebRtc = WebRtc;
-	ut_place( &appToUtf8(Map)(0), &appToUtf8(Host)(0), Port, &appToUtf8(WebRtc)(0) );
+	ut_place( appToUtf8(Map).GetTypedData(), appToUtf8(Host).GetTypedData(), Port, appToUtf8(WebRtc).GetTypedData() );
 }
 #endif
 
@@ -470,12 +470,12 @@ inline CMainLoop::CMainLoop( UEngine* InEngine, UBOOL InIncludeMessaging )
 	
 	BMMaxFrames			= 0; // gam
 	Parse(appCmdLine(),TEXT("SECONDS="),BMMaxFrames);
-	BMMaxFrames			*= 30;
-	
+	// The description row and the first measured frame need room even without -seconds.
+	BMMaxFrames			= Max( BMMaxFrames*30, BMDiscardedFrames+2 );
+
 	for( INT i=0; i<(BMMaxFrames-BMDiscardedFrames+1); i++ )
 		new(BMStrings) FString(TEXT(""));
-	if( BMMaxFrames )
-		BMFrameTimes.Add(BMMaxFrames-BMDiscardedFrames+1);
+	BMFrameTimes.Add(BMMaxFrames-BMDiscardedFrames+1);
 
 	LastFrameCycles		= appCycles();
 
@@ -1031,7 +1031,7 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 			}
 #if __EMSCRIPTEN__
 			// An alert would leave a black canvas behind, the page shows it with a way to start again.
-			ut_error( &appToUtf8(*Report)(0), &appToUtf8(*Url)(0), &appToUtf8(*LogText)(0) );
+			ut_error( appToUtf8(*Report).GetTypedData(), appToUtf8(*Url).GetTypedData(), appToUtf8(*LogText).GetTypedData() );
 #else
 			FString Shown = Report + TEXT("\n\nThe log file is ") + FString(Log.Filename);
 			if( Url.Len() )
@@ -1044,11 +1044,11 @@ snprintf(&blah, 1, "%d%d%d", GLoadedSDLDrv, GLoadedOpenGLDrv, GLoadedALAudio);
 				{ 0, Send, "Send report" },
 			};
 			TArray<ANSICHAR> Text = appToUtf8( *Shown );
-			const SDL_MessageBoxData Box = { SDL_MESSAGEBOX_ERROR, NULL, "UT2004", &Text(0), Url.Len() ? 2 : 1, Buttons, NULL };
+			const SDL_MessageBoxData Box = { SDL_MESSAGEBOX_ERROR, NULL, "UT2004", Text.GetTypedData(), Url.Len() ? 2 : 1, Buttons, NULL };
 			int Choice = Close;
 			if( SDL_ShowMessageBox( &Box, &Choice ) && Choice==Send )
 			{
-				bool Sent = PostReport( &appToUtf8(*Url)(0), &appToUtf8(*(Report + LogText))(0) );
+				bool Sent = PostReport( appToUtf8(*Url).GetTypedData(), appToUtf8(*(Report + LogText)).GetTypedData() );
 				SDL_ShowSimpleMessageBox( Sent ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_WARNING, "UT2004",
 					Sent ? "The report was sent. Thank you." : "The report could not be sent.", NULL );
 			}

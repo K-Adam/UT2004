@@ -443,7 +443,7 @@ void AxEmitter::Initialize()
 
     mHeadIndex = INDEX_NONE;
 	mMaxParticles = Min( mMaxParticles, ((PclArrayPtr)mpParticles)->Num() );
-    ParticleT* p = &(*(PclArrayPtr)mpParticles)(0);
+    ParticleT* p = ((PclArrayPtr)mpParticles)->GetTypedData();
 
     if ( mParticleType == PT_Beam )
     {
@@ -461,7 +461,7 @@ void AxEmitter::Initialize()
 		for (int i=0; i<mStartParticles; i++, p++)
 			pcl_index[i] = i;
 		SpawnBranchParticles( this, pcl_index, mStartParticles );
-        ParticleT* p = &(*(PclArrayPtr)mpParticles)(0);
+        ParticleT* p = ((PclArrayPtr)mpParticles)->GetTypedData();
         for (int i=0; i<mStartParticles; i++, p++)
             mBounds += p->pos;
 	}

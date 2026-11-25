@@ -120,7 +120,7 @@ FBitWriter::FBitWriter( INT InMaxBits )
 ,	Buffer		( (InMaxBits+7)>>3 )
 {
 	guard(FBitWriter::FBitWriter);
-	appMemzero( &Buffer(0), Buffer.Num() );
+	appMemzero( Buffer.GetTypedData(), Buffer.Num() );
 	ArIsPersistent = ArIsSaving = 1;
 	ArNetVer |= 0x80000000;
 	unguard;
@@ -139,7 +139,7 @@ void FBitWriter::SerializeBits( void* Src, INT LengthBits )
 		}
 		else
 		{
-			appBitsCpy( &Buffer(0), Num, (BYTE*)Src, 0, LengthBits);
+			appBitsCpy( Buffer.GetTypedData(), Num, (BYTE*)Src, 0, LengthBits);
 			Num += LengthBits;
 		}
 	}
@@ -153,7 +153,7 @@ void FBitWriter::Serialize( void* Src, INT LengthBytes )
 	INT LengthBits = LengthBytes*8;
 	if( Num+LengthBits<=Max )
 	{
-		appBitsCpy( &Buffer(0), Num, (BYTE*)Src, 0, LengthBits);
+		appBitsCpy( Buffer.GetTypedData(), Num, (BYTE*)Src, 0, LengthBits);
 		Num += LengthBits;
 	}
 	else ArIsError = 1;
@@ -210,7 +210,7 @@ void FBitWriter::WriteBit( BYTE In )
 BYTE* FBitWriter::GetData()
 {
 	guardSlow(FBitWriter::GetData);
-	return &Buffer(0);
+	return Buffer.GetTypedData();
 	unguardSlow;
 }
 INT FBitWriter::GetNumBytes()
@@ -240,7 +240,7 @@ void FBitWriterMark::Pop( FBitWriter& Writer )
 		Writer.Buffer(Num>>3) &= GMask[Num&7];
 	INT Start = (Num       +7)>>3;
 	INT End   = (Writer.Num+7)>>3;
-	appMemzero( &Writer.Buffer(Start), End-Start );
+	appMemzero( Writer.Buffer.GetTypedData()+Start, End-Start );
 
 	Writer.ArIsError = Overflowed;
 	Writer.Num       = Num;
@@ -264,7 +264,7 @@ FBitReader::FBitReader( BYTE* Src, INT CountBits )
 	ArIsPersistent = ArIsLoading = 1;
 	ArNetVer |= 0x80000000;
 	if( Src )
-		appMemcpy( &Buffer(0), Src, (CountBits+7)>>3 );
+		appMemcpy( Buffer.GetTypedData(), Src, (CountBits+7)>>3 );
 	unguard;
 }
 void FBitReader::SetData( FBitReader& Src, INT CountBits )
@@ -275,7 +275,7 @@ void FBitReader::SetData( FBitReader& Src, INT CountBits )
 	ArIsError  = 0;
 	Buffer.Empty();
 	Buffer.Add( (CountBits+7)>>3 );
-	Src.SerializeBits( &Buffer(0), CountBits );
+	Src.SerializeBits( Buffer.GetTypedData(), CountBits );
 	unguard;
 }
 void FBitReader::SerializeBits( void* Dest, INT LengthBits )
@@ -292,7 +292,7 @@ void FBitReader::SerializeBits( void* Dest, INT LengthBits )
 		}
 		else
 		{
-			appBitsCpy( (BYTE*)Dest, 0, &Buffer(0), Pos, LengthBits );
+			appBitsCpy( (BYTE*)Dest, 0, Buffer.GetTypedData(), Pos, LengthBits );
 			Pos += LengthBits;
 		}
 	}
@@ -342,7 +342,7 @@ void FBitReader::Serialize( void* Dest, INT LengthBytes )
 BYTE* FBitReader::GetData()
 {
 	guardSlow(FBitReader::GetData);
-	return &Buffer(0);
+	return Buffer.GetTypedData();
 	unguardSlow;
 }
 UBOOL FBitReader::AtEnd()

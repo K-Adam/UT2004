@@ -505,7 +505,7 @@ INT FLineBatcher::GetComponents(FVertexComponent* OutComponents)
 
 void FLineBatcher::GetStreamData(void* Dest)
 {
-	appMemcpy(Dest,&Vertices(0),Vertices.Num() * sizeof(FLineVertex));
+	appMemcpy(Dest,Vertices.GetTypedData(),Vertices.Num() * sizeof(FLineVertex));
 }
 
 //
@@ -836,7 +836,7 @@ INT FCanvasUtil::GetComponents(FVertexComponent* OutComponents)
 
 void FCanvasUtil::GetStreamData(void* Dest)
 {
-	appMemcpy(Dest,&Vertices(0),Vertices.Num() * sizeof(FCanvasVertex));
+	appMemcpy(Dest,Vertices.GetTypedData(),Vertices.Num() * sizeof(FCanvasVertex));
 }
 
 //
@@ -871,12 +871,12 @@ INT FRawIndexBuffer::Stripify()
 	_WORD			NumPrimitiveGroups = 0;
 
 	SetListsOnly(false);
-	GenerateStrips(&Indices(0),Indices.Num(),&PrimitiveGroups,&NumPrimitiveGroups);
+	GenerateStrips(Indices.GetTypedData(),Indices.Num(),&PrimitiveGroups,&NumPrimitiveGroups);
 
 	Indices.Empty();
 	Indices.Add(PrimitiveGroups->numIndices);
 
-	appMemcpy(&Indices(0),PrimitiveGroups->indices,Indices.Num() * sizeof(_WORD));
+	appMemcpy(Indices.GetTypedData(),PrimitiveGroups->indices,Indices.Num() * sizeof(_WORD));
 
 	delete [] PrimitiveGroups;
 
@@ -899,12 +899,12 @@ void FRawIndexBuffer::CacheOptimize()
 	_WORD			NumPrimitiveGroups = 0;
 
 	SetListsOnly(true);
-	GenerateStrips(&Indices(0),Indices.Num(),&PrimitiveGroups,&NumPrimitiveGroups);
+	GenerateStrips(Indices.GetTypedData(),Indices.Num(),&PrimitiveGroups,&NumPrimitiveGroups);
 
 	Indices.Empty(PrimitiveGroups->numIndices);
 	Indices.Add(PrimitiveGroups->numIndices);
 
-	appMemcpy(&Indices(0),PrimitiveGroups->indices,Indices.Num() * sizeof(_WORD));
+	appMemcpy(Indices.GetTypedData(),PrimitiveGroups->indices,Indices.Num() * sizeof(_WORD));
 
 	delete [] PrimitiveGroups;
 
@@ -964,7 +964,7 @@ INT FRawIndexBuffer::GetIndexSize()
 
 void FRawIndexBuffer::GetContents(void* Data)
 {
-	appMemcpy(Data,&Indices(0),Indices.Num() * sizeof(_WORD));
+	appMemcpy(Data,Indices.GetTypedData(),Indices.Num() * sizeof(_WORD));
 }
 
 //
@@ -1028,7 +1028,7 @@ INT FRaw32BitIndexBuffer::GetIndexSize()
 
 void FRaw32BitIndexBuffer::GetContents(void* Data)
 {
-	appMemcpy(Data,&Indices(0),Indices.Num() * sizeof(DWORD));
+	appMemcpy(Data,Indices.GetTypedData(),Indices.Num() * sizeof(DWORD));
 }
 
 //
@@ -1105,7 +1105,7 @@ INT FRawColorStream::GetComponents(FVertexComponent* OutComponents)
 
 void FRawColorStream::GetStreamData(void* Dest)
 {
-	appMemcpy(Dest,&Colors(0),Colors.Num() * sizeof(FColor));
+	appMemcpy(Dest,Colors.GetTypedData(),Colors.Num() * sizeof(FColor));
 }
 
 //

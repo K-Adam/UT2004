@@ -144,7 +144,7 @@ public:
 		Components[3] = FVertexComponent(CT_Float2,FVF_TexCoord0);
 		return 4;
 	}
-	virtual void GetStreamData(void* Dest) { appMemcpy(Dest,&Vertices(0),GetSize()); }
+	virtual void GetStreamData(void* Dest) { appMemcpy(Dest,Vertices.GetTypedData(),GetSize()); }
 	virtual void GetRawStreamData(void** Dest,INT FirstVertex) { *Dest = &Vertices(FirstVertex); }
 };
 
@@ -352,7 +352,7 @@ static inline INT Compare(DOUBLE A,DOUBLE B)
 
 static DOUBLE Median(TArray<DOUBLE>& Values)
 {
-	Sort(&Values(0),Values.Num());
+	Sort(Values.GetTypedData(),Values.Num());
 	return (Values((Values.Num() - 1) / 2) + Values(Values.Num() / 2)) * 0.5;
 }
 

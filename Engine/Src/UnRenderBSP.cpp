@@ -855,7 +855,7 @@ public:
 		// Generate vertices for the nodes in the draw list.
 
 		FBspLightVertex*	VertexPointer = (FBspLightVertex*) Dest;
-		FBspVertex*			StaticVertices = &DrawList->Model->Sections(DrawList->SectionIndex).Vertices.Vertices(0);
+		FBspVertex*			StaticVertices = DrawList->Model->Sections(DrawList->SectionIndex).Vertices.Vertices.GetTypedData();
 		FLOAT				RadiusSquared = Square(Light->Radius);
 
 		for(INT NodeIndex = 0;NodeIndex < DrawList->NumNodes;NodeIndex++)

@@ -572,21 +572,21 @@ class CORE_API UClass : public UState
 	{
 		guardSlow(UClass::GetDefaultObject);
 		check(Defaults.Num()==GetPropertiesSize());
-		return (UObject*)&Defaults(0);
+		return (UObject*)Defaults.GetTypedData();
 		unguardobjSlow;
 	}
 	const UObject* GetDefaultObject() const
 	{
 		guardSlow(UClass::GetDefaultObjectConst);
 		check(Defaults.Num()==GetPropertiesSize());
-		return (UObject*)&Defaults(0);
+		return (UObject*)Defaults.GetTypedData();
 		unguardobjSlow;
 	}
 	class AActor* GetDefaultActor()
 	{
 		guardSlow(UClass::GetDefaultActor);
 		check(Defaults.Num());
-		return (AActor*)&Defaults(0);
+		return (AActor*)Defaults.GetTypedData();
 		unguardobjSlow;
 	}
 

@@ -386,7 +386,7 @@ static BYTE LineCheckInner( INT iNode, FVector End, const FVector& Start, BYTE O
 BYTE UModel::FastLineCheck( const FVector& End, const FVector& Start )
 {
 	guard(UModel::FastLineCheck);
-	GLineCheckNodes = &Nodes(0);
+	GLineCheckNodes = Nodes.GetTypedData();
 	return Nodes.Num() ? LineCheckInner(0,End,Start,RootOutside) : RootOutside;
 	unguard;
 }

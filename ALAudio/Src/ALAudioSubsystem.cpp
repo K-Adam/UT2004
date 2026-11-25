@@ -583,7 +583,7 @@ void UALAudioSubsystem::PlaySound( FSoundSource* InSource )
 		if( Buffer->BufferIds.Num() == 1 )
 			alSourcei( sid, AL_BUFFER, Buffer->BufferIds(0) );
 		else
-			alSourceQueueBuffers( sid, Buffer->BufferIds.Num(), &Buffer->BufferIds(0) );
+			alSourceQueueBuffers( sid, Buffer->BufferIds.Num(), Buffer->BufferIds.GetTypedData() );
 		Source->Play();
 	}
 

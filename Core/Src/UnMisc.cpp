@@ -378,7 +378,7 @@ CORE_API FString appFromUtf8( const ANSICHAR* Str )
 	if( !DecodeUtf8( Str, [&Out]( TCHAR C ) { Out.AddItem( C ); } ) )
 		return TEXT("?");
 	Out.AddItem( 0 );
-	return FString( &Out(0) );
+	return FString( Out.GetTypedData() );
 }
 
 // Allocates nothing, launchers call it before appInit sets up the allocator
@@ -1660,7 +1660,7 @@ CORE_API UBOOL appLoadFileToArray( TArray<BYTE>& Result, const TCHAR* Filename, 
 		return 0;
 	Result.Empty();
 	Result.Add( Reader->TotalSize() );
-	Reader->Serialize( &Result(0), Result.Num() );
+	Reader->Serialize( Result.GetTypedData(), Result.Num() );
 	UBOOL Success = Reader->Close();
 	delete Reader;
 	return Success;
@@ -1679,7 +1679,7 @@ CORE_API UBOOL appLoadFileToString( FString& Result, const TCHAR* Filename, FFil
 		return 0;
 	INT Size = Reader->TotalSize();
 	TArray<ANSICHAR> Ch( Size+2 );
-	Reader->Serialize( &Ch(0), Size );
+	Reader->Serialize( Ch.GetTypedData(), Size );
 	UBOOL Success = Reader->Close();
 	delete Reader;
 	Ch( Size+0 )=0;
@@ -1721,7 +1721,7 @@ CORE_API UBOOL appSaveArrayToFile( const TArray<BYTE>& Array, const TCHAR* Filen
 	FArchive* Ar = FileManager->CreateFileWriter( Filename, WriteFlags, bLogErrors ? GLog : NULL );
 	if( !Ar )
 		return 0;
-	Ar->Serialize( const_cast<BYTE*>(&Array(0)), Array.Num() );
+	Ar->Serialize( const_cast<BYTE*>(Array.GetTypedData()), Array.Num() );
 	delete Ar;
 	return 1;
 	unguard;
@@ -1761,7 +1761,7 @@ CORE_API UBOOL appSaveStringToFile( const FString& String, const TCHAR* Filename
 		TArray<ANSICHAR> AnsiBuffer(String.Len());
 		for( INT i=0; i<String.Len(); i++ )
 			AnsiBuffer(i) = ToAnsi((*String)[i]);
-		Ar->Serialize( const_cast<ANSICHAR*>(&AnsiBuffer(0)), String.Len() );
+		Ar->Serialize( AnsiBuffer.GetTypedData(), String.Len() );
 	}
 	delete Ar;
 	if( !Success )
@@ -2609,7 +2609,7 @@ UBOOL USystem::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 			for( INT x=0; x<Names.Num(); x++ )
 				Sorted.AddItem( &Names(x) );
 			if( Sorted.Num() )
-				appQsort( &Sorted(0), Sorted.Num(), sizeof(FString*), StringCompare );
+				appQsort( Sorted.GetTypedData(), Sorted.Num(), sizeof(FString*), StringCompare );
 			for( INT x=0; x<Sorted.Num(); x++ )
 				Ar.Logf( Pass ? TEXT("%s") : TEXT("[%s]"), **Sorted(x) );
 		}

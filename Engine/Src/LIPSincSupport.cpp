@@ -852,7 +852,7 @@ void TLIPSincBonePoseInfo::Blend ( TArray<DOUBLE> &LIPSincValues )
 {
 	guard(TLIPSincBonePoseInfo::Blend);
 
-	TLIPSincBonePose *pDefBonePose = &m_lbpBonePoses(0);
+	TLIPSincBonePose *pDefBonePose = m_lbpBonePoses.GetTypedData();
 		
 	if( pDefBonePose )
 	{

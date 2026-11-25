@@ -1934,7 +1934,7 @@ void UWaterTexture::CalculateWater()
 {
 	guard(UWaterTexture::CalculateWater);
 
-	BYTE* BitMapAddr  = &Mips(0).DataArray(0);   //pointer
+	BYTE* BitMapAddr  = Mips(0).DataArray.GetTypedData();   //pointer
 
     //BYTE* RenderTable = (BYTE*) &RenderTable;  // actual table
     //BYTE*   WaveTable = (BYTE*) &WaveTable;    // actual table
@@ -2348,7 +2348,7 @@ void UWetTexture::ApplyWetTexture()
 	// Any source texture selected yet ?
     if( SourceTexture == NULL ) return;
 
-    BYTE* BitMapAddr     = &Mips(0).DataArray(0);     // pointer
+    BYTE* BitMapAddr     = Mips(0).DataArray.GetTypedData();     // pointer
 
 	BYTE* SourceMapAddr;
 
@@ -2364,7 +2364,7 @@ void UWetTexture::ApplyWetTexture()
 			return;
 		}
 
-		SourceMapAddr = &SourceTexture->Mips(0).DataArray(0);
+		SourceMapAddr = SourceTexture->Mips(0).DataArray.GetTypedData();
 	}
 
     INT  Xdimension = USize;
@@ -2458,13 +2458,13 @@ void UIceTexture::BlitTexIce()
 	if(!GlassTexture->bParametric)
 		GlassTexture->Mips(0).DataArray.Load();
 
-    BYTE* TexAddr		= &SourceTexture->Mips(0).DataArray(0);
-	BYTE* GlassAddr		= &GlassTexture->Mips(0).DataArray(0);
-    BYTE* BitMapAddr	= &Mips(0).DataArray(0);  // Pointer.
+    BYTE* TexAddr		= SourceTexture->Mips(0).DataArray.GetTypedData();
+	BYTE* GlassAddr		= GlassTexture->Mips(0).DataArray.GetTypedData();
+    BYTE* BitMapAddr	= Mips(0).DataArray.GetTypedData();  // Pointer.
 
 	if( LocalSourceBitmap ) return; // Static local source, no update needed.
 
-	TexAddr = &SourceTexture->Mips(0).DataArray(0);
+	TexAddr = SourceTexture->Mips(0).DataArray.GetTypedData();
 
     INT  Xdimension   = USize;  // Wrap needed for 8-bit counters.
     INT  Ydimension   = VSize;  // 
@@ -2514,9 +2514,9 @@ void UIceTexture::BlitIceTex()
 	if(!GlassTexture->bParametric)
 		GlassTexture->Mips(0).DataArray.Load();
 
-    BYTE* TexAddr		= &SourceTexture->Mips(0).DataArray(0);
-	BYTE* GlassAddr		= &GlassTexture->Mips(0).DataArray(0);
-    BYTE* BitMapAddr	= &Mips(0).DataArray(0);  // Pointer
+    BYTE* TexAddr		= SourceTexture->Mips(0).DataArray.GetTypedData();
+	BYTE* GlassAddr		= GlassTexture->Mips(0).DataArray.GetTypedData();
+    BYTE* BitMapAddr	= Mips(0).DataArray.GetTypedData();  // Pointer
 
 	if( LocalSourceBitmap ) return; // Static local source, no update needed.
 
@@ -3313,8 +3313,8 @@ void UFireTexture::ConstantTimeTick()
 
 			RedrawSparks();
 
-			if( bRising ) CalcWrapFire( &Mips(0).DataArray(0), RenderTable, USize, VSize );
-			else      CalcSlowFire( &Mips(0).DataArray(0), RenderTable, USize, VSize );
+			if( bRising ) CalcWrapFire( Mips(0).DataArray.GetTypedData(), RenderTable, USize, VSize );
+			else      CalcSlowFire( Mips(0).DataArray.GetTypedData(), RenderTable, USize, VSize );
 
 			PostDrawSparks();
 		}
@@ -3817,7 +3817,7 @@ void UFluidTexture::CalculateFluid()
 {
 	guard(UWaterTexture::CalculateFluid);
 
-	BYTE* BitMapAddr  = &Mips(0).DataArray(0);   //pointer
+	BYTE* BitMapAddr  = Mips(0).DataArray.GetTypedData();   //pointer
 
     //BYTE* RenderTable = (BYTE*) &RenderTable;  // actual table
     //BYTE*   WaveTable = (BYTE*) &WaveTable;    // actual table
@@ -4279,7 +4279,7 @@ void UWetTexture::PostLoad()
 		{
 			if( LocalSourceBitmap ) delete LocalSourceBitmap;
 			LocalSourceBitmap = new BYTE[ USize * VSize ]; 
-			BYTE* SourceMapAddr  = &SourceTexture->Mips(0).DataArray(0);
+			BYTE* SourceMapAddr  = SourceTexture->Mips(0).DataArray.GetTypedData();
 			
 			for( INT V=0; V<VSize; V++)
 			{
@@ -4457,8 +4457,8 @@ void UIceTexture::PostLoad()
 					if(!SourceTexture->bParametric)
 						SourceTexture->Mips(0).DataArray.Load();
 
-					LocalSourceBitmap = &Mips(0).DataArray(0);  // Our static output image.
-					BYTE* SourceMapAddr = &SourceTexture->Mips(0).DataArray(0);
+					LocalSourceBitmap = Mips(0).DataArray.GetTypedData();  // Our static output image.
+					BYTE* SourceMapAddr = SourceTexture->Mips(0).DataArray.GetTypedData();
 						
 					// Copy, with optional scaling, to our first mipmap.
 					for( INT V=0; V< VSize; V++)

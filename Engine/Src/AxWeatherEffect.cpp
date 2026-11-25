@@ -88,7 +88,7 @@ public:
 	virtual void GetStreamData(void* Dest)
 	{
 		DynamicVertex*	pVerts		= (DynamicVertex*)Dest;
-		FWeatherPcl*	p			= &pFx->pcl(0);
+		FWeatherPcl*	p			= pFx->pcl.GetTypedData();
 		INT				Rendered	= 0;
 
 		int numPcl = pFx->pcl.Num();
@@ -358,7 +358,7 @@ UBOOL AxWeatherEffect::Tick( FLOAT deltaTime, ELevelTick TickType )
 	Box.Max		= Location;
 	numActive	= 0;
 	
-	FWeatherPcl*	p				= &pcl(0);
+	FWeatherPcl*	p				= pcl.GetTypedData();
 	FLOAT			invEyeDistSqr	= 1.0f / Square(maxPclEyeDist);
 	INT				numPcl			= pcl.Num();
 	for( INT i=0; i<numPcl; i++ )
@@ -466,7 +466,7 @@ void AxWeatherEffect::Render( FLevelSceneNode* SceneNode, FRenderInterface* RI )
 	// cull behind particles, need to first determine 'renderable' amount for dynamic buffer lock.
 	FPlane			eyePlane( SceneNode->ViewOrigin, eyeDir);
 	INT				NumVisible	= 0;
-	FWeatherPcl*	p			= &pcl(0);
+	FWeatherPcl*	p			= pcl.GetTypedData();
 	
 	int pclNum = pcl.Num();
 	for( INT i=0; i<pclNum; i++ )

@@ -32,13 +32,13 @@ UStaticMesh* CreateStaticMesh(TArray<FStaticMeshTriangle>& Triangles,TArray<FSta
 
 	UStaticMesh*	StaticMesh = new(InOuter,InName,RF_Public|RF_Standalone) UStaticMesh;
 
-	Sort(&Triangles(0),Triangles.Num());
+	Sort(Triangles.GetTypedData(),Triangles.Num());
 
 	StaticMesh->RawTriangles.Add(Triangles.Num());
-	appMemcpy(&StaticMesh->RawTriangles(0),&Triangles(0),Triangles.Num() * sizeof(FStaticMeshTriangle));
+	appMemcpy(StaticMesh->RawTriangles.GetTypedData(),Triangles.GetTypedData(),Triangles.Num() * sizeof(FStaticMeshTriangle));
 
 	StaticMesh->Materials.Add(Materials.Num());
-	appMemcpy(&StaticMesh->Materials(0),&Materials(0),Materials.Num() * sizeof(FStaticMeshMaterial));
+	appMemcpy(StaticMesh->Materials.GetTypedData(),Materials.GetTypedData(),Materials.Num() * sizeof(FStaticMeshMaterial));
 
 	StaticMesh->UseSimpleBoxCollision = 0; // sjs
 	StaticMesh->Build();
@@ -217,7 +217,7 @@ void CreateModelFromStaticMesh(UModel* Model,AActor* StaticMeshActor)
 			FPoly*					Polygon = new(Model->Polys->Element) FPoly;
 
 			Polygon->Init();
-			Polygon->iLink = Polygon - &Model->Polys->Element(0);
+			Polygon->iLink = Polygon - Model->Polys->Element.GetTypedData();
 			Polygon->Material = StaticMesh->Materials(Triangle.MaterialIndex).Material;
 			Polygon->PolyFlags = 0;
 			Polygon->SmoothingMask = Triangle.SmoothingMask;
@@ -294,12 +294,12 @@ void GetActorTriangles(TArray<FStaticMeshTriangle>& Triangles,TArray<FStaticMesh
 		// Use LOD model 0.
 		if( SkelMesh->LODModels.Num() )
 		{
-			FStaticLODModel* Model = &SkelMesh->LODModels(0);
+			FStaticLODModel* Model = SkelMesh->LODModels.GetTypedData();
 			INT NumWedges = Model->SmoothStreamWedges;
 			NewVerts.AddZeroed( NumWedges );
 			// GetMeshVerts for skeletal meshes returns vertices in order of vertex buffer (i.e wedges; textured vertices.)
 			if( MeshInstance )
-				((USkeletalMeshInstance*)MeshInstance)->GetMeshVerts( Actor, &NewVerts(0), sizeof(FVector), NumWedges );
+				((USkeletalMeshInstance*)MeshInstance)->GetMeshVerts( Actor, NewVerts.GetTypedData(), sizeof(FVector), NumWedges );
 			
 			// Ensure lazy arrays are loaded.
 			Model->Wedges.Load();
@@ -342,7 +342,7 @@ void GetActorTriangles(TArray<FStaticMeshTriangle>& Triangles,TArray<FStaticMesh
 		INT	NumVertices = Mesh->ModelVerts;
 		Vertices.AddZeroed( Mesh->ModelVerts );
 		if( MeshInstance )
-			((ULodMeshInstance*)MeshInstance)->GetMeshVerts( Actor, &Vertices(0), sizeof(FVector), NumVertices );
+			((ULodMeshInstance*)MeshInstance)->GetMeshVerts( Actor, Vertices.GetTypedData(), sizeof(FVector), NumVertices );
 
 		// For each face in mesh. 
 		for( INT FaceIndex = 0; FaceIndex < Mesh->Faces.Num(); FaceIndex++ )
@@ -1410,21 +1410,21 @@ void UEditorEngine::CreateWithNormals( UStaticMesh* StaticMesh,
 {
 	guard( UEditorEngine::CreateWithNormals );
 
-	Sort( &triList(0), triList.Num() );
+	Sort( triList.GetTypedData(), triList.Num() );
 
 	StaticMesh->RawTriangles.Add( triList.Num() );
-	appMemcpy( &StaticMesh->RawTriangles(0), &triList(0), 
+	appMemcpy( StaticMesh->RawTriangles.GetTypedData(), triList.GetTypedData(), 
 				triList.Num() * sizeof( FStaticMeshTriangle ) );
 
 	StaticMesh->Materials.Add( materialList.Num() );
-	appMemcpy( &StaticMesh->Materials(0), &materialList(0), 
+	appMemcpy( StaticMesh->Materials.GetTypedData(), materialList.GetTypedData(), 
 				materialList.Num() * sizeof( FStaticMeshMaterial ) );
 
 	BuildCollisionFromList( StaticMesh, collisionList );
 
 	StaticMesh->UseSimpleBoxCollision = 0; // sjs
 
-	StaticMesh->Build( 0, &normalList(0) );
+	StaticMesh->Build( 0, normalList.GetTypedData() );
 
 	// Assign a valid content authentication key. 
 	StaticMesh->AuthenticationKey = StaticMesh->CreateAuthenticationKey();

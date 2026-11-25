@@ -185,7 +185,7 @@ int main( int argc, char* argv[] )
 					}
 				}
 				new(Items)FString( TEXT("   ucc help <command>        Get help on a command") );
-				Sort( &Items(0), Items.Num() );
+				Sort( Items.GetTypedData(), Items.Num() );
 				for( i=0; i<Items.Num(); i++ )
 					Warn.Log( Items(i) );
 			}

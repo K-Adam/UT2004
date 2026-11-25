@@ -680,12 +680,12 @@ void UVertMeshInstance::MeshBuildBounds()
 			OneFrame .AddItem( Vertex );
 			AllFrames.AddItem( Vertex );
 		}
-		Mesh->BoundingBoxes  (i) = FBox   ( &OneFrame(0), OneFrame.Num() );
-		Mesh->BoundingSpheres(i) = FSphere( &OneFrame(0), OneFrame.Num() );
+		Mesh->BoundingBoxes  (i) = FBox   ( OneFrame.GetTypedData(), OneFrame.Num() );
+		Mesh->BoundingSpheres(i) = FSphere( OneFrame.GetTypedData(), OneFrame.Num() );
 	}
 
-	Mesh->BoundingBox    = FBox   ( &AllFrames(0), AllFrames.Num() );
-	Mesh->BoundingSphere = FSphere( &AllFrames(0), AllFrames.Num() );
+	Mesh->BoundingBox    = FBox   ( AllFrames.GetTypedData(), AllFrames.Num() );
+	Mesh->BoundingSphere = FSphere( AllFrames.GetTypedData(), AllFrames.Num() );
 
 	// Display bounds.
 	debugf
@@ -799,7 +799,7 @@ void UVertMeshInstance::GetMeshVerts
 	NewVerts.AddZeroed(Mesh->ModelVerts);
 
 	// GetFrame will return just vectors if size = sizeof(FVector).
-	GetFrame( Owner, NULL, &NewVerts(0), sizeof(FVector), LODRequest, GF_RawVerts);
+	GetFrame( Owner, NULL, NewVerts.GetTypedData(), sizeof(FVector), LODRequest, GF_RawVerts);
 	// Now add the scaling which, for GetFrame, was left to the hardware...	
 	FCoords MeshConversion;
 	if(bIgnoreMeshOffset)
@@ -894,8 +894,8 @@ void UVertMeshInstance::GetFrame
 		CachedFrame = 0.f;
 	}
 
-	FVector* CachedVerts    = &CachedMeshPoints(0);
-	FVector* CachedNorms    = &CachedMeshNormals(0);
+	FVector* CachedVerts    = CachedMeshPoints.GetTypedData();
+	FVector* CachedNorms    = CachedMeshNormals.GetTypedData();
 	const FMeshAnimSeq* Seq = GetAnimSeq( BaseChannel.AnimSequence );
 
 	if( BaseChannel.AnimFrame>=0.f || !WasCached )

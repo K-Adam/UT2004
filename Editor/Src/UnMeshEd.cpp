@@ -229,7 +229,7 @@ void UEditorEngine::meshVertImport
 	}
 
 	// Sort triangles by texture and flags.
-	appQsort( &RawTris(0), RawTris.Num(), sizeof(RawTris(0)), (QSORT_COMPARE)CompareTris );
+	appQsort( RawTris.GetTypedData(), RawTris.Num(), sizeof(RawTris(0)), (QSORT_COMPARE)CompareTris );
 
 	while( MaxTextureIndex >= Mesh->Materials.Num() )
 		Mesh->Materials.AddItem( NULL );
@@ -343,42 +343,42 @@ void UEditorEngine::meshSkelImport//modelImport
 	// 3d points "vpoints" datasize*datacount....
 	SkinFile->Serialize( &ChunkHeader, sizeof(VChunkHeader) );
 	RawData.Points.Add(ChunkHeader.DataCount);
-	SkinFile->Serialize( &RawData.Points(0), sizeof(VPoint) * ChunkHeader.DataCount);	
+	SkinFile->Serialize( RawData.Points.GetTypedData(), sizeof(VPoint) * ChunkHeader.DataCount);	
 	unguard;
 
 	guard(ReadWedgeData);
 	//  Wedges (VVertex)
 	SkinFile->Serialize(&ChunkHeader, sizeof(VChunkHeader) );
 	RawData.Wedges.Add(ChunkHeader.DataCount);
-	SkinFile->Serialize( &RawData.Wedges(0), sizeof(VVertex) * ChunkHeader.DataCount);
+	SkinFile->Serialize( RawData.Wedges.GetTypedData(), sizeof(VVertex) * ChunkHeader.DataCount);
 	unguard;
 
 	guard(ReadFaceData);
 	// Faces (VTriangle)
 	SkinFile->Serialize(&ChunkHeader, sizeof(VChunkHeader) );
 	RawData.Faces.Add(ChunkHeader.DataCount);
-	SkinFile->Serialize( &RawData.Faces(0), sizeof(VTriangle) * ChunkHeader.DataCount);
+	SkinFile->Serialize( RawData.Faces.GetTypedData(), sizeof(VTriangle) * ChunkHeader.DataCount);
 	unguard
 
 	guard(ReadMaterialData);
 	// Materials (VMaterial)
 	SkinFile->Serialize(&ChunkHeader, sizeof(VChunkHeader) );
 	RawData.Materials.Add(ChunkHeader.DataCount);
-	SkinFile->Serialize( &RawData.Materials(0), sizeof(VMaterial) * ChunkHeader.DataCount);
+	SkinFile->Serialize( RawData.Materials.GetTypedData(), sizeof(VMaterial) * ChunkHeader.DataCount);
 	unguard;
 
 	guard(ReadRefSkeleton);
 	// Reference skeleton (VBones)
 	SkinFile->Serialize(&ChunkHeader, sizeof(VChunkHeader) );
 	RawData.RefBonesBinary.Add(ChunkHeader.DataCount);
-	SkinFile->Serialize( &RawData.RefBonesBinary(0), sizeof(VBone) * ChunkHeader.DataCount);
+	SkinFile->Serialize( RawData.RefBonesBinary.GetTypedData(), sizeof(VBone) * ChunkHeader.DataCount);
 	unguard;
 	
 	guard(ReadBoneInfluences);
 	// Raw bone influences (VRawBoneInfluence)
 	SkinFile->Serialize(&ChunkHeader, sizeof(VChunkHeader) );
 	RawData.Influences.Add(ChunkHeader.DataCount);
-	SkinFile->Serialize( &RawData.Influences(0), sizeof(VRawBoneInfluence) * ChunkHeader.DataCount);
+	SkinFile->Serialize( RawData.Influences.GetTypedData(), sizeof(VRawBoneInfluence) * ChunkHeader.DataCount);
 	unguard;
 
 	delete SkinFile;
@@ -546,7 +546,7 @@ void UEditorEngine::animationImport
 	TArray<FNamedBoneBinary> RawBoneNames;
 	RawBoneNames.Add(ChunkHeader.DataCount);	
 	NewAnimation->RefBones.Add(ChunkHeader.DataCount);
-	AnimationFile->Serialize( &RawBoneNames(0), sizeof(FNamedBoneBinary) * ChunkHeader.DataCount);
+	AnimationFile->Serialize( RawBoneNames.GetTypedData(), sizeof(FNamedBoneBinary) * ChunkHeader.DataCount);
 
 	// Translate the raw data from the bones to Animation->RefBones FNames
 	for( INT n=0; n<RawBoneNames.Num(); n++)
@@ -561,14 +561,14 @@ void UEditorEngine::animationImport
 	// Read the header and the animation sequence info if present...
 	AnimationFile->Serialize( &ChunkHeader, sizeof(VChunkHeader) );
 	NewAnimation->DigestHelper->RawAnimSeqInfo.Add(ChunkHeader.DataCount);
-	AnimationFile->Serialize( &NewAnimation->DigestHelper->RawAnimSeqInfo(0), sizeof(AnimInfoBinary) * ChunkHeader.DataCount);
+	AnimationFile->Serialize( NewAnimation->DigestHelper->RawAnimSeqInfo.GetTypedData(), sizeof(AnimInfoBinary) * ChunkHeader.DataCount);
 	// Remember to change  the raw animation name and group to FNames... =  FName(appFromAnsi( &name ));
 	unguard;
 	
 	// Read the header and beta keys.
 	AnimationFile->Serialize( &ChunkHeader, sizeof(VChunkHeader) );
 	NewAnimation->DigestHelper->RawAnimKeys.Add(ChunkHeader.DataCount);
-	AnimationFile->Serialize( &NewAnimation->DigestHelper->RawAnimKeys(0), sizeof(VQuatAnimKey) * ChunkHeader.DataCount);	
+	AnimationFile->Serialize( NewAnimation->DigestHelper->RawAnimKeys.GetTypedData(), sizeof(VQuatAnimKey) * ChunkHeader.DataCount);	
 	NewAnimation->DigestHelper->RawNumFrames = ChunkHeader.DataCount / NewAnimation->RefBones.Num();
 	NewAnimation->DigestHelper->CompFactor = CompDefault;
 

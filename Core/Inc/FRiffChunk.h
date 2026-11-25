@@ -45,7 +45,7 @@ struct FRiffChunk
 		guard(FRiffChunk::SerializeChunk);
 		if( Ar.IsLoading() )
 			Unknown = TArray<BYTE>( Size );
-		Ar.Serialize( &Unknown(0), Size );
+		Ar.Serialize( Unknown.GetTypedData(), Size );
 		unguard;
 	}
 	virtual FRiffChunk* CreateSubChunk( DWORD FourCC )
@@ -63,7 +63,7 @@ struct FRiffChunk
 
 		TArray<BYTE> SubChunkData;
 		SubChunkData = TArray<BYTE>( Size + DataPos - Ar.Tell() );
-		Ar.Serialize( &SubChunkData(0), SubChunkData.Num() );
+		Ar.Serialize( SubChunkData.GetTypedData(), SubChunkData.Num() );
 		FBufferReader SubAr( SubChunkData );
 		while( !SubAr.AtEnd() )
 		{
@@ -155,7 +155,7 @@ struct FRiffChunk_data : public FRiffChunk
 	{
 		if( Ar.IsLoading() )
 			Bits = TArray<BYTE>( Size );
-		Ar.Serialize( &Bits(0), Bits.Num() );
+		Ar.Serialize( Bits.GetTypedData(), Bits.Num() );
 	}
 	TArray<BYTE> Bits;
 };

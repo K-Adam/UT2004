@@ -81,22 +81,22 @@ void FOpenGLTexture::Upload(GLenum Face,INT Level,FTexture* Source,INT SourceMip
 		INT Pitch = ((MipWidth + 3) / 4) * (Format == TEXF_DXT1 ? 8 : 16);
 		INT Size = Pitch * ((MipHeight + 3) / 4);
 		TArray<BYTE> Blocks(Size);
-		appMemzero(&Blocks(0),Size);
-		Source->GetTextureData(SourceMip,&Blocks(0),Pitch,Format);
+		appMemzero(Blocks.GetTypedData(),Size);
+		Source->GetTextureData(SourceMip,Blocks.GetTypedData(),Pitch,Format);
 		if( InternalFormat != GL_RGBA8 )
 		{
-			glCompressedTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,InternalFormat,Size,&Blocks(0));
+			glCompressedTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,InternalFormat,Size,Blocks.GetTypedData());
 			return;
 		}
 		// Static lightmaps have no UTexture to decompress them, so squish decodes every DXT texture. It writes RGBA, as GL wants it.
 		TArray<BYTE> Data(MipWidth * MipHeight * 4);
-		squish::DecompressImage(&Data(0),MipWidth,MipHeight,&Blocks(0),Format == TEXF_DXT1 ? squish::kDxt1 : Format == TEXF_DXT3 ? squish::kDxt3 : squish::kDxt5);
-		glTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,GL_RGBA,GL_UNSIGNED_BYTE,&Data(0));
+		squish::DecompressImage(Data.GetTypedData(),MipWidth,MipHeight,Blocks.GetTypedData(),Format == TEXF_DXT1 ? squish::kDxt1 : Format == TEXF_DXT3 ? squish::kDxt3 : squish::kDxt5);
+		glTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,GL_RGBA,GL_UNSIGNED_BYTE,Data.GetTypedData());
 		return;
 	}
 
 	TArray<BYTE> Data(MipWidth * MipHeight * 4);
-	appMemzero(&Data(0),Data.Num());
+	appMemzero(Data.GetTypedData(),Data.Num());
 	if( Format == TEXF_L8 || Format == TEXF_RGB8 )
 	{
 		BYTE* Raw = (BYTE*)Source->GetRawTextureData(SourceMip);
@@ -116,11 +116,11 @@ void FOpenGLTexture::Upload(GLenum Face,INT Level,FTexture* Source,INT SourceMip
 		// The engine only converts these to RGBA8.
 		if( Format != TEXF_RGBA8 && Format != TEXF_P8 && Format != TEXF_G16 )
 			debugf(NAME_Warning,TEXT("OpenGLDrv: Texture format %i is not supported"),(INT)Format);
-		Source->GetTextureData(SourceMip,&Data(0),MipWidth * 4,TEXF_RGBA8);
+		Source->GetTextureData(SourceMip,Data.GetTypedData(),MipWidth * 4,TEXF_RGBA8);
 	}
 
-	SwapRedBlue(&Data(0),MipWidth * MipHeight);
-	glTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,GL_RGBA,GL_UNSIGNED_BYTE,&Data(0));
+	SwapRedBlue(Data.GetTypedData(),MipWidth * MipHeight);
+	glTexSubImage2D(Face,Level,0,0,MipWidth,MipHeight,GL_RGBA,GL_UNSIGNED_BYTE,Data.GetTypedData());
 }
 
 void FOpenGLTexture::Cache(FBaseTexture* Source)
@@ -170,9 +170,9 @@ void FOpenGLTexture::Cache(FBaseTexture* Source)
 			ChildRevisions(i) = Child->GetRevision();
 			INT ChildWidth = Child->GetWidth(), ChildHeight = Child->GetHeight();
 			TArray<BYTE> Data(ChildWidth * ChildHeight * 4);
-			Child->GetTextureData(0,&Data(0),ChildWidth * 4,TEXF_RGBA8);
-			SwapRedBlue(&Data(0),ChildWidth * ChildHeight);
-			glTexSubImage2D(GL_TEXTURE_2D,0,X,Y,ChildWidth,ChildHeight,GL_RGBA,GL_UNSIGNED_BYTE,&Data(0));
+			Child->GetTextureData(0,Data.GetTypedData(),ChildWidth * 4,TEXF_RGBA8);
+			SwapRedBlue(Data.GetTypedData(),ChildWidth * ChildHeight);
+			glTexSubImage2D(GL_TEXTURE_2D,0,X,Y,ChildWidth,ChildHeight,GL_RGBA,GL_UNSIGNED_BYTE,Data.GetTypedData());
 		}
 		return;
 	}
@@ -249,7 +249,7 @@ static BYTE* MapWholeBuffer(GLenum Target,GLuint Buffer,INT& Size,INT NewSize,GL
 #ifdef __EMSCRIPTEN__
 	if( UploadScratch.Num() < Size )
 		UploadScratch.Add(Size - UploadScratch.Num());
-	return Size ? &UploadScratch(0) : NULL;
+	return Size ? UploadScratch.GetTypedData() : NULL;
 #else
 	return Size ? (BYTE*)glMapBufferRange(Target,0,Size,GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT) : NULL;
 #endif
@@ -258,7 +258,7 @@ static BYTE* MapWholeBuffer(GLenum Target,GLuint Buffer,INT& Size,INT NewSize,GL
 static void UnmapWholeBuffer(GLenum Target,INT Size)
 {
 #ifdef __EMSCRIPTEN__
-	glBufferSubData(Target,0,Size,&UploadScratch(0));
+	glBufferSubData(Target,0,Size,UploadScratch.GetTypedData());
 #else
 	glUnmapBuffer(Target);
 #endif
@@ -309,7 +309,7 @@ GLuint UOpenGLRenderDevice::SmoothStream(FVertexStream* Source)
 	TArray<BYTE> Data;
 	Data.Add(Source->GetSize());
 	if( Data.Num() )
-		Source->GetStreamData(&Data(0));
+		Source->GetStreamData(Data.GetTypedData());
 	if( Position != INDEX_NONE && Normal != INDEX_NONE )
 	{
 		TMap<DWORD,FVector> Sums;
@@ -335,7 +335,7 @@ GLuint UOpenGLRenderDevice::SmoothStream(FVertexStream* Source)
 	if( !Stream->Buffer )
 		glGenBuffers(1,&Stream->Buffer);
 	glBindBuffer(GL_ARRAY_BUFFER,Stream->Buffer);
-	glBufferData(GL_ARRAY_BUFFER,Data.Num(),Data.Num() ? &Data(0) : NULL,GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER,Data.Num(),Data.Num() ? Data.GetTypedData() : NULL,GL_STATIC_DRAW);
 	Stream->Size			= Data.Num();
 	Stream->CachedRevision	= Source->GetRevision();
 	return Stream->Buffer;
@@ -388,7 +388,7 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 	LockedBytes		= Bytes;
 	if( Scratch.Num() < Bytes )
 		Scratch.Add(Bytes - Scratch.Num());
-	return Bytes > 0 ? &Scratch(0) : NULL;
+	return Bytes > 0 ? Scratch.GetTypedData() : NULL;
 #else
 	// Unsynchronized, nothing has drawn from this range since the store was orphaned.
 	// Native drivers, phone ones above all, may copy or wait on glBufferSubData into a buffer the GPU still reads.
@@ -403,7 +403,7 @@ void FOpenGLDynamicBuffer::Unlock()
 	// Lock left the buffer bound.
 	if( LockedBytes > 0 )
 #if defined(_WIN32) || defined(__EMSCRIPTEN__)
-		glBufferSubData(Target,LockedOffset,LockedBytes,&Scratch(0));
+		glBufferSubData(Target,LockedOffset,LockedBytes,Scratch.GetTypedData());
 #else
 		glUnmapBuffer(Target);
 #endif

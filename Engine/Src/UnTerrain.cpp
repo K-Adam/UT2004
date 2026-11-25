@@ -628,7 +628,7 @@ void UTerrainSector::GenerateTriangles( UBOOL CheckLayerBlending )
 	guard(UpdateStaticProjectors);
 	for( INT i=0;i<Projectors.Num();i++ )
 	{
-		FStaticProjectorVertex*	DestVertex = &Projectors(i).Info->Vertices(0);
+		FStaticProjectorVertex*	DestVertex = Projectors(i).Info->Vertices.GetTypedData();
 		Vertex = &Info->VertexStreams(VertexStreamNum).Vertices(VertexStreamOffset);
 		for(INT Y = Projectors(i).MinQuadY * N;Y <= (Projectors(i).MaxQuadY + 1) * N;Y++)
 		{
@@ -680,7 +680,7 @@ void ATerrainInfo::SmoothColors( void )
         else
         {
             Override = 1;
-            appMemcpy( &RawVertexClr(0), &VertexLightMap->Mips(0).DataArray(0), HeightmapY * HeightmapX * sizeof(RawVertexClr(0)));
+            appMemcpy( RawVertexClr.GetTypedData(), VertexLightMap->Mips(0).DataArray.GetTypedData(), HeightmapY * HeightmapX * sizeof(RawVertexClr(0)));
             for( int i=0; i<VertexClr.Num(); i++ )
             {
                 VertexClr( i ).X = (float)RawVertexClr(i).R;
@@ -721,7 +721,7 @@ void ATerrainInfo::SmoothColors( void )
 		pExportTex->Format = TEXF_RGBA8;
 		pExportTex->Init( HeightmapX, HeightmapY );
 		pExportTex->PostLoad();
-		appMemcpy( &pExportTex->Mips(0).DataArray(0), &RawVertexClr(0), HeightmapX*HeightmapY*sizeof(RawVertexClr(0)) );
+		appMemcpy( pExportTex->Mips(0).DataArray.GetTypedData(), RawVertexClr.GetTypedData(), HeightmapX*HeightmapY*sizeof(RawVertexClr(0)) );
 
         GWarn->StatusUpdatef(1,3,TEXT("Smoothing Terrain colors..."));
 
@@ -822,7 +822,7 @@ void UTerrainSector::StaticLight( UBOOL Force )
 		VertexStream.Vertices(VertexIndex).Color =
 			FColor((BYTE) Min<INT>(255*AbmientColor.X,255),(BYTE) Min<INT>(255*AbmientColor.Y,255),(BYTE) Min<INT>(255*AbmientColor.Z,255), 255);
 
-    Sort( &LightInfos(0), LightInfos.Num()); // sjs
+    Sort( LightInfos.GetTypedData(), LightInfos.Num()); // sjs
 	for( INT InfoIndex=0; InfoIndex<LightInfos.Num();InfoIndex++ )
 	{
 		TArray<BYTE>&	VisibilityBitmap = LightInfos(InfoIndex).VisibilityBitmap;
@@ -1068,7 +1068,7 @@ void UTerrainPrimitive::Illuminate(AActor* Owner,UBOOL ChangedOnly)
                 
                 LightInfo->VisibilityBitmap.Empty();
                 LightInfo->VisibilityBitmap.AddZeroed(((S->QuadsX+1)*(S->QuadsY+1) + 7) / 8);
-                SectorLights.AddItem((INT)(LightInfo - &S->LightInfos(0)));
+                SectorLights.AddItem((INT)(LightInfo - S->LightInfos.GetTypedData()));
             }
         }
         
@@ -1250,7 +1250,7 @@ TryNextCombination:;
 	FTerrainRenderCombination* NewCombination = new(RenderCombinations) FTerrainRenderCombination;
 	NewCombination->CombinedWeightMaps = NULL;
 	NewCombination->Layers.Add( Layers.Num() );
-	appMemcpy( &NewCombination->Layers(0), &Layers(0), Layers.Num() * sizeof(INT) );
+	appMemcpy( NewCombination->Layers.GetTypedData(), Layers.GetTypedData(), Layers.Num() * sizeof(INT) );
 	NewCombination->RenderMethod = RenderMethod;
 
 	return RenderCombinations.Num()-1;
@@ -1592,7 +1592,7 @@ void ATerrainInfo::PostLoad()
 		TerrainMap->Format = TEXF_G16;
 		TerrainMap->Init( HeightmapX, HeightmapY );
 		TerrainMap->PostLoad();
-		appMemcpy( &TerrainMap->Mips(0).DataArray(0), &OldHeightmap(0), HeightmapX*HeightmapY*2 );
+		appMemcpy( TerrainMap->Mips(0).DataArray.GetTypedData(), OldHeightmap.GetTypedData(), HeightmapX*HeightmapY*2 );
 		OldHeightmap.Empty();
 	}
 
@@ -1602,13 +1602,13 @@ void ATerrainInfo::PostLoad()
 	{
 		QuadVisibilityBitmap.Empty();
 		QuadVisibilityBitmap.Add( BitmapSize );
-		appMemset( &QuadVisibilityBitmap(0), 0xFF, BitmapSize * sizeof(DWORD) );
+		appMemset( QuadVisibilityBitmap.GetTypedData(), 0xFF, BitmapSize * sizeof(DWORD) );
 	}
 	if( EdgeTurnBitmap.Num() != BitmapSize )
 	{
 		EdgeTurnBitmap.Empty();
 		EdgeTurnBitmap.Add( BitmapSize );
-		appMemset( &EdgeTurnBitmap(0), 0, BitmapSize * sizeof(DWORD) );
+		appMemset( EdgeTurnBitmap.GetTypedData(), 0, BitmapSize * sizeof(DWORD) );
 	}
 
 	// remember that we've just loaded so we rebuild terrain data before we try to render.
@@ -1839,14 +1839,14 @@ void ATerrainInfo::SetupSectors()
 	{
 		QuadVisibilityBitmap.Empty();
 		QuadVisibilityBitmap.Add( BitmapSize );
-		appMemset( &QuadVisibilityBitmap(0), 0xFF, BitmapSize * sizeof(DWORD) );
+		appMemset( QuadVisibilityBitmap.GetTypedData(), 0xFF, BitmapSize * sizeof(DWORD) );
 	}
 
 	if( EdgeTurnBitmap.Num() != BitmapSize )
 	{
 		EdgeTurnBitmap.Empty();
 		EdgeTurnBitmap.Add( BitmapSize );
-		appMemset( &EdgeTurnBitmap(0), 0, BitmapSize * sizeof(DWORD) );
+		appMemset( EdgeTurnBitmap.GetTypedData(), 0, BitmapSize * sizeof(DWORD) );
 	}
 
 	Sectors.Empty();
@@ -2433,7 +2433,7 @@ void ATerrainInfo::ConvertHeightmapFormat()
 	if(TerrainMap->Format != TEXF_P8)	return;
 
 	TArray<BYTE> OldData(TerrainMap->USize*TerrainMap->VSize);
-	appMemcpy( &OldData(0), &TerrainMap->Mips(0).DataArray(0), TerrainMap->USize*TerrainMap->VSize);
+	appMemcpy( OldData.GetTypedData(), TerrainMap->Mips(0).DataArray.GetTypedData(), TerrainMap->USize*TerrainMap->VSize);
 	TerrainMap->Palette = NULL;
 	TerrainMap->Format	= TEXF_G16;
 	TerrainMap->Init( TerrainMap->USize, TerrainMap->VSize );
@@ -3641,7 +3641,7 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 			if ( DecoLayer.FadeoutRadius.Max - DecoLayer.FadeoutRadius.Min )
 				RMaxMin /= DecoLayer.FadeoutRadius.Max - DecoLayer.FadeoutRadius.Min;
 	
-			FDecoInfo* DecoInfo = &DecoLayerData(LayerIndex).Sectors(SectorIndices[s]).DecoInfo(0);
+			FDecoInfo* DecoInfo = DecoLayerData(LayerIndex).Sectors(SectorIndices[s]).DecoInfo.GetTypedData();
 			
 			INT Rendered = 0;
 			for( INT DecoIndex=0; DecoIndex<Amount; DecoIndex++ )
@@ -3728,7 +3728,7 @@ void ATerrainInfo::RenderDecorations(FLevelSceneNode* SceneNode,FRenderInterface
 
 				RenderedTriangles += Rendered * Section.NumPrimitives;
 
-				DecoInfo = &DecoLayerData(LayerIndex).Sectors(SectorIndices[s]).DecoInfo(0);
+				DecoInfo = DecoLayerData(LayerIndex).Sectors(SectorIndices[s]).DecoInfo.GetTypedData();
 
 				if( DecoLayer.DrawOrder != SORT_NoSort )
 				{

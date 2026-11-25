@@ -406,7 +406,7 @@ BYTE* SmoothLightBitmap(FLightBitmap* LightBitmap,INT MinX,INT MinY,INT MaxX,INT
 	BYTE*	ShadowMap = NewZeroed<BYTE>(GSceneMem,Size);
 
 	INT		StrideDWORD = Stride / sizeof(DWORD);
-	BYTE*	SrcBits = &LightBitmap->Bits(0);
+	BYTE*	SrcBits = LightBitmap->Bits.GetTypedData();
 	DWORD*	Dest1 = (DWORD*) ShadowMap;
 	DWORD*	Dests[3] = { (DWORD*)Dest1, (DWORD*)Dest1, (DWORD*)Dest1 + StrideDWORD };
 
@@ -822,7 +822,7 @@ void FLightMap::GetTextureData(INT MipIndex,void* Dest,INT DestStride,ETextureFo
 
 	// Find the cached lightmap info.
 
-	QWORD				CacheId = MakeCacheID(CID_StaticMap,(INT)(this - &Model->LightMaps(0)),iZone,Model);
+	QWORD				CacheId = MakeCacheID(CID_StaticMap,(INT)(this - Model->LightMaps.GetTypedData()),iZone,Model);
 	FCacheItem*			CacheItem = NULL;
 	FCachedLightMap*	CachedLightMap = (FCachedLightMap*) GCache.Get(CacheId,CacheItem);
 
@@ -1055,7 +1055,7 @@ void FStaticLightMapTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStri
 	if( !Data[MipIndex].Num() )
 		Data[MipIndex].Load();
 
-	appMemcpy(Dest,&Data[MipIndex](0),Data[MipIndex].Num());
+	appMemcpy(Dest,Data[MipIndex].GetTypedData(),Data[MipIndex].Num());
 
 	Data[MipIndex].Unload();	
 
@@ -1085,7 +1085,7 @@ void* FStaticLightMapTexture::GetRawTextureData(INT MipIndex)
 	if( !Data[MipIndex].Num() )
 		Data[MipIndex].Load();
 
-	return &Data[MipIndex](0);
+	return Data[MipIndex].GetTypedData();
 
 	unguard;
 }

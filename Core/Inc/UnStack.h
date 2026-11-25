@@ -25,8 +25,8 @@ enum {MAX_FUNC_PARMS			= 16                };
 //
 // guardexec mechanism for script debugging.
 //
-#define unguardexecSlow  unguardfSlow(( TEXT("(%s @ %s : %04X)"), Stack.Object->GetFullName(), Stack.Node->GetFullName(), Stack.Code - &Stack.Node->Script(0) ))
-#define unguardexec      unguardf    (( TEXT("(%s @ %s : %04X)"), Stack.Object->GetFullName(), Stack.Node->GetFullName(), Stack.Code - &Stack.Node->Script(0) ))
+#define unguardexecSlow  unguardfSlow(( TEXT("(%s @ %s : %04X)"), Stack.Object->GetFullName(), Stack.Node->GetFullName(), Stack.Code - Stack.Node->Script.GetTypedData() ))
+#define unguardexec      unguardf    (( TEXT("(%s @ %s : %04X)"), Stack.Object->GetFullName(), Stack.Node->GetFullName(), Stack.Code - Stack.Node->Script.GetTypedData() ))
 
 //
 // State flags.

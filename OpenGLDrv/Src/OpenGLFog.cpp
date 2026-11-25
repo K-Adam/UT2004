@@ -156,7 +156,7 @@ const FOpenGLFogLights* FOpenGLRenderInterface::PickFogLights()
 		Clear.Add(Square(FOG_ATLAS_TILES * FOG_TILE));
 		for( INT i=0; i<Clear.Num(); i++ )
 			Clear(i) = 1.f;
-		glTexSubImage2D(GL_TEXTURE_2D,0,0,0,FOG_ATLAS_TILES * FOG_TILE,FOG_ATLAS_TILES * FOG_TILE,GL_RED,GL_FLOAT,&Clear(0));
+		glTexSubImage2D(GL_TEXTURE_2D,0,0,0,FOG_ATLAS_TILES * FOG_TILE,FOG_ATLAS_TILES * FOG_TILE,GL_RED,GL_FLOAT,Clear.GetTypedData());
 		glBindTexture(GL_TEXTURE_2D,Textures[1]);
 		// Positions along the sun's axis need full precision, the shader fetches texels unfiltered.
 		glTexStorage2D(GL_TEXTURE_2D,1,GL_R32F,FOG_SUN_SIZE,FOG_SUN_SIZE);

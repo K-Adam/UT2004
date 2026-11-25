@@ -1694,7 +1694,7 @@ void UEditorEngine::meshSkelLODProcess( USkeletalMesh* Mesh, FLODProcessInfo* LO
 	}}
 		
 	// Sort raw data mesh faces by material index.
-	appQsort( &RawData->Faces(0),RawData->Faces.Num(), sizeof(RawData->Faces(0)), (QSORT_COMPARE)CompareFaces );
+	appQsort( RawData->Faces.GetTypedData(),RawData->Faces.Num(), sizeof(RawData->Faces(0)), (QSORT_COMPARE)CompareFaces );
 	
 	// Mesh faces from RawDataFaces ->   Mesh->Faces; also size TModel.FaceLevel.AddItem(0xFFFF) !!
 	for( INT t=0; t< RawData->Faces.Num(); t++ )
@@ -2058,7 +2058,7 @@ void UEditorEngine::meshSkelLODProcess( USkeletalMesh* Mesh, FLODProcessInfo* LO
 		debugf(TEXT(" Patched vertex influences to bone 0: %i "),PatchedSceneWeights );
 				
 	// Sort influences per point.
-	appQsort( &WorkWeights(0), WorkWeights.Num(), sizeof(TWorkWeight),(QSORT_COMPARE)CompareBoneWeight );
+	appQsort( WorkWeights.GetTypedData(), WorkWeights.Num(), sizeof(TWorkWeight),(QSORT_COMPARE)CompareBoneWeight );
 
 	
 	// Then collapse the multiby multiplicity into Weights and the MultiBlends array.

@@ -357,7 +357,7 @@ CORE_API const UNICHAR* appToUnicode( const TCHAR* Str, UNICHAR* UCh=NULL, INT m
 CORE_API const TCHAR* appFromAnsi( const ANSICHAR* Str, TCHAR* TCh=NULL, INT maxlen = STATICSTRINGLENGTH );
 CORE_API const TCHAR* appFromUnicode( const UNICHAR* Str, TCHAR* TCh=NULL, INT maxlen = STATICSTRINGLENGTH );
 CORE_API UBOOL appIsPureAnsi( const TCHAR* Str );
-// Null terminated, &Result(0) is the C string
+// Null terminated, Result.GetTypedData() is the C string
 CORE_API TArray<ANSICHAR> appToUtf8( const TCHAR* Str );
 CORE_API void appToUtf8( const TCHAR* Str, ANSICHAR* Out, INT MaxLen );
 CORE_API FString appFromUtf8( const ANSICHAR* Str );

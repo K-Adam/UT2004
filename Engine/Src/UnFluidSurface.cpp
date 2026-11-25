@@ -333,11 +333,11 @@ void AFluidSurfaceInfo::RebuildClampedBitmap()
 
 	// Reset clamp bitmap to zero
 	INT BitmapSize = (FluidXSize * FluidYSize + 31 ) / 32;
-	appMemset( &ClampBitmap(0), 0, BitmapSize * sizeof(DWORD) );
+	appMemset( ClampBitmap.GetTypedData(), 0, BitmapSize * sizeof(DWORD) );
 
 	// Ensure all heights are zeroed. Looks weird otherwise.
-	appMemset( &Verts0(0), 0, FluidXSize * FluidYSize * sizeof(FLOAT) );
-	appMemset( &Verts1(0), 0, FluidXSize * FluidYSize * sizeof(FLOAT) );
+	appMemset( Verts0.GetTypedData(), 0, FluidXSize * FluidYSize * sizeof(FLOAT) );
+	appMemset( Verts1.GetTypedData(), 0, FluidXSize * FluidYSize * sizeof(FLOAT) );
 
 	// Iterate over 'touching actors' list, checking for blocking volumes.
 	// This isn't very efficient.

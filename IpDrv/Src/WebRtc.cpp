@@ -383,7 +383,7 @@ static void WebRtcSignal( const std::shared_ptr<FWebRtcPeer>& Shared )
 		Peer.SignalId = TEXT("");
 		// The answer is as large as the web master makes it, so it must not go through the stack
 		if( Ok )
-			Peer.Pc->setRemoteDescription( rtc::Description( std::string(&appToUtf8(*Answer)(0)), rtc::Description::Type::Answer ) );
+			Peer.Pc->setRemoteDescription( rtc::Description( std::string(appToUtf8(*Answer).GetTypedData()), rtc::Description::Type::Answer ) );
 		else if( Gone && Peer.Name.Len() && !Peer.LookedUp )
 		{
 			// The host's socket reconnected under a new id, its name finds it. The same offer goes there.
@@ -458,7 +458,7 @@ static void HostSocketOpen()
 		HostSocket->Socket = std::make_shared<rtc::WebSocket>( Config );
 		HostSocket->Socket->onMessage( []( rtc::binary ) {}, []( std::string Text ) { HostSocketMessage( Text ); } );
 		// http becomes ws and https becomes wss
-		HostSocket->Socket->open( "ws" + std::string( &appToUtf8( *WebMasterURL() )(0) ).substr( 4 ) + "/host" );
+		HostSocket->Socket->open( "ws" + std::string( appToUtf8( *WebMasterURL() ).GetTypedData() ).substr( 4 ) + "/host" );
 	}
 	catch( const std::exception& E )
 	{

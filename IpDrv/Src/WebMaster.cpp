@@ -272,19 +272,19 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 
 	nlohmann::json Info = nlohmann::json::array();
 	for( INT i=0; i<Server.ServerInfo.Num(); i++ )
-		Info.push_back( { { "key", &appToUtf8(*Server.ServerInfo(i).Key)(0) }, { "value", &appToUtf8(*Server.ServerInfo(i).Value)(0) } } );
+		Info.push_back( { { "key", appToUtf8(*Server.ServerInfo(i).Key).GetTypedData() }, { "value", appToUtf8(*Server.ServerInfo(i).Value).GetTypedData() } } );
 	nlohmann::json Body =
 	{
 		{ "port", Server.Port },
-		{ "name", &appToUtf8(*Server.ServerName)(0) },
-		{ "map", &appToUtf8(*Server.MapName)(0) },
-		{ "gameType", &appToUtf8(*Server.GameType)(0) },
+		{ "name", appToUtf8(*Server.ServerName).GetTypedData() },
+		{ "map", appToUtf8(*Server.MapName).GetTypedData() },
+		{ "gameType", appToUtf8(*Server.GameType).GetTypedData() },
 		{ "players", Server.CurrentPlayers },
 		{ "maxPlayers", Server.MaxPlayers },
 		{ "flags", Server.Flags },
-		{ "skill", &appToUtf8(*Server.SkillLevel)(0) },
+		{ "skill", appToUtf8(*Server.SkillLevel).GetTypedData() },
 		{ "info", Info },
-		{ "token", &appToUtf8(*Token)(0) },
+		{ "token", appToUtf8(*Token).GetTypedData() },
 	};
 
 	std::string Json = Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
@@ -330,7 +330,7 @@ static FWebMasterRequest* WebMasterRequest( const TCHAR* Path, const std::string
 		Response->Ok = Ok;
 		Response->Done = true;
 	};
-	HttpRequestAsync( &appToUtf8( *(Base + Path) )(0), Body, Done );
+	HttpRequestAsync( appToUtf8( *(Base + Path) ).GetTypedData(), Body, Done );
 	return Request;
 }
 
@@ -365,7 +365,7 @@ static UBOOL IsDottedQuad( const TCHAR* S )
 
 FWebMasterRequest* WebMasterOffer( const FString& HostId, const FString& Sdp )
 {
-	return WebMasterRequest( TEXT("/offer"), nlohmann::json{ { "host", &appToUtf8(*HostId)(0) }, { "sdp", &appToUtf8(*Sdp)(0) } }.dump() );
+	return WebMasterRequest( TEXT("/offer"), nlohmann::json{ { "host", appToUtf8(*HostId).GetTypedData() }, { "sdp", appToUtf8(*Sdp).GetTypedData() } }.dump() );
 }
 
 UBOOL WebMasterOfferDone( FWebMasterRequest* Request, UBOOL& Ok, FString& Sdp, UBOOL& Gone )

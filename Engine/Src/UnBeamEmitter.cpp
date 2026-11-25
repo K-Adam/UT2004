@@ -603,8 +603,8 @@ INT UBeamEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* Scene
 	BeamVertices.Vertices.Add(MaxParticles * VerticesPerParticle);
 	BeamIndices.Indices.Add(MaxParticles * IndicesPerParticle);
 
-	FBeamVertex* Vertex = &BeamVertices.Vertices(0);
-	_WORD* VBIndex = &BeamIndices.Indices(0);
+	FBeamVertex* Vertex = BeamVertices.Vertices.GetTypedData();
+	_WORD* VBIndex = BeamIndices.Indices.GetTypedData();
 
 	// Render all active particles.
 	INT RenderedParticles = 0;

@@ -123,7 +123,7 @@ struct FArchiveWebRtcWriter : public FArchiveUdpWriter
 	{}
 	void Flush()
 	{
-		WebRtcPeerSend( Peer, &SendData(0), SendData.Num() );
+		WebRtcPeerSend( Peer, SendData.GetTypedData(), SendData.Num() );
 		// The version header stays for the next packet
 		SendData.Remove( sizeof(INT), SendData.Num()-sizeof(INT) );
 	}

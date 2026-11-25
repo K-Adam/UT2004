@@ -412,8 +412,8 @@ void UModel::BuildBound()
 		for( INT i=0; i<Polys->Element.Num(); i++ )
 			for( INT j=0; j<Polys->Element(i).NumVertices; j++ )
 				Points.AddItem(Polys->Element(i).Vertex[j]);
-		BoundingBox    = FBox( &Points(0), Points.Num() );
-		BoundingSphere = FSphere( &Points(0), Points.Num() );
+		BoundingBox    = FBox( Points.GetTypedData(), Points.Num() );
+		BoundingSphere = FSphere( Points.GetTypedData(), Points.Num() );
 	}
 	else BoundingBox = FBox(0);
 	unguard;
@@ -485,7 +485,7 @@ void BoxLeavesRecurse(UModel* Model,INT iNode,FVector Origin,FVector Extent,TArr
     {
         NodeCache.Add( Model->Nodes.Num() - NodeCache.Num() );
     }
-	INT*	iNodes = &NodeCache(0);
+	INT*	iNodes = NodeCache.GetTypedData();
 #else
     INT*	iNodes = new INT[Model->Nodes.Num()];
 #endif
@@ -982,7 +982,7 @@ void UModel::BuildRenderData()
 				Section->iLightMapTexture = iLightMapTexture;
 			}
 
-			Node.iSection = Section - &Sections(0);
+			Node.iSection = Section - Sections.GetTypedData();
 			Node.iFirstVertex = Section->Vertices.Vertices.Add(Node.NumVertices);
 
 			FCoords		TexCoords = FCoords(

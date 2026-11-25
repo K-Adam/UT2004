@@ -568,7 +568,7 @@ void UStruct::SerializeTaggedProperties( FArchive& Ar, BYTE* Data, UClass* Defau
 	INT   DefaultsCount = 0;
 	if( DefaultsClass )
 	{
-		Defaults      = &DefaultsClass->Defaults(0);
+		Defaults      = DefaultsClass->Defaults.GetTypedData();
 		DefaultsCount =  DefaultsClass->Defaults.Num();
 	}
 
@@ -874,7 +874,7 @@ void UState::Serialize( FArchive& Ar )
 void UState::DisableScript()
 {
 	if( Script.Num() )
-		appMemset( &Script(0), EX_Stop, Script.Num() );
+		appMemset( Script.GetTypedData(), EX_Stop, Script.Num() );
 	LabelTableOffset = MAXWORD;
 }
 void UState::Link( FArchive& Ar, UBOOL Props )
@@ -1021,7 +1021,7 @@ void UClass::Destroy()
 	NetFields.Empty();
 	Dependencies.Empty();
 	PackageImports.Empty();
-	ExitProperties( &Defaults(0), this );
+	ExitProperties( Defaults.GetTypedData(), this );
 	Defaults.Empty();
 	DefaultPropText=TEXT("");
 
@@ -1077,7 +1077,7 @@ void UClass::Link( FArchive& Ar, UBOOL Props )
 			}
 		}
 		NetFields.Shrink();
-		Sort( &NetFields(0), NetFields.Num() );
+		Sort( NetFields.GetTypedData(), NetFields.Num() );
 	}
 	unguard;
 }
@@ -1085,7 +1085,7 @@ void UClass::DisableScript()
 {
 	// A class holds the conditions its variables and functions replicate on, each one expression.
 	if( Script.Num() )
-		appMemset( &Script(0), EX_False, Script.Num() );
+		appMemset( Script.GetTypedData(), EX_False, Script.Num() );
 	LabelTableOffset = MAXWORD;
 }
 void UClass::Serialize( FArchive& Ar )
@@ -1130,12 +1130,12 @@ void UClass::Serialize( FArchive& Ar )
 		Defaults.Empty( GetPropertiesSize() );
 		Defaults.Add( GetPropertiesSize() );
 		GetDefaultObject()->InitClassDefaultObject( this );
-		SerializeTaggedProperties( Ar, &Defaults(0), GetSuperClass() );
+		SerializeTaggedProperties( Ar, Defaults.GetTypedData(), GetSuperClass() );
 
 		if( (!GIsEditor || (GIsUCC && !(GUglyHackFlags & 64))) && Defaults.Num() && DefaultPropText==TEXT("") )
 		{
 			FStringOutputDevice Exporter;
-			ExportProperties( Exporter, this, &Defaults(0), -1, GetSuperClass(), GetSuperClass() ? (BYTE*)GetSuperClass()->GetDefaultObject() : NULL );
+			ExportProperties( Exporter, this, Defaults.GetTypedData(), -1, GetSuperClass(), GetSuperClass() ? (BYTE*)GetSuperClass()->GetDefaultObject() : NULL );
 			DefaultPropText = Exporter;
 		}
 
@@ -1159,13 +1159,13 @@ void UClass::Serialize( FArchive& Ar )
 	else if( Ar.IsSaving() )
 	{
 		check(Defaults.Num()==GetPropertiesSize());
-		SerializeTaggedProperties( Ar, &Defaults(0), GetSuperClass() );
+		SerializeTaggedProperties( Ar, Defaults.GetTypedData(), GetSuperClass() );
 	}
 	else
 	{
 		check(Defaults.Num()==GetPropertiesSize());
 		Defaults.CountBytes( Ar );
-		SerializeBin( Ar, &Defaults(0), 0 );
+		SerializeBin( Ar, Defaults.GetTypedData(), 0 );
 	}
 	unguardobj;
 }

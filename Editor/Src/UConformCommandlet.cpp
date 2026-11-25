@@ -258,7 +258,7 @@ class UClassFlagCommandlet : public UCommandlet
 			}
 		}
 
-		Sort(&Classes(0), Classes.Num());
+		Sort(Classes.GetTypedData(), Classes.Num());
 		for ( INT i = 0; i < Classes.Num(); i++ )
 		{
 			UClass* Cls = Classes(i);

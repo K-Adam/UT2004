@@ -93,7 +93,7 @@ class UCheckTextures : public UCommandlet
 							if(!Texture->bParametric)
 								Mipmap.DataArray.Load();
 							
-							if( &Mipmap.DataArray(0) == NULL )
+							if( Mipmap.DataArray.GetTypedData() == NULL )
 							{
 								CorruptedTexture = 1;
 								GWarn->Logf(NAME_Log, TEXT("Texture [%s] miplevel %i is empty [out of %i]."),Texture->GetPathName(),MipIndex,Texture->Mips.Num()-1);
@@ -103,7 +103,7 @@ class UCheckTextures : public UCommandlet
 								if( Texture->Format == TEXF_DXT3 )
 								{
 									INT		NumberOfBlocks	= Max(Mipmap.USize/4, 1) * Max(Mipmap.VSize/4, 1);								
-									DWORD*	AlphaData		= (DWORD *) &Mipmap.DataArray(0);
+									DWORD*	AlphaData		= (DWORD *) Mipmap.DataArray.GetTypedData();
 									DWORD	Dummy			= 0xFFFFFFFF;
 
 									DXTBytesUsed += NumberOfBlocks * 16;
@@ -121,7 +121,7 @@ class UCheckTextures : public UCommandlet
 								if( Texture->Format == TEXF_DXT5 )
 								{
 									INT		NumberOfBlocks	= Max(Mipmap.USize/4, 1) * Max(Mipmap.VSize/4, 1);								
-									_WORD*	AlphaData		= (_WORD *) &Mipmap.DataArray(0);
+									_WORD*	AlphaData		= (_WORD *) Mipmap.DataArray.GetTypedData();
 									_WORD	Dummy			= 0xFFFF;
 
 									DXTBytesUsed += NumberOfBlocks * 16;
@@ -639,7 +639,7 @@ class UListExports : public UCommandlet
 					
 					if( Exports.Num() )
 					{
-						Sort( &Exports(0), Exports.Num() );
+						Sort( Exports.GetTypedData(), Exports.Num() );
 						for( INT i=0; i<Exports.Num(); i++ )
 							GWarn->Logf(TEXT("%i %s"),Exports(i).Size,*Exports(i).Name);
 					}

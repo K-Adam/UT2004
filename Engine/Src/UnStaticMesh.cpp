@@ -425,7 +425,7 @@ void UStaticMesh::Serialize(FArchive& Ar)
 			{
 				RawTriangles.Empty(Temp.Num());
 				RawTriangles.Add(Temp.Num());
-				appMemcpy(&RawTriangles(0),&Temp(0),Temp.Num() * sizeof(FStaticMeshTriangle));
+				appMemcpy(RawTriangles.GetTypedData(),Temp.GetTypedData(),Temp.Num() * sizeof(FStaticMeshTriangle));
 			}
 		}
 		else
@@ -789,7 +789,8 @@ void UStaticMesh::Illuminate(AActor* Owner,UBOOL ChangedOnly)
 				if(!ChangedOnly || Owner->bLightChanged || LightActor->bLightChanged)
 				{
 					FStaticMeshLightInfo*	LightInfo = new(Owner->StaticMeshInstance->Lights) FStaticMeshLightInfo(LightActor);
-					BYTE*					BitPtr = &LightInfo->VisibilityBits(LightInfo->VisibilityBits.Add((VertexStream.Vertices.Num() + 7) / 8));
+					INT						FirstBit = LightInfo->VisibilityBits.Add((VertexStream.Vertices.Num() + 7) / 8);
+					BYTE*					BitPtr = LightInfo->VisibilityBits.GetTypedData() + FirstBit;
 					BYTE					BitMask = 1;
 					FVector					LightDirection = LightActor->Rotation.Vector();
 					UBOOL					IsSunlight = LightInfo->LightActor->LightEffect == LE_Sunlight;

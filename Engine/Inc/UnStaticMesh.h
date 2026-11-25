@@ -86,7 +86,7 @@ public:
 	}
 	virtual void GetStreamData(void* Dest)
 	{
-		appMemcpy(Dest,&Vertices(0),Vertices.Num() * sizeof(FStaticMeshVertex));
+		appMemcpy(Dest,Vertices.GetTypedData(),Vertices.Num() * sizeof(FStaticMeshVertex));
 	}
 	virtual void GetRawStreamData(void ** Dest, INT FirstVertex )
 	{
@@ -179,7 +179,7 @@ public:
 	}
 	virtual void GetStreamData(void* Dest)
 	{
-		appMemcpy(Dest,&UVs(0),UVs.Num() * sizeof(FStaticMeshUV));
+		appMemcpy(Dest,UVs.GetTypedData(),UVs.Num() * sizeof(FStaticMeshUV));
 	}
 	virtual void GetRawStreamData(void ** Dest, INT FirstVertex )
 	{

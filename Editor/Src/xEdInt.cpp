@@ -82,7 +82,7 @@ static void IntExportProp( UClass* Class, UClass* SuperClass, UClass* OuterClass
 
 	BYTE* DefaultData = NULL;
 	if ( SuperClass && SuperClass->IsChildOf(OuterClass) )
-		DefaultData = (BYTE*)&SuperClass->Defaults(0);
+		DefaultData = (BYTE*)SuperClass->Defaults.GetTypedData();
 
 	if ( DefaultData && DefaultData != DataBase )
 	{
@@ -217,7 +217,7 @@ EDITOR_API UBOOL IntExport (UObject *Package, const TCHAR *IntName, UBOOL Export
 
 
     if( Objects.Num() )
-       Sort (&Objects(0), Objects.Num());
+       Sort (Objects.GetTypedData(), Objects.Num());
 
 	const TCHAR* nl = TEXT("\r\n");
 	for (INT i = 0; i < StandardSections.Num(); i++)
@@ -254,7 +254,7 @@ EDITOR_API UBOOL IntExport (UObject *Package, const TCHAR *IntName, UBOOL Export
 		Class = Cast<UClass>(obj);
 
 		if( Class )
-		    IntExportStruct( Class, Class->GetSuperClass(), Class, Class, TmpName, Class->GetName(), NULL, &Class->Defaults(0), 0, true );
+		    IntExportStruct( Class, Class->GetSuperClass(), Class, Class, TmpName, Class->GetName(), NULL, Class->Defaults.GetTypedData(), 0, true );
 		else
 		{
 			Class = obj->GetClass();

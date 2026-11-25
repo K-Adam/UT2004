@@ -38,7 +38,6 @@ UFunction* GNativeFunction( INT iNative );
 CORE_API void GRefuseScript( UObject* Culprit, const TCHAR* Rule );
 UBOOL GIsRefused( UObject* Object );
 CORE_API void GDisableRefusedScript( TArray<UObject*>& Loaded );
-
 extern CORE_API Native GCasts[];
 BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 
@@ -148,7 +147,7 @@ FORCEINLINE void FFrame::Step( UObject* Context, RESULT_DECL )
 	guardSlow(FFrame::Step);
 	INT B = *Code++;
 	(Context->*GNatives[B])( *this, Result );
-	unguardfSlow(( TEXT("(%s @ %s : %04X)"), Object->GetFullName(), Node->GetFullName(), Code - &Node->Script(0) ));
+	unguardfSlow(( TEXT("(%s @ %s : %04X)"), Object->GetFullName(), Node->GetFullName(), Code - Node->Script.GetTypedData() ));
 }
 inline INT FFrame::ReadInt()
 {

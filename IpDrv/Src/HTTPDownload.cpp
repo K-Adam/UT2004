@@ -260,7 +260,7 @@ void UHTTPDownload::Tick(void)
 			TArray<ANSICHAR> AnsiRequest( Request.Len() );
 			for( INT i=0; i<Request.Len(); i++ )
 				AnsiRequest(i) = ToAnsi( (*Request)[i] );
-			send( ServerSocket, &AnsiRequest(0), AnsiRequest.Num(), 0 );
+			send( ServerSocket, AnsiRequest.GetTypedData(), AnsiRequest.Num(), 0 );
 		}
 		ConnectStartTime = GCurrentTime;
 		HTTPState = HTTP_ReceivingHeader;
@@ -280,7 +280,7 @@ void UHTTPDownload::Tick(void)
 				{				
 					UBOOL EOH = i==0;
 					ReceivedData(i) = 0;
-					Headers(Headers.AddZeroed()) = appFromAnsi((char*)&ReceivedData(0));
+					Headers(Headers.AddZeroed()) = appFromAnsi((char*)ReceivedData.GetTypedData());
 					if( i<ReceivedData.Num()-1 && (ReceivedData(i+1)==13 || ReceivedData(i+1)==10) )
 						i++;					
 					ReceivedData.Remove(0, i+1);
@@ -374,7 +374,7 @@ void UHTTPDownload::Tick(void)
 			{
 				INT Count = Transfered + ReceivedData.Num() > Info->FileSize ? Info->FileSize - Transfered : ReceivedData.Num(); //!! ?? this doesn't look correct for compressed files.
 				if( Count > 0 )
-					ReceiveData( &ReceivedData(0), Count );
+					ReceiveData( ReceivedData.GetTypedData(), Count );
 				else
 					HTTPState = HTTP_Closed;
 				ReceivedData.Empty();

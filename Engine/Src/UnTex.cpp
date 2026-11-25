@@ -399,7 +399,7 @@ void UTexture::CreateMips( UBOOL FullMips, UBOOL Downsample, UBOOL SpecialBorder
 			{	
 				FPlane C(0,0,0,0);
 				for( INT i=0; i<Mips(0).DataArray.Num() >> 2 ; i++ )
-					C += ((FColor*)(&Mips(0).DataArray(0)))[i].Plane();
+					C += ((FColor*)(Mips(0).DataArray.GetTypedData()))[i].Plane();
 				MipZero = FColor(C/Mips(0).DataArray.Num());
 			}
 		}
@@ -471,7 +471,7 @@ void UTexture::CreateMips( UBOOL FullMips, UBOOL Downsample, UBOOL SpecialBorder
 						{
 							if( SpecialBorderColor && ((U==0) || (V==0) || (U==Dest.USize-1) || (V==Dest.VSize-1)) )
 							{
-								((FColor*)(&Dest.DataArray(0)))[ V*Dest.USize+U ] = BorderColor;
+								((FColor*)(Dest.DataArray.GetTypedData()))[ V*Dest.USize+U ] = BorderColor;
 								continue;
 							}
 
@@ -509,10 +509,10 @@ void UTexture::CreateMips( UBOOL FullMips, UBOOL Downsample, UBOOL SpecialBorder
 									C += Colors[ Src.DataArray( TexCoord + UD + VD ) ].Plane();
 									break;
 								case TEXF_RGBA8:
-									C += ((FColor*)(&Src.DataArray(0)))[ TexCoord +  0 +  0 ].Plane();
-									C += ((FColor*)(&Src.DataArray(0)))[ TexCoord + UD +  0 ].Plane();
-									C += ((FColor*)(&Src.DataArray(0)))[ TexCoord +  0 + VD ].Plane(); 
-									C += ((FColor*)(&Src.DataArray(0)))[ TexCoord + UD + VD ].Plane();							
+									C += ((FColor*)(Src.DataArray.GetTypedData()))[ TexCoord +  0 +  0 ].Plane();
+									C += ((FColor*)(Src.DataArray.GetTypedData()))[ TexCoord + UD +  0 ].Plane();
+									C += ((FColor*)(Src.DataArray.GetTypedData()))[ TexCoord +  0 + VD ].Plane(); 
+									C += ((FColor*)(Src.DataArray.GetTypedData()))[ TexCoord + UD + VD ].Plane();							
 									break;
 								}
 							}
@@ -527,7 +527,7 @@ void UTexture::CreateMips( UBOOL FullMips, UBOOL Downsample, UBOOL SpecialBorder
 								Dest.DataArray(V*Dest.USize+U) = Palette->BestMatch( MipTexel, 0 );
 								break;
 							case TEXF_RGBA8:
-								((FColor*)(&Dest.DataArray(0)))[ V*Dest.USize+U ] = MipTexel;
+								((FColor*)(Dest.DataArray.GetTypedData()))[ V*Dest.USize+U ] = MipTexel;
 								break;
 							}
 						}
@@ -641,7 +641,7 @@ void UTexture::Clear( FColor TexelColor )
 	{
 	case TEXF_RGBA8:
 		for( INT i=0;i<USize*VSize;i++ )
-			((FColor*)(&Mips(0).DataArray(0)))[i] = TexelColor;
+			((FColor*)(Mips(0).DataArray.GetTypedData()))[i] = TexelColor;
 		break;
 	}
 
@@ -654,7 +654,7 @@ FColor UTexture::GetTexel( FLOAT u1, FLOAT v1, FLOAT u2, FLOAT v2 )
 	switch(Format)
 	{
 	case TEXF_RGBA8:
-		return ((FColor*)(&Mips(0).DataArray(0)))[INT(v1)*USize+INT(u1)];
+		return ((FColor*)(Mips(0).DataArray.GetTypedData()))[INT(v1)*USize+INT(u1)];
 		break;
 	}
 	return FColor(0,0,0,0);
@@ -679,7 +679,7 @@ void UTexture::ArithOp( UTexture* Operand, ETextureArithOp Operation )
 		{
 			for( INT u=0;u<USize;u++ )
 			{
-				FColor OrigColor = ((FColor*)(&Mips(0).DataArray(0)))[v*USize+u];
+				FColor OrigColor = ((FColor*)(Mips(0).DataArray.GetTypedData()))[v*USize+u];
 				FColor OperColor = Operand->GetTexel( URatio*u, VRatio*v, URatio*(u+1), VRatio*(v+1) );
 				FColor DestColor;
 
@@ -729,7 +729,7 @@ void UTexture::ArithOp( UTexture* Operand, ETextureArithOp Operation )
 					DestColor = OrigColor;
 					break;
 				}
-				((FColor*)(&Mips(0).DataArray(0)))[v*USize+u] = DestColor;
+				((FColor*)(Mips(0).DataArray.GetTypedData()))[v*USize+u] = DestColor;
 			}
 		}
 		break;
@@ -845,8 +845,8 @@ UPalette* UPalette::ReplaceWithExisting()
 	{
 		if( *It!=this && It->GetOuter()==GetOuter() )
 		{
-			FColor* C1 = &Colors(0);
-			FColor* C2 = &It->Colors(0);
+			FColor* C1 = Colors.GetTypedData();
+			FColor* C2 = It->Colors.GetTypedData();
 			int i;
 			for( i=0; i<NUM_PAL_COLORS; i++ )
 				if( *C1++ != *C2++ ) break;
@@ -882,7 +882,7 @@ void CompressDXT( const FColor* Src, INT Width, INT Height, ETextureFormat Forma
 	}
 	Out.Empty();
 	Out.Add( squish::GetStorageRequirements(Width, Height, Flags) );
-	squish::CompressImage( &RGBA(0), Width, Height, &Out(0), Flags );
+	squish::CompressImage( RGBA.GetTypedData(), Width, Height, Out.GetTypedData(), Flags );
 	unguard;
 }
 
@@ -898,14 +898,14 @@ UBOOL UTexture::Compress( ETextureFormat InFormat, UBOOL Mipmaps, FDXTCompressio
 	Mips(0).DataArray.Load();
 	TArray<BYTE> Data(USize * VSize * 4);
 	if( Format == TEXF_RGBA8 )
-		appMemcpy( &Data(0), &Mips(0).DataArray(0), Data.Num() );
+		appMemcpy( Data.GetTypedData(), Mips(0).DataArray.GetTypedData(), Data.Num() );
 	else
-		RenderInterface->GetTextureData(0,&Data(0),RenderInterface->GetWidth()*sizeof(FColor),TEXF_RGBA8);
+		RenderInterface->GetTextureData(0,Data.GetTypedData(),RenderInterface->GetWidth()*sizeof(FColor),TEXF_RGBA8);
 
 	// A new mip 0 drops the lazy loader, which would otherwise reload the uncompressed source.
 	Mips.Empty();
 	new(Mips)FMipmap( UBits, VBits, Data.Num() );
-	appMemcpy( &Mips(0).DataArray(0), &Data(0), Data.Num() );
+	appMemcpy( Mips(0).DataArray.GetTypedData(), Data.GetTypedData(), Data.Num() );
 	Format = TEXF_RGBA8;
 
 	// CreateMips clears bMasked for anything but P8.
@@ -917,7 +917,7 @@ UBOOL UTexture::Compress( ETextureFormat InFormat, UBOOL Mipmaps, FDXTCompressio
 	for( INT MipIndex=0; MipIndex<Mips.Num(); MipIndex++ )
 	{
 		FMipmap& Mip    = Mips(MipIndex);
-		FColor*  Colors = (FColor*)&Mip.DataArray(0);
+		FColor*  Colors = (FColor*)Mip.DataArray.GetTypedData();
 		if( Options && Options->Fade )
 		{
 			// FadeAmount is the percentage faded per mip level, as nvDXT defined it.
@@ -984,7 +984,7 @@ UBOOL UTexture::Decompress( ETextureFormat InFormat )
 				{
 					for(INT X = 0;X < MipWidth;X += 4)
 					{
-						FDXT3Block*	SourceBlock = (FDXT3Block*) ((BYTE*) &Mips(MipIndex).DataArray(0) + (Y / 4) * (MipWidth / 4 * 16) + (X / 4) * 16);
+						FDXT3Block*	SourceBlock = (FDXT3Block*) ((BYTE*) Mips(MipIndex).DataArray.GetTypedData() + (Y / 4) * (MipWidth / 4 * 16) + (X / 4) * 16);
 						FColor		Colors[4];
 						FColor565*	SourceColor;
 
@@ -1027,7 +1027,7 @@ UBOOL UTexture::Decompress( ETextureFormat InFormat )
 
 						for(INT Row = 0;Row < 4;Row++)
 						{
-							FColor*		DestColor = &MipColors(0) + (Y + Row) * MipWidth + X;
+							FColor*		DestColor = MipColors.GetTypedData() + (Y + Row) * MipWidth + X;
 
 							DestColor[0] = Colors[(SourceBlock->Color.Rows[Row] >> 0) & 0x03];
 							DestColor[1] = Colors[(SourceBlock->Color.Rows[Row] >> 2) & 0x03];
@@ -1040,7 +1040,7 @@ UBOOL UTexture::Decompress( ETextureFormat InFormat )
 				Mips(MipIndex).DataArray.Empty(MipWidth * MipHeight * sizeof(FColor));
 				Mips(MipIndex).DataArray.Add(MipWidth * MipHeight * sizeof(FColor));
 	
-				appMemcpy(&Mips(MipIndex).DataArray(0),&MipColors(0),MipWidth * MipHeight * sizeof(FColor));
+				appMemcpy(Mips(MipIndex).DataArray.GetTypedData(),MipColors.GetTypedData(),MipWidth * MipHeight * sizeof(FColor));
 			}
 
 			Format = TEXF_RGBA8;
@@ -1069,7 +1069,7 @@ ETextureFormat UTexture::ConvertDXT( INT MipLevel, UBOOL ForceRGBA, UBOOL Use444
 	INT Height		= Mips(MipLevel).VSize;
 
 	// Handle corrupted textures.
-	if( &Mips(MipLevel).DataArray(0) == NULL )
+	if( Mips(MipLevel).DataArray.GetTypedData() == NULL )
 	{
 		*Data = new BYTE[Width * Height *4];
 		appMemzero( *Data, Width * Height * 4 );
@@ -1079,13 +1079,13 @@ ETextureFormat UTexture::ConvertDXT( INT MipLevel, UBOOL ForceRGBA, UBOOL Use444
 	switch( Format )
 	{
 	case TEXF_DXT1:
-		IsDXT1 = ConvertDXT1( &Mips(MipLevel).DataArray(0), Width, Height, Use4444, Data, ForceRGBA );
+		IsDXT1 = ConvertDXT1( Mips(MipLevel).DataArray.GetTypedData(), Width, Height, Use4444, Data, ForceRGBA );
 		break;
 	case TEXF_DXT3:
-		IsDXT1 = ConvertDXT3( &Mips(MipLevel).DataArray(0), Width, Height, Use4444, Data, ForceRGBA );
+		IsDXT1 = ConvertDXT3( Mips(MipLevel).DataArray.GetTypedData(), Width, Height, Use4444, Data, ForceRGBA );
 		break;
 	case TEXF_DXT5:
-		IsDXT1 = ConvertDXT5( &Mips(MipLevel).DataArray(0), Width, Height, Use4444, Data, ForceRGBA );
+		IsDXT1 = ConvertDXT5( Mips(MipLevel).DataArray.GetTypedData(), Width, Height, Use4444, Data, ForceRGBA );
 		break;
 	default:
 		appErrorf(TEXT("Invalid texture format passed to ConvertDXT"));
@@ -1115,13 +1115,13 @@ ETextureFormat UTexture::ConvertDXT()
 			// Texture are always lazy loaded.
 			if( !Mips(m).DataArray.Num() )
 				Mips(m).DataArray.Load();
-			check( &Mips(m).DataArray(0) );
+			check( Mips(m).DataArray.GetTypedData() );
 
 			UBOOL IsDXT1;
 			if( Format == TEXF_DXT3 )
-				IsDXT1 = ConvertDXT3( &Mips(m).DataArray(0), Width, Height, ConvertTo4444, &Data, ForceRGBA );
+				IsDXT1 = ConvertDXT3( Mips(m).DataArray.GetTypedData(), Width, Height, ConvertTo4444, &Data, ForceRGBA );
 			else 
-				IsDXT1 = ConvertDXT5( &Mips(m).DataArray(0), Width, Height, ConvertTo4444, &Data, ForceRGBA );
+				IsDXT1 = ConvertDXT5( Mips(m).DataArray.GetTypedData(), Width, Height, ConvertTo4444, &Data, ForceRGBA );
 								
 			// Make sure all miplevels use RGBA if needed.
 			if( m==0 && !IsDXT1 )
@@ -1130,7 +1130,7 @@ ETextureFormat UTexture::ConvertDXT()
 			Mips(m).DataArray.Empty();
 			INT Size = IsDXT1 ? Max(Width/4,1) * Max(Height/4,1) * 8 : ConvertTo4444 ? Width * Height * 2 : Width * Height * 4;
 			Mips(m).DataArray.Add( Size );
-			appMemcpy( &Mips(m).DataArray(0), Data, Size );
+			appMemcpy( Mips(m).DataArray.GetTypedData(), Data, Size );
 			delete [] Data;
 		}
 		Format = ForceRGBA ? TEXF_RGBA8 : TEXF_DXT1;
@@ -1475,7 +1475,7 @@ void* FStaticTexture::GetRawTextureData(INT MipIndex)
 		debugf(TEXT("WARNING: Texture [%s] is corrupted."),Texture->GetPathName());
 		return NULL;
 	}
-	return &Texture->Mips(MipIndex).DataArray(0);
+	return Texture->Mips(MipIndex).DataArray.GetTypedData();
 
 	unguard;
 }
@@ -1515,7 +1515,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 	if(!Texture->bParametric)
 		Mipmap.DataArray.Load();
 
-	if( &Mipmap.DataArray(0) == NULL || !MipFits(Texture,MipIndex) )
+	if( Mipmap.DataArray.GetTypedData() == NULL || !MipFits(Texture,MipIndex) )
 	{
 		debugf(TEXT("WARNING: Texture [%s] is corrupted."),Texture->GetPathName());
 		return;
@@ -1656,7 +1656,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 	{
 		check(SourceFormat == DestFormat);
 
-		BYTE*	SourceData = &Mipmap.DataArray(0);
+		BYTE*	SourceData = Mipmap.DataArray.GetTypedData();
 		BYTE*	DestData = (BYTE*) Dest;
 		INT		USize = Max(Mipmap.USize,4),
 				VSize = Max(Mipmap.VSize,4),
@@ -1681,7 +1681,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 	else if(SourceFormat == DestFormat)
 	{
 		// No format conversion.
-		BYTE*	SourceData = &Mipmap.DataArray(0);
+		BYTE*	SourceData = Mipmap.DataArray.GetTypedData();
 		BYTE*	DestData = (BYTE*) Dest;
 		INT		SourceStride = GetBytesPerPixel(SourceFormat,Mipmap.USize);
 
@@ -1703,9 +1703,9 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 		// Expand palettized texture to 32-bit RGBA.
 		static DWORD	Palette[256];
 		static DWORD*	PalettePtr = Palette;
-		BYTE*			SourceData = &Mipmap.DataArray(0);
+		BYTE*			SourceData = Mipmap.DataArray.GetTypedData();
 
-		appMemcpy(Palette,&Texture->Palette->Colors(0),Min(Texture->Palette->Colors.Num(),256) * sizeof(FColor));
+		appMemcpy(Palette,Texture->Palette->Colors.GetTypedData(),Min(Texture->Palette->Colors.Num(),256) * sizeof(FColor));
 
 		//!!MAT
 		if(Texture->bMasked)
@@ -1728,7 +1728,7 @@ void FStaticTexture::GetTextureData(INT MipIndex,void* Dest,INT DestStride,EText
 	else if(SourceFormat == TEXF_G16 && DestFormat == TEXF_RGBA8)
 	{
 		// Expand 16-bit greyscale to 32-bit RGBA.
-		_WORD*	SourceData = (_WORD*) &Mipmap.DataArray(0);
+		_WORD*	SourceData = (_WORD*) Mipmap.DataArray.GetTypedData();
 		FColor*	DestData = (FColor*) Dest;
 
 		for(INT Y = 0;Y < Mipmap.VSize;Y++)

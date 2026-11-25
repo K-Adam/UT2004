@@ -3064,7 +3064,7 @@ static void ExportTravel( FOutputDevice& Out, AActor* Actor )
 			FString Value;
 			if
 			(	(It->PropertyFlags & CPF_Travel)
-			&&	It->ExportText( Index, Value, (BYTE*)Actor, &Actor->GetClass()->Defaults(0), 0 ) )
+			&&	It->ExportText( Index, Value, (BYTE*)Actor, Actor->GetClass()->Defaults.GetTypedData(), 0 ) )
 			{
                 Out.Log( It->GetName() );
 				if( It->ArrayDim!=1 )

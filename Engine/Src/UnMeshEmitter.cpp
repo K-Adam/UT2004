@@ -103,7 +103,7 @@ INT UMeshEmitter::RenderParticles(FDynamicActor* DynActor,FLevelSceneNode* Scene
 	{
 		FStaticMeshSection&	Section		= StaticMesh->Sections(SectionIndex);
 		UMaterial* Material = StaticMesh->GetSkin(Owner,SectionIndex);
-		FParticle* Particle = &Particles(0);
+		FParticle* Particle = Particles.GetTypedData();
 		
 		if( Section.NumPrimitives == 0 )
 			continue;

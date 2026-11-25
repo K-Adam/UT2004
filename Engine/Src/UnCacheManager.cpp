@@ -844,7 +844,7 @@ UBOOL UCacheManager::ParseCacheFiles( const TCHAR* CacheKey )
 	if ( Lines.Num() )
 	{
 		bReverseSort = true;
-		Sort( &Lines(0), Lines.Num() );
+		Sort( Lines.GetTypedData(), Lines.Num() );
 		bReverseSort = false;
 	}
 

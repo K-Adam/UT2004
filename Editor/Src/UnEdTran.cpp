@@ -190,7 +190,7 @@ private:
 			void Serialize( void* Data, INT Num )
 			{
 				checkSlow(Offset+Num<=Bytes.Num());
-				appMemcpy( Data, &Bytes(Offset), Num );
+				appMemcpy( Data, Bytes.GetTypedData()+Offset, Num );
 				Offset += Num;
 			}
 			FArchive& operator<<( class FName& N )
@@ -235,7 +235,7 @@ private:
 			void Serialize( void* Data, INT Num )
 			{
 				INT Index = Bytes.Add(Num);
-				appMemcpy( &Bytes(Index), Data, Num );
+				appMemcpy( Bytes.GetTypedData()+Index, Data, Num );
 			}
 			FArchive& operator<<( class FName& N )
 			{

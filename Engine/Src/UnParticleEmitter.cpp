@@ -1133,7 +1133,7 @@ void UParticleEmitter::HandleActorForce( AActor* Other, FLOAT DeltaTime )
 		case FT_DragAlong:
 			if ( Other->ForceRadius )
 			{
-				FParticle* Particle	 = &Particles(0);
+				FParticle* Particle	 = Particles.GetTypedData();
 				FLOAT RadiusSquared	 = Square(Other->ForceRadius);
 				FLOAT RRadiusSquared = 1.f / RadiusSquared;
 				for (INT n=0; n<ActiveParticles; n++)

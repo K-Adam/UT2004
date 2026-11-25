@@ -811,7 +811,7 @@ void UGUIList::execSortList( FFrame& Stack, RESULT_DECL )
 		GSList=NULL;
 
 	
-	Sort( &Elements(0), Elements.Num() );
+	Sort( Elements.GetTypedData(), Elements.Num() );
 
 	unguardexec;
 }
@@ -1834,7 +1834,7 @@ void UGUIMultiColumnList::execSortList(FFrame& Stack, RESULT_DECL )
 	for ( INT i = 0; i < SortData.Num(); i++ )
 		TempSortData.Set( SortData(i).SortItem, i );
 
-	Sort( &SortData(0), SortData.Num() );
+	Sort( SortData.GetTypedData(), SortData.Num() );
 
 	// update reverse map
 	for ( INT i = 0; i < SortData.Num(); i++ )
@@ -2349,7 +2349,7 @@ void UGUITreeList::execSortList( FFrame& Stack, RESULT_DECL )
 		GTreeList=NULL;
 
 	STreeList = this;
-	Sort( &Elements(0), Elements.Num() );
+	Sort( Elements.GetTypedData(), Elements.Num() );
 	STreeList = NULL;
 
 	unguardexec;

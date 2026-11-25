@@ -530,8 +530,9 @@ void UStaticMesh::Build( UBOOL OnlyCollision, FVector* InNormals )
 
 				Section->FirstIndex = IndexBuffer.Indices.Num();
 
-				_WORD*	DestPtr = &IndexBuffer.Indices(IndexBuffer.Indices.Add(SectionIndices(SectionIndex).Indices.Num()));
-				_WORD*	SrcPtr = &SectionIndices(SectionIndex).Indices(0);
+				INT		First = IndexBuffer.Indices.Add(SectionIndices(SectionIndex).Indices.Num());
+				_WORD*	DestPtr = IndexBuffer.Indices.GetTypedData() + First;
+				_WORD*	SrcPtr = SectionIndices(SectionIndex).Indices.GetTypedData();
 
 				Section->MinVertexIndex = *SrcPtr;
 				Section->MaxVertexIndex = *SrcPtr;

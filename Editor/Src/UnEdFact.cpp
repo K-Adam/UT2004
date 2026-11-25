@@ -1769,7 +1769,7 @@ UObject* USoundFactory::FactoryCreateBinary
 		USound* Sound = new(InParent,Name,Flags)USound;
 		Sound->SetFileType (FName(FileType)); // gam
 		Sound->GetData().Add( BufferEnd-Buffer ); // gam
-		appMemcpy( &Sound->GetData()(0), Buffer, Sound->GetData().Num() ); // gam
+		appMemcpy( Sound->GetData().GetTypedData(), Buffer, Sound->GetData().Num() ); // gam
 		return Sound;
 	}
 	else if( appStricmp(FileType, TEXT("UFX"))==0 )//oldver
@@ -2227,7 +2227,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 			Texture->PostLoad();
 
 			// Import it.
-			BYTE* DestPtr	= &Texture->Mips(0).DataArray(0);
+			BYTE* DestPtr	= Texture->Mips(0).DataArray.GetTypedData();
 			BYTE* DestEnd	= DestPtr + Texture->Mips(0).DataArray.Num();
 			Buffer += 128;
 			while( DestPtr < DestEnd )
@@ -2327,7 +2327,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 				BYTE*	IdData = (BYTE*)TGA + sizeof(FTGAFileHeader); 
 				BYTE*	ColorMap = IdData + TGA->IdFieldLength;
 				BYTE*	ImageData = (BYTE*) (ColorMap + (TGA->ColorMapEntrySize + 4) / 8 * TGA->ColorMapLength);				
-				DWORD*	TextureData = (DWORD*) &Texture->Mips(0).DataArray(0);
+				DWORD*	TextureData = (DWORD*) Texture->Mips(0).DataArray.GetTypedData();
 				BYTE    Pixel[4];
 				INT     RLERun = 0;
 				INT     RAWRun = 0;
@@ -2379,7 +2379,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 				BYTE*	IdData = (BYTE*)TGA + sizeof(FTGAFileHeader); 
 				BYTE*	ColorMap = IdData + TGA->IdFieldLength;
 				BYTE*	ImageData = (BYTE*) (ColorMap + (TGA->ColorMapEntrySize + 4) / 8 * TGA->ColorMapLength);
-				DWORD*	TextureData = (DWORD*) &Texture->Mips(0).DataArray(0);
+				DWORD*	TextureData = (DWORD*) Texture->Mips(0).DataArray.GetTypedData();
 				BYTE    Pixel[4];
 				INT     RLERun = 0;
 				INT     RAWRun = 0;
@@ -2433,7 +2433,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 				BYTE*	IdData = (BYTE*)TGA + sizeof(FTGAFileHeader);
 				BYTE*	ColorMap = IdData + TGA->IdFieldLength;				
 				_WORD*	ImageData = (_WORD*) (ColorMap + (TGA->ColorMapEntrySize + 4) / 8 * TGA->ColorMapLength);
-				_WORD*	TextureData = (_WORD*) &Texture->Mips(0).DataArray(0);
+				_WORD*	TextureData = (_WORD*) Texture->Mips(0).DataArray.GetTypedData();
 				_WORD    Pixel = 0;
 				INT     RLERun = 0;
 				INT     RAWRun = 0;
@@ -2488,7 +2488,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 				BYTE*	IdData = (BYTE*)TGA + sizeof(FTGAFileHeader);
 				BYTE*	ColorMap = IdData + TGA->IdFieldLength;
 				DWORD*	ImageData = (DWORD*) (ColorMap + (TGA->ColorMapEntrySize + 4) / 8 * TGA->ColorMapLength);
-				DWORD*	TextureData = (DWORD*) &Texture->Mips(0).DataArray(0);
+				DWORD*	TextureData = (DWORD*) Texture->Mips(0).DataArray.GetTypedData();
 
 				for(INT Y = 0;Y < TGA->Height;Y++)
 					appMemcpy(TextureData + Y * TGA->Width,ImageData + (TGA->Height - Y - 1) * TGA->Width,TGA->Width * 4);
@@ -2509,7 +2509,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 				BYTE*	IdData = (BYTE*)TGA + sizeof(FTGAFileHeader);
 				BYTE*	ColorMap = IdData + TGA->IdFieldLength;
 				_WORD*	ImageData = (_WORD*) (ColorMap + (TGA->ColorMapEntrySize + 4) / 8 * TGA->ColorMapLength);
-				_WORD*	TextureData = (_WORD*) &Texture->Mips(0).DataArray(0);
+				_WORD*	TextureData = (_WORD*) Texture->Mips(0).DataArray.GetTypedData();
 
 				// Monochrome 16-bit format - terrain heightmaps.
 				for(INT Y = 0;Y < TGA->Height;Y++)
@@ -2526,7 +2526,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 				BYTE*	IdData = (BYTE*)TGA + sizeof(FTGAFileHeader);
 				BYTE*	ColorMap = IdData + TGA->IdFieldLength;
 				BYTE*	ImageData = (BYTE*) (ColorMap + (TGA->ColorMapEntrySize + 4) / 8 * TGA->ColorMapLength);
-				DWORD*	TextureData = (DWORD*) &Texture->Mips(0).DataArray(0);
+				DWORD*	TextureData = (DWORD*) Texture->Mips(0).DataArray.GetTypedData();
                 BYTE    Pixel[4];
 
 				for(INT Y = 0;Y < TGA->Height;Y++)
@@ -2607,7 +2607,7 @@ UObject* UTextureFactory::FactoryCreateBinary
 				INT MipmapSize = Texture->Format==TEXF_DXT1 ? wtmp*htmp/2 : wtmp*htmp;
 				FMipmap* NewMipmap = new(Texture->Mips)FMipmap( Max(Texture->UBits-m,0), Max(Texture->VBits-m,0), MipmapSize );
 				check( MipmapSize <= Length );
-				appMemcpy( &NewMipmap->DataArray(0), Buffer, MipmapSize );
+				appMemcpy( NewMipmap->DataArray.GetTypedData(), Buffer, MipmapSize );
 				Buffer += MipmapSize;
 				Length -= MipmapSize;
 				w = (w+1)/2;
@@ -2716,7 +2716,7 @@ UBOOL UTextureExporterPCX::ExportBinary( UObject* Object, const TCHAR* Type, FAr
 		{
 			for( INT ColorPlane = 2; ColorPlane >= 0; ColorPlane-- )
 			{
-				BYTE* ScreenPtr = &Texture->Mips(0).DataArray(0) + (Line * Texture->USize * 4) + ColorPlane;
+				BYTE* ScreenPtr = Texture->Mips(0).DataArray.GetTypedData() + (Line * Texture->USize * 4) + ColorPlane;
 				for( INT Row=0; Row<Texture->USize; Row++ )
 				{
 					if( (*ScreenPtr&0xc0)==0xc0 )
@@ -2732,7 +2732,7 @@ UBOOL UTextureExporterPCX::ExportBinary( UObject* Object, const TCHAR* Type, FAr
 	{
 		PCX.NumPlanes = 1;
 		Ar << PCX;
-		BYTE* ScreenPtr = &Texture->Mips(0).DataArray(0);
+		BYTE* ScreenPtr = Texture->Mips(0).DataArray.GetTypedData();
 		for( INT i=0; i<Texture->USize*Texture->VSize; i++ )
 		{
 			if( (*ScreenPtr&0xc0)==0xc0 )
@@ -2967,7 +2967,7 @@ UBOOL UTextureExporterUPT::ExportBinary( UObject* Object, const TCHAR* Type, FAr
 		Texture->Mips(0).DataArray.Load();
 		ExportData.Add( Texture->Mips(0).DataArray.Num() );
 		appMemcpy( &(ExportData(0)),&(Texture->Mips(0).DataArray(0)), Texture->Mips(0).DataArray.Num());
-		ScrambleUPT( (DWORD*)&(ExportData(0)), UPT.seed, UPT.Width, UPT.Height );
+		ScrambleUPT( (DWORD*)ExportData.GetTypedData(), UPT.seed, UPT.Width, UPT.Height );
 
 		// Write out rows upside-down.
 		for( INT Y=0;Y < Texture->VSize;Y++ ) 
@@ -3033,7 +3033,7 @@ UBOOL UTextureExporterDDS::ExportBinary( UObject* Object, const TCHAR* Type, FAr
 	for(DWORD m=0; m<hdr.desc.dwMipMapCount; m++ )
 	{
 		Texture->Mips(m).DataArray.Load();
-		Ar.Serialize( &Texture->Mips(m).DataArray(0), Texture->Mips(m).DataArray.Num() );
+		Ar.Serialize( Texture->Mips(m).DataArray.GetTypedData(), Texture->Mips(m).DataArray.Num() );
 		Texture->Mips(m).DataArray.Unload();
 	}
 
@@ -3091,7 +3091,7 @@ BYTE FontRemap[256] =
 static UBOOL ScanFontBox( UTexture* Texture, INT X, INT Y, INT& XL, INT& YL )
 {
 	guard(UFont_ScanFontBox);
-	BYTE* Data = &Texture->Mips(0).DataArray(0);
+	BYTE* Data = Texture->Mips(0).DataArray.GetTypedData();
 	INT FontXL = Texture->USize;
 
 	// Find x-length.
@@ -3155,7 +3155,7 @@ UObject* UFontFactory::FactoryCreateBinary
 	{
 		// Init.
 		Tex->bMasked = 1;
-		BYTE* TextureData = &Tex->Mips(0).DataArray(0);
+		BYTE* TextureData = Tex->Mips(0).DataArray.GetTypedData();
 		Font->Characters.AddZeroed( NUM_FONT_CHARS );
 
 		// Scan in all fonts, starting at glyph 32.

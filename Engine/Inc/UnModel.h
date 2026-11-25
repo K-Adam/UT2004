@@ -85,7 +85,7 @@ public:
 
 		return 4;
 	}
-	virtual void GetStreamData(void* Dest) { appMemcpy(Dest,&Vertices(0),Vertices.Num() * sizeof(FBspVertex)); }
+	virtual void GetStreamData(void* Dest) { appMemcpy(Dest,Vertices.GetTypedData(),Vertices.Num() * sizeof(FBspVertex)); }
 	virtual void GetRawStreamData(void** Dest,INT FirstVertex) { *Dest = &Vertices(FirstVertex); }
 
 	// FRenderResource interface.

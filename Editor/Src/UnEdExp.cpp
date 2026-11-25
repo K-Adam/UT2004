@@ -61,7 +61,7 @@ UBOOL USoundExporterWAV::ExportBinary( UObject* Object, const TCHAR* Type, FArch
 	if( Sound->GetClass() == USound::StaticClass() ) // don't export sound groups/ procedural sounds
 	{
 		Sound->GetData().Load(); // gam
-		Ar.Serialize( &Sound->GetData()(0), Sound->GetData().Num() ); // gam
+		Ar.Serialize( Sound->GetData().GetTypedData(), Sound->GetData().Num() ); // gam
 		return 1;
 	}
 	else
@@ -176,7 +176,7 @@ UBOOL UClassExporterH::ExportText( UObject* Object, const TCHAR* Type, FOutputDe
 				if( FName::GetEntry(i) && (FName::GetEntry(i)->Flags & RF_TagExp) )
 					new(AutoNames) FString(*FName((EName)(i)));
 
-			Sort(&AutoNames(0), AutoNames.Num());
+			Sort(AutoNames.GetTypedData(), AutoNames.Num());
 
 			for ( INT i=0; i<AutoNames.Num(); i++)
 				Ar.Logf( TEXT("AUTOGENERATE_NAME(%s)\r\n"), *AutoNames(i) );
@@ -674,10 +674,10 @@ UBOOL UClassExporterUC::ExportText( UObject* Object, const TCHAR* Type, FOutputD
 	(
 		Ar,
 		Class,
-		&Class->Defaults(0),
+		Class->Defaults.GetTypedData(),
 		TextIndent+4,
 		Class->GetSuperClass(),
-		Class->GetSuperClass() ? &Class->GetSuperClass()->Defaults(0) : NULL
+		Class->GetSuperClass() ? Class->GetSuperClass()->Defaults.GetTypedData() : NULL
 	);
 	Ar.Log( TEXT("}\r\n") );
 
@@ -800,7 +800,7 @@ UBOOL ULevelExporterT3D::ExportText( UObject* Object, const TCHAR* Type, FOutput
 		if( Actor && !Cast<ACamera>(Actor) && (AllSelected ||Actor->bSelected) )
 		{
 			Ar.Logf( TEXT("%sBegin Actor Class=%s Name=%s\r\n"), appSpc(TextIndent), Actor->GetClass()->GetName(), Actor->GetName() );
-			ExportProperties( Ar, Actor->GetClass(), (BYTE*)Actor, TextIndent+3, Actor->GetClass(), &Actor->GetClass()->Defaults(0) );
+			ExportProperties( Ar, Actor->GetClass(), (BYTE*)Actor, TextIndent+3, Actor->GetClass(), Actor->GetClass()->Defaults.GetTypedData() );
 			Ar.Logf( TEXT("%sEnd Actor\r\n"), appSpc(TextIndent) );
 		}
 	}

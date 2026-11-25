@@ -33,10 +33,10 @@ void CalculateStaticMeshLighting(UStaticMesh* StaticMesh,UStaticMeshInstance* St
 
 	// Update the static lighting stream.
 
-	appMemzero(&StaticMeshInstance->ColorStream.Colors(0),StaticMeshInstance->ColorStream.Colors.Num() * sizeof(FColor));
+	appMemzero(StaticMeshInstance->ColorStream.Colors.GetTypedData(),StaticMeshInstance->ColorStream.Colors.Num() * sizeof(FColor));
 	StaticMeshInstance->ColorStream.Revision++;
 
-    Sort(&StaticMeshInstance->Lights(0),StaticMeshInstance->Lights.Num()); // sjs
+    Sort(StaticMeshInstance->Lights.GetTypedData(),StaticMeshInstance->Lights.Num()); // sjs
 
 	for(INT LightIndex = 0;LightIndex < StaticMeshInstance->Lights.Num();LightIndex++)
 	{
@@ -50,9 +50,9 @@ void CalculateStaticMeshLighting(UStaticMesh* StaticMesh,UStaticMeshInstance* St
 
 			if(Light && !Light->Changed && !Light->Dynamic)
 			{
-				FStaticMeshVertex*	VertexPtr = &StaticMesh->VertexStream.Vertices(0);
-				FColor*				ColorPtr = &StaticMeshInstance->ColorStream.Colors(0);
-				BYTE*				BitPtr = LightInfo->VisibilityBits.Num() ? &LightInfo->VisibilityBits(0) : NULL;
+				FStaticMeshVertex*	VertexPtr = StaticMesh->VertexStream.Vertices.GetTypedData();
+				FColor*				ColorPtr = StaticMeshInstance->ColorStream.Colors.GetTypedData();
+				BYTE*				BitPtr = LightInfo->VisibilityBits.Num() ? LightInfo->VisibilityBits.GetTypedData() : NULL;
 				BYTE				BitMask = 1;
 
 				for(INT VertexIndex = 0;VertexIndex < StaticMesh->VertexStream.Vertices.Num();VertexIndex++)
@@ -96,8 +96,8 @@ void CalculateStaticMeshLighting(UStaticMesh* StaticMesh,UStaticMeshInstance* St
 
 	// Blend the vertex color/alpha into the color stream.
 
-	FColor*	SrcPtr = &StaticMesh->ColorStream.Colors(0);
-	FColor*	DestPtr = &StaticMeshInstance->ColorStream.Colors(0);
+	FColor*	SrcPtr = StaticMesh->ColorStream.Colors.GetTypedData();
+	FColor*	DestPtr = StaticMeshInstance->ColorStream.Colors.GetTypedData();
 
 	for(INT VertexIndex = 0;VertexIndex < StaticMesh->VertexStream.Vertices.Num();VertexIndex++)
 	{

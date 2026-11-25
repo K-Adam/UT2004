@@ -20,7 +20,7 @@ INT FNullRenderInterface::SetDynamicStream(EVertexShader Shader,FVertexStream* S
 		RenDev->DynamicData.Add( Stream->GetSize() - RenDev->DynamicData.Num() );
 		debugf(TEXT("NullDrv: dynamic data size = %i"), RenDev->DynamicData.Num());
 	}
-	Stream->GetStreamData( &RenDev->DynamicData(0) );
+	Stream->GetStreamData( RenDev->DynamicData.GetTypedData() );
 	return 0; 
 }
 

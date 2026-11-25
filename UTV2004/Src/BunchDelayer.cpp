@@ -154,14 +154,14 @@ static inline void SerializeCompressedInitial( FArchive& Bunch, FVector& Locatio
     // read/write compressed location
     SerializeCompVector( Bunch, Location );
     if( Ch && Ch->Recent.Num() )
-        ((AActor*)&Ch->Recent(0))->Location = Location;
+        ((AActor*)Ch->Recent.GetTypedData())->Location = Location;
 
     // optionally read/write compressed rotation
     if( bSerializeRotation )
     {
         SerializeCompRotator( Bunch, Rotation );
 	    if( Ch && Ch->Recent.Num() )
-            ((AActor*)&Ch->Recent(0))->Rotation = Rotation;
+            ((AActor*)Ch->Recent.GetTypedData())->Rotation = Rotation;
     }
 	unguardSlow;
 }

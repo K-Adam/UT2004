@@ -94,7 +94,7 @@ public:
 
 	virtual void GetStreamData(void* Dest)
 	{
-		appMemcpy(Dest,&Vertices(0),Vertices.Num() * sizeof(FTerrainVertex));
+		appMemcpy(Dest,Vertices.GetTypedData(),Vertices.Num() * sizeof(FTerrainVertex));
 	}
 
 	// GetRawStreamData

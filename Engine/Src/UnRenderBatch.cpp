@@ -580,7 +580,7 @@ public:
 				FMemMark			MemMark(GSceneMem);
 				FVector				LocalViewOrigin = DynamicActor->WorldToLocal.TransformFVector(ViewOrigin);
 				_WORD*				Indices = &Element.Actor->StaticMesh->IndexBuffer.Indices(Section->FirstIndex);
-				FStaticMeshVertex*	Vertices = &Element.Actor->StaticMesh->VertexStream.Vertices(0);
+				FStaticMeshVertex*	Vertices = Element.Actor->StaticMesh->VertexStream.Vertices.GetTypedData();
 				FTriangleSortInfo*	SortedTriangles = New<FTriangleSortInfo>(GSceneMem,Section->NumTriangles);
 
 				for(INT TriangleIndex = 0;TriangleIndex < Section->NumTriangles;TriangleIndex++)

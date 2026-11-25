@@ -72,7 +72,7 @@ INT UDumpConfigCommandlet::Main( const TCHAR* Parms )
 
 	// Sort the files
 	if ( Files.Num() )
-		Sort( &Files(0), Files.Num() );
+		Sort( Files.GetTypedData(), Files.Num() );
 
 	// Load all packages
 
@@ -157,7 +157,7 @@ void UDumpConfigCommandlet::DumpClass( UClass* Cls )
 			if ( Sec )
 			{
 				Sec->Remove( Key );
-				FArray* Ptr  = (FArray*)(&Cls->Defaults(0) + It->Offset);
+				FArray* Ptr  = (FArray*)(Cls->Defaults.GetTypedData() + It->Offset);
 				INT     Size = Array->Inner->ElementSize;
 
 				if ( Ptr->Num() == 0 )
@@ -185,7 +185,7 @@ void UDumpConfigCommandlet::DumpClass( UClass* Cls )
 						appSprintf( TempKey, TEXT("%s[%i]"), It->GetName(), Index );
 						Key = TempKey;
 					}
-					It->ExportText( Index, Value, &Cls->Defaults(0), &Cls->Defaults(0), 0 );
+					It->ExportText( Index, Value, Cls->Defaults.GetTypedData(), Cls->Defaults.GetTypedData(), 0 );
 					GConfig->SetString( Section, Key, *Value, Filename );
 				}
 			}

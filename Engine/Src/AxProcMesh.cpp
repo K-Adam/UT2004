@@ -119,7 +119,7 @@ static bool AddUniqueLink(TArray<FProcMeshLink>& linkData, _WORD v0, _WORD v1, f
 static void CalcProcNormals( TArray<FProcMeshVertex>& Vertices, TArray<FProcMeshFace>& faces )
 {
     int numFaces = faces.Num();
-    FProcMeshFace* pFace = &faces(0);
+    FProcMeshFace* pFace = faces.GetTypedData();
     FVector faceNorm;
     for( int i=0; i<numFaces; i++ )
     {
@@ -168,7 +168,7 @@ static void CalculateLighting(UStaticMesh* StaticMesh,UStaticMeshInstance* Stati
 
     FMatrix LocalToWorld = Owner->LocalToWorld();
 
-	appMemzero(&StaticMeshInstance->ColorStream.Colors(0),StaticMeshInstance->ColorStream.Colors.Num() * sizeof(FColor));
+	appMemzero(StaticMeshInstance->ColorStream.Colors.GetTypedData(),StaticMeshInstance->ColorStream.Colors.Num() * sizeof(FColor));
 	StaticMeshInstance->ColorStream.Revision++;
 
 	for(INT LightIndex = 0;LightIndex < StaticMeshInstance->Lights.Num();LightIndex++)
@@ -178,9 +178,9 @@ static void CalculateLighting(UStaticMesh* StaticMesh,UStaticMeshInstance* Stati
 
 		if(Light && !Light->Changed && !Light->Dynamic)
 		{
-			FStaticMeshVertex*	VertexPtr = &StaticMesh->VertexStream.Vertices(0);
-			FColor*				ColorPtr = &StaticMeshInstance->ColorStream.Colors(0);
-			BYTE*				BitPtr = LightInfo->VisibilityBits.Num() ? &LightInfo->VisibilityBits(0) : NULL;
+			FStaticMeshVertex*	VertexPtr = StaticMesh->VertexStream.Vertices.GetTypedData();
+			FColor*				ColorPtr = StaticMeshInstance->ColorStream.Colors.GetTypedData();
+			BYTE*				BitPtr = LightInfo->VisibilityBits.Num() ? LightInfo->VisibilityBits.GetTypedData() : NULL;
 			BYTE				BitMask = 1;
 
 			for(INT VertexIndex = 0;VertexIndex < StaticMesh->VertexStream.Vertices.Num();VertexIndex++)
@@ -244,8 +244,8 @@ void AxProcMesh::execProcPling( FFrame& Stack, RESULT_DECL )
     float radiusSqr = Square(Radius);
     float invRadiusSqr = 1.0f / radiusSqr;
 
-    FProcMeshVertex* pVert = &Vertices(0);
-    FProcVertData* pVData = &pData->vertData(0);
+    FProcMeshVertex* pVert = Vertices.GetTypedData();
+    FProcVertData* pVData = pData->vertData.GetTypedData();
     int numVerts = Vertices.Num();
     int k;
 
@@ -535,7 +535,7 @@ void AxProcMesh::CalcMeshData(void)
 		while( !Data && (MipLevel < weightMap->Mips.Num()) )
 		{
 			weightMap->Mips(MipLevel).DataArray.Load();
-			Data = (BYTE*) &weightMap->Mips(MipLevel).DataArray(0);
+			Data = (BYTE*) weightMap->Mips(MipLevel).DataArray.GetTypedData();
 			USize = weightMap->Mips(MipLevel).USize;
 			VSize = weightMap->Mips(MipLevel).VSize;
 			MipLevel++;
@@ -552,7 +552,7 @@ void AxProcMesh::CalcMeshData(void)
                 tu = StaticMesh->UVStreams(1).UVs(i).U;
                 tv = StaticMesh->UVStreams(1).UVs(i).V;
             }
-            FetchTextureColor( clr, USize, VSize, tu, tv, Data, &weightMap->Palette->Colors(0) );
+            FetchTextureColor( clr, USize, VSize, tu, tv, Data, weightMap->Palette->Colors.GetTypedData() );
             if( (clr.X + clr.Y + clr.Z) < 0.1f )
             {
                 pData->vertData(i).invWtSum = RIGID_WEIGHT;
@@ -607,8 +607,8 @@ UBOOL AxProcMesh::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
         float radiusSqr = Square(BoundingSphere.W);
         float invRadiusSqr = 1.0f / radiusSqr;
 
-        FProcMeshVertex* pVert = &Vertices(0);
-        FProcVertData* pVData = &pData->vertData(0);
+        FProcMeshVertex* pVert = Vertices.GetTypedData();
+        FProcVertData* pVData = pData->vertData.GetTypedData();
         FVector actorVelocity = pActor->Velocity;
 
         actorVelocity.Z -= actorVelocity.Size() * 0.2f; // argh
@@ -630,7 +630,7 @@ UBOOL AxProcMesh::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 
     // update pData->links - !! this assume that pData->vertData(i).desire == Vertices(i).Position before entering
     int numLinks = pData->links.Num();
-    FProcMeshLink* pLink = &pData->links(0);
+    FProcMeshLink* pLink = pData->links.GetTypedData();
     for (i=0; i<numLinks; i++)
     {
         FProcVertData* pVData0 = &pData->vertData(pLink->v0);
@@ -654,8 +654,8 @@ UBOOL AxProcMesh::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
             secs -= t;
 		    recalcNormals = true;
 		    // calc desired acceleration based on tension in mesh, update velocity
-            FProcMeshVertex* pVert = &Vertices(0);
-            FProcVertData* pVData = &pData->vertData(0);
+            FProcMeshVertex* pVert = Vertices.GetTypedData();
+            FProcVertData* pVData = pData->vertData.GetTypedData();
             int numVerts = Vertices.Num();
 		    for ( i=0; i<numVerts; i++ )
 		    {
@@ -686,7 +686,7 @@ UBOOL AxProcMesh::Tick( FLOAT DeltaTime, enum ELevelTick TickType )
 	if ( recalcNormals )
     {
 		CalcProcNormals( Vertices, pData->faces );
-        FProcMeshShared* pShare = &pData->shares(0);
+        FProcMeshShared* pShare = pData->shares.GetTypedData();
         int numShare = pData->shares.Num();
         for( int i=0; i<numShare; i++ )
         {
@@ -796,7 +796,7 @@ public:
 	{
 		if(!pProcMesh)
 			return;
-        appMemcpy( Dest, &pProcMesh->Vertices(0), pProcMesh->Vertices.Num()*sizeof(FProcMeshVertex) );
+        appMemcpy( Dest, pProcMesh->Vertices.GetTypedData(), pProcMesh->Vertices.Num()*sizeof(FProcMeshVertex) );
 	}
 
 	virtual void GetRawStreamData(void ** Dest, INT FirstVertex )

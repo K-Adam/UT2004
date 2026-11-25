@@ -113,7 +113,7 @@ void UPlayInfo::execSort( FFrame& Stack, RESULT_DECL )
 	if (SortingMethod >= 0 && SortingMethod < 11)
 		SortType = SortingMethod;
 
-	Sort( &Settings(0), Settings.Num() );
+	Sort( Settings.GetTypedData(), Settings.Num() );
 
 	SortType = 0;
 
@@ -461,7 +461,7 @@ void UPlayInfo::execAddSetting( FFrame& Stack, RESULT_DECL )
 
 	if ( Prop->ArrayDim == 1 )
 	{
-		if ( Prop->ExportText( 0, TempStr, (BYTE*)Class->GetDefaultObject(), &Class->Defaults(0), PPF_Localized) )
+		if ( Prop->ExportText( 0, TempStr, (BYTE*)Class->GetDefaultObject(), Class->Defaults.GetTypedData(), PPF_Localized) )
 			PID.Value = TempStr;
 	}
 	else
@@ -473,7 +473,7 @@ void UPlayInfo::execAddSetting( FFrame& Stack, RESULT_DECL )
 			else if ( TempStr.Len() )
 				PID.Value += TEXT(",");
 
-			if ( Prop->ExportText( i, TempStr, (BYTE*)Class->GetDefaultObject(), &Class->Defaults(0), PPF_Localized | PPF_Delimited) )
+			if ( Prop->ExportText( i, TempStr, (BYTE*)Class->GetDefaultObject(), Class->Defaults.GetTypedData(), PPF_Localized | PPF_Delimited) )
 				PID.Value += TempStr;
 		}
 

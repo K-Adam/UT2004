@@ -34,8 +34,8 @@ static inline void SetupTextureSource( UTexture* pTex, BYTE*& pBitmap, FColor*& 
 		return;
 	}
     pTex->Mips(0).DataArray.Load();
-	pBitmap = &pTex->Mips(0).DataArray(0);
-	pColors = &pTex->Palette->Colors(0);
+	pBitmap = pTex->Mips(0).DataArray.GetTypedData();
+	pColors = pTex->Palette->Colors.GetTypedData();
 }
 
 static inline void UnlockTextureSource( UTexture* pTex )

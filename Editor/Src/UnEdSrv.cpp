@@ -29,7 +29,7 @@ private:
 	void Serialize( void* Data, INT Num )
 	{
 		checkSlow(Offset+Num<=Bytes.Num());
-		appMemcpy( Data, &Bytes(Offset), Num );
+		appMemcpy( Data, Bytes.GetTypedData()+Offset, Num );
 		Offset += Num;
 	}
 	void Seek( INT InPos )
@@ -56,7 +56,7 @@ private:
 	void Serialize( void* Data, INT Num )
 	{
 		Bytes.Add(Num);
-		appMemcpy( &Bytes(Offset), Data, Num );
+		appMemcpy( Bytes.GetTypedData()+Offset, Data, Num );
 		Offset+=Num;
 	}
 	void Seek( INT InPos )
@@ -3674,7 +3674,7 @@ UBOOL UEditorEngine::Exec_Texture( const TCHAR* Str, FOutputDevice& Ar )
 
 				if(Texture->Format == TEXF_RGBA8)
 				{
-					FColor*	DataPtr = (FColor*) &Texture->Mips(MipIndex).DataArray(0);
+					FColor*	DataPtr = (FColor*) Texture->Mips(MipIndex).DataArray.GetTypedData();
 					FLOAT	GreyFactor = (FLOAT) (MipIndex * MipIndex);
 					INT		Width = Texture->USize >> MipIndex,
 							Height = Texture->VSize >> MipIndex;

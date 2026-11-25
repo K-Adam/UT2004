@@ -170,7 +170,7 @@ public:
 
 	virtual void GetStreamData(void* Dest)
 	{
-		appMemcpy(Dest,&Vertices(0),Vertices.Num() * sizeof(VertexClass));
+		appMemcpy(Dest,Vertices.GetTypedData(),Vertices.Num() * sizeof(VertexClass));
 	}
 	virtual void GetRawStreamData(void ** Dest, INT FirstVertex )
 	{

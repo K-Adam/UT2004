@@ -3873,7 +3873,7 @@ void UGUIMultiComponent::InitializeControls()
 
 	bRemap = false;
 	if ( Controls.Num() > 1 )
-		Sort( &Controls(0), Controls.Num() );
+		Sort( Controls.GetTypedData(), Controls.Num() );
 
 	unguardobj;
 }
@@ -3904,7 +3904,7 @@ void UGUIMultiComponent::RemapComponents()
 
 	bRemap = true;
 	if ( Components.Num() > 1 )
-		Sort( &Components(0), Components.Num() );
+		Sort( Components.GetTypedData(), Components.Num() );
 
 	unguard;
 }

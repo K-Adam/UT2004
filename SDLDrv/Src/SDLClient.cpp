@@ -78,7 +78,7 @@ static void SDLClipboardCopy( const TCHAR* Str )
 
 static UBOOL SDLLaunchURL( const TCHAR* URL )
 {
-	return SDL_OpenURL( &appToUtf8(URL)(0) );
+	return SDL_OpenURL( appToUtf8(URL).GetTypedData() );
 }
 
 static FString SDLClipboardPaste()

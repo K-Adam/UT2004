@@ -485,7 +485,7 @@ UBOOL UEngine::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
 				SizeSortedTextures.AddItem(FTextureSizeSort(*It));
 		}
 
-		Sort(&SizeSortedTextures(0),SizeSortedTextures.Num());
+		Sort(SizeSortedTextures.GetTypedData(),SizeSortedTextures.Num());
 
 		INT	TotalTextureSize = 0;
 

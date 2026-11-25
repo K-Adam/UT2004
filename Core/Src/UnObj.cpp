@@ -232,7 +232,7 @@ void UObject::PostLoad()
 	// HACK for bad subobjects in the editor.
 	if( !GIsEditor && !Outer->IsA(UClass::StaticClass()) )
 	{
-		BYTE* Defaults			= &Class->Defaults(0);
+		BYTE* Defaults			= Class->Defaults.GetTypedData();
 		INT DefaultsCount		=  Class->Defaults.Num();
 		for( UProperty* P=Class->ConstructorLink; P; P=P->ConstructorLinkNext )
 		{
@@ -596,8 +596,8 @@ void UObject::Serialize( FArchive& Ar )
 			{
 				Ar.Preload( StateFrame->Node );
 				if( Ar.IsSaving() && StateFrame->Code )
-					check(StateFrame->Code>=&StateFrame->Node->Script(0) && StateFrame->Code<&StateFrame->Node->Script(StateFrame->Node->Script.Num()));
-				INT Offset = StateFrame->Code ? StateFrame->Code - &StateFrame->Node->Script(0) : INDEX_NONE;
+					check(StateFrame->Code>=StateFrame->Node->Script.GetTypedData() && StateFrame->Code<StateFrame->Node->Script.GetTypedData()+StateFrame->Node->Script.Num());
+				INT Offset = StateFrame->Code ? StateFrame->Code - StateFrame->Node->Script.GetTypedData() : INDEX_NONE;
 				Ar << AR_INDEX(Offset);
 				// A class holds no state code to go on in.
 				if( Foreign || StateFrame->Node->GetClass()==UClass::StaticClass() )
@@ -1374,8 +1374,8 @@ static void LoadLocalizedStruct( UStruct* Struct, const TCHAR *IntName, const TC
 
 				else if ( Cls )
 				{
-					BYTE* DefaultData = &Cls->Defaults(0);
-					BYTE* SuperData = Prop->Offset < Cls->GetSuperClass()->Defaults.Num() ? &Cls->GetSuperClass()->Defaults(0) : NULL;
+					BYTE* DefaultData = Cls->Defaults.GetTypedData();
+					BYTE* SuperData = Prop->Offset < Cls->GetSuperClass()->Defaults.Num() ? Cls->GetSuperClass()->Defaults.GetTypedData() : NULL;
 
 				// Don't spam messages about missing localization for instanced objects, when the object's value matches the class value
 					bOverride = Prop->Matches(Data, DefaultData, i) &&
@@ -1914,7 +1914,7 @@ void UObject::InitProperties( BYTE* Data, INT DataCount, UClass* DefaultsClass, 
 	guardSlow(FindDefaults);
 	if( !Defaults && DefaultsClass && DefaultsClass->Defaults.Num() )
 	{
-		Defaults      = &DefaultsClass->Defaults(0);
+		Defaults      = DefaultsClass->Defaults.GetTypedData();
 		DefaultsCount =  DefaultsClass->Defaults.Num();
 	}
 	unguardSlow;
@@ -1940,7 +1940,7 @@ void UObject::InitProperties( BYTE* Data, INT DataCount, UClass* DefaultsClass, 
 	if( SuperObject )
 	{
 		checkSlow(DestObject);
-		BYTE* ClassDefaults = &DefaultsClass->Defaults(0);
+		BYTE* ClassDefaults = DefaultsClass->Defaults.GetTypedData();
 		for( TFieldFlagIterator<UProperty,CLASS_IsAUProperty> It(DestObject->GetClass()); It; ++It )
 			if( It->PropertyFlags & CPF_Transient )
 				appMemcpy( Data + It->Offset, ClassDefaults + It->Offset, It->ArrayDim*It->ElementSize );
@@ -2819,7 +2819,7 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 			{
 				FString Temp;
 				if( Class->Defaults.Num() )
-					Property->ExportText( 0, Temp, &Class->Defaults(0), &Class->Defaults(0), PPF_Localized );
+					Property->ExportText( 0, Temp, Class->Defaults.GetTypedData(), Class->Defaults.GetTypedData(), PPF_Localized );
 				Ar.Log( *Temp );
 			}
 			else Ar.Logf( NAME_ExecWarning, TEXT("Unrecognized property %s"), PropertyName );
@@ -2848,7 +2848,7 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 					UClass* ClsIt = Cast<UClass>(*It);
 					BYTE* Data = NULL;
 					if ( !bNoClasses && ClsIt && (ClsIt == Class || ClsIt->IsChildOf(Class)) )
-						Data = ClsIt->Defaults.Num() ? &ClsIt->Defaults(0) : NULL;
+						Data = ClsIt->Defaults.Num() ? ClsIt->Defaults.GetTypedData() : NULL;
 					else if ( It->IsA(Class) )
 						Data = (BYTE*)*It;
 					if ( !Data )
@@ -3161,7 +3161,7 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 			}
 			if( Objects.Num() )
 			{
-				appQsort( &Objects(0), Objects.Num(), sizeof(Objects(0)), (QSORT_COMPARE)CompareSubItems );
+				appQsort( Objects.GetTypedData(), Objects.Num(), sizeof(Objects(0)), (QSORT_COMPARE)CompareSubItems );
 				Ar.Logf( TEXT("%60s % 10s % 10s"), TEXT("Object"), TEXT("NumBytes"), TEXT("MaxBytes") );
 				for( INT i=0; i<Objects.Num(); i++ )
 					Ar.Logf( TEXT("%60s % 10i % 10i"), Objects(i).Object->GetFullName(), Objects(i).Num, Objects(i).Max );
@@ -3169,7 +3169,7 @@ UBOOL UObject::StaticExec( const TCHAR* Cmd, FOutputDevice& Ar )
 			}
 			if( List.Num() )
 			{
-				appQsort( &List(0), List.Num(), sizeof(List(0)), (QSORT_COMPARE)CompareItems );
+				appQsort( List.GetTypedData(), List.Num(), sizeof(List(0)), (QSORT_COMPARE)CompareItems );
 				Ar.Logf(TEXT(" %30s % 6s % 10s  % 10s "), TEXT("Class"), TEXT("Count"), TEXT("NumBytes"), TEXT("MaxBytes") );
 				for( INT i=0; i<List.Num(); i++ )
 					Ar.Logf(TEXT(" %30s % 6i % 10iK % 10iK"), List(i).Class->GetName(), List(i).Count, List(i).Num/1024, List(i).Max/1024 );
@@ -3816,11 +3816,11 @@ void UObject::EndLoad()
 
 			while(GObjLoaded.Num())
 			{
-				appMemcpy(&ObjLoaded(ObjLoaded.Add(GObjLoaded.Num())),&GObjLoaded(0),GObjLoaded.Num() * sizeof(UObject*));
+				appMemcpy(&ObjLoaded(ObjLoaded.Add(GObjLoaded.Num())),GObjLoaded.GetTypedData(),GObjLoaded.Num() * sizeof(UObject*));
 				GObjLoaded.Empty();
 
 				// Sort by file and seek
-				Sort( &ObjLoaded(0), ObjLoaded.Num() );
+				Sort( ObjLoaded.GetTypedData(), ObjLoaded.Num() );
 
 				// Finish loading everything.
 				//warning: Array may expand during iteration.
@@ -4241,7 +4241,7 @@ UBOOL UObject::SavePackage( UObject* InOuter, UObject* Base, DWORD TopLevelFlags
 		// Sort imports by usage count.
 		guard(SortImports);
 		GTempSave = Linker;
-		appQsort( &Linker->ImportMap(0), Linker->ImportMap.Num(), sizeof(Linker->ImportMap(0)), LinkerImportSort );
+		appQsort( Linker->ImportMap.GetTypedData(), Linker->ImportMap.Num(), sizeof(Linker->ImportMap(0)), LinkerImportSort );
 		unguard;
 
 		// Build ExportMap.

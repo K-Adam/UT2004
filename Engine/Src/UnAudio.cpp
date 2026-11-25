@@ -242,7 +242,7 @@ UBOOL UAudioSubsystem::Update( FSceneNode* SceneNode )
 	}
 
 	// Sort by priority.
-	Sort( &QueuedSources(0), QueuedSources.Num() );
+	Sort( QueuedSources.GetTypedData(), QueuedSources.Num() );
 
 	// Stop all sources below threshold.
 	FLOAT ThresholdPriority = GetNumSources()+1 > QueuedSources.Num() ? 0.f : QueuedSources(GetNumSources())->Priority;	
@@ -1689,8 +1689,8 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 	FFormatChunk* FmtChunk;
 	if( WavData.Num() < 3*4 )
 		return 0;
-	FRiffWaveHeader* RiffHdr = (FRiffWaveHeader*)&WavData(0);
-	WaveDataEnd = &WavData(0) + WavData.Num();	
+	FRiffWaveHeader* RiffHdr = (FRiffWaveHeader*)WavData.GetTypedData();
+	WaveDataEnd = WavData.GetTypedData() + WavData.Num();	
 
 	// Verify we've got a real 'WAVE' header.
 	if ( RiffHdr->wID != mmioFOURCC('W','A','V','E') )

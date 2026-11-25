@@ -321,7 +321,7 @@ void FSkinVertexStream::GetStreamData(void* Dest)
 	if( bStreamCallback && MeshInstance )
 		((USkeletalMeshInstance*)MeshInstance)->MeshSkinVertsCallback( Dest );	
 	else
-		appMemcpy( Dest, &Vertices(0), Vertices.Num() * sizeof(FAnimMeshVertex) );		
+		appMemcpy( Dest, Vertices.GetTypedData(), Vertices.Num() * sizeof(FAnimMeshVertex) );		
 	unguard;
 }
 
@@ -2519,7 +2519,7 @@ void USkeletalMeshInstance::GetMeshVerts
 
 			LODRequest = Min( LODRequest, NewVerts.Num());
 			CurrentLODLevel = 0; 
-			ComputeSkinVerts( Mesh, this, &NewVerts(0), sizeof(FAnimMeshVertex), DummyVerts );		
+			ComputeSkinVerts( Mesh, this, NewVerts.GetTypedData(), sizeof(FAnimMeshVertex), DummyVerts );		
 			
 			FVector* OutVert = ResultVerts;
 			for( INT v=0; v<LODRequest; v++)
@@ -2557,7 +2557,7 @@ INT USkeletalMeshInstance::GetMeshVertsAndNormals( AActor* Owner, TArray<FVector
 	NewVerts.Add( LODModel->SmoothStreamWedges  );
 	
 	// Use whatever's the current LOD level. 
-	ComputeSkinVerts( Mesh, this, &NewVerts(0), sizeof(FAnimMeshVertex), DummyVerts );	
+	ComputeSkinVerts( Mesh, this, NewVerts.GetTypedData(), sizeof(FAnimMeshVertex), DummyVerts );	
 	
 	if(  Result->Num() )
 		Result->Empty();
@@ -3108,10 +3108,10 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 	//
 	
 	FVector*	StreamPtr		= (FVector*)Destination;		
-	FCoords*	BoneBase		= &FinalTrafos(0);
+	FCoords*	BoneBase		= FinalTrafos.GetTypedData();
 	FSkinPoint* SkinVertPtr		= &(LODModel->SmoothVerts(0));
 	DWORD*		InStream		= &(LODModel->SkinningStream(0)); 	
-	FVector*    DupDestination	= (FVector*)&Duplicates(0);
+	FVector*    DupDestination	= (FVector*)Duplicates.GetTypedData();
 	DWORD		InDW = *InStream;	
 
 	while( InDW < 0xFFFFFFFF ) // End marker...
@@ -3340,7 +3340,7 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 		}
 		
 		// Copy vertices and normals from the (AGP memory) vertex buffer  - slow, but for debugging purposes only.
-		DWORD*		InStream = &LODModel->SkinningStream(0);		
+		DWORD*		InStream = LODModel->SkinningStream.GetTypedData();		
 		DWORD		InDW = *InStream;
 		INT				FreshVertIndex = 0;
 		INT				OutIdx = 0;
@@ -3521,7 +3521,7 @@ void USkeletalMeshInstance::GetFrame
 			AnimLinkups(0).Mesh = &OwnerMesh;
 			AnimLinkups(0).Anim = NULL;
 			// Actualize linkups of this mesh ONLY to the mesh of the owner.			
-			LinkMeshBonesToMesh( Mesh, OwnerMesh, &AnimLinkups(0) );
+			LinkMeshBonesToMesh( Mesh, OwnerMesh, AnimLinkups.GetTypedData() );
 		}
 
 		// Copy bone positions from owner or refpose, depending on name match.
@@ -3790,7 +3790,7 @@ void USkeletalMeshInstance::GetFrame
 		//  The TrafoHeap entries _are_ order-sensitive.
 		//
 		Twitch *TrafoStart, *Trafo;
-		TrafoStart = &TrafoHeap(0);
+		TrafoStart = TrafoHeap.GetTypedData();
 		for( INT a=0; a< TrafoHeap.Num(); a++)
 		{	
 			Trafo = TrafoStart++;
@@ -5234,8 +5234,8 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 
 		FLineBatcher LineBatcher(RI);
 
-		FVector* Pivots  = &DebugPivots(0);
-		INT* ParentIndex = &DebugParents(0);
+		FVector* Pivots  = DebugPivots.GetTypedData();
+		INT* ParentIndex = DebugParents.GetTypedData();
 
 		// Draw bones - use same trafo already set for the mesh.
 		FColor BoneColor = FColor( Actor->bSelected ? FPlane( .3f,1.2f,.3f,0.f ) : FPlane( 2.f,2.f,2.f, 0.f ) );
@@ -5485,7 +5485,7 @@ void USkeletalMeshInstance::Render( FDynamicActor* Owner, FLevelSceneNode* Scene
 				TArray <FAnimMeshVertex> NewVerts;
 				INT VertCount = SkelMesh->LODModels(CurrentLODLevel).SmoothStreamWedges;
 				NewVerts.AddZeroed( VertCount );																
-				ComputeSkinVerts( SkelMesh, this, &NewVerts(0), sizeof(FAnimMeshVertex), VertCount );
+				ComputeSkinVerts( SkelMesh, this, NewVerts.GetTypedData(), sizeof(FAnimMeshVertex), VertCount );
 				NewVerts.Empty();
 			}
 		}

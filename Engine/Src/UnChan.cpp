@@ -57,14 +57,14 @@ static inline void SerializeCompressedInitial( FArchive& Bunch, FVector& Locatio
     // read/write compressed location
     SerializeCompVector( Bunch, Location );
     if( Ch && Ch->Recent.Num() )
-        ((AActor*)&Ch->Recent(0))->Location = Location;
+        ((AActor*)Ch->Recent.GetTypedData())->Location = Location;
 
     // optionally read/write compressed rotation
     if( bSerializeRotation )
     {
         SerializeCompRotator( Bunch, Rotation );
 	    if( Ch && Ch->Recent.Num() )
-            ((AActor*)&Ch->Recent(0))->Rotation = Rotation;
+            ((AActor*)Ch->Recent.GetTypedData())->Rotation = Rotation;
     }
 	unguardSlow;
 }
@@ -685,7 +685,7 @@ void UActorChannel::Destroy()
 	if( Recent.Num() )
 	{
 		check(ActorClass);
-		UObject::ExitProperties( &Recent(0), ActorClass );
+		UObject::ExitProperties( Recent.GetTypedData(), ActorClass );
 	}
 
 	// If we're the client, destroy this actor.
@@ -781,7 +781,7 @@ void UActorChannel::SetChannelActor( AActor* InActor )
 		// Allocate recent property list.
 		INT Size = ActorClass->Defaults.Num();
 		Recent.Add( Size );
-		UObject::InitProperties( &Recent(0), Size, ActorClass, NULL, 0, NULL, NULL, 0 ); /* Last param - don't instance subobjects */
+		UObject::InitProperties( Recent.GetTypedData(), Size, ActorClass, NULL, 0, NULL, NULL, 0 ); /* Last param - don't instance subobjects */
 
 		// Init config properties, to force replicate them.
 		for( UProperty* It=ActorClass->ConfigLink; It; It=It->ConfigLinkNext )
@@ -925,7 +925,7 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 
 			// Pointer to destination.
 			BYTE* DestActor  = (BYTE*)Actor;
-			BYTE* DestRecent = Recent.Num() ? &Recent(0) : NULL;
+			BYTE* DestRecent = Recent.Num() ? Recent.GetTypedData() : NULL;
 
 			// Server, shouldn't receive properties.
 			if( !Connection->Driver->ServerConnection )
@@ -1183,15 +1183,15 @@ void UActorChannel::ReplicateActor()
 	bActorStillInitial = false;
 	// Get memory for retirement list.
 	FMemMark Mark(GMem);
-	appMemzero( &RepEval(0), RepEval.Num() );
+	appMemzero( RepEval.GetTypedData(), RepEval.Num() );
 	INT* Reps = New<INT>( GMem, Retirement.Num() ), *LastRep;
 	UBOOL		FilledUp = 0;
 
 	// Figure out which properties to replicate.
 	guard(FigureOutWhatNeedsReplicating);
-	BYTE*   CompareBin = Recent.Num() ? &Recent(0) : &ActorClass->Defaults(0);
+	BYTE*   CompareBin = Recent.Num() ? Recent.GetTypedData() : ActorClass->Defaults.GetTypedData();
 	INT     iCount     = ClassCache->RepProperties.Num();
-	LastRep            = Actor->GetOptimizedRepList( CompareBin, &Retirement(0), Reps, Connection->PackageMap,this );
+	LastRep            = Actor->GetOptimizedRepList( CompareBin, Retirement.GetTypedData(), Reps, Connection->PackageMap,this );
 	if( Actor->bNetDirty )
 	{
 		if ( Actor->DelayScriptReplication(LastFullUpdateTime) )

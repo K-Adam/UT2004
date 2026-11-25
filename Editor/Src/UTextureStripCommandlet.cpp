@@ -118,7 +118,7 @@ class UTextureStripCommandlet : public UCommandlet
                 continue;
             }
 
-            Sort( &FilesInPath(0), FilesInPath.Num() );
+            Sort( FilesInPath.GetTypedData(), FilesInPath.Num() );
 
 		    for( i = 0; i < FilesInPath.Num(); i++ )
             {

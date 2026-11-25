@@ -203,7 +203,7 @@ public:
 	{
 		guard(FArchiveWriter::WriteData);
 
-		Serialize(&Data(0),Data.Num());
+		Serialize(Data.GetTypedData(),Data.Num());
 
 		return Size - Data.Num();
 
@@ -339,7 +339,7 @@ class UMasterCommandlet : public UCommandlet
 	enum {MIN_RUNLENGTH=10};
 	INT ArrayCrc( const TArray<BYTE>& T, INT Offset )
 	{
-		return appMemCrc( &T(Offset), Min((INT)MIN_RUNLENGTH,T.Num()-Offset) ) & (ARRAY_SIZE-1);
+		return appMemCrc( T.GetTypedData()+Offset, Min((INT)MIN_RUNLENGTH,T.Num()-Offset) ) & (ARRAY_SIZE-1);
 	}
 	void Decompress( TArray<BYTE>& New, TArray<BYTE>& Delta, TArray<BYTE> Old )
 	{
@@ -349,7 +349,7 @@ class UMasterCommandlet : public UCommandlet
 		Reader << Magic << OldSize << OldCRC << NewSize << NewCRC;
 		check(Magic==0x92f92912);
 		check(OldSize==Old.Num());
-		check(OldCRC==(INT)appMemCrc(&Old(0),Old.Num()));
+		check(OldCRC==(INT)appMemCrc(Old.GetTypedData(),Old.Num()));
 		while( !Reader.AtEnd() )
 		{
 			INT Index;
@@ -372,7 +372,7 @@ class UMasterCommandlet : public UCommandlet
 			}
 		}
 		check(NewSize==New.Num());
-		check(NewCRC==(INT)appMemCrc(&New(0),New.Num()));
+		check(NewCRC==(INT)appMemCrc(New.GetTypedData(),New.Num()));
 		unguard;
 	}
 	UBOOL DeltaCode( const TCHAR* RefFilename, const TCHAR* MasterFilename, const TCHAR* SrcFilename )
@@ -413,7 +413,7 @@ class UMasterCommandlet : public UCommandlet
 		{
 			// Save header.
 			Data.Empty();
-			INT	Magic=0x92f92912, OldSize=Old.Num(), OldCRC=appMemCrc(&Old(0),Old.Num()), NewSize=New.Num(), NewCRC=appMemCrc(&New(0),New.Num());
+			INT	Magic=0x92f92912, OldSize=Old.Num(), OldCRC=appMemCrc(Old.GetTypedData(),Old.Num()), NewSize=New.Num(), NewCRC=appMemCrc(New.GetTypedData(),New.Num());
 			Data << Magic << OldSize << OldCRC << NewSize << NewCRC;
 
 			// Delta compress the files.
@@ -919,7 +919,7 @@ class UUpdateUModCommandlet : public UCommandlet
 						// Write stub to self-extracting exe.
 						TArray<BYTE> SFXBuffer;
 						verify(appLoadFileToArray(SFXBuffer,SFX_STUB));
-						DestArc.Serialize( &SFXBuffer(0), SFXBuffer.Num() );
+						DestArc.Serialize( SFXBuffer.GetTypedData(), SFXBuffer.Num() );
 					}
 					for( INT i=0; i<SrcHdr._Items_.Num(); i++ )
 					{
@@ -935,14 +935,14 @@ class UUpdateUModCommandlet : public UCommandlet
 						if( UpdatePath == TEXT("") )
 							UpdatePath = File;
 						new(DestHdr._Items_)FArchiveItem(*UpdatePath,DestArc.Num(),Data.Num(),UpdateFlags);
-						DestArc.Serialize( &Data(0), Data.Num() );
+						DestArc.Serialize( Data.GetTypedData(), Data.Num() );
 					}
 
 					UModFile = UModFile+TEXT(".new");
 					GWarn->Logf( TEXT("Saving archive: %s"), *UModFile );
 					DestHdr.TableOffset = DestArc.Num();
 					DestArc << DestHdr._Items_;
-					DestHdr.CRC      = appMemCrc( &DestArc(0), DestArc.Num(), 0 );
+					DestHdr.CRC      = appMemCrc( DestArc.GetTypedData(), DestArc.Num(), 0 );
 					DestHdr.FileSize = DestArc.Tell() + ARCHIVE_HEADER_SIZE;
 					DestArc << DestHdr;
 

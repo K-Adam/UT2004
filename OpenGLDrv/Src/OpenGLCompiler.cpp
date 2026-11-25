@@ -1280,11 +1280,11 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	Compiler.K(CurrentState->Instanced);
 
 	INT KeyNum = Compiler.KeyNum;
-	DWORD Hash = appMemCrc(&Key(0),KeyNum);
+	DWORD Hash = appMemCrc(Key.GetTypedData(),KeyNum);
 	FOpenGLProgram** Same = RenDev->Programs.Find(Hash);
 	for( FOpenGLProgram* Candidate = Same ? *Same : NULL; Candidate; Candidate = Candidate->NextSameHash )
 	{
-		if( Candidate->Key.Num() == KeyNum && appMemcmp(&Candidate->Key(0),&Key(0),KeyNum) == 0 )
+		if( Candidate->Key.Num() == KeyNum && appMemcmp(Candidate->Key.GetTypedData(),Key.GetTypedData(),KeyNum) == 0 )
 		{
 			State.Program = Candidate;
 			return 1;
@@ -1326,7 +1326,7 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	FString Fragment = FString(OpenGLFragmentPrologue) + Fade + Writer.Declarations() + TEXT("void main()\n{\n") + Dissolve + Body + TEXT("}\n");
 	FOpenGLProgram* Program = new FOpenGLProgram;
 	Program->Key.Add(KeyNum);
-	appMemcpy(&Program->Key(0),&Key(0),KeyNum);
+	appMemcpy(Program->Key.GetTypedData(),Key.GetTypedData(),KeyNum);
 	// No real value has this pattern, so the first draw sends everything.
 	appMemset(&Program->SentLocalToWorld,0xff,sizeof(Program->SentLocalToWorld));
 	appMemset(Program->SentMatrices,0xff,sizeof(Program->SentMatrices));
@@ -1334,8 +1334,8 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	appMemset(&Program->SentAlphaRef,0xff,sizeof(Program->SentAlphaRef));
 	Program->Layouts = Program->SavedLayouts = 0;
 	TArray<ANSICHAR> Source = ToAnsi(Fragment);
-	if( !RenDev->LoadProgram(Program,CurrentState->Instanced,&Source(0)) )
-		Program->Program = RenDev->StartProgram(CurrentState->Instanced ? RenDev->InstancedVertexShaderObject : RenDev->VertexShaderObject,&Source(0),Program->FragmentShader);
+	if( !RenDev->LoadProgram(Program,CurrentState->Instanced,Source.GetTypedData()) )
+		Program->Program = RenDev->StartProgram(CurrentState->Instanced ? RenDev->InstancedVertexShaderObject : RenDev->VertexShaderObject,Source.GetTypedData(),Program->FragmentShader);
 	Program->Pending = 1;
 	Program->NextSameHash = Same ? *Same : NULL;
 	RenDev->Programs.Set(Hash,Program);

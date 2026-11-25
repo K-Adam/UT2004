@@ -129,7 +129,7 @@ class UDumpIntCommandlet : public UCommandlet
 		}
 
 		if ( Files.Num() > 0 )
-			Sort( &Files(0), Files.Num() );
+			Sort( Files.GetTypedData(), Files.Num() );
 
 		for( INT i = 0; i < Files.Num(); i++ )
         {

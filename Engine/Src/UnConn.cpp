@@ -297,14 +297,14 @@ void UNetConnection::FlushNet()
 		{
 			DelayedPacket& B = *(new(Delayed)DelayedPacket);
 			B.Data.Add( Out.GetNumBytes() );
-			appMemcpy( &B.Data(0), Out.GetData(), Out.GetNumBytes() );
+			appMemcpy( B.Data.GetTypedData(), Out.GetData(), Out.GetNumBytes() );
 
 			for( INT i=Delayed.Num()-1; i>=0; i-- )
 			{
 				if( appFrand()>0.50 )
 				{
 					if( !PktLoss || appFrand()*100.f>PktLoss )
-						LowLevelSend( (char*)&Delayed(i).Data(0), Delayed(i).Data.Num() );
+						LowLevelSend( (char*)Delayed(i).Data.GetTypedData(), Delayed(i).Data.Num() );
 					Delayed.Remove( i );
 				}
 			}
@@ -315,7 +315,7 @@ void UNetConnection::FlushNet()
 			{
 				DelayedPacket& B = *(new(Delayed)DelayedPacket);
 				B.Data.Add( Out.GetNumBytes() );
-				appMemcpy( &B.Data(0), Out.GetData(), Out.GetNumBytes() );
+				appMemcpy( B.Data.GetTypedData(), Out.GetData(), Out.GetNumBytes() );
 				B.SendTime = appSeconds() + (DOUBLE(PktLag)  + 2.0f * (appFrand() - 0.5f) * DOUBLE(PktLagVariance))/ 1000.f;
 			}
 		}
@@ -819,7 +819,7 @@ void UNetConnection::Tick()
 		{
 			if( appSeconds() > Delayed(i).SendTime )
 			{
-				LowLevelSend( (char*)&Delayed(i).Data(0), Delayed(i).Data.Num() );
+				LowLevelSend( (char*)Delayed(i).Data.GetTypedData(), Delayed(i).Data.Num() );
 				Delayed.Remove( i );
 				i--;
 			}

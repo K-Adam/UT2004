@@ -125,17 +125,17 @@ void FStats::Clear()
 
 	// Update old stats.
 	if( DWORDStats.Num() )
-		appMemcpy( &DWORDOldStats(0), &DWORDStats(0), DWORDStats.Num() * sizeof(DWORD) );
+		appMemcpy( DWORDOldStats.GetTypedData(), DWORDStats.GetTypedData(), DWORDStats.Num() * sizeof(DWORD) );
 	if( FLOATStats.Num() )
-		appMemcpy( &FLOATOldStats(0), &FLOATStats(0), FLOATStats.Num() * sizeof(FLOAT) );
+		appMemcpy( FLOATOldStats.GetTypedData(), FLOATStats.GetTypedData(), FLOATStats.Num() * sizeof(FLOAT) );
 	for( INT i=0; i<FSTRINGStats.Num(); i++ )
 		FSTRINGOldStats(i) = FSTRINGStats(i);
 
 	// Clear new ones.
 	if( DWORDStats.Num() )
-		appMemzero( &DWORDStats(0), DWORDStats.Num() * sizeof(DWORD) );
+		appMemzero( DWORDStats.GetTypedData(), DWORDStats.Num() * sizeof(DWORD) );
 	if( FLOATStats.Num() )
-		appMemzero( &FLOATStats(0), FLOATStats.Num() * sizeof(FLOAT) );
+		appMemzero( FLOATStats.GetTypedData(), FLOATStats.Num() * sizeof(FLOAT) );
 	for( INT i=0; i<FSTRINGStats.Num(); i++ )
 		FSTRINGStats(i) = TEXT("");
 

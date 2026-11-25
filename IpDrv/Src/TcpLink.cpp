@@ -644,9 +644,9 @@ UBOOL ATcpLink::FlushSendBuffer()
 		while(Count > 0)
 		{
 			if ( RemoteSocket != INVALID_SOCKET )
-				BytesSent = send( (SOCKET) RemoteSocket, (char*)&SendFIFO(0), Count, 0 );
+				BytesSent = send( (SOCKET) RemoteSocket, (char*)SendFIFO.GetTypedData(), Count, 0 );
 			else
-				BytesSent = send( (SOCKET) Socket, (char*)&SendFIFO(0), Count, 0 );
+				BytesSent = send( (SOCKET) Socket, (char*)SendFIFO.GetTypedData(), Count, 0 );
 			if ( BytesSent == SOCKET_ERROR )
 				return 1;
 			SendFIFO.Remove(0, BytesSent);
@@ -709,7 +709,7 @@ void ATcpLink::execSendText( FFrame& Stack, RESULT_DECL )
 		ANSICHAR* p = TCHAR_TO_ANSI(*Str);
 		INT Count = (INT) ::strlen(p);
 		INT Index = SendFIFO.Add( Count );
-		appMemcpy( &SendFIFO(Index), p, Count );
+		appMemcpy( SendFIFO.GetTypedData()+Index, p, Count );
 		*(DWORD*)Result = Count;
 		FlushSendBuffer();
 		return;

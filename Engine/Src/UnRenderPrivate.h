@@ -525,7 +525,7 @@ public:
 		FMemMark					MemMark(GSceneMem);
 		FStaticMeshSection*			Section = &StaticMesh->Sections(SectionIndex);
 		_WORD*						Indices = &StaticMesh->IndexBuffer.Indices(Section->FirstIndex);
-		FStaticMeshVertex*			Vertices = &StaticMesh->VertexStream.Vertices(0);
+		FStaticMeshVertex*			Vertices = StaticMesh->VertexStream.Vertices.GetTypedData();
 		FTriangleSortInfo*			SortedTriangles = New<FTriangleSortInfo>(GSceneMem,Section->NumTriangles);
 		_WORD						Offset = -Section->MinVertexIndex + MinVertexIndex;
 

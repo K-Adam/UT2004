@@ -309,7 +309,7 @@ void AActor::execCopyObjectToClipboard( FFrame& Stack, RESULT_DECL )
 		Actor->bScriptInitialized = false;
 		Ar.Logf(TEXT("Begin Map\r\n"));
 		Ar.Logf(TEXT("Begin Actor Class=%s Name=%s\r\n"), Obj->GetClass()->GetName(), Obj->GetName());
-		ExportProperties(Ar, Obj->GetClass(), (BYTE*)Obj, 3, Obj->GetClass(), &Obj->GetClass()->Defaults(0));
+		ExportProperties(Ar, Obj->GetClass(), (BYTE*)Obj, 3, Obj->GetClass(), Obj->GetClass()->Defaults.GetTypedData());
 		Ar.Logf(TEXT("End Actor\r\n"));
 		Ar.Logf(TEXT("Begin Surface\r\n"));
 		Ar.Logf(TEXT("End Surface\r\n"));
@@ -322,7 +322,7 @@ void AActor::execCopyObjectToClipboard( FFrame& Stack, RESULT_DECL )
 	else
 	{
 		Ar.Logf(TEXT("Begin Object Class=%s Name=%s\r\n"), Obj->GetClass()->GetName(), Obj->GetName());
-		ExportProperties(Ar, Obj->GetClass(), (BYTE*)Obj, 3, Obj->GetClass(), &Obj->GetClass()->Defaults(0));
+		ExportProperties(Ar, Obj->GetClass(), (BYTE*)Obj, 3, Obj->GetClass(), Obj->GetClass()->Defaults.GetTypedData());
 		Ar.Logf(TEXT("End Object\r\n"));
 	}
 

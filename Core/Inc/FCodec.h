@@ -51,7 +51,7 @@ public:
 		guard(FCodecBWT::Encode);
 		TArray<BYTE> CompressBufferArray(MAX_BUFFER_SIZE);
 		TArray<INT>  CompressPosition   (MAX_BUFFER_SIZE+1);
-		CompressBuffer = &CompressBufferArray(0);
+		CompressBuffer = CompressBufferArray.GetTypedData();
 		INT i, First=0, Last=0;
 		while( !In.AtEnd() )
 		{
@@ -59,7 +59,7 @@ public:
 			In.Serialize( CompressBuffer, CompressLength );
 			for( i=0; i<CompressLength+1; i++ )
 				CompressPosition(i) = i;
-			appQsort( &CompressPosition(0), CompressLength+1, sizeof(INT), (QSORT_COMPARE)ClampedBufferCompare );
+			appQsort( CompressPosition.GetTypedData(), CompressLength+1, sizeof(INT), (QSORT_COMPARE)ClampedBufferCompare );
 			for( i=0; i<CompressLength+1; i++ )
 				if( CompressPosition(i)==1 )
 					First = i;
@@ -84,7 +84,7 @@ public:
 			In << DecompressLength << First << Last;
 			check(DecompressLength<=MAX_BUFFER_SIZE+1);
 			check(DecompressLength<=In.TotalSize()-In.Tell());
-			In.Serialize( &DecompressBuffer(0), ++DecompressLength );
+			In.Serialize( DecompressBuffer.GetTypedData(), ++DecompressLength );
 			for( i=0; i<257; i++ )
 				DecompressCount[ i ]=0;
 			for( i=0; i<DecompressLength; i++ )
@@ -302,8 +302,8 @@ public:
 		INT Total;
 		In << Total;
 		TArray<BYTE> InArray( In.TotalSize()-In.Tell() );
-		In.Serialize( &InArray(0), InArray.Num() );
-		FBitReader Reader( &InArray(0), InArray.Num()*8 );
+		In.Serialize( InArray.GetTypedData(), InArray.Num() );
+		FBitReader Reader( InArray.GetTypedData(), InArray.Num()*8 );
 		FHuffman Root(-1);
 		Root.ReadTable( Reader );
 		while( Total-- > 0 )

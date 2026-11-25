@@ -6932,7 +6932,7 @@ static UBOOL ImportPropertiesScriptsWorker( TArray<UClass*>& AllClasses, FScript
 		GWarn->Logf(TEXT("Importing Defaults for %s"), Class->GetName() );
 		Class->GetDefaultObject()->InitClassDefaultObject( Class, 1 );
 		Compiler.InDefaultPropContext = 1; // error reporting
-		UBOOL ImportSuccess = !Class->DefaultPropText || ImportProperties( Class, &Class->Defaults(0), (ULevel*)NULL, *Class->DefaultPropText, Class->GetOuter(), GWarn, 0 )!=NULL; 
+		UBOOL ImportSuccess = !Class->DefaultPropText || ImportProperties( Class, Class->Defaults.GetTypedData(), (ULevel*)NULL, *Class->DefaultPropText, Class->GetOuter(), GWarn, 0 )!=NULL; 
 		Compiler.InDefaultPropContext = 0;
 
 		// if import failed, return 1.

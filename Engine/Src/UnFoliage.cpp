@@ -24,7 +24,7 @@ public:
 	FFoliageLightTexture(ATerrainInfo* Terrain) : Width(Terrain->HeightmapX), Height(Terrain->HeightmapY), CacheId(MakeCacheID(CID_RenderTexture))
 	{
 		Colors.Add(Width * Height);
-		appMemcpy(&Colors(0),&Terrain->VertexColors(0),Colors.Num() * sizeof(FColor));
+		appMemcpy(Colors.GetTypedData(),Terrain->VertexColors.GetTypedData(),Colors.Num() * sizeof(FColor));
 	}
 
 	virtual QWORD GetCacheId() { return CacheId; }
@@ -36,7 +36,7 @@ public:
 	virtual ETextureFormat GetFormat() { return TEXF_RGBA8; }
 	virtual ETexClampMode GetUClamp() { return TC_Clamp; }
 	virtual ETexClampMode GetVClamp() { return TC_Clamp; }
-	virtual void* GetRawTextureData(INT MipIndex) { return &Colors(0); }
+	virtual void* GetRawTextureData(INT MipIndex) { return Colors.GetTypedData(); }
 	virtual void UnloadRawTextureData(INT MipIndex) {}
 	virtual void GetTextureData(INT MipIndex,void* Dest,INT DestStride,ETextureFormat DestFormat,UBOOL ColoredMips)
 	{
@@ -93,7 +93,7 @@ struct FFoliageMesh
 		// header: magic, version, vertex count, index count, bounds. vertex: position, normal, uv, colour. index: 16 bit.
 		enum { HEADER = 40, VERTEX = 36 };
 		TArray<BYTE> File;
-		if( !appLoadFileToArray(File,Filename) || File.Num() < HEADER || appMemcmp(&File(0),"PHFM",4) != 0 || *(INT*)&File(4) != 2 )
+		if( !appLoadFileToArray(File,Filename) || File.Num() < HEADER || appMemcmp(File.GetTypedData(),"PHFM",4) != 0 || *(INT*)&File(4) != 2 )
 			return 0;
 		INT NumVertices = *(INT*)&File(8), NumIndices = *(INT*)&File(12);
 		if( NumVertices <= 0 || NumVertices > 65535 || NumIndices <= 0 || File.Num() != HEADER + NumVertices * VERTEX + NumIndices * 2 )
@@ -115,7 +115,7 @@ struct FFoliageMesh
 			Colors.Colors(i)				= *(FColor*)&Source[8];
 		}
 		Indices.Indices.Add(NumIndices);
-		appMemcpy(&Indices.Indices(0),&File(HEADER + NumVertices * VERTEX),NumIndices * sizeof(_WORD));
+		appMemcpy(Indices.Indices.GetTypedData(),&File(HEADER + NumVertices * VERTEX),NumIndices * sizeof(_WORD));
 		for( INT i=0; i<NumIndices; i++ )
 			if( Indices.Indices(i) >= NumVertices )
 				return 0;
@@ -885,7 +885,8 @@ UBOOL FFoliage::RenderDecorations(ATerrainInfo* Terrain,INT LayerIndex,INT Secto
 			if( !LODReaches(LODRange(Set,Set->Variants(i),LOD,SceneNode),Near,Far) )
 				continue;
 			TArray<FFoliageInstance>& Merged = Set->Variants(i)->Merged[LOD][Lightmapped].Instances;
-			appMemcpy(&Merged(Merged.Add(Source.Num())),&Source(0),Source.Num() * sizeof(FFoliageInstance));
+			INT First = Merged.Add(Source.Num());
+			appMemcpy(Merged.GetTypedData()+First,Source.GetTypedData(),Source.Num() * sizeof(FFoliageInstance));
 		}
 	}
 	return 1;

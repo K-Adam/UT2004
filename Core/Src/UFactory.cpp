@@ -79,7 +79,7 @@ UObject* UFactory::StaticImportObject
 					Factories.AddItem( ConstructObject<UFactory>(*It) );
 			}
 		}
-		Sort( &Factories(0), Factories.Num() );
+		Sort( Factories.GetTypedData(), Factories.Num() );
 	}
 
 	// Try each factory in turn.
@@ -116,7 +116,7 @@ UObject* UFactory::StaticImportObject
 				if( appLoadFileToArray( Data, Filename ) )
 				{
 					Data.AddItem( 0 );
-					const BYTE* Ptr = &Data( 0 );
+					const BYTE* Ptr = Data.GetTypedData();
 					Factory->ParseParms( Parms );
 					Result = Factory->FactoryCreateBinary( Class, InOuter, Name, Flags, NULL, appFExt(Filename), Ptr, Ptr+Data.Num()-1, Warn );
 				}

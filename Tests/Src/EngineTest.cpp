@@ -222,7 +222,7 @@ TEST( Core, CachePurgesOldFiles )
 	FString Old = GSys->CachePath * (FString(TEXT("old")) + GSys->CacheExt), New = GSys->CachePath * (FString(TEXT("new")) + GSys->CacheExt);
 	ASSERT_TRUE( appSaveStringToFile( TEXT("x"), *Old, GFileManager ) );
 	ASSERT_TRUE( appSaveStringToFile( TEXT("x"), *New, GFileManager ) );
-	std::filesystem::path Real = std::filesystem::u8path( &appToUtf8( *GFileManager->ExpandPath( *Old ) )(0) );
+	std::filesystem::path Real = std::filesystem::u8path( appToUtf8( *GFileManager->ExpandPath( *Old ) ).GetTypedData() );
 	std::filesystem::last_write_time( Real, std::filesystem::last_write_time( Real ) - std::chrono::hours( 24*40 ) );
 	appCleanFileCache();
 	EXPECT_LT( GFileManager->FileSize( *Old ), 0 );

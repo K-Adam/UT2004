@@ -188,7 +188,7 @@ void FFrame::Serialize( const TCHAR* V, EName Event )
 		TEXT("%s (%s:%04X) %s"),
 		Object->GetFullName(),
 		Node->GetFullName(),
-		Code - &Node->Script(0),
+		Code - Node->Script.GetTypedData(),
 		V
 	);
 	else debugf
@@ -197,7 +197,7 @@ void FFrame::Serialize( const TCHAR* V, EName Event )
 		TEXT("%s (%s:%04X) %s"),
 		Object->GetFullName(),
 		Node->GetFullName(),
-		Code - &Node->Script(0),
+		Code - Node->Script.GetTypedData(),
 		V
 	);
 	unguard;
@@ -4871,7 +4871,7 @@ void UObject::execIterator( FFrame& Stack, RESULT_DECL )
 	if( GIteratorFrame!=&Stack )
 	{
 		TArray<BYTE>& Script = Stack.Node->Script;
-		INT Pos = Stack.Code - &Script(0);
+		INT Pos = Stack.Code - Script.GetTypedData();
 		if( Script(Pos-1)!=EX_IteratorPop )
 		{
 			INT End = Pos+2<=Script.Num() ? Stack.ReadWord() : MAXINT;

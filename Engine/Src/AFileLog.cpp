@@ -92,7 +92,7 @@ void AFileLog::execLogf( FFrame& Stack, RESULT_DECL )
 	for( INT i=0; i<LogString.Len(); i++ )
 		AnsiStr(i) = ToAnsi((*LogString)[i] );
 
-	((FArchive*)LogAr)->Serialize( &AnsiStr(0), AnsiStr.Num() );
+	((FArchive*)LogAr)->Serialize( AnsiStr.GetTypedData(), AnsiStr.Num() );
 
 	unguardexec;
 }

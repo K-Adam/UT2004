@@ -447,7 +447,7 @@ int FOpenGLRenderInterface::LockDynBuffer(BYTE** OutBuffer,int NumVerts,int Stri
 	DynamicStride		= Stride;
 	DynamicSize			= NumVerts * Stride;
 	DynamicComponents	= ComponentFlags;
-	*OutBuffer = &DynamicVertices(0);
+	*OutBuffer = DynamicVertices.GetTypedData();
 	return NumVerts;
 }
 
@@ -463,7 +463,7 @@ int FOpenGLRenderInterface::UnlockDynBuffer()
 	if( DynamicComponents & VF_Tex2 )		Components[NumComponents++] = FVertexComponent(CT_Float2,FVF_TexCoord1);
 	INT Offset;
 	if( BYTE* Dest = RenDev->DynamicVertexBuffer.Lock(DynamicSize,DynamicStride,Offset) )
-		appMemcpy(Dest,&DynamicVertices(0),DynamicSize);
+		appMemcpy(Dest,DynamicVertices.GetTypedData(),DynamicSize);
 	RenDev->DynamicVertexBuffer.Unlock();
 	return UseDynamicVertices(Offset,DynamicStride,Components,NumComponents);
 }
@@ -481,7 +481,7 @@ void FOpenGLRenderInterface::SetQuadIndexBuffer(INT BaseVertexIndex)
 		}
 		glGenBuffers(1,&RenDev->QuadIndices);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,RenDev->QuadIndices);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER,Indices.Num() * sizeof(_WORD),&Indices(0),GL_STATIC_DRAW);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER,Indices.Num() * sizeof(_WORD),Indices.GetTypedData(),GL_STATIC_DRAW);
 		RenDev->GL.ElementBuffer = RenDev->QuadIndices;
 	}
 	CurrentState->IndexBuffer		= RenDev->QuadIndices;

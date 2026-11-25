@@ -203,7 +203,7 @@ UBOOL UExporter::ExportToFile( UObject* Object, UExporter* InExporter, const TCH
 			if
 			(	appLoadFileToArray(FileBytes,Filename)
 			&&	FileBytes.Num()==Buffer.Num()
-			&&	appMemcmp(&FileBytes(0),&Buffer(0),Buffer.Num())==0 )
+			&&	appMemcmp(FileBytes.GetTypedData(),Buffer.GetTypedData(),Buffer.Num())==0 )
 			{
 				debugf( TEXT("Not replacing %s because identical"), Filename );
 				Result = 1;
@@ -259,7 +259,7 @@ UBOOL UObjectExporterT3D::ExportText( UObject* Object, const TCHAR* Type, FOutpu
 {
 	guard(UObjectExporterT3D::ExportText);
 	Ar.Logf( TEXT("%sBegin Object Class=%s Name=%s\r\n"),appSpc(TextIndent), Object->GetClass()->GetName(), Object->GetName() );
-	ExportProperties( Ar, Object->GetClass(), (BYTE*)Object, TextIndent+3,Object->GetClass(), &Object->GetClass()->Defaults(0) );
+	ExportProperties( Ar, Object->GetClass(), (BYTE*)Object, TextIndent+3,Object->GetClass(), Object->GetClass()->Defaults.GetTypedData() );
 	Ar.Logf( TEXT("%sEnd Object\r\n"), appSpc(TextIndent) );
 	return 1;
 	unguard;

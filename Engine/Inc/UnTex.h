@@ -119,7 +119,7 @@ public:
 	void Clear()
 	{
 		guard(FMipmap::Clear);
-		appMemzero( &DataArray(0), DataArray.Num() );
+		appMemzero( DataArray.GetTypedData(), DataArray.Num() );
 		unguard;
 	}
 	friend FArchive& operator<<( FArchive& Ar, FMipmap& M )
@@ -300,7 +300,7 @@ class ENGINE_API UTexture : public UBitmapMaterial
 	}
 	FColor* GetColors()
 	{
-		return Palette ? &Palette->Colors(0) : NULL;
+		return Palette ? Palette->Colors.GetTypedData() : NULL;
 	}
 	INT GetNumMips()
 	{
