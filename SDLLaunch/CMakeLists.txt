@@ -24,10 +24,9 @@ if(ANDROID)
   target_link_libraries(SDLLaunch PRIVATE LibLZMA::LibLZMA)
 endif()
 if(NOT EMSCRIPTEN)
-  # Both are C libraries, so unlike IpDrv's C++ ones they are safe in the executable before the allocator is set.
+  # Engine free, so they are safe in the executable before the allocator is set.
   find_package(OpenSSL REQUIRED)
-  find_package(CURL REQUIRED)
-  target_link_libraries(SDLLaunch PRIVATE OpenSSL::Crypto CURL::libcurl)
+  target_link_libraries(SDLLaunch PRIVATE OpenSSL::Crypto Http)
   # The content downloads. Read on every configure unless set with -D, so test builds can point at localhost.
   set(UT_ASSETS_ENV ${CMAKE_SOURCE_DIR}/Android/assets.env)
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${UT_ASSETS_ENV})

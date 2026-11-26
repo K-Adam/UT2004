@@ -90,9 +90,6 @@ UBOOL WebRtcPendingExpired( DOUBLE CreatedTime, INT Queries );
 
 // WebMaster.cpp
 void WebMasterLinkReceived( const std::string& Json );
-#if __ANDROID__
-const std::string& AndroidCaCerts();
-#endif
 
 // WebRtc.cpp
 

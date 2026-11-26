@@ -2,22 +2,10 @@
 
 // Standard headers go before the engine's, whose macros (check, min, max) break them.
 #define NOMINMAX
+#include "HttpTransfer.h"
 #pragma pack(push, 8)
-#if __EMSCRIPTEN__
-#include <emscripten/fetch.h>
-#else
-#include <curl/curl.h>
-#include <thread>
-#endif
-#if __ANDROID__
-#include <dirent.h>
-#include <fstream>
-#include <sstream>
-#endif
 #include <nlohmann/json.hpp>
 #include <algorithm>
-#include <functional>
-#include <memory>
 #include <mutex>
 #include <string>
 #include "SemVer.h"
@@ -27,9 +15,6 @@
 #include "UnTcpNetDriver.h"
 
 #include "WebRtc.h"
-
-// Done gets whether the server answered 2xx, and the body.
-typedef std::function<void( bool, std::string )> FHttpDone;
 
 // The reply comes from the network, so its size and row counts are bounded.
 enum
@@ -48,151 +33,22 @@ enum
 	TURN_RETRY_TIME		= 600,
 };
 
-#if __EMSCRIPTEN__
-// The browser reads the body after this call returns, so the request keeps it
-struct FHttpFetch
+// An offer waits up to 8 seconds for the host to answer, an unreachable master still fails fast.
+static FHttpTransfer* WebMasterTransfer( const FString& Url, const std::string& Body )
 {
-	FHttpDone Done;
-	std::string Body;
-};
-
-static void HttpFinished( emscripten_fetch_t* Fetch )
-{
-	// Closing a fetch that is still running calls its error handler again
-	FHttpFetch* Request = (FHttpFetch*)Fetch->userData;
-	if( !Request )
-		return;
-	Fetch->userData = NULL;
-	// A refusal has a body too, which says why
-	bool Sized = Fetch->data && Fetch->numBytes <= MAX_RESPONSE_SIZE;
-	Request->Done( Sized && Fetch->status >= 200 && Fetch->status < 300, Sized ? std::string( Fetch->data, Fetch->numBytes ) : std::string() );
-	delete Request;
-	emscripten_fetch_close( Fetch );
-}
-
-static void HttpProgress( emscripten_fetch_t* Fetch )
-{
-	if( Fetch->dataOffset + Fetch->numBytes > MAX_RESPONSE_SIZE )
-	{
-		Fetch->status = 0;
-		HttpFinished( Fetch );
-	}
-}
-
-// No headers, because a request without them needs no CORS preflight. The callbacks run on the main thread once the browser has the answer.
-static void HttpRequestAsync( const std::string& Url, const std::string& Body, FHttpDone Done )
-{
-	FHttpFetch* Request = new FHttpFetch{ Done, Body };
-	emscripten_fetch_attr_t Attr;
-	emscripten_fetch_attr_init( &Attr );
-	strcpy( Attr.requestMethod, Body.empty() ? "GET" : "POST" );
-	// Replace, or the request waits for a lookup in a cache that never holds it
-	Attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_REPLACE;
-	// An offer waits up to 8 seconds for the host to answer
-	Attr.timeoutMSecs = Body.empty() ? 5000 : 10000;
-	Attr.requestData = Request->Body.data();
-	Attr.requestDataSize = Request->Body.size();
-	Attr.userData = Request;
-	Attr.onsuccess = HttpFinished;
-	Attr.onerror = HttpFinished;
-	Attr.onprogress = HttpProgress;
-	emscripten_fetch( &Attr, Url.c_str() );
-}
-#else
-static size_t AppendResponse( char* Data, size_t Size, size_t Count, void* Response )
-{
-	std::string* Out = (std::string*)Response;
-	// A short count makes curl abort the transfer with an error
-	if( Out->size() + Size * Count > MAX_RESPONSE_SIZE )
-		return 0;
-	Out->append( Data, Size * Count );
-	return Size * Count;
-}
-
-#if __ANDROID__
-// OpenSSL has no CA store on Android. The files are PEM, the text around each certificate is skipped.
-const std::string& AndroidCaCerts()
-{
-	static const std::string Certs = []()
-	{
-		std::string All;
-		for( const char* Dir : { "/apex/com.android.conscrypt/cacerts", "/system/etc/security/cacerts" } )
-			if( DIR* D = opendir( Dir ) )
-			{
-				while( dirent* E = readdir( D ) )
-					if( E->d_name[0] != '.' )
-					{
-						std::ostringstream Cert;
-						Cert << std::ifstream( std::string(Dir) + "/" + E->d_name ).rdbuf();
-						All += Cert.str() + "\n";
-					}
-				closedir( D );
-				if( !All.empty() )
-					break;
-			}
-		return All;
-	}();
-	return Certs;
-}
-#endif
-
-// The setup that every request to the port's hosts needs.
-CURL* HttpEasy( const std::string& Url )
-{
-	CURL* Curl = curl_easy_init();
-	if( !Curl )
-		return NULL;
-	curl_easy_setopt( Curl, CURLOPT_URL, Url.c_str() );
-	// Schannel otherwise fails when the CA's revocation server is unreachable, WinHTTP never checked it.
-	curl_easy_setopt( Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT );
-#if __ANDROID__
-	curl_blob Ca = { (void*)AndroidCaCerts().data(), AndroidCaCerts().size(), CURL_BLOB_NOCOPY };
-	curl_easy_setopt( Curl, CURLOPT_CAINFO_BLOB, &Ca );
-#endif
-	return Curl;
-}
-
-// Runs on a worker thread, so it only touches standard types.
-static bool HttpRequest( const std::string& Url, const std::string& Body, std::string& Response )
-{
-	CURL* Curl = HttpEasy( Url );
-	if( !Curl )
-		return false;
-	curl_slist* Headers = curl_slist_append( NULL, "Content-Type: application/json" );
-	curl_easy_setopt( Curl, CURLOPT_HTTPHEADER, Headers );
-	curl_easy_setopt( Curl, CURLOPT_USERAGENT, "UT2004/" UT_VERSION );
+	FHttpRequest Request;
+	Request.Url = appToUtf8( *Url ).GetTypedData();
+	Request.Body = Body;
+	Request.Accept = "application/json";
+	Request.ContentType = "application/json";
+	Request.UserAgent = "UT2004/" UT_VERSION;
 	// The master lists the address a post comes from, and the game is reachable over IPv4 only.
-	curl_easy_setopt( Curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4 );
-	// An offer waits up to 8 seconds for the host to answer, an unreachable master still fails fast
-	curl_easy_setopt( Curl, CURLOPT_CONNECTTIMEOUT, 5L );
-	curl_easy_setopt( Curl, CURLOPT_TIMEOUT, 10L );
-	curl_easy_setopt( Curl, CURLOPT_WRITEFUNCTION, AppendResponse );
-	curl_easy_setopt( Curl, CURLOPT_WRITEDATA, &Response );
-	if( !Body.empty() )
-	{
-		curl_easy_setopt( Curl, CURLOPT_POSTFIELDS, Body.data() );
-		curl_easy_setopt( Curl, CURLOPT_POSTFIELDSIZE, (long)Body.size() );
-	}
-	long Status = 0;
-	bool Ok = curl_easy_perform( Curl ) == CURLE_OK
-		&& curl_easy_getinfo( Curl, CURLINFO_RESPONSE_CODE, &Status ) == CURLE_OK
-		&& Status >= 200 && Status < 300;
-	curl_slist_free_all( Headers );
-	curl_easy_cleanup( Curl );
-	return Ok;
+	Request.Ipv4 = true;
+	Request.ConnectTimeout = 5;
+	Request.Timeout = 10;
+	Request.MaxSize = MAX_RESPONSE_SIZE;
+	return new FHttpTransfer( Request );
 }
-
-// Done runs on the worker thread.
-static void HttpRequestAsync( const std::string& Url, const std::string& Body, FHttpDone Done )
-{
-	std::thread( [Url, Body, Done]()
-	{
-		std::string Response;
-		bool Ok = HttpRequest( Url, Body, Response );
-		Done( Ok, std::move(Response) );
-	} ).detach();
-}
-#endif
 
 FString WebMasterURL()
 {
@@ -247,8 +103,18 @@ void WebMasterLinkReceived( const std::string& Json )
 		Out.Token = Token;
 }
 
+// The uplink polls it through WebMasterLinkTake every tick.
+static FHttpTransfer* GAdvertise;
+
 UBOOL WebMasterLinkTake( FString& Link, FString& Token )
 {
+	if( GAdvertise && GAdvertise->Poll() )
+	{
+		if( GAdvertise->Ok() )
+			WebMasterLinkReceived( GAdvertise->Body );
+		delete GAdvertise;
+		GAdvertise = NULL;
+	}
 	FWebMasterLink& In = ReceivedLink();
 	std::lock_guard<std::mutex> Guard( In.Lock );
 	if( In.Link.empty() )
@@ -288,59 +154,43 @@ void WebMasterAdvertise( const FServerResponseLine& Server )
 	};
 
 	std::string Json = Body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-	if( !WebRtcHostState( Json.c_str() ) )
-		HttpRequestAsync( &appToUtf8( *(Base + TEXT("/advertise")) )(0), Json, []( bool Ok, std::string Reply ) { if( Ok ) WebMasterLinkReceived( Reply ); } );
+	if( !WebRtcHostState( Json.c_str() ) && !GAdvertise )
+		GAdvertise = WebMasterTransfer( Base + TEXT("/advertise"), Json );
 }
 
-#pragma pack(push, 8)
-struct FWebMasterResponse
-{
-	std::mutex Lock;
-	bool Done = false;
-	bool Ok = false;
-	std::string Body;
-};
-#pragma pack(pop)
-
-// The request holds its own reference, so freeing one that is still running is safe.
+// Without a web master it has no transfer.
 struct FWebMasterRequest
 {
-	std::shared_ptr<FWebMasterResponse> Response;
+	FHttpTransfer* Transfer = NULL;
+	~FWebMasterRequest() { delete Transfer; }
 };
 
 static FWebMasterRequest* WebMasterRequest( const TCHAR* Path, const std::string& Body )
 {
 	FString Base = WebMasterURL();
 	FWebMasterRequest* Request = new FWebMasterRequest;
-	Request->Response = std::make_shared<FWebMasterResponse>();
-	if( !Base.Len() )
+	if( Base.Len() )
+		Request->Transfer = WebMasterTransfer( Base + Path, Body );
+	else
 	{
 		// A page without a web master asks for its ICE servers again and again
 		static UBOOL Logged;
 		if( !Logged )
 			debugf( TEXT("WebMasterServer is not set in [IpDrv.MasterServerLink]") );
 		Logged = 1;
-		Request->Response->Done = true;
-		return Request;
 	}
-	FHttpDone Done = [Response = Request->Response]( bool Ok, std::string Body )
-	{
-		std::lock_guard<std::mutex> Guard( Response->Lock );
-		Response->Body.swap( Body );
-		Response->Ok = Ok;
-		Response->Done = true;
-	};
-	HttpRequestAsync( appToUtf8( *(Base + Path) ).GetTypedData(), Body, Done );
 	return Request;
 }
 
 static UBOOL WebMasterRequestDone( FWebMasterRequest* Request, UBOOL& Ok, std::string& Body )
 {
-	std::lock_guard<std::mutex> Guard( Request->Response->Lock );
-	if( !Request->Response->Done )
+	Ok = 0;
+	if( !Request->Transfer )
+		return 1;
+	if( !Request->Transfer->Poll() )
 		return 0;
-	Ok = Request->Response->Ok;
-	Body.swap( Request->Response->Body );
+	Ok = Request->Transfer->Ok();
+	Body.swap( Request->Transfer->Body );
 	return 1;
 }
 

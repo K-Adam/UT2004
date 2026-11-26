@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 #pragma pack(pop)
+#include "HttpTransfer.h"
 
 #include "UnIpDrv.h"
 #include "UnTcpNetDriver.h"
@@ -452,9 +453,8 @@ static void HostSocketOpen()
 		// Without a limit a dead link is only noticed when TCP gives up
 		Config.maxOutstandingPings = 2;
 		Config.maxMessageSize = WEBRTC_HOST_SOCKET_MAX_MESSAGE;
-#if __ANDROID__
-		Config.caCertificatePemFile = AndroidCaCerts();
-#endif
+		if( const std::string* Ca = SystemCaBundle() )
+			Config.caCertificatePemFile = *Ca;
 		HostSocket->Socket = std::make_shared<rtc::WebSocket>( Config );
 		HostSocket->Socket->onMessage( []( rtc::binary ) {}, []( std::string Text ) { HostSocketMessage( Text ); } );
 		// http becomes ws and https becomes wss
@@ -890,14 +890,16 @@ static void HostSocketTick( UTcpNetDriver* Driver, FWebRtcHost* Host )
 		debugf( TEXT("WebRTC: connected to the web master, players join through it") );
 		S->Logged = FWebRtcHostSocket::Listed;
 	}
+	// Every tick, as the relay request only moves on while it is polled
+	FWebMasterTurn Turn;
+	UBOOL Relay = Listed && WebMasterTurn( Turn );
 	if( !Offered || appSeconds() < S->OfferTime )
 		return;
 
 	// A level that is switching takes nobody and a peer made now would die with it. The offers wait for the next level,
 	// which is in time for some. Asked twice a second, because the level logs each time.
 	EAcceptConnection Accept = Driver->Notify->NotifyAcceptingConnection();
-	FWebMasterTurn Turn;
-	if( Accept==ACCEPTC_Ignore || (Accept==ACCEPTC_Accept && !WebMasterTurn( Turn )) )
+	if( Accept==ACCEPTC_Ignore || (Accept==ACCEPTC_Accept && !Relay) )
 	{
 		S->OfferTime = appSeconds() + 0.5;
 		return;

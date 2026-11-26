@@ -30,4 +30,4 @@ Checks: >
   -bugprone-multiple-new-in-one-expression,
   -bugprone-inc-dec-in-conditions
 WarningsAsErrors: '*'
-HeaderFilterRegex: '/(ALAudio|Core|Editor|Engine|Fire|IpDrv|Onslaught|OpenGLDrv|SDLDrv|SDLLaunch|UCC|UTV2004|UWeb|XGame|XInterface)/(Inc|Src)/'
+HeaderFilterRegex: '/(ALAudio|Core|Editor|Engine|Fire|Http|IpDrv|Onslaught|OpenGLDrv|SDLDrv|SDLLaunch|UCC|UTV2004|UWeb|XGame|XInterface)/(Inc|Src)/'

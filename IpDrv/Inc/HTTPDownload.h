@@ -67,7 +67,7 @@ class UAssetDownload : public UDownload
 	DECLARE_CLASS(UAssetDownload,UDownload,CLASS_Transient|CLASS_Config,IpDrv);
 	NO_DEFAULT_CONSTRUCTOR(UAssetDownload);
 
-	struct FAssetTransfer* Transfer;
+	class FHttpTransfer* Transfer;
 
 	void StaticConstructor();
 	void Destroy();

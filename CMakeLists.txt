@@ -314,7 +314,7 @@ find_package(SDL3 3.2 CONFIG REQUIRED)
 add_subdirectory(Tools/NVTriStrip)
 add_subdirectory(metoolkit-karma)
 
-set(UT_MODULES Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
+set(UT_MODULES Http Core Engine Fire IpDrv UWeb Editor OpenGLDrv ALAudio
     XGame XInterface Onslaught SDLDrv SDLLaunch)
 # UCC is a tool for the build host, a cross build would not run it.
 if(NOT CMAKE_CROSSCOMPILING)

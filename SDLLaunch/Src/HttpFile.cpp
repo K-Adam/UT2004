@@ -2,20 +2,12 @@
 
 #include "SDLLaunchContent.h"
 
-#pragma pack(push,8)
-#include <curl/curl.h>
-#include <openssl/evp.h>
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <sys/statvfs.h>
-#endif
-#pragma pack(pop)
+#include "HttpTransfer.h"
 
-#if __ANDROID__
-// IpDrv/Src/WebMaster.cpp
-const std::string& AndroidCaCerts();
-#endif
+#pragma pack(push,8)
+#include <openssl/evp.h>
+#include <filesystem>
+#pragma pack(pop)
 
 // The download as a file, kept between attempts and launches so several gigabytes go on where they stopped.
 struct FPartFile
@@ -24,91 +16,47 @@ struct FPartFile
     FInstall* I;
 };
 
-static size_t WritePart(char* Data, size_t Size, size_t Count, void* User)
-{
-    FPartFile* Part = (FPartFile*)User;
-    Part->I->Progress(Size * Count);
-    return !SetupQuit && SDL_WriteIO(Part->File, Data, Size * Count) == Size * Count ? Size * Count : 0;
-}
-
-// Called while no data arrives too, so the window answers and closing it stops the transfer.
-static int WhileWaiting(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
-{
-    PumpSetup();
-    return SetupQuit;
-}
-
 // Appends the file from byte ResumeFrom on. False with the reason in Why when the transfer did not finish.
 static bool Download(const char* Url, Sint64 ResumeFrom, FPartFile& Part, char* Why, size_t WhySize, bool& NoResume)
 {
-    CURL* Curl = curl_easy_init();
-    if (!Curl)
-        return false;
-    char Reason[CURL_ERROR_SIZE] = "";
-    curl_easy_setopt(Curl, CURLOPT_URL, Url);
-    curl_easy_setopt(Curl, CURLOPT_FOLLOWLOCATION, 1L);
-    // An error page must not end up in the file.
-    curl_easy_setopt(Curl, CURLOPT_FAILONERROR, 1L);
-    curl_easy_setopt(Curl, CURLOPT_RESUME_FROM_LARGE, (curl_off_t)ResumeFrom);
-    curl_easy_setopt(Curl, CURLOPT_CONNECTTIMEOUT, 20L);
-    curl_easy_setopt(Curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);
-    curl_easy_setopt(Curl, CURLOPT_LOW_SPEED_TIME, 30L);
-    curl_easy_setopt(Curl, CURLOPT_ERRORBUFFER, Reason);
-    // Schannel otherwise fails when the CA's revocation server is unreachable.
-    curl_easy_setopt(Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT);
-#if __ANDROID__
-    curl_blob Ca = { (void*)AndroidCaCerts().data(), AndroidCaCerts().size(), CURL_BLOB_NOCOPY };
-    curl_easy_setopt(Curl, CURLOPT_CAINFO_BLOB, &Ca);
-#endif
-    curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, WritePart);
-    curl_easy_setopt(Curl, CURLOPT_WRITEDATA, &Part);
-    curl_easy_setopt(Curl, CURLOPT_XFERINFOFUNCTION, WhileWaiting);
-    curl_easy_setopt(Curl, CURLOPT_NOPROGRESS, 0L);
-    CURLcode Code = curl_easy_perform(Curl);
-    long Status = 0;
-    curl_easy_getinfo(Curl, CURLINFO_RESPONSE_CODE, &Status);
-    curl_easy_cleanup(Curl);
+    FHttpRequest Request;
+    Request.Url = Url;
+    Request.FollowRedirects = true;
+    Request.ResumeFrom = ResumeFrom;
+    Request.ConnectTimeout = 20;
+    Request.StallTime = 30;
+    Request.Receive = [&Part](const char* Data, size_t Count)
+    {
+        Part.I->Progress(Count);
+        return !SetupQuit && SDL_WriteIO(Part.File, Data, Count) == Count;
+    };
+    FHttpTransfer Transfer(Request);
+    // The window answers while no data arrives too, and closing it stops the transfer.
+    while (!Transfer.Poll() && !SetupQuit)
+    {
+        PumpSetup();
+        Transfer.Wait(100);
+    }
     // The server has nothing past the end of a file that is already complete.
-    bool Ok = Code == CURLE_OK || (ResumeFrom > 0 && Status == 416);
-    NoResume = !Ok && Code == CURLE_RANGE_ERROR;
+    bool Ok = Transfer.Ok() || (ResumeFrom > 0 && Transfer.Status == 416);
+    NoResume = !Ok && Transfer.RangeRefused;
     if (!Ok)
-        SDL_snprintf(Why, WhySize, "%s", Reason[0] ? Reason : curl_easy_strerror(Code));
+        SDL_snprintf(Why, WhySize, "%s", SetupQuit ? "Stopped" : Transfer.Error.c_str());
     return Ok;
-}
-
-// curl prints a reply to stdout unless something takes it.
-static size_t Discard(char*, size_t Size, size_t Count, void*)
-{
-    return Size * Count;
 }
 
 bool PostReport(const char* Url, const char* Text)
 {
-    CURL* Curl = curl_easy_init();
-    if (!Curl)
-        return false;
-    curl_slist* Headers = curl_slist_append(NULL, "Content-Type: text/plain");
-    curl_easy_setopt(Curl, CURLOPT_URL, Url);
-    curl_easy_setopt(Curl, CURLOPT_HTTPHEADER, Headers);
-    curl_easy_setopt(Curl, CURLOPT_POSTFIELDS, Text);
+    FHttpRequest Request;
+    Request.Url = Url;
+    Request.Body = Text;
+    Request.ContentType = "text/plain";
     // The player waits on this with the game already gone.
-    curl_easy_setopt(Curl, CURLOPT_CONNECTTIMEOUT, 5L);
-    curl_easy_setopt(Curl, CURLOPT_TIMEOUT, 10L);
-    // Schannel otherwise fails when the CA's revocation server is unreachable.
-    curl_easy_setopt(Curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_REVOKE_BEST_EFFORT);
-#if __ANDROID__
-    curl_blob Ca = { (void*)AndroidCaCerts().data(), AndroidCaCerts().size(), CURL_BLOB_NOCOPY };
-    curl_easy_setopt(Curl, CURLOPT_CAINFO_BLOB, &Ca);
-#endif
-    curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, Discard);
+    Request.ConnectTimeout = 5;
+    Request.Timeout = 10;
+    Request.Receive = [](const char*, size_t) { return true; };
     // A redirect or an error page is not a stored report.
-    long Status = 0;
-    bool Ok = curl_easy_perform(Curl) == CURLE_OK
-        && curl_easy_getinfo(Curl, CURLINFO_RESPONSE_CODE, &Status) == CURLE_OK
-        && Status >= 200 && Status < 300;
-    curl_slist_free_all(Headers);
-    curl_easy_cleanup(Curl);
-    return Ok;
+    return FHttpTransfer(Request).Run();
 }
 
 static bool Sha256Matches(FPartFile& Part, const char* Expected)
@@ -134,17 +82,9 @@ static bool Sha256Matches(FPartFile& Part, const char* Expected)
 // Negative when the system can't tell.
 static Sint64 FreeSpace(const char* Dir)
 {
-#ifdef _WIN32
-    wchar_t Wide[1024];
-    ULARGE_INTEGER Free;
-    if (MultiByteToWideChar(CP_UTF8, 0, Dir, -1, Wide, SDL_arraysize(Wide)) && GetDiskFreeSpaceExW(Wide, &Free, NULL, NULL))
-        return (Sint64)Free.QuadPart;
-#else
-    struct statvfs St;
-    if (statvfs(Dir, &St) == 0)
-        return (Sint64)St.f_bavail * (Sint64)St.f_frsize;
-#endif
-    return -1;
+    std::error_code Ec;
+    std::filesystem::space_info Space = std::filesystem::space(std::filesystem::u8path(Dir), Ec);
+    return Ec ? -1 : (Sint64)Space.available;
 }
 
 static Sint64 FileSize(const std::string& Path)
