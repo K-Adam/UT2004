@@ -233,8 +233,6 @@ public:
 		guardSlow(FArray::InsertZeroed);
 		// gam ---
 		checkSlow(ElementSize>0);
-		checkSlow(Index>=0);
-		checkSlow(Index<=ArrayNum);
 		checkSlow(ArrayNum>=0);
 		checkSlow(ArrayMax>=ArrayNum);
 		// --- gam
@@ -250,8 +248,8 @@ public:
 		// --- gam
 		checkSlow(ArrayNum>=0);
 		checkSlow(ArrayMax>=ArrayNum);
-		checkSlow(Index>=0);
-		checkSlow(Index<=ArrayNum);
+		if( (DWORD)Index > (DWORD)ArrayNum || Count<0 )
+			appIndexFail( Index, ArrayNum );
 
 		INT OldNum = ArrayNum;
 		Grow( Count, ElementSize );
@@ -357,6 +355,13 @@ public:
 		unguardSlow;
 	}
 	void Remove( INT Index, INT Count, INT ElementSize );
+	void CheckRemove( INT Index, INT Count ) const
+	{
+		if( (DWORD)Index > (DWORD)ArrayNum )
+			appIndexFail( Index, ArrayNum );
+		if( (DWORD)Count > (DWORD)(ArrayNum-Index) )
+			appIndexFail( Count<0 ? Count : ArrayNum, ArrayNum );
+	}
 protected:
 	void Realloc( INT ElementSize );
 	void Grow( INT Count, INT ElementSize )
@@ -436,8 +441,8 @@ public:
     T& operator()( INT i )
 	{
 		guardSlow(TArray::operator());
-		checkSlow(i>=0);
-		checkSlow(i<=ArrayNum);
+		if( (DWORD)i >= (DWORD)ArrayNum )
+			appIndexFail( i, ArrayNum );
 		checkSlow(ArrayMax>=ArrayNum);
 		return ((T*)Data)[i];
 		unguardSlow;
@@ -445,8 +450,8 @@ public:
 	const T& operator()( INT i ) const
 	{
 		guardSlow(TArray::operator());
-		checkSlow(i>=0);
-		checkSlow(i<=ArrayNum);
+		if( (DWORD)i >= (DWORD)ArrayNum )
+			appIndexFail( i, ArrayNum );
 		checkSlow(ArrayMax>=ArrayNum);
 		return ((T*)Data)[i];
 		unguardSlow;
@@ -464,17 +469,13 @@ public:
 	T& Last( INT c=0 )
 	{
 		guardSlow(TArray::Last);
-		check(c<ArrayNum);
-		checkSlow(ArrayMax>=ArrayNum);
-		return ((T*)Data)[ArrayNum-c-1];
+		return (*this)(ArrayNum-c-1);
 		unguardSlow;
 	}
 	const T& Last( INT c=0 ) const
 	{
 		guardSlow(TArray::Last);
-		checkSlow(c<ArrayNum);
-		checkSlow(ArrayMax>=ArrayNum);
-		return ((T*)Data)[ArrayNum-c-1];
+		return (*this)(ArrayNum-c-1);
 		unguardSlow;
 	}
 	void Shrink()
@@ -593,9 +594,7 @@ public:
 	void Remove( INT Index, INT Count=1 )
 	{
 		guardSlow(TArray::Remove);
-		check(Index>=0);
-		check(Index<=ArrayNum);
-		check(Index+Count<=ArrayNum);
+		this->CheckRemove( Index, Count );
 		if( TTypeInfo<T>::NeedsDestructor() )
 			for( INT i=Index; i<Index+Count; i++ )
 				(&(*this)(i))->~T();
@@ -794,6 +793,7 @@ public:
 	void Remove( INT Index, INT Count=1 )
 	{
 		guardSlow(TTransArray::Remove);
+		this->CheckRemove( Index, Count );
 		if( GUndo )
 			GUndo->SaveArray( Owner, this, Index, Count, -1, sizeof(T), SerializeItem, DestructItem );
 		TArray<T>::Remove( Index, Count );
@@ -825,7 +825,8 @@ public:
 	{
 		guardSlow(TTransArray::AddItem);
 		T Copy = Item;
-		INT Index=Add();
+		// The assignment needs a valid element, and elements like FBspNode hold arrays of their own.
+		INT Index=AddZeroed();
 		(*this)(Index)=Copy;
 		return Index;
 		unguardSlow;
@@ -1108,8 +1109,8 @@ public:
     TCHAR& operator[]( INT i )
 	{
 		guardSlow(FString::operator());
-		checkSlow(i>=0);
-		checkSlow(i<=ArrayNum);
+		if( (DWORD)i >= (DWORD)ArrayNum )
+			appIndexFail( i, ArrayNum );
 		checkSlow(ArrayMax>=ArrayNum);
 		return ((TCHAR*)Data)[i];
 		unguardSlow;
@@ -1117,8 +1118,8 @@ public:
 	const TCHAR& operator[]( INT i ) const
 	{
 		guardSlow(FString::operator());
-		checkSlow(i>=0);
-		checkSlow(i<=ArrayNum);
+		if( (DWORD)i >= (DWORD)ArrayNum )
+			appIndexFail( i, ArrayNum );
 		checkSlow(ArrayMax>=ArrayNum);
 		return ((TCHAR*)Data)[i];
 		unguardSlow;

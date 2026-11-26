@@ -50,6 +50,7 @@ CORE_API void appExit();
 CORE_API void appRequestExit( UBOOL Force );
 
 CORE_API void VARARGS appFailAssert( const ANSICHAR* Expr, const ANSICHAR* File, INT Line );
+[[noreturn]] CORE_API void appIndexFail( INT Index, INT Num );
 CORE_API void VARARGS appUnwindf( const TCHAR* Fmt, ... );
 CORE_API const TCHAR* appGetSystemErrorMessage( INT Error=0 );
 CORE_API const UBOOL appMsgf( INT Type, const TCHAR* Fmt, ... );

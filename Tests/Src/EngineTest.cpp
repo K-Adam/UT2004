@@ -266,3 +266,33 @@ TEST( Core, CommandLineStartsWithTheFirstArgument )
 {
 	EXPECT_EQ( 0, appStrncmp( appCmdLine(), TEXT("DM-Rankin"), 9 ) ) << TCHAR_TO_ANSI(appCmdLine());
 }
+
+// Run alone with --gtest_also_run_disabled_tests --gtest_filter=Engine.DISABLED_TickBenchmark to time the game tick.
+TEST( Engine, DISABLED_TickBenchmark )
+{
+	const TCHAR* URLs[] = { DeathmatchURL, OnslaughtURL };
+	for( INT u=0; u<ARRAY_COUNT(URLs); u++ )
+	{
+		// The engine starts on the first map.
+		if( u )
+			Travel( URLs[u] );
+		appRandInit( 0 );
+		DOUBLE Start = appSeconds();
+		RunGame( 120.f );
+		DOUBLE Seconds = appSeconds() - Start;
+
+		// Equal across runs only when both simulated the same game.
+		DOUBLE Sum = 0;
+		ULevel* Level = GTestEngine->GLevel;
+		for( INT i=0; i<Level->Actors.Num(); i++ )
+		{
+			APawn* Pawn = Cast<APawn>( Level->Actors(i) );
+			if( Pawn )
+				Sum += Pawn->Location.X + Pawn->Location.Y + Pawn->Location.Z;
+			AController* Controller = Cast<AController>( Level->Actors(i) );
+			if( Controller && Controller->PlayerReplicationInfo )
+				Sum += Controller->PlayerReplicationInfo->Score;
+		}
+		printf( "TickBenchmark %s seconds=%.3f actors=%i checksum=%.3f\n", TCHAR_TO_ANSI(URLs[u]), Seconds, Level->Actors.Num(), Sum );
+	}
+}

@@ -71,6 +71,7 @@ void FArray::Realloc( INT ElementSize )
 void FArray::Remove( INT Index, INT Count, INT ElementSize )
 {
 	guardSlow(FArray::Remove);
+	CheckRemove( Index, Count );
 	if( Count )
 	{
 		appMemmove
@@ -397,6 +398,13 @@ CORE_API void appFromUtf8( const ANSICHAR* Str, TCHAR* Out, INT MaxLen )
 CORE_API void VARARGS appFailAssert( const ANSICHAR* Expr, const ANSICHAR* File, INT Line )
 {
 	appErrorf( TEXT("Assertion failed: %s [File:%s] [Line: %i]"), appFromAnsi(Expr), appFromAnsi(File), Line );
+}
+
+// appErrorf can return before appInit, unguarded or in debug builds, and the access must never follow.
+CORE_API void appIndexFail( INT Index, INT Num )
+{
+	appErrorf( TEXT("Array index %i outside 0..%i"), Index, Num-1 );
+	abort();
 }
 
 //

@@ -18,6 +18,8 @@ public:
 	{
 		printf( "appError: %s\n", TCHAR_TO_ANSI(Msg) );
 		fflush( stdout );
+		// As the stock HandleError does. It stops the static classes destroyed at DLL detach from logging through the freed name table.
+		GIsCriticalError = 1;
 		std::_Exit( 1 );
 	}
 	void HandleError() {}

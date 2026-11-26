@@ -1684,3 +1684,32 @@ TEST( Security, StaticMeshTriangleUVsPastItsArray )
 	UObject::ResetLoaders( Package, 0, 1 );
 	GFileManager->Delete( TEXT("SecurityTriangles.u") );
 }
+
+TEST( Security, ArrayIndicesAreCheckedInRelease )
+{
+	struct FThrowingError : public FOutputDeviceError
+	{
+		void Serialize( const TCHAR* Msg, enum EName Event ) { throw 1; }
+		void HandleError() {}
+	} Thrower;
+	FOutputDeviceError* OldError = GError;
+	GError = &Thrower;
+
+	TArray<INT> A;
+	EXPECT_ANY_THROW( A.Last() );
+	A.AddZeroed( 4 );
+	EXPECT_ANY_THROW( A(-1) );
+	EXPECT_ANY_THROW( A(4) );
+	EXPECT_ANY_THROW( A.Insert( 5 ) );
+	EXPECT_ANY_THROW( A.Remove( 0, -1 ) );
+	EXPECT_ANY_THROW( A.Remove( 2, 3 ) );
+	EXPECT_NO_THROW( A.Insert( 4 ) );
+	EXPECT_NO_THROW( A.Remove( 5, 0 ) );
+	EXPECT_EQ( A.Num(), 5 );
+
+	FString S( TEXT("ab") );
+	EXPECT_NO_THROW( S[S.Len()] );
+	EXPECT_ANY_THROW( S[S.Len()+1] );
+
+	GError = OldError;
+}

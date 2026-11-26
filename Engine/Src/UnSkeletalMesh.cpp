@@ -3258,7 +3258,7 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 	
 	FVector*	StreamPtr		= (FVector*)Destination;		
 	FCoords*	BoneBase		= FinalTrafos.GetTypedData();
-	FSkinPoint* SkinVertPtr		= &(LODModel->SmoothVerts(0));
+	FSkinPoint* SkinVertPtr		= LODModel->SmoothVerts.GetTypedData();
 	DWORD*		InStream		= &(LODModel->SkinningStream(0)); 	
 	FVector*    DupDestination	= (FVector*)Duplicates.GetTypedData();
 	DWORD		InDW = *InStream;	

@@ -4226,7 +4226,7 @@ UBOOL UObject::SavePackage( UObject* InOuter, UObject* Base, DWORD TopLevelFlags
 #endif
 			FirstSort = Conform->NameMap.Num();
 		}
-		appQsort( &Linker->NameMap(FirstSort), Linker->NameMap.Num()-FirstSort, sizeof(Linker->NameMap(0)), LinkerNameSort );
+		appQsort( Linker->NameMap.GetTypedData()+FirstSort, Linker->NameMap.Num()-FirstSort, sizeof(Linker->NameMap(0)), LinkerNameSort );
 		unguard;
 
 		// Save names.
@@ -4297,7 +4297,7 @@ UBOOL UObject::SavePackage( UObject* InOuter, UObject* Base, DWORD TopLevelFlags
 			}}
 #endif
 		}
-		appQsort( &Linker->ExportMap(FirstSort), Linker->ExportMap.Num()-FirstSort, sizeof(Linker->ExportMap(0)), LinkerExportSort );
+		appQsort( Linker->ExportMap.GetTypedData()+FirstSort, Linker->ExportMap.Num()-FirstSort, sizeof(Linker->ExportMap(0)), LinkerExportSort );
 		Linker->Summary.ExportCount = Linker->ExportMap.Num();
 		unguard;
 
