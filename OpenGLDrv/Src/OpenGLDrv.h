@@ -130,8 +130,9 @@ struct FOpenGLDynamicBuffer
 			LockedOffset,
 			LockedBytes;
 	TArray<BYTE>	Scratch;
+	UBOOL	MapRanges;	// False on ANGLE, which copies a mapped range back over the whole buffer before every draw.
 
-	FOpenGLDynamicBuffer(GLenum InTarget) : Target(InTarget), Buffer(0), Size(0), Used(0), LockedOffset(0), LockedBytes(0) {}
+	FOpenGLDynamicBuffer(GLenum InTarget) : Target(InTarget), Buffer(0), Size(0), Used(0), LockedOffset(0), LockedBytes(0), MapRanges(0) {}
 	// Returns room for Bytes at the next aligned offset, which Offset receives, uploaded by Unlock. NULL for no bytes.
 	BYTE* Lock(INT Bytes,INT Alignment,INT& Offset);
 	void Unlock();

@@ -380,33 +380,37 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 		Offset = 0;
 	}
 	Used = Offset + Bytes;
-#if defined(_WIN32) || defined(__EMSCRIPTEN__)
-	// Not mapped: ANGLE maps into a staging copy and then copies the whole buffer back before
-	// every draw that reads it. Uploading with glBufferSubData keeps its system memory copy current.
-	// WebGL has no mapping at all.
+#ifndef __EMSCRIPTEN__
+	if( MapRanges )
+	{
+		// Unsynchronized, nothing has drawn from this range since the store was orphaned.
+		// Native drivers, phone ones above all, may copy or wait on glBufferSubData into a buffer the GPU still reads.
+		// No invalidate, Adreno answers it with a fresh allocation and a free on every map.
+		BYTE* Result = Bytes > 0 ? (BYTE*)glMapBufferRange(Target,Offset,Bytes,GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT) : NULL;
+		LockedBytes = Result ? Bytes : 0;
+		return Result;
+	}
+#endif
+	// Uploading with glBufferSubData keeps ANGLE's system memory copy current. WebGL has no mapping at all.
 	LockedOffset	= Offset;
 	LockedBytes		= Bytes;
 	if( Scratch.Num() < Bytes )
 		Scratch.Add(Bytes - Scratch.Num());
 	return Bytes > 0 ? Scratch.GetTypedData() : NULL;
-#else
-	// Unsynchronized, nothing has drawn from this range since the store was orphaned.
-	// Native drivers, phone ones above all, may copy or wait on glBufferSubData into a buffer the GPU still reads.
-	BYTE* Result = Bytes > 0 ? (BYTE*)glMapBufferRange(Target,Offset,Bytes,GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_UNSYNCHRONIZED_BIT) : NULL;
-	LockedBytes = Result ? Bytes : 0;
-	return Result;
-#endif
 }
 
 void FOpenGLDynamicBuffer::Unlock()
 {
 	// Lock left the buffer bound.
 	if( LockedBytes > 0 )
-#if defined(_WIN32) || defined(__EMSCRIPTEN__)
-		glBufferSubData(Target,LockedOffset,LockedBytes,Scratch.GetTypedData());
-#else
-		glUnmapBuffer(Target);
+	{
+#ifndef __EMSCRIPTEN__
+		if( MapRanges )
+			glUnmapBuffer(Target);
+		else
 #endif
+		glBufferSubData(Target,LockedOffset,LockedBytes,Scratch.GetTypedData());
+	}
 	LockedBytes = 0;
 }
 

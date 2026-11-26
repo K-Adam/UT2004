@@ -130,16 +130,6 @@ UBOOL UOpenGLRenderDevice::Init()
 	unguard;
 }
 
-static UBOOL HasExtension(const char* Name)
-{
-	GLint Count = 0;
-	glGetIntegerv(GL_NUM_EXTENSIONS,&Count);
-	for( GLint i=0; i<Count; i++ )
-		if( strcmp((const char*)glGetStringi(GL_EXTENSIONS,i),Name) == 0 )
-			return 1;
-	return 0;
-}
-
 static void LogShaderError(GLuint Shader)
 {
 	ANSICHAR Log[4096] = "";
@@ -338,13 +328,14 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	debugf(TEXT("GL_RENDERER   : %s"),appFromAnsi((const ANSICHAR*)glGetString(GL_RENDERER)));
 	debugf(TEXT("GL_VERSION    : %s"),appFromAnsi((const ANSICHAR*)glGetString(GL_VERSION)));
 
-	UBOOL S3TC			= HasExtension("GL_EXT_texture_compression_s3tc") || HasExtension("GL_WEBGL_compressed_texture_s3tc");
-	SupportsDXT1		= S3TC || HasExtension("GL_EXT_texture_compression_dxt1");
-	SupportsDXT35		= S3TC || (HasExtension("GL_ANGLE_texture_compression_dxt3") && HasExtension("GL_ANGLE_texture_compression_dxt5"));
-	SupportsFloatTargets = HasExtension("GL_EXT_color_buffer_float");
+	UBOOL S3TC			= SDL_GL_ExtensionSupported("GL_EXT_texture_compression_s3tc") || SDL_GL_ExtensionSupported("GL_WEBGL_compressed_texture_s3tc");
+	SupportsDXT1		= S3TC || SDL_GL_ExtensionSupported("GL_EXT_texture_compression_dxt1");
+	SupportsDXT35		= S3TC || (SDL_GL_ExtensionSupported("GL_ANGLE_texture_compression_dxt3") && SDL_GL_ExtensionSupported("GL_ANGLE_texture_compression_dxt5"));
+	SupportsFloatTargets = SDL_GL_ExtensionSupported("GL_EXT_color_buffer_float");
+	DynamicVertexBuffer.MapRanges = DynamicIndexBuffer.MapRanges = !strstr((const ANSICHAR*)glGetString(GL_RENDERER),"ANGLE");
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE,&MaxTextureSize);
 	MaxAnisotropy = 1;
-	if( HasExtension("GL_EXT_texture_filter_anisotropic") )
+	if( SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic") )
 	{
 		GLfloat Max = 1.f;
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT,&Max);
@@ -353,11 +344,11 @@ UBOOL UOpenGLRenderDevice::InitContext()
 	glGetIntegerv(GL_MAX_SAMPLES,&MaxSamples);
 	// Without it every base vertex change respecifies the attributes.
 	DrawElementsBaseVertex = NULL;
-	if( HasExtension("GL_OES_draw_elements_base_vertex") )
+	if( SDL_GL_ExtensionSupported("GL_OES_draw_elements_base_vertex") )
 		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexOES");
-	else if( HasExtension("GL_EXT_draw_elements_base_vertex") )
+	else if( SDL_GL_ExtensionSupported("GL_EXT_draw_elements_base_vertex") )
 		DrawElementsBaseVertex = (PFNGLDRAWELEMENTSBASEVERTEXOESPROC)SDL_GL_GetProcAddress("glDrawElementsBaseVertexEXT");
-	ParallelCompile = HasExtension("GL_KHR_parallel_shader_compile");
+	ParallelCompile = SDL_GL_ExtensionSupported("GL_KHR_parallel_shader_compile");
 	if( ParallelCompile )
 	{
 		// WebGL's version of the extension has no such function, its browsers compile in parallel on their own.
@@ -365,7 +356,7 @@ UBOOL UOpenGLRenderDevice::InitContext()
 		if( MaxShaderCompilerThreads )
 			MaxShaderCompilerThreads(0xFFFFFFFF);
 	}
-	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i, sample variables %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile,HasExtension("GL_OES_sample_variables"));
+	debugf(TEXT("OpenGLDrv: DXT1 %i, DXT3/5 %i, anisotropy %i, max texture %i, base vertex %i, parallel compile %i, sample variables %i"),SupportsDXT1,SupportsDXT35,MaxAnisotropy,MaxTextureSize,DrawElementsBaseVertex != NULL,ParallelCompile,SDL_GL_ExtensionSupported("GL_OES_sample_variables"));
 
 	// WebGL has no program binaries.
 	GLint BinaryFormats = 0;

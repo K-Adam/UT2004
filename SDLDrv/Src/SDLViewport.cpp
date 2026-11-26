@@ -303,13 +303,19 @@ INT USDLViewport::VehicleSeats( INT& Seat )
 	return Array->Num() + 1;
 }
 
+// Phones and tablets, which type on a keyboard on the screen.
+static UBOOL IsTouchDevice()
+{
+	return SDL_HasScreenKeyboardSupport();
+}
+
 //
 // Phone and tablet screens are dense, the fonts grow towards their size on a 2000 point wide screen.
 //
 FLOAT USDLViewport::GUIFontScale()
 {
 	SDL_Window* Window = GetOuterUSDLClient()->Window;
-	if( !Window || !SDL_HasScreenKeyboardSupport() )
+	if( !Window || !IsTouchDevice() )
 		return 1.f;
 	FLOAT Points = SizeX / Max( SDL_GetDisplayContentScale( SDL_GetDisplayForWindow( Window ) ), 1.f );
 	return Clamp( 2000.f / Points, 1.f, 2.5f );
@@ -868,13 +874,7 @@ void USDLViewport::RenderOverlay()
 void* USDLViewport::GetWindow()
 {
 	guard(USDLViewport::GetWindow);
-	SDL_Window* Window = GetOuterUSDLClient()->Window;
-#ifdef _WIN32
-	// Force feedback needs the native window.
-	return SDL_GetPointerProperty( SDL_GetWindowProperties(Window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL );
-#else
-	return Window;
-#endif
+	return GetOuterUSDLClient()->Window;
 	unguard;
 }
 
@@ -1049,7 +1049,7 @@ void USDLViewport::UpdateTextInput( UBOOL InMenu )
 	FStateFrame* ConsoleState = Console ? Console->GetStateFrame() : NULL;
 	UBOOL ConsoleText = Console && Console->IsA(UConsole::StaticClass())
 		&& (((UConsole*)Console)->bTyping || (ConsoleState && ConsoleState->StateNode && ConsoleState->StateNode->GetFName() == NAME_ConsoleVisible));
-	UBOOL WantText = SDL_HasScreenKeyboardSupport()
+	UBOOL WantText = IsTouchDevice()
 		? ConsoleText || (InMenu && EditBoxFocused( GUIController ))
 		: ConsoleText || InMenu;
 	// Only on a change, so a keyboard the player closed stays closed.
@@ -1689,7 +1689,7 @@ UBOOL USDLViewport::ResizeViewport( DWORD NewBlitFlags, INT InNewX, INT InNewY, 
 #ifdef __EMSCRIPTEN__
 	bWindowsMouseAvailable = 1;
 #else
-	bWindowsMouseAvailable = !(NewBlitFlags & BLIT_Fullscreen) || SDL_HasScreenKeyboardSupport();
+	bWindowsMouseAvailable = !(NewBlitFlags & BLIT_Fullscreen) || IsTouchDevice();
 #endif
 
 	SetTitleBar();

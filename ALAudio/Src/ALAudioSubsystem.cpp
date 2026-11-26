@@ -258,11 +258,14 @@ UBOOL UALAudioSubsystem::Init()
 #if DYNAMIC_BIND
 	guard(DynamicBinding);
 #if !__EMSCRIPTEN__
-	// Find DLL's.
-	DLLHandle = appGetDllHandle( AL_DLL );
+	// OpenAL Soft as the Windows build copies it into System/, as Linux installs it and as the APK packages it.
+	static const TCHAR* const Libraries[] = { TEXT("OpenAL32.dll"), TEXT("libopenal.so.1"), TEXT("libopenal.so") };
+	DLLHandle = NULL;
+	for( INT i=0; i<ARRAY_COUNT(Libraries) && !DLLHandle; i++ )
+		DLLHandle = appGetDllHandle( Libraries[i] );
 	if( !DLLHandle )
 	{
-		debugf( NAME_Init, TEXT("Couldn't locate %s - giving up."), AL_DLL );
+		debugf( NAME_Init, TEXT("Couldn't locate OpenAL - giving up.") );
 		return 0;
 	}
 #endif
@@ -404,10 +407,6 @@ UBOOL UALAudioSubsystem::Init()
 			}
 		}
 		unguard;
-	#endif
-
-	#ifndef _WIN32
-	alcProcessContext( SoundContext );
 	#endif
 
 #if WITH_SPEEX
@@ -688,10 +687,9 @@ UBOOL UALAudioSubsystem::Update( FSceneNode* SceneNode )
 	if( (Viewport->CurrentTime - LastHWUpdate) >= (TimeBetweenHWUpdates / 1000.f) )
 	{
 		LastHWUpdate = Viewport->CurrentTime;
+		// The changes until the next update apply together.
 		alcProcessContext( SoundContext );
-#ifdef _WIN32
 		alcSuspendContext( SoundContext );
-#endif
 	}
 
 	unclock(GStats.DWORDStats(AudioStats.STATS_UpdateCycles));

@@ -45,16 +45,6 @@ typedef ALenum (*EAXGet)(const GUID*, ALuint, ALuint, ALvoid*, ALuint);
 #define MAX_AUDIOCHANNELS 64
 #define NUM_VOICE_BUFFERS 10
 
-// The Windows build copies OpenAL Soft into System/, where it is found before a system-wide OpenAL.
-#ifdef _WIN32
-#define AL_DLL TEXT("OpenAL32.dll")
-#elif __ANDROID__
-// Packaged in the APK next to libmain.so, without a version suffix.
-#define AL_DLL TEXT("libopenal.so")
-#else
-#define AL_DLL TEXT("libopenal.so.1")
-#endif
-
 class UALAudioSubsystem;
 class FALAudioStreamManager;
 
