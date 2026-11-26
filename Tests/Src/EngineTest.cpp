@@ -1,6 +1,7 @@
 // Before the engine headers, whose macros break the standard ones
 #pragma pack(push,8)
 #include <filesystem>
+#include <fstream>
 #pragma pack(pop)
 
 #include "TestEngine.h"
@@ -231,6 +232,34 @@ TEST( Core, CachePurgesOldFiles )
 	GSys->CachePath = CachePath;
 	GSys->PurgeCacheDays = Days;
 }
+
+#ifdef _WIN32
+// A stale game folder cache file must not be found or copied empty into the player's cache, and an empty file there is no package.
+TEST( Core, CacheIsOnlyInThePlayersFolder )
+{
+	const wchar_t* Env = _wgetenv( L"LOCALAPPDATA" );
+	std::wstring Saved = Env ? Env : L"";
+	std::filesystem::path Local = std::filesystem::absolute( "CacheTestLocal" );
+	_wputenv_s( L"LOCALAPPDATA", Local.c_str() );
+	FGuid Guid( 1, 2, 3, 4 );
+	FString Name = FString( Guid.String() ) + TEXT("-1") + GSys->CacheExt;
+	std::filesystem::path Game = std::filesystem::path( *GSys->CachePath ) / *Name;
+	std::filesystem::path Player = Local / L"UT2004" / L"Cache" / *Name;
+	std::filesystem::create_directories( Game.parent_path() );
+	std::ofstream( Game ) << "xxxx";
+	TCHAR Out[256];
+	EXPECT_FALSE( appFindPackageFile( TEXT("CacheTest"), &Guid, Out, 1 ) );
+	EXPECT_FALSE( std::filesystem::exists( Player ) );
+	std::filesystem::create_directories( Player.parent_path() );
+	std::ofstream{ Player };
+	EXPECT_FALSE( appFindPackageFile( TEXT("CacheTest"), &Guid, Out, 1 ) );
+	std::error_code Ec;
+	std::filesystem::remove( Game, Ec );
+	std::filesystem::remove( Game.parent_path(), Ec );
+	std::filesystem::remove_all( Local, Ec );
+	_wputenv_s( L"LOCALAPPDATA", Saved.c_str() );
+}
+#endif
 
 // The launcher passes the arguments after the executable and appInit keeps all of them. The engine test starts with the map.
 TEST( Core, CommandLineStartsWithTheFirstArgument )

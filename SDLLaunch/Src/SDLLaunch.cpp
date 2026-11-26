@@ -54,13 +54,8 @@ FOutputDeviceAnsiError Error;
 #include "FFeedbackContextAnsi.h"
 
 // File manager.
-#ifdef _WIN32
-#include "FFileManagerWindows.h"
-FFileManagerWindowsHome FileManager;
-#else
-#include "FFileManagerUnix.h"
-FFileManagerUnix FileManager;
-#endif
+#include "FFileManagerStd.h"
+FFileManagerStd FileManager;
 
 // Config.
 #include "FConfigCacheIni.h"

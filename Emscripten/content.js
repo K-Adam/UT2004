@@ -9,8 +9,6 @@ addToLibrary({
     // Chunks up to this many bytes stay in memory, least recently used first.
     budget: 256 << 20,
     chunks: new Map(),
-    // Whole files read for fopen, which bypasses ut_content_read.
-    whole: new Set(),
     async load(node, index) {
       node.contentBlob ??= await Module.readContent(node.contentPath);
       const start = index * UTContent.chunk;
@@ -58,25 +56,6 @@ addToLibrary({
       err(e);
       return -1;
     });
-  },
-
-  // Reads the whole file before fopen, for the music streams.
-  ut_content_open__deps: ['$UTContent', '$FS', '$UTF8ToString'],
-  ut_content_open__sig: 'vp',
-  ut_content_open__async: true,
-  ut_content_open: (path) => {
-    const node = FS.analyzePath(UTF8ToString(path)).object;
-    if (!node?.contentPath || node.contents) return;
-    return (async () => {
-      node.contents = new Uint8Array(await (await Module.readContent(node.contentPath)).arrayBuffer());
-      for (const old of UTContent.whole) {
-        if (!FS.streams.some((stream) => stream?.node === old)) {
-          old.contents = null;
-          UTContent.whole.delete(old);
-        }
-      }
-      UTContent.whole.add(node);
-    })();
   },
 
   ut_next_frame__sig: 'i',

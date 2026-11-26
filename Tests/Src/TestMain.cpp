@@ -27,13 +27,8 @@ static FOutputDeviceTestError Error;
 #include "FFeedbackContextAnsi.h"
 static FFeedbackContextAnsi Warn;
 
-#if _WIN32
-	#include "FFileManagerWindows.h"
-	static FFileManagerWindowsHome FileManager;
-#else
-	#include "FFileManagerUnix.h"
-	static FFileManagerUnix FileManager;
-#endif
+#include "FFileManagerStd.h"
+static FFileManagerStd FileManager;
 #include "FMallocAnsi.h"
 static FMallocAnsi Malloc;
 

@@ -1948,9 +1948,10 @@ static UBOOL CheckPotentialFileGuid( const TCHAR* InFilename, const FGuid* InGui
 // Callers pass this many characters.
 #define PACKAGE_FILE_PATH 256
 
+// An empty file is no package, older builds left such files in the cache.
 static UBOOL PackageFileFound( const FString& Path, const FGuid* Guid, TCHAR* Out )
 {
-	if( Path.Len()>=PACKAGE_FILE_PATH || GFileManager->FileSize(*Path)<0 || !CheckPotentialFileGuid(*Path,Guid) )
+	if( Path.Len()>=PACKAGE_FILE_PATH || GFileManager->FileSize(*Path)<=0 || !CheckPotentialFileGuid(*Path,Guid) )
 		return 0;
 	appStrcpy( Out, *Path );
 	return 1;
@@ -2068,7 +2069,7 @@ UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT 
 	if( Guid && GenerationLevel>0 )
 	{
 		TArray<FString> Files = GFileManager->FindFiles( *(GSys->CachePath * Guid->String() + TEXT("-*") + GSys->CacheExt), 1, 0 );
-		INT Best = -1;
+		INT Best = 0;
 		for( INT i=0; i<Files.Num(); i++ )
 		{
 			FString Path = GSys->CachePath * Files(i);
@@ -2079,7 +2080,7 @@ UBOOL appFindPackageFile( const TCHAR* InIn, const FGuid* Guid, TCHAR* Out, INT 
 				appStrcpy( Out, *Path );
 			}
 		}
-		if( Best >= 0 )
+		if( Best > 0 )
 		{
 			appUpdateFileModTime( Out );
 			return 1;

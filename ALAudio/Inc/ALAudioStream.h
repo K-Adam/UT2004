@@ -56,7 +56,7 @@ protected:
 	FALAudioStream*		Next;
 
 	void*				SharedData;
-	FILE*				FileHandle;
+	FArchive*			File;
 	
 	FLOAT				Duration;
 	INT					FileSeek,

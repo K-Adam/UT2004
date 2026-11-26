@@ -483,7 +483,7 @@ var Module = {
     status.hidden = !text;
   },
   preRun: [() => {
-    // FFileManagerUnix writes the inis, saves and logs below ~/.ut2004 and downloaded packages to ~/.cache.
+    // FFileManagerStd writes the inis, saves and logs below ~/.ut2004 and downloaded packages to ~/.cache.
     const FS = Module.FS;
     for (const dir of ['/home/web_user/.ut2004', '/home/web_user/.cache']) {
       FS.mkdirTree(dir);

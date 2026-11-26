@@ -14,11 +14,6 @@ Revision history:
 #include "vorbis/vorbisfile.h"
 #pragma pack (pop)
 
-#if __UNIX__
-#undef clock
-#include "FFileManagerUnix.h"
-#endif
-
 static void FileStreamingThread( FALAudioStreamManager* StreamManager );
 
 static void FreeStreams( FALAudioStreamManager* StreamManager )
@@ -48,7 +43,7 @@ FALAudioStream::FALAudioStream( FALAudioStream* InPrevious, FCriticalSection* In
 	Previous		= InPrevious;
 	Next			= NULL;
 
-	FileHandle		= NULL;
+	File			= NULL;
 	FileSeek		= 0;
 	ChunksRequested	= 0;
 	LoopCount		= 0;
@@ -70,9 +65,8 @@ FALAudioStream::~FALAudioStream()
 	Previous	= NULL;
 	Next		= NULL;
 
-	if( FileHandle )
-		fclose( FileHandle );
-	FileHandle	= NULL;
+	delete File;
+	File		= NULL;
 }
 
 //
@@ -83,17 +77,8 @@ UBOOL FALAudioStream::Init( const TCHAR* Filename, void* InSharedData, EAudioStr
 	SharedData	= InSharedData;
 	Type		= InType;
 
-#if __UNIX__
-	FileHandle	= ((FFileManagerUnix *) GFileManager)->fopenReadRespectHomeDir(Filename);
-#else
-	// The file manager knows where a relative path leads, which can be the player's folder outside the game.
-	FileHandle	= _wfopen( *GFileManager->ExpandPath(Filename), TEXT("rb") );
-#endif
-
-	if( FileHandle == NULL )
-		return 0;
-
-	return 1;
+	File		= GFileManager->CreateFileReader( Filename );
+	return File != NULL;
 }
 
 //
@@ -140,22 +125,34 @@ FALAudioStreamOgg::~FALAudioStreamOgg()
 	if( VorbisFile )
 	{
 		ov_clear( VorbisFile );
-		// ov_clear() closes FileHandle, so don't let parent class destructor!
-		FileHandle = NULL;
 		delete VorbisFile;
 		VorbisFile = NULL;
 	}
 }
 
-
-// ov_open() on Win64 breaks without a custom fseek() callback, probably a
-// C runtime conflict with ogg.
-#ifdef _WIN64
-static int _fseek64_wrapper(void *h, ogg_int64_t offset, int whence)
+// Vorbis reads through the file manager, which knows the player's folder and the web page's content.
+static size_t OggRead( void* Data, size_t Size, size_t Count, void* Source )
 {
-	return(fseek((FILE *) h, (long) offset, whence));
+	FArchive* Ar = (FArchive*)Source;
+	INT Bytes = (INT)Min<size_t>( Size * Count, Ar->TotalSize() - Ar->Tell() );
+	Ar->Serialize( Data, Bytes );
+	return Ar->IsError() ? 0 : Bytes / Size;
 }
-#endif
+
+static int OggSeek( void* Source, ogg_int64_t Offset, int Whence )
+{
+	FArchive* Ar = (FArchive*)Source;
+	ogg_int64_t Pos = Whence==SEEK_SET ? Offset : Whence==SEEK_CUR ? Ar->Tell() + Offset : Ar->TotalSize() + Offset;
+	if( Pos<0 || Pos>Ar->TotalSize() )
+		return -1;
+	Ar->Seek( (INT)Pos );
+	return Ar->IsError() ? -1 : 0;
+}
+
+static long OggTell( void* Source )
+{
+	return ((FArchive*)Source)->Tell();
+}
 
 
 //
@@ -168,20 +165,9 @@ UBOOL FALAudioStreamOgg::Init( const TCHAR* Filename, void* InSharedData, EAudio
 
 	VorbisFile = new OggVorbis_File;
 
-#ifdef _WIN64
-	static ov_callbacks callbacks = {
-		(size_t (*)(void *, size_t, size_t, void *))  fread,
-		(int (*)(void *, ogg_int64_t, int))           _fseek64_wrapper,
-		(int (*)(void *))                             fclose,
-		(long (*)(void *))                            ftell
-	};
-                                  
-	if( ov_open_callbacks((FILE*) FileHandle, VorbisFile, NULL, 0, callbacks ) < 0 )
+	static const ov_callbacks Callbacks = { OggRead, OggSeek, NULL, OggTell };
+	if( ov_open_callbacks( File, VorbisFile, NULL, 0, Callbacks ) < 0 )
 		return 0;
-#else
-	if( ov_open( (FILE*) FileHandle, VorbisFile, NULL, 0 ) < 0 )
-		return 0;
-#endif
 
 	vorbis_info *VorbisInfo = ov_info(VorbisFile, -1);
 	Duration	= ov_time_total(VorbisFile, -1);
@@ -237,12 +223,9 @@ UBOOL FALAudioStreamOgg::ReadChunks( INT NumChunks )
 
 		if ( Read == 0 )
 		{
-			// Rewind stream if looping...
-			if( Type == ST_OggLooping )
-			{
-				ov_time_seek( VorbisFile, 0.0 );
+			// Rewind stream if looping... A failed read ends it, as the rewind then fails too.
+			if( Type == ST_OggLooping && ov_time_seek( VorbisFile, 0.0 ) == 0 )
 				LoopCount++;
-			}
 			// ... or fill with silence and mark EOF. (memset is used for reentrance reasons)
 			else
 			{
