@@ -351,6 +351,7 @@ public:
 				Max;
 	};
 	TMap<QWORD,FProbe>	Probes;			// By quantised origin, so objects that stay put trace once.
+	TArray<FBox>		ZoneBoxes;		// The extent of each zone's BSP surfaces, built on first use.
 
 	// Explosions seen lately. Actors carry no spawn time, so the first frame one shows up starts its blast wave.
 	struct FBlast
@@ -414,7 +415,7 @@ private:
 	void Commit();
 	UBOOL CompileMaterial(UMaterial* Material,FString* ErrorString,UMaterial** ErrorMaterial);
 	FPlane PickShadowLight();
-	FProbe FindProbe(const FMatrix& LocalToWorld);
+	FProbe FindProbe(const FMatrix& LocalToWorld,const FMatrix& WorldToCamera);
 	FLOAT PickFocus();
 	const FOpenGLFogLights* PickFogLights();
 	void PickBlasts(FPlane* Out);
@@ -422,7 +423,7 @@ private:
 	FLOAT TraceSunCell(ULevel* Level,INT I,INT J,FLOAT CameraS);
 };
 
-enum EOpenGLExtraTarget { EXTRA_Reflection, EXTRA_Albedo };
+enum EOpenGLExtraTarget { EXTRA_Reflection, EXTRA_Albedo, EXTRA_Normal };
 enum EOpenGLHeat { HEAT_None, HEAT_Hot, HEAT_Lava };
 #define HEAT_BLASTS 4
 
@@ -436,8 +437,8 @@ struct FOpenGLFramebuffer
 			MultisampleFramebuffer,
 			MultisampleColor,
 			MultisampleDepth,
-			ExtraTextures[2],	// Indexed by EOpenGLExtraTarget.
-			MultisampleExtra[2];
+			ExtraTextures[3],	// Indexed by EOpenGLExtraTarget.
+			MultisampleExtra[3];
 	INT		Width,
 			Height,
 			Samples;
@@ -503,6 +504,7 @@ class UOpenGLRenderDevice : public URenderDevice
 			OcclusionResolveProgram,
 			OverlayProgram,
 			IndirectProgram,
+			ReflectProgram,
 			ShadowAtlas,		// Distance maps of static lights, as fractions of their radius.
 			SunShadow;			// Where the sun's shadow begins along its axis, world anchored and wrapping.
 	GLsync	FrameFence;
@@ -520,6 +522,8 @@ class UOpenGLRenderDevice : public URenderDevice
 						ScatterHistory[2],		// Scattering averaged over frames, alternating.
 						Indirect,				// Light bounced off nearby surfaces at half the world size.
 						IndirectHistory[2],		// Indirect averaged over frames, alternating.
+						Reflect,				// Screen space reflection hits at half the world size.
+						ReflectHistory[2],		// Reflection hits averaged over frames, alternating.
 						Overlay;				// Labels drawn within the world, laid over it after the post processing.
 	AActor*				ShadowLight;			// Only compared, never dereferenced, the actor may be gone.
 	DWORD				FrameCount;
@@ -546,7 +550,8 @@ class UOpenGLRenderDevice : public URenderDevice
 						FrameViewValid,
 						OcclusionHistoryValid,
 						ScatterHistoryValid,
-						IndirectHistoryValid;
+						IndirectHistoryValid,
+						ReflectHistoryValid;
 
 	// Last state sent to GL, so Commit only changes what differs.
 	struct FGLState
@@ -618,7 +623,7 @@ class UOpenGLRenderDevice : public URenderDevice
 	void UseProgram(GLuint Program);
 	// Covers the framebuffer with Program. Unit 2 is the depth texture, the others sample linearly.
 	// Over lays premultiplied alpha over.
-	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Depth = 0,UBOOL Over = 0,GLuint Texture3 = 0,GLuint Texture4 = 0,GLuint Texture5 = 0,GLuint Texture6 = 0);
+	void DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1 = 0,GLuint Depth = 0,UBOOL Over = 0,GLuint Texture3 = 0,GLuint Texture4 = 0,GLuint Texture5 = 0,GLuint Texture6 = 0,GLuint Texture7 = 0);
 	void PostProcess(UBOOL ViewValid,const FMatrix& CameraToScreen,const FPlane& Light,FLOAT Gamma,FLOAT FocusDistance,const FOpenGLFogLights* Fog,const FPlane* Blasts);
 	void FlushShadows();
 	void CreateFramebuffer(FOpenGLFramebuffer& F,INT Width,INT Height,INT Samples,GLenum Format = GL_RGBA8,UBOOL HasDepth = 1,INT Extra = 0);

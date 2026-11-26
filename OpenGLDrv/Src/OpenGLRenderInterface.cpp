@@ -243,6 +243,7 @@ void FOpenGLRenderInterface::Clear(UBOOL UseColor,FColor Color,UBOOL UseDepth,FL
 		GLfloat Zero[4] = { 0.f, 0.f, 0.f, 0.f };
 		glClearBufferfv(GL_COLOR,1,Zero);
 		glClearBufferfv(GL_COLOR,2,Zero);
+		glClearBufferfv(GL_COLOR,3,Zero);
 	}
 }
 
@@ -524,19 +525,52 @@ static void SetCap(GLenum Cap,UBOOL Enable,UBOOL& Cached)
 // from the drawn object's origin. The median of five rays per side keeps one ray through a gap from
 // opening the side. Like the fog shadows they pass the skybox, so the sky counts as infinitely far
 // and the sky zone stays a scene of its own.
-FOpenGLRenderInterface::FProbe FOpenGLRenderInterface::FindProbe(const FMatrix& LocalToWorld)
+FOpenGLRenderInterface::FProbe FOpenGLRenderInterface::FindProbe(const FMatrix& LocalToWorld,const FMatrix& WorldToCamera)
 {
 	const FLOAT	Far = 1e8f;
 	FProbe		Probe = { FVector(0,0,0), FVector(-Far,-Far,-Far), FVector(Far,Far,Far) };
 	ULevel*		Level = Viewport->Actor ? Viewport->Actor->XLevel : NULL;
-	// BSP, terrain and world space particles have no object to centre on.
-	if( !Level || ViewModel || LocalToWorld == FMatrix::Identity )
+	if( !Level || ViewModel )
 		return Probe;
 	// By map name, a new level can reuse the old one's address.
-	if( Level->GetOuter()->GetFName() != ProbeMap || Probes.Num() >= 256 )
+	if( Level->GetOuter()->GetFName() != ProbeMap )
 	{
 		Probes.Empty();
+		ZoneBoxes.Empty();
 		ProbeMap = Level->GetOuter()->GetFName();
+	}
+	if( Probes.Num() >= 256 )
+		Probes.Empty();
+	// Batched static meshes and BSP have no object origin, so they take the box of the viewer's zone,
+	// open to the sky above. Camera space particles and flat draws have no world view to place it in.
+	// ponytail: the viewer's zone also boxes batched surfaces seen through a portal, per batch zones if that shows.
+	if( LocalToWorld == FMatrix::Identity )
+	{
+		if( WorldToCamera == FMatrix::Identity )
+			return Probe;
+		UModel* Model = Level->Model;
+		if( !ZoneBoxes.Num() )
+		{
+			ZoneBoxes.AddZeroed(FBspNode::MAX_ZONES);
+			for( INT i=0; i<Model->Nodes.Num(); i++ )
+			{
+				const FBspNode& Node = Model->Nodes(i);
+				for( INT k=0; k<Node.NumVertices && Node.iZone[1]<FBspNode::MAX_ZONES; k++ )
+					ZoneBoxes(Node.iZone[1]) += Model->Points(Model->Verts(Node.iVertPool + k).pVertex);
+			}
+		}
+		FMatrix		View = WorldToCamera;
+		FVector		Camera = View.Inverse().TransformFVector(FVector(0,0,0));
+		INT			Zone = Model->PointRegion(Level->GetLevelInfo(),Camera).ZoneNumber;
+		AZoneInfo*	ZoneActor = Model->Zones[Zone].ZoneActor;
+		const FBox&	Box = ZoneBoxes(Zone);
+		if( !Zone || !Box.IsValid || (ZoneActor && ZoneActor->IsA(ASkyZoneInfo::StaticClass()))
+		||	Box.Max.X - Box.Min.X > WORLD_MAX * 0.5f || Box.Max.Y - Box.Min.Y > WORLD_MAX * 0.5f )
+			return Probe;
+		Probe.Origin	= Box.GetCenter();
+		Probe.Min		= Box.Min;
+		Probe.Max		= FVector(Box.Max.X,Box.Max.Y,Far);
+		return Probe;
 	}
 	FVector	C = LocalToWorld.TransformFVector(FVector(0,0,0));
 	QWORD	Key = 0;
@@ -546,6 +580,7 @@ FOpenGLRenderInterface::FProbe FOpenGLRenderInterface::FindProbe(const FMatrix& 
 		return *Found;
 
 	Probe.Origin = C;
+	UBOOL Open[3] = { 0, 0, 0 };
 	for( INT Axis=0; Axis<3; Axis++ )
 		for( INT Sign=-1; Sign<=1; Sign+=2 )
 		{
@@ -568,12 +603,17 @@ FOpenGLRenderInterface::FProbe FOpenGLRenderInterface::FindProbe(const FMatrix& 
 					Distances[j] = Distances[j - 1];
 				Distances[j] = D;
 			}
-			(Sign < 0 ? Probe.Min : Probe.Max).Component(Axis) = C.Component(Axis) + Sign * Max(Distances[2],64.f);
+			// Level rays that leave past the skybox ring would make the side endless and drop the
+			// correction. The scenery a cubemap shows stands within a few thousand units.
+			FLOAT Side = Axis < 2 ? Clamp(Distances[2],64.f,4096.f) : Max(Distances[2],64.f);
+			Open[Axis] |= Distances[2] > Side;
+			(Sign < 0 ? Probe.Min : Probe.Max).Component(Axis) = C.Component(Axis) + Sign * Side;
 		}
 	// Cubemaps were captured from the middle of the space around them rather than from an object's
-	// pivot, which for a fluid surface is the centre of a grid that mostly runs under the terrain.
+	// pivot, which for a fluid surface is the centre of a grid that mostly runs under the terrain. An
+	// open side has no middle, the pivot stays.
 	for( INT Axis=0; Axis<3; Axis++ )
-		if( Probe.Max.Component(Axis) - Probe.Min.Component(Axis) < WORLD_MAX * 0.5f )
+		if( !Open[Axis] && Probe.Max.Component(Axis) - Probe.Min.Component(Axis) < WORLD_MAX * 0.5f )
 			Probe.Origin.Component(Axis) = (Probe.Min.Component(Axis) + Probe.Max.Component(Axis)) * 0.5f;
 	Probes.Set(Key,Probe);
 	return Probe;
@@ -640,7 +680,8 @@ void FOpenGLRenderInterface::Commit()
 	}
 
 	// Per draw uniforms. Normals take the inverse transpose, so scaled meshes light correctly.
-	if( appMemcmp(&Program->SentLocalToWorld,&S->LocalToWorld,sizeof(FMatrix)) != 0 )
+	UBOOL Moved = appMemcmp(&Program->SentLocalToWorld,&S->LocalToWorld,sizeof(FMatrix)) != 0;
+	if( Moved )
 	{
 		Program->SentLocalToWorld = S->LocalToWorld;
 		FMatrix Inverse = S->LocalToWorld.Inverse();
@@ -650,11 +691,12 @@ void FOpenGLRenderInterface::Commit()
 				NormalToWorld[Row * 3 + Column] = Inverse.M[Column][Row];
 		glUniformMatrix4fv(Program->LocalToWorld,1,GL_FALSE,&S->LocalToWorld.M[0][0]);
 		glUniformMatrix3fv(Program->NormalToWorld,1,GL_FALSE,NormalToWorld);
-		if( Program->Probe != -1 )
-		{
-			FProbe Probe = FindProbe(S->LocalToWorld);
-			glUniform3fv(Program->Probe,3,&Probe.Origin.X);
-		}
+	}
+	// World space draws take the viewer's zone, which changes while their transform stays the same.
+	if( Program->Probe != -1 && (Moved || S->LocalToWorld == FMatrix::Identity) )
+	{
+		FProbe Probe = FindProbe(S->LocalToWorld,S->WorldToCamera);
+		glUniform3fv(Program->Probe,3,&Probe.Origin.X);
 	}
 	if( S->Instanced && Program->WorldToLightmap != -1 )
 		glUniformMatrix4fv(Program->WorldToLightmap,1,GL_FALSE,&S->WorldToLightmap.M[0][0]);

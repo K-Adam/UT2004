@@ -168,6 +168,72 @@ static const ANSICHAR* OcclusionFragmentShader =
 	"	FragColor = vec4(AO, Shadow, 0.0, 1.0);\n"
 	"}\n";
 
+// Screen space reflections at half the world size, traced from the normal the surface wrote. Decals
+// such as puddles leave the depth and normal of the ground beneath them, so nearly level normals are
+// taken as level, Up is world up in camera space. The hit is spread by how far the reflection
+// travelled, which softens distant reflections. It fades toward the screen edges and the ray's end so
+// misses blend back into the env map. RGB is the hit times its weight and A the weight, so the
+// history averages both alike.
+static const ANSICHAR* ReflectFragmentShader =
+	POST_COMMON
+	"uniform sampler2D Frame, Reflection, Normal;\n"
+	"uniform vec3 Up;\n"
+	"uniform float FrameIndex;\n"
+	"void main()\n"
+	"{\n"
+	"	ivec2 P = ivec2(gl_FragCoord.xy) * 2;\n"
+	"	float D = DepthAt(P);\n"
+	"	vec4 G = texelFetch(Normal, ClampPixel(P), 0);\n"
+	"	FragColor = vec4(0.0);\n"
+	"	if (D < Split || D >= 1.0 || texelFetch(Reflection, ClampPixel(P), 0).a <= 0.004)\n"
+	"		return;\n"
+	"	vec2 Size = vec2(textureSize(Depth, 0));\n"
+	"	vec3 C = PosAt(P);\n"
+	// Meshes without normals leave none, the depth gives one.
+	"	vec3 N = G.a > 0.5 ? normalize(G.xyz * 2.0 - 1.0) : NormalAt(P, C);\n"
+	"	N = dot(N, C) > 0.0 ? -N : N;\n"
+	"	N = normalize(mix(N, Up, smoothstep(0.8, 0.95, dot(N, Up))));\n"
+	"	vec3 R = reflect(normalize(C), N);\n"
+	"	float Noise = fract(Jitter() + FrameIndex * 0.618034);\n"
+	"	float Step = max(8.0, 0.02 * C.z);\n"
+	"	vec3 S = C + N * (0.5 + 0.002 * C.z) + R * Step * Noise;\n"
+	"	for (int i = 0; i < 24; i++)\n"
+	"	{\n"
+	"		S += R * Step;\n"
+	"		if (S.z < 1.0)\n"
+	"			return;\n"
+	"		vec2 SUV = ToUV(S);\n"
+	"		if (any(lessThan(SUV, vec2(0.0))) || any(greaterThan(SUV, vec2(1.0))))\n"
+	"			return;\n"
+	"		float SD = DepthAt(ivec2(SUV * Size));\n"
+	"		float Behind = S.z - LinearZ(SD);\n"
+	// Behind the weapon or the sky nothing is known.
+	"		if (SD >= Split && SD < 1.0 && Behind > 0.0 && Behind < max(2.0 * Step, 8.0))\n"
+	"		{\n"
+	"			vec3 A = S - R * Step, B = S;\n"
+	"			for (int j = 0; j < 5; j++)\n"
+	"			{\n"
+	"				vec3 M = (A + B) * 0.5;\n"
+	"				if (M.z - LinearZ(DepthAt(ivec2(ToUV(M) * Size))) > 0.0)\n"
+	"					B = M;\n"
+	"				else\n"
+	"					A = M;\n"
+	"			}\n"
+	"			vec2 HitUV = ToUV(B);\n"
+	"			float Spread = min(2.0 * length(B - C) / B.z, 3.0);\n"
+	"			vec2 Edge = smoothstep(0.0, 0.1, min(HitUV, 1.0 - HitUV));\n"
+	"			float W = Edge.x * Edge.y * (1.0 - float(i) / 24.0);\n"
+	"			float Angle = 6.283 * Noise;\n"
+	"			vec2 O = vec2(cos(Angle), sin(Angle)) * Spread / Size, O2 = vec2(-O.y, O.x);\n"
+	"			vec3 Hit = (texture(Frame, HitUV + O).rgb + texture(Frame, HitUV - O).rgb\n"
+	"				+ texture(Frame, HitUV + O2).rgb + texture(Frame, HitUV - O2).rgb) * 0.25;\n"
+	"			FragColor = vec4(Hit * W, W);\n"
+	"			return;\n"
+	"		}\n"
+	"		Step *= 1.25;\n"
+	"	}\n"
+	"}\n";
+
 // Light bounced once off the surfaces around each point, at half the world size. The lit frame already
 // holds the light the baked lighting sends off every visible surface, so it is gathered from there with
 // the haze taken out. Nothing tests what lies between a tap and the point, so light leaks through thin
@@ -236,13 +302,9 @@ static const ANSICHAR* IndirectFragmentShader =
 	"	return Color + (Hash(uvec3(uvec2(gl_FragCoord.xy), Seed)) - 0.5) * 0.024 * (0.3 + 2.8 * Luma * (1.0 - Luma));\n" \
 	"}\n"
 
-// Where the ray finds the reflected surface on screen it replaces the env map, fading out toward the
-// screen edges and the ray's end so misses blend back into it. Decals such as puddles leave the
-// depth of the ground beneath them, so nearly level normals are taken as level, Up is world up in
-// camera space. The hit is spread by how far the reflection travelled, which softens distant
-// reflections and dithers their stair steps. The half size occlusion, bounced light and fog
-// scattering are gathered 4x4 with depth weights, which also averages out their noise. The sky gathers
-// only sky, the fog in front of a branch is thin and would darken the sky around it. With depth
+// Where the screen space reflection hit, it replaces the env map by its weight. The half size
+// occlusion, bounced light and fog scattering are gathered 4x4 with depth weights, which also
+// averages out their noise. The sky gathers only sky, the fog in front of a branch is thin and would darken the sky around it. With depth
 // of field the lit world goes to Focus with the signed circle of confusion of a thin lens, which
 // grows with depth. The frame's alpha holds how hot each pixel looks. Heat rises, so the air shimmers
 // at and above it, less far away where the waves would be larger than what they bend. Haze holds the
@@ -256,7 +318,7 @@ static const ANSICHAR* CompositeFragmentShader =
 	POST_COMMON
 	POST_FINISH
 	OGL_FOG_AMOUNT
-	"uniform sampler2D Frame, Occlusion, Reflection, Scattering, Indirect, Albedo;\n"
+	"uniform sampler2D Frame, Occlusion, Reflection, Scattering, Indirect, Albedo, Reflected;\n"
 	"uniform float Volumetric;\n"
 	"uniform vec3 Up, FogColor;\n"
 	"uniform vec4 Fog;\n"
@@ -326,53 +388,21 @@ static const ANSICHAR* CompositeFragmentShader =
 	"	vec4 Refl = texelFetch(Reflection, P, 0);\n"
 	"	if (Params.w > 0.0 && D >= Split && D < 1.0 && Refl.a > 0.004)\n"
 	"	{\n"
-	"		vec2 Size = vec2(textureSize(Depth, 0));\n"
-	"		vec3 C = PosAt(P);\n"
-	"		vec3 N = NormalAt(P, C);\n"
-	"		N = normalize(mix(N, Up, smoothstep(0.8, 0.95, dot(N, Up))));\n"
-	"		vec3 R = reflect(normalize(C), N);\n"
-	"		float Step = max(8.0, 0.02 * C.z);\n"
-	"		vec3 S = C + N * (0.5 + 0.002 * C.z) + R * Step * Jitter();\n"
-	"		float W = 0.0, Spread = 0.0;\n"
-	"		vec2 HitUV;\n"
-	"		for (int i = 0; i < 24; i++)\n"
-	"		{\n"
-	"			S += R * Step;\n"
-	"			if (S.z < 1.0)\n"
-	"				break;\n"
-	"			vec2 SUV = ToUV(S);\n"
-	"			if (any(lessThan(SUV, vec2(0.0))) || any(greaterThan(SUV, vec2(1.0))))\n"
-	"				break;\n"
-	"			float SD = DepthAt(ivec2(SUV * Size));\n"
-	"			float Behind = S.z - LinearZ(SD);\n"
-	// Behind the weapon or the sky nothing is known.
-	"			if (SD >= Split && SD < 1.0 && Behind > 0.0 && Behind < max(2.0 * Step, 8.0))\n"
+	"		float Z = LinearZ(D), Weights = 0.0;\n"
+	"		vec4 Hit = vec4(0.0);\n"
+	"		ivec2 Size = (textureSize(Depth, 0) + 1) / 2;\n"
+	"		for (int Y = -1; Y <= 1; Y++)\n"
+	"			for (int X = -1; X <= 1; X++)\n"
 	"			{\n"
-	"				vec3 A = S - R * Step, B = S;\n"
-	"				for (int j = 0; j < 5; j++)\n"
-	"				{\n"
-	"					vec3 M = (A + B) * 0.5;\n"
-	"					if (M.z - LinearZ(DepthAt(ivec2(ToUV(M) * Size))) > 0.0)\n"
-	"						B = M;\n"
-	"					else\n"
-	"						A = M;\n"
-	"				}\n"
-	"				HitUV = ToUV(B);\n"
-	"				Spread = min(2.0 * length(B - C) / B.z, 3.0);\n"
-	"				vec2 Edge = smoothstep(0.0, 0.1, min(HitUV, 1.0 - HitUV));\n"
-	"				W = Edge.x * Edge.y * (1.0 - float(i) / 24.0);\n"
-	"				break;\n"
+	"				ivec2 Q = clamp(P / 2 + ivec2(X, Y), ivec2(0), Size - 1);\n"
+	"				float QD = DepthAt(Q * 2);\n"
+	"				float W = QD >= Split && QD < 1.0 ? max(1.0 - abs(LinearZ(QD) - Z) / (0.05 * Z + 1.0), 0.0) * max(1.0 - length(vec2(Q * 2 - P)) / 3.0, 0.0) : 0.0;\n"
+	"				Hit += texelFetch(Reflected, Q, 0) * W;\n"
+	"				Weights += W;\n"
 	"			}\n"
-	"			Step *= 1.25;\n"
-	"		}\n"
-	"		if (W > 0.0)\n"
-	"		{\n"
-	"			float A = 6.283 * Jitter();\n"
-	"			vec2 O = vec2(cos(A), sin(A)) * Spread / Size, O2 = vec2(-O.y, O.x);\n"
-	"			vec3 Hit = (texture(Frame, HitUV + O).rgb + texture(Frame, HitUV - O).rgb\n"
-	"				+ texture(Frame, HitUV + O2).rgb + texture(Frame, HitUV - O2).rgb) * 0.25;\n"
-	"			Color = max(Color + W * (Hit * Refl.a - Refl.rgb), 0.0);\n"
-	"		}\n"
+	// The history clamps hit and weight apart, a hit never outshines what it reflects.
+	"		Hit = Weights > 0.0 ? Hit / Weights : vec4(0.0);\n"
+	"		Color = max(Color + min(Hit.rgb, vec3(Hit.a)) * Refl.a - Hit.a * Refl.rgb, 0.0);\n"
 	"	}\n"
 	"	if (Params.y > 0.0 || Params.z > 0.0 || Volumetric > 0.0)\n"
 	"	{\n"
@@ -567,7 +597,7 @@ static const ANSICHAR* VolumetricFragmentShader =
 	"	FragColor = vec4(Sum * Fog.w + Tint, 1.0);\n"
 	"}\n";
 
-// Averages the scattering over frames, its sampling changes every frame. The history is found where
+// Averages a half size pass over frames, its sampling changes every frame. The history is found where
 // the point was last frame and limited to the range around it now, so nothing trails behind motion.
 // The range comes from neighbours at the point's own depth, or what a swaying twig left behind would
 // still fit the range of the sky beside it and outline the twig. A half size texel is centred half a
@@ -581,7 +611,7 @@ static const ANSICHAR* ResolveFragmentShader =
 	"void main()\n"
 	"{\n"
 	"	ivec2 Q = ivec2(gl_FragCoord.xy), Size = textureSize(Frame, 0);\n"
-	"	vec3 C = texelFetch(Frame, Q, 0).rgb, Lo = C, Hi = C;\n"
+	"	vec4 C = texelFetch(Frame, Q, 0), Lo = C, Hi = C;\n"
 	"	ivec2 P = Q * 2;\n"
 	"	float D = DepthAt(P), Z = LinearZ(D);\n"
 	"	bool Sky = D >= 1.0;\n"
@@ -592,7 +622,7 @@ static const ANSICHAR* ResolveFragmentShader =
 	"			float ND = DepthAt(N * 2);\n"
 	"			if ((ND >= 1.0) != Sky || (!Sky && abs(LinearZ(ND) - Z) > 0.05 * Z + 1.0))\n"
 	"				continue;\n"
-	"			vec3 S = texelFetch(Frame, N, 0).rgb;\n"
+	"			vec4 S = texelFetch(Frame, N, 0);\n"
 	"			Lo = min(Lo, S);\n"
 	"			Hi = max(Hi, S);\n"
 	"		}\n"
@@ -601,7 +631,7 @@ static const ANSICHAR* ResolveFragmentShader =
 	"	vec2 UV0 = Prev.xy / (Prev.z * PrevProj.xy) * 0.5 + 0.5;\n"
 	"	float W = Prev.z > 0.0 && all(greaterThan(UV0, vec2(0.0))) && all(lessThan(UV0, vec2(1.0))) ? HistoryWeight : 0.0;\n"
 	"	UV0 = (UV0 * vec2(textureSize(Depth, 0)) + 0.5) / (2.0 * vec2(textureSize(History, 0)));\n"
-	"	FragColor = vec4(mix(C, clamp(texture(History, UV0).rgb, Lo, Hi), W), 1.0);\n"
+	"	FragColor = mix(C, clamp(texture(History, UV0), Lo, Hi), W);\n"
 	"}\n";
 
 // The occlusion history is kept wherever the depth stored beside it in B still matches. Limiting it to the current neighbourhood would discard a thin shadow that only
@@ -652,9 +682,10 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 	ResolveProgram		= CompileProgram(VertexShader,ResolveFragmentShader);
 	OverlayProgram		= CompileProgram(VertexShader,OverlayFragmentShader);
 	IndirectProgram		= CompileProgram(VertexShader,IndirectFragmentShader);
+	ReflectProgram		= CompileProgram(VertexShader,ReflectFragmentShader);
 	OcclusionResolveProgram	= CompileProgram(VertexShader,OcclusionResolveFragmentShader);
 
-	GLuint Programs[] = { CopyProgram, OcclusionProgram, OcclusionResolveProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram };
+	GLuint Programs[] = { CopyProgram, OcclusionProgram, OcclusionResolveProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram, ReflectProgram };
 	for( INT i=0; i<ARRAY_COUNT(Programs); i++ )
 	{
 		if( !Programs[i] )
@@ -668,6 +699,8 @@ UBOOL UOpenGLRenderDevice::InitPostProcess(GLuint VertexShader)
 		glUniform1i(glGetUniformLocation(Programs[i],"Scattering"),4);
 		glUniform1i(glGetUniformLocation(Programs[i],"Indirect"),5);
 		glUniform1i(glGetUniformLocation(Programs[i],"Albedo"),6);
+		glUniform1i(glGetUniformLocation(Programs[i],"Reflected"),7);
+		glUniform1i(glGetUniformLocation(Programs[i],"Normal"),1);
 		glUniform1i(glGetUniformLocation(Programs[i],"SunMap"),1);
 		glUniform1i(glGetUniformLocation(Programs[i],"History"),1);
 	}
@@ -718,6 +751,20 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	}
 	else
 		IndirectHistoryValid = 0;
+
+	GLuint ReflectTexture = World.Texture;
+	if( Reflections )
+	{
+		CreateFramebuffer(Reflect,(World.Width + 1) / 2,(World.Height + 1) / 2,0,GL_RGBA8,0);
+		UseProgram(ReflectProgram);
+		glUniform4fv(glGetUniformLocation(ReflectProgram,"Proj"),1,&Proj.X);
+		glUniform1f(glGetUniformLocation(ReflectProgram,"FrameIndex"),(FLOAT)(FrameCount & 1023));
+		glUniform3fv(glGetUniformLocation(ReflectProgram,"Up"),1,&Up.X);
+		DrawFullscreen(ReflectProgram,Reflect.Framebuffer,Reflect.Width,Reflect.Height,World.Texture,World.ExtraTextures[EXTRA_Normal],World.DepthTexture,0,World.ExtraTextures[EXTRA_Reflection]);
+		ReflectTexture = Accumulate(ResolveProgram,Reflect,ReflectHistory,ReflectHistoryValid,GL_RGBA8,Proj,Reproject);
+	}
+	else
+		ReflectHistoryValid = 0;
 
 	if( Fog )
 	{
@@ -771,7 +818,7 @@ void UOpenGLRenderDevice::PostProcess(UBOOL ViewValid,const FMatrix& CameraToScr
 	FOpenGLFramebuffer& Target = Defocus ? Focus : Scene;
 	DrawFullscreen(CompositeProgram,Target.DrawFramebuffer(),Target.Width,Target.Height,World.Texture,
 		OcclusionTexture,World.DepthTexture,0,World.ExtraTextures[EXTRA_Reflection],ScatterTexture,
-		IndirectTexture,World.ExtraTextures[EXTRA_Albedo]);
+		IndirectTexture,World.ExtraTextures[EXTRA_Albedo],ReflectTexture);
 	if( ViewValid )
 	{
 		PrevWorldToCamera	= WorldToCamera;

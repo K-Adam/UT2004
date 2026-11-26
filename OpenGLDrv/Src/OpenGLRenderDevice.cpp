@@ -14,7 +14,7 @@ UOpenGLRenderDevice::UOpenGLRenderDevice()
 	LockedViewport	= NULL;
 	ContextReady	= 0;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = InstancedVertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = OcclusionResolveProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = OcclusionResolveProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ReflectProgram = ShadowAtlas = SunShadow = 0;
 	FrameFence = NULL;
 	DrawElementsBaseVertex = NULL;
 	ShadowLight = NULL;
@@ -468,8 +468,8 @@ void UOpenGLRenderDevice::DestroyFramebuffer(FOpenGLFramebuffer& F)
 		return;
 	// Zero names are ignored.
 	GLuint	Framebuffers[] = { F.Framebuffer, F.MultisampleFramebuffer },
-			Textures[] = { F.Texture, F.DepthTexture, F.ExtraTextures[0], F.ExtraTextures[1] },
-			Renderbuffers[] = { F.MultisampleColor, F.MultisampleDepth, F.MultisampleExtra[0], F.MultisampleExtra[1] };
+			Textures[] = { F.Texture, F.DepthTexture, F.ExtraTextures[0], F.ExtraTextures[1], F.ExtraTextures[2] },
+			Renderbuffers[] = { F.MultisampleColor, F.MultisampleDepth, F.MultisampleExtra[0], F.MultisampleExtra[1], F.MultisampleExtra[2] };
 	glDeleteFramebuffers(ARRAY_COUNT(Framebuffers),Framebuffers);
 	glDeleteTextures(ARRAY_COUNT(Textures),Textures);
 	glDeleteRenderbuffers(ARRAY_COUNT(Renderbuffers),Renderbuffers);
@@ -544,6 +544,9 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	DestroyFramebuffer(Indirect);
 	DestroyFramebuffer(IndirectHistory[0]);
 	DestroyFramebuffer(IndirectHistory[1]);
+	DestroyFramebuffer(Reflect);
+	DestroyFramebuffer(ReflectHistory[0]);
+	DestroyFramebuffer(ReflectHistory[1]);
 	DestroyFramebuffer(Overlay);
 	DynamicVertexBuffer.Release();
 	DynamicIndexBuffer.Release();
@@ -551,7 +554,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	if( SceneBuffer )			glDeleteBuffers(1,&SceneBuffer);
 	if( VertexArray )			glDeleteVertexArrays(1,&VertexArray);
 	if( EmptyVertexArray )		glDeleteVertexArrays(1,&EmptyVertexArray);
-	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, OcclusionResolveProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram };
+	GLuint PostPrograms[] = { CopyProgram, OcclusionProgram, OcclusionResolveProgram, CompositeProgram, DepthOfFieldProgram, VolumetricProgram, ResolveProgram, OverlayProgram, IndirectProgram, ReflectProgram };
 	for( INT i=0; i<ARRAY_COUNT(PostPrograms); i++ )
 		glDeleteProgram(PostPrograms[i]);
 	if( VertexShaderObject )	glDeleteShader(VertexShaderObject);
@@ -562,7 +565,7 @@ void UOpenGLRenderDevice::ReleaseObjects()
 	FlushShadows();
 	FrameFence = NULL;
 	VertexArray = EmptyVertexArray = SceneBuffer = QuadIndices = VertexShaderObject = InstancedVertexShaderObject = 0;
-	CopyProgram = OcclusionProgram = OcclusionResolveProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ShadowAtlas = SunShadow = 0;
+	CopyProgram = OcclusionProgram = OcclusionResolveProgram = CompositeProgram = DepthOfFieldProgram = VolumetricProgram = ResolveProgram = OverlayProgram = IndirectProgram = ReflectProgram = ShadowAtlas = SunShadow = 0;
 }
 
 void UOpenGLRenderDevice::Exit(UViewport* Viewport)
@@ -646,7 +649,7 @@ FRenderInterface* UOpenGLRenderDevice::Lock(UViewport* Viewport,BYTE* HitData,IN
 	INT Samples = Antialiasing ? Min<INT>(4,MaxSamples) : 0;
 	CreateFramebuffer(Scene,Viewport->SizeX,Viewport->SizeY,Samples);
 	INT Scale = Clamp(ResolutionScale,50,100);
-	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples,GL_RGBA8,1,2);
+	CreateFramebuffer(World,(Viewport->SizeX * Scale + 99) / 100,(Viewport->SizeY * Scale + 99) / 100,Samples,GL_RGBA8,1,3);
 	glBindFramebuffer(GL_FRAMEBUFFER,World.DrawFramebuffer());
 	SetWorldDrawBuffers(0);
 	GL.Framebuffer = World.DrawFramebuffer();
@@ -681,7 +684,7 @@ void UOpenGLRenderDevice::ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth)
 		INT i;
 		for( i=0; i<ARRAY_COUNT(F.ExtraTextures) && F.ExtraTextures[i]; i++ )
 		{
-			GLenum Only[] = { GL_NONE, GL_NONE, GL_NONE }, First = GL_COLOR_ATTACHMENT0;
+			GLenum Only[] = { GL_NONE, GL_NONE, GL_NONE, GL_NONE }, First = GL_COLOR_ATTACHMENT0;
 			Only[i + 1] = GL_COLOR_ATTACHMENT1 + i;
 			glReadBuffer(GL_COLOR_ATTACHMENT1 + i);
 			glDrawBuffers(i + 2,Only);
@@ -691,7 +694,7 @@ void UOpenGLRenderDevice::ResolveFramebuffer(FOpenGLFramebuffer& F,UBOOL Depth)
 		}
 		glEnable(GL_SCISSOR_TEST);
 		glBindFramebuffer(GL_FRAMEBUFFER,F.MultisampleFramebuffer);
-		GLenum Attachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+		GLenum Attachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
 		glInvalidateFramebuffer(GL_FRAMEBUFFER,2 + i,Attachments);
 		GL.Framebuffer = F.MultisampleFramebuffer;
 	}
@@ -705,6 +708,7 @@ void UOpenGLRenderDevice::SetWorldDrawBuffers(UBOOL ReflectionOnly)
 		ReflectionOnly ? (GLenum)GL_NONE : GL_COLOR_ATTACHMENT0,
 		ScreenSpaceReflections ? GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE,
 		GlobalIllumination && !ReflectionOnly ? GL_COLOR_ATTACHMENT2 : (GLenum)GL_NONE,
+		ScreenSpaceReflections && !ReflectionOnly ? GL_COLOR_ATTACHMENT3 : (GLenum)GL_NONE,
 	};
 	glDrawBuffers(ARRAY_COUNT(Buffers),Buffers);
 }
@@ -728,7 +732,7 @@ void UOpenGLRenderDevice::UseProgram(GLuint Program)
 }
 
 // ES 3 cannot scale a blit into a multisampled target, a draw can.
-void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Depth,UBOOL Over,GLuint Texture3,GLuint Texture4,GLuint Texture5,GLuint Texture6)
+void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT Width,INT Height,GLuint Texture0,GLuint Texture1,GLuint Depth,UBOOL Over,GLuint Texture3,GLuint Texture4,GLuint Texture5,GLuint Texture6,GLuint Texture7)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER,Framebuffer);
 	glViewport(0,0,Width,Height);
@@ -746,7 +750,7 @@ void UOpenGLRenderDevice::DrawFullscreen(GLuint Program,GLuint Framebuffer,INT W
 	else
 		glDisable(GL_BLEND);
 	UseProgram(Program);
-	GLuint Textures[] = { Texture0, Texture1, Depth, Texture3, Texture4, Texture5, Texture6 };
+	GLuint Textures[] = { Texture0, Texture1, Depth, Texture3, Texture4, Texture5, Texture6, Texture7 };
 	for( INT i=0; i<ARRAY_COUNT(Textures); i++ )
 	{
 		if( !Textures[i] )

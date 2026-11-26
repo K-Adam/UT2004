@@ -39,7 +39,7 @@ void UOpenGLRenderDevice::FlushShadows()
 	}
 	ShadowLevel = NULL;
 	SunDirection = FVector(0,0,0);
-	OcclusionHistoryValid = ScatterHistoryValid = IndirectHistoryValid = 0;
+	OcclusionHistoryValid = ScatterHistoryValid = IndirectHistoryValid = ReflectHistoryValid = 0;
 }
 
 // Where the sun's shadow begins on the map line of cell I,J: points further toward the sun are lit.

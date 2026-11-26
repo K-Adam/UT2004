@@ -155,6 +155,8 @@ const ANSICHAR* OpenGLFragmentPrologue =
 	"layout(location = 1) out vec4 Reflection;\n"
 	// The surface colour before lighting, which the global illumination tints the bounced light with.
 	"layout(location = 2) out vec4 Albedo;\n"
+	// The camera space normal of the solid surface, the screen space reflections trace from it.
+	"layout(location = 3) out vec4 Normal;\n"
 	// FDynamicLight::SampleIntensity per pixel. Light types: 0 sunlight, 1 cylinder,
 	// 2 non incidence, 3 quadratic non incidence, 4 point, 5 spot.
 	"float SampleIntensity(int i, vec3 P, vec3 N)\n"

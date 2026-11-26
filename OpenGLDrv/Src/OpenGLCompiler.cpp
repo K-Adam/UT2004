@@ -276,7 +276,7 @@ public:
 	}
 
 	// Texture coordinates as D3D's fixed function texture transforms produce them.
-	INT TexCoord(const FOpenGLModifierInfo& Mod)
+	INT TexCoord(const FOpenGLModifierInfo& Mod,UBOOL CubeTarget)
 	{
 		BYTE Source = Mod.ModifyTextureTransforms ? Mod.TexCoordSource : TCS_Stream0;
 		UBOOL UseMatrix = Mod.ModifyTextureTransforms && (Mod.Matrix != FMatrix::Identity || Mod.TexCoordProjected);
@@ -301,7 +301,8 @@ public:
 			Emit(TEXT("\tvec4 r%i = vec4(vCameraPos, 1.0);\n"),T);
 		else
 		{
-			EnvSampled = 1;
+			// Only cubemaps reflect the scene, 2D env maps are painted highlights the screen space reflections must keep.
+			EnvSampled |= CubeTarget;
 			if( Source != TCS_WorldEnvMapCoords )
 				Emit(TEXT("\tvec4 r%i = vec4(CameraReflection(), 1.0);\n"),T);
 			else
@@ -337,7 +338,7 @@ public:
 		State.SamplerFlags[Unit] = Cube[Unit] ? (GSF_ClampU | GSF_ClampV) : ((UClamp == TC_Clamp ? GSF_ClampU : 0) | (VClamp == TC_Clamp ? GSF_ClampV : 0));
 		K(Cube[Unit]);
 
-		INT TC = TexCoord(Mod);
+		INT TC = TexCoord(Mod,Cube[Unit]);
 		if( TC == INDEX_NONE )
 			return INDEX_NONE;
 		INT T = NewTemp();
@@ -605,6 +606,18 @@ public:
 		return Targets[FogMode];
 	}
 
+	// Solid draws write the normal. Blended ones keep the surface's below, which zero does for every
+	// blend but modulation, where a half doubles back to it.
+	void SurfaceNormal()
+	{
+		if( State.SrcBlend == GL_ONE && State.DstBlend == GL_ZERO )
+			Emit(TEXT("\tNormal = dot(vWorldNormal, vWorldNormal) > 0.0 ? vec4(normalize(mat3(WorldToCamera) * vWorldNormal) * 0.5 + 0.5, 1.0) : vec4(0.0);\n"));
+		else if( State.DstBlend == GL_SRC_COLOR )
+			Emit(TEXT("\tNormal = vec4(0.5);\n"));
+		else
+			Emit(TEXT("\tNormal = vec4(0.0);\n"));
+	}
+
 	void Output(INT C)
 	{
 		K(Beam);
@@ -648,6 +661,7 @@ public:
 			Emit(TEXT("\tReflection = vec4(FragColor.rgb, dot(FragColor.rgb, vec3(0.299, 0.587, 0.114)));\n"));
 		else
 			Emit(TEXT("\tReflection = vec4(0.0);\n"));
+		SurfaceNormal();
 		// Dividing out the lighting in float keeps the albedo exact in the dark, where the bounce matters
 		// most, and keeps detail textures and tints. Lit layers blended over each other blend it alike.
 		UBOOL Layered = (State.SrcBlend == GL_SRC_ALPHA && State.DstBlend == GL_ONE_MINUS_SRC_ALPHA) || (State.SrcBlend == GL_ONE && State.DstBlend == GL_ONE);
@@ -845,6 +859,7 @@ public:
 		else
 			Emit(TEXT("\tReflection = vec4(0.0);\n"));
 		Emit(TEXT("\tAlbedo = vec4(0.0);\n"));
+		SurfaceNormal();
 		return 1;
 	}
 
