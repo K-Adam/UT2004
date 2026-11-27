@@ -866,11 +866,12 @@ void UActorChannel::ReceivedBunch( FInBunch& Bunch )
 			Broken = 1;
 			return;
 		}
-		debugf( NAME_DevNetTraffic, TEXT("      Spawn %s:"), InActor->GetFullName() );
+		if( !FName::SafeSuppressed(NAME_DevNetTraffic) )
+			debugf( NAME_DevNetTraffic, TEXT("      Spawn %s:"), InActor->GetFullName() );
 		SetChannelActor( InActor );
 		unguard;
 	}
-	else
+	else if( !FName::SafeSuppressed(NAME_DevNetTraffic) )
 	{
 		debugf( NAME_DevNetTraffic, TEXT("      Actor %s:"), Actor->GetFullName() );
 	}

@@ -610,6 +610,16 @@ public:
 		FArray::Empty( sizeof(T), Slack );
 		unguardSlow;
 	}
+	// Keeps the allocation for an array refilled again and again.
+	void Reset()
+	{
+		guardSlow(TArray::Reset);
+		if( TTypeInfo<T>::NeedsDestructor() )
+			for( INT i=0; i<ArrayNum; i++ )
+				(&(*this)(i))->~T();
+		ArrayNum = 0;
+		unguardSlow;
+	}
 
 	// Functions dependent on Add, Remove.
 	TArray& operator+( const TArray& Other )

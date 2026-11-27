@@ -484,6 +484,9 @@ void UNetConnection::ReceivedPacket( FBitReader& Reader )
 			for( INT i=OpenChannels.Num()-1; i>=0; i-- )
 			{
 				UChannel* Channel = OpenChannels(i);
+				// Without queued bunches the ack can only touch the channel's open.
+				if( !Channel->OutRec && Channel->OpenPacketId!=AckPacketId && !(Channel->OpenTemporary && Channel->OpenAcked) )
+					continue;
 				for( FOutBunch* Out=Channel->OutRec; Out; Out=Out->Next )
 				{
 					if( Out->PacketId==AckPacketId )

@@ -3222,15 +3222,13 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 	// pose (as opposed from the local-bone-space, an approach we don't use.)
 	//	
 
-	TArray<FLOAT> Duplicates; // Temp buffer for all 3d points to be copied into multiple vertices.
-	TArray<FCoords> FinalTrafos;	
-	
 	FStaticLODModel* LODModel = &Mesh->LODModels( MInst->CurrentLODLevel );	 // Draw this particular level... 
 	// A level with only rigid parts has an empty stream, without even its end marker.
 	if( !LODModel->SkinningStream.Num() )
 		return;
-	FinalTrafos.Add( MInst->SpaceBases.Num() );   // Special trafo's allowing skin to be transformed directly from the reference pose.
-	Duplicates.Add( LODModel->DupVertCount * 2 * 3 ); // Duplicates-buffer - for vertices that need to be expanded into multiple 'wedges' (vertices with different UV's)
+	FMemMark Mark( GMem );
+	FCoords* FinalTrafos = New<FCoords>( GMem, MInst->SpaceBases.Num() );   // Special trafo's allowing skin to be transformed directly from the reference pose.
+	FLOAT* Duplicates = New<FLOAT>( GMem, LODModel->DupVertCount * 2 * 3 ); // Duplicates-buffer - for vertices that need to be expanded into multiple 'wedges' (vertices with different UV's)
 
 	// Prepare transforms to deform skin vertices directly from reference pose.
 	for( INT s=0; s<MInst->SpaceBases.Num(); s++ ) 
@@ -3239,7 +3237,7 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 		// Perform the transform recombine that effectively accomplishes: NewCopy = MInst->SpaceBases(s).ApplyPivot(Mesh->RefBases(s).PivotInverse());
 		FCoords& SpaceBaseRef   = MInst->SpaceBases(s);
 		FCoords& SpaceCopy      = Mesh->RefBasesInverse(s);   
-		FCoords& FinalCopy      = FinalTrafos(s);
+		FCoords& FinalCopy      = FinalTrafos[s];
 		FinalCopy.Origin = SpaceBaseRef.Origin;
 		FinalCopy.Origin.X += ( SpaceBaseRef.XAxis | SpaceCopy.Origin );
 		FinalCopy.Origin.Y += ( SpaceBaseRef.YAxis | SpaceCopy.Origin );
@@ -3257,10 +3255,10 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 	//
 	
 	FVector*	StreamPtr		= (FVector*)Destination;		
-	FCoords*	BoneBase		= FinalTrafos.GetTypedData();
+	FCoords*	BoneBase		= FinalTrafos;
 	FSkinPoint* SkinVertPtr		= LODModel->SmoothVerts.GetTypedData();
 	DWORD*		InStream		= &(LODModel->SkinningStream(0)); 	
-	FVector*    DupDestination	= (FVector*)Duplicates.GetTypedData();
+	FVector*    DupDestination	= (FVector*)Duplicates;
 	DWORD		InDW = *InStream;	
 
 	while( InDW < 0xFFFFFFFF ) // End marker...
@@ -3291,8 +3289,8 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 		{				
 			// Copy back from vertex indicated by BoneFlags.		
 			INT DupIndex = InDW & 0x0FFFFFFF;
-			StreamPtr[0] = *(FVector*)&(Duplicates( DupIndex   ));
-			StreamPtr[1] = *(FVector*)&(Duplicates( DupIndex+3 ));
+			StreamPtr[0] = *(FVector*)&Duplicates[DupIndex];
+			StreamPtr[1] = *(FVector*)&Duplicates[DupIndex+3];
 			((FLOAT*)StreamPtr)[6] = ((FLOAT*)InStream)[1];  // U texture coordinate.
 			((FLOAT*)StreamPtr)[7] = ((FLOAT*)InStream)[2];  // V texture coordinate.						
 			*(BYTE**)&StreamPtr += sizeof(FAnimMeshVertex);  // Advance output stream pointer.
@@ -3443,6 +3441,7 @@ void ComputeSkinVerts( USkeletalMesh* Mesh, USkeletalMeshInstance* MInst, void* 
 		}
 		InDW = *InStream;
 	}	
+	Mark.Pop();
 
 	unclock(Cycles);
 	GStats.DWORDStats( GEngineStats.STATS_Mesh_SkinCycles ) += Cycles;

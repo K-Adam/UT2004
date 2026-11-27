@@ -579,7 +579,7 @@ void FCanvasUtil::Flush()
 
 		RI->PopState();
 
-		Vertices.Empty();
+		Vertices.Reset();
 		NumPrimitives = 0;
 	}
 

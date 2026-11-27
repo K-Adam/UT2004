@@ -65,6 +65,8 @@ struct FWebRtcPeer
 	std::mutex Lock;
 	std::deque<rtc::binary> Inbox;
 	bool Closed = false;
+	// The game thread's side of Inbox, swapped with it each tick
+	std::deque<rtc::binary> Drain;
 };
 
 struct FWebRtcHost
@@ -973,7 +975,9 @@ void UTcpNetDriver::WebRtcTick()
 				HostSocketSend( nlohmann::json{ { "type", "answer" }, { "id", Peer->AnswerId }, { "sdp", std::string(*Local) } }.dump( -1, ' ', false, nlohmann::json::error_handler_t::replace ) );
 				Peer->AnswerId.clear();
 			}
-		std::deque<rtc::binary> Inbox;
+		// clear() frees the storage in MSVC's deque, resize keeps it.
+		std::deque<rtc::binary>& Inbox = Peer->Drain;
+		Inbox.resize( 0 );
 		bool Closed;
 		{
 			std::lock_guard<std::mutex> Guard( Peer->Lock );
