@@ -13,7 +13,8 @@
     { "name": "libdatachannel", "default-features": false, "features": ["ws"], "platform": "windows | android" },
     { "name": "nlohmann-json", "platform": "windows | android | emscripten" },
     { "name": "curl", "platform": "windows | android" },
-    { "name": "gtest", "platform": "windows" }
+    { "name": "gtest", "platform": "windows" },
+    { "name": "mimalloc", "platform": "windows" }
   ],
   "overrides": [
     { "name": "libdatachannel", "version": "0.24.7" },

@@ -7,6 +7,16 @@
 =============================================================================*/
 
 #include "Core.h"
+#if UT_MIMALLOC
+#include <mimalloc.h>
+#define ANSI_MALLOC mi_malloc
+#define ANSI_REALLOC mi_realloc
+#define ANSI_FREE mi_free
+#else
+#define ANSI_MALLOC malloc
+#define ANSI_REALLOC realloc
+#define ANSI_FREE free
+#endif
 
 //
 // ANSI C memory allocator.
@@ -19,7 +29,7 @@ public:
 	{
 		guard(FMallocAnsi::Malloc);
 		check(Size>=0);
-		void* Ptr = malloc( Size );
+		void* Ptr = ANSI_MALLOC( Size );
 		check(Ptr);
 		return Ptr;
 		unguard;
@@ -32,16 +42,16 @@ public:
 if ((PTRINT) Ptr < 0x1000) Ptr = NULL;
 		if( Ptr && NewSize )
 		{
-			Result = realloc( Ptr, NewSize );
+			Result = ANSI_REALLOC( Ptr, NewSize );
 		}
 		else if( NewSize )
 		{
-			Result = malloc( NewSize );
+			Result = ANSI_MALLOC( NewSize );
 		}
 		else
 		{
 			if( Ptr )
-				free( Ptr );
+				ANSI_FREE( Ptr );
 			Result = NULL;
 		}
 		check(Result || !NewSize);
@@ -51,7 +61,7 @@ if ((PTRINT) Ptr < 0x1000) Ptr = NULL;
 	void Free( void* Ptr )
 	{
 		guard(FMallocAnsi::Free);
-		free( Ptr );
+		ANSI_FREE( Ptr );
 		unguard;
 	}
 	void DumpAllocs()

@@ -198,6 +198,11 @@ function(ut_module name type)
   if(NOT type STREQUAL "SHARED")
     # Executables need the staged data next to them, also when built as single targets.
     add_dependencies(${name} ut_stage)
+    # The launchers' FMallocAnsi is GMalloc for every module.
+    if(TARGET mimalloc-static)
+      target_link_libraries(${name} PRIVATE mimalloc-static)
+      target_compile_definitions(${name} PRIVATE UT_MIMALLOC=1)
+    endif()
     # appGetDllHandle finds linked modules by their exported GLoaded<Package> symbol.
     set_target_properties(${name} PROPERTIES ENABLE_EXPORTS ${UT_STATIC_LINK})
   endif()
@@ -269,6 +274,7 @@ if(VCPKG_TOOLCHAIN)
     find_package(OpenAL CONFIG REQUIRED)
     find_package(unofficial-angle CONFIG REQUIRED)
     set(GLES_TARGET unofficial::angle::libGLESv2)
+    find_package(mimalloc CONFIG REQUIRED)
   else()
     # Emscripten links its own OpenAL on Web Audio (-lopenal), and WebGL sits behind the GLES3 headers.
     set(GLES_TARGET "")
