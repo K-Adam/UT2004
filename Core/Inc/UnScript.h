@@ -51,6 +51,10 @@ CORE_API void DropForeignObjects( UProperty* Property, BYTE* Addr, INT Count );
 inline UClass* GOutClass( UClass* Class, UClass* Out ) { return Class && Class->IsChildOf(Out) ? Class : Out; }
 // The ScriptFields key of the element an array opcode reads as a context's member, apart from the opcode's own.
 inline INT GContextElementKey( INT Offset ) { return -1-Offset; }
+// The ScriptFields key of the dynamic array a statement leaves, apart from its expression's own.
+inline INT GStatementKey( INT Offset ) { return 0x40000000+Offset; }
+// Runs one statement and frees a dynamic array it leaves, which retail script compiles without freeing.
+CORE_API void GStepStatement( FFrame& Stack, UObject* Context );
 
 extern CORE_API Native GCasts[];
 BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
@@ -132,16 +136,12 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 extern CORE_API FFrame* GIteratorFrame;
 #define PRE_ITERATOR \
 	INT wEndOffset = Stack.ReadWord(); \
-	BYTE B=0, Buffer[MAX_STRING_CONST_SIZE]; \
+	BYTE B=0; \
 	BYTE *StartCode = Stack.Code; \
 	do {
-// Each statement's value lands on what the one before left, the load check keeps it to what an empty string covers.
 #define POST_ITERATOR \
 		while( (B=*Stack.Code)!=EX_IteratorPop && B!=EX_IteratorNext ) \
-		{ \
-			appMemzero( Buffer, sizeof(FString) ); \
-			Stack.Step( Stack.Object, Buffer ); \
-		} \
+			GStepStatement( Stack, Stack.Object ); \
 		if( *Stack.Code++==EX_IteratorNext ) \
 			Stack.Code = StartCode; \
 	} while( B != EX_IteratorPop ); \

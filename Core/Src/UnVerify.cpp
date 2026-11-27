@@ -180,6 +180,8 @@ public:
 
 	const TCHAR* Run()
 	{
+		if( Size>=GStatementKey(0) )
+			return TEXT("has more script than ScriptFields keys cover");
 		BYTE Last = EX_EndOfScript;
 		while( Pos<Size && !Error )
 		{
@@ -966,9 +968,13 @@ private:
 			case EX_EatString:
 			{
 				// The compiler eats arrays of strings too, an array has a string's layout.
+				INT Start = Pos-1;
 				FScriptType Value = Expr().Type;
 				if( Value.Kind==TK_Array && Value.Dim==1 )
+				{
+					LeftArray( Start, Value );
 					Value = ScriptType( TK_String );
+				}
 				Need( Value, ScriptType(TK_String), TEXT("eats a value that is no string") );
 				break;
 			}
@@ -1066,6 +1072,11 @@ private:
 					Fail( TEXT("assigns to a value that is no variable") );
 				if( Token==EX_LetBool && Target.Inner!=EX_BoolVariable )
 					Fail( TEXT("assigns a bool to a variable that is no bool") );
+				// Through None execLet evaluates into scratch room, which it destroys as the property found here.
+				UArrayProperty* Array = Target.Inner==EX_DynArrayElement ? Cast<UArrayProperty>( Target.Property ) : NULL;
+				UProperty* Held = Array ? Array->Inner : Target.Property;
+				if( Loaded && Token==EX_Let && Target.Kind==EK_Variable && Held && (Held->PropertyFlags & CPF_NeedCtorLink) && TypeOf(Held).Kind==Target.Type.Kind )
+					Node->ScriptFields.Set( Current, Held );
 				FScriptType Slot = Token==EX_LetBool || Target.Kind==EK_Length ? IntType : Token==EX_LetDelegate ? ScriptType(TK_Delegate) : Target.Type;
 				// execLetDelegate writes a delegate through the target's address.
 				if( Token==EX_LetDelegate )
@@ -1094,6 +1105,7 @@ private:
 				Pos--;
 				// A native function's parameter statements are never run. The compiler wraps a string statement
 				// in EX_EatString to free it. A bare string statement would leak.
+				INT Start = Pos;
 				FScriptType Value = Expr().Type;
 				if( Function && (Function->FunctionFlags & FUNC_Native) )
 					break;
@@ -1101,9 +1113,21 @@ private:
 					TypeFail( TEXT("has a value that does not fit its buffer") );
 				else if( Value.Kind==TK_String )
 					TypeFail( TEXT("has a statement whose value is never freed") );
+				// Retail compiles a bare dynamic array statement, GStepStatement frees it as the array found here.
+				else if( Value.Kind==TK_Array && Value.Dim==1 )
+					LeftArray( Start, Value );
 				break;
 			}
 		}
+	}
+
+	void LeftArray( INT Start, FScriptType Value )
+	{
+		if( !Loaded || !Value.Inner )
+			return;
+		UArrayProperty* Array = Cast<UArrayProperty>( Value.Inner->GetOuter() );
+		if( Array && Array->Inner==Value.Inner )
+			Node->ScriptFields.Set( GStatementKey(Start), Array );
 	}
 };
 

@@ -1150,6 +1150,8 @@ void UObject::execLet( FFrame& Stack, RESULT_DECL )
 	guardSlow(UObject::execLet);
 	checkSlow(!IsA(UBoolProperty::StaticClass()));
 
+	UStruct* Node = Stack.Node;
+	INT At = Stack.Code - 1 - Node->Script.GetTypedData();
 	// Get variable address. Only a length read in this target may mark the assignment as a length set.
 	GPropAddr = NULL;
 	GRuntimeUCFlags &= ~RUC_ArrayLengthSet;
@@ -1200,7 +1202,12 @@ void UObject::execLet( FFrame& Stack, RESULT_DECL )
 			DropForeignObjects( Target, Addr, Whole ? Target->ArrayDim : 1 );
 	}
 	if( Scratch )
+	{
+		// The load check found what the value holds that needs destroying, the room covers all of it.
+		if( UField** Found = Node->ScriptFields.Find( At ) )
+			((UProperty*)*Found)->DestroyValue( Scratch );
 		appFree( Scratch );
+	}
 	unguardexecSlow;
 }
 IMPLEMENT_FUNCTION( UObject, EX_Let, execLet );
@@ -4025,9 +4032,14 @@ void UObject::execEatString( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execEatString);
 
-	// Call function returning a string, then discard the result.
+	// Call function returning a string or a dynamic array, then discard the result.
+	UStruct* Node = Stack.Node;
+	INT At = Stack.Code - 1 - Node->Script.GetTypedData();
 	FString String;
 	Stack.Step( this, &String );
+	if( ((FArray*)&String)->GetData() )
+		if( UField** Found = Node->ScriptFields.Find( GStatementKey(At) ) )
+			((UArrayProperty*)*Found)->DestroyValue( &String );
 
 	unguardexecSlow;
 }
@@ -5422,7 +5434,6 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 	&&	!(ObjectFlags & SingularFlag) )
 	{
 		ObjectFlags |= SingularFlag;
-		BYTE Buffer[MAX_STRING_CONST_SIZE];
 #if DO_GUARD
 		if( ++Recurse > RECURSE_LIMIT )
 		{
@@ -5432,13 +5443,8 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 			Stack.Logf( NAME_Critical, TEXT("Infinite script recursion (%i calls) detected"), RECURSE_LIMIT );
 		}
 #endif
-		// Each statement's value lands on what the one before left, the load check keeps it to what an empty string
-		// covers.
 		while( *Stack.Code != EX_Return )
-		{
-			appMemzero( Buffer, sizeof(FString) );
-			Stack.Step( Stack.Object, Buffer );
-		}
+			GStepStatement( Stack, Stack.Object );
 		Stack.Code++;
 		Stack.Step( Stack.Object, Result );
 		UProperty* Return = Result && ((UFunction*)Stack.Node)->ReturnValueOffset!=MAXWORD ? ((UFunction*)Stack.Node)->GetReturnProperty() : NULL;
@@ -5455,6 +5461,20 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 #endif
 	}
 	unguardSlow;
+}
+
+void GStepStatement( FFrame& Stack, UObject* Context )
+{
+	// Each statement's value lands on what the one before left, the load check keeps it to what an empty string
+	// covers. The statement may change the frame's state, so it is looked up where it started.
+	BYTE Buffer[MAX_STRING_CONST_SIZE];
+	appMemzero( Buffer, sizeof(FString) );
+	UStruct* Node = Stack.Node;
+	INT At = Stack.Code - Node->Script.GetTypedData();
+	Stack.Step( Context, Buffer );
+	if( ((FArray*)Buffer)->GetData() )
+		if( UField** Found = Node->ScriptFields.Find( GStatementKey(At) ) )
+			((UArrayProperty*)*Found)->DestroyValue( Buffer );
 }
 
 //

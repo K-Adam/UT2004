@@ -1167,9 +1167,12 @@ TEST( Security, ElementOfAValueIsReadFromIt )
 	FScript S( TEXT("SecurityReadElement") );
 	UProperty* Read = S.Int( TEXT("Read"), CPF_Parm );
 	S.Link();
+	// An eaten dynamic array is freed as the array it is.
+	S.Byte( EX_EatString ).Byte( EX_FinalFunction ).Object( Make.Function ).Byte( EX_EndFunctionParms );
 	S.Byte( EX_Let ).Local( Read ).Byte( EX_DynArrayElement ).Byte( EX_IntOne ).Byte( EX_FinalFunction ).Object( Make.Function ).Byte( EX_EndFunctionParms );
 	S.Return();
 	ASSERT_EQ( "", ScriptRule( S.Function ) );
+	EXPECT_TRUE( S.Function->ScriptFields.Find( GStatementKey(0) ) );
 	BYTE Parms[64] = {};
 	S.Run( Parms );
 	EXPECT_EQ( 7, S.Value<INT>( Parms, Read ) );
