@@ -45,6 +45,10 @@ CORE_API void GDisableRefusedScript( TArray<UObject*>& Loaded );
 CORE_API const TCHAR* GScriptStructureError( UStruct* Node );
 // Marks where each statement that can run starts, by the grammar alone, for checks made before the batch has loaded.
 UBOOL GScriptStatements( UStruct* Node, TArray<BYTE>& Starts );
+// Sets object references that are not of their property's class to None.
+CORE_API void DropForeignObjects( UProperty* Property, BYTE* Addr, INT Count );
+// An iterator's class narrowed to what its out variable holds.
+inline UClass* GOutClass( UClass* Class, UClass* Out ) { return Class && Class->IsChildOf(Out) ? Class : Out; }
 // The ScriptFields key of the element an array opcode reads as a context's member, apart from the opcode's own.
 inline INT GContextElementKey( INT Offset ) { return -1-Offset; }
 
@@ -95,6 +99,8 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 #define P_GET_OBJECT(cls,var)         cls*  var=NULL;                      Stack.Step( Stack.Object, &var    ); P_CHECK_OBJECT(cls,var);
 #define P_GET_OBJECT_OPTX(cls,var,def)cls*  var=def;                       Stack.Step( Stack.Object, &var    ); P_CHECK_OBJECT(cls,var);
 #define P_GET_OBJECT_REF(cls,var)     cls*  var##T=NULL; GPropAddr=0;      Stack.Step( Stack.Object, &var##T ); if( GPropObject )GPropObject->NetDirty(GProperty); cls**    var = GPropAddr ? (cls   **)GPropAddr:&var##T; P_CHECK_OBJECT(cls,*var);
+// The out variable may be of a narrower class than the native writes, the load check does not compare classes.
+#define P_GET_OBJECT_OUT(cls,var,varcls) P_GET_OBJECT_REF(cls,var) UClass* varcls = GPropAddr && GProperty && (GProperty->GetClass()->ClassFlags & CLASS_IsAUObjectProperty) ? ((UObjectProperty*)GProperty)->PropertyClass : cls::StaticClass();
 #define P_GET_ARRAY_REF(typ,var)      typ   var##T[256]; GPropAddr=0;      Stack.Step( Stack.Object,  var##T ); if( GPropObject )GPropObject->NetDirty(GProperty); typ*     var = GPropAddr ? (typ    *)GPropAddr: var##T;
 // rjp --
 #define P_GET_TARRAY(var,typ)         TArray<typ> var;                     Stack.Step( Stack.Object, &var    );
@@ -118,6 +124,7 @@ BYTE CORE_API GRegisterCast( INT CastCode, const Native& Func );
 #define P_GET_ACTOR(var)            P_GET_OBJECT(AActor,var)
 #define P_GET_ACTOR_OPTX(var,def)   P_GET_OBJECT_OPTX(AActor,var,def)
 #define P_GET_ACTOR_REF(var)        P_GET_OBJECT_REF(AActor,var)
+#define P_GET_ACTOR_OUT(var,varcls) P_GET_OBJECT_OUT(AActor,var,varcls)
 
 //
 // Iterator macros.

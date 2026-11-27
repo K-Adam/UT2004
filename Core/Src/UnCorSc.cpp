@@ -357,6 +357,9 @@ void UObject::execUndefined( FFrame& Stack, RESULT_DECL  )
 }
 
 CORE_API INT GMaxPropertySize = 0;
+
+// Whether GPropAddr is one element of GProperty rather than the whole variable.
+static UBOOL GPropElement = 0;
 CORE_API BYTE GLatentNatives[EX_Max];
 
 UFunction* GNativeFunction( INT iNative )
@@ -476,8 +479,14 @@ static inline UBOOL HasField( UObject* Object, FFrame& Stack, UProperty* Propert
 
 // Script checks an object's class only when it compiles, and the engine reads object variables as their C++ type.
 // So an object stored where its class does not belong becomes None.
-static inline void DropForeignObjects( UProperty* Property, BYTE* Addr, INT Count )
+void DropForeignObjects( UProperty* Property, BYTE* Addr, INT Count )
 {
+	if( Property->GetClass()==UArrayProperty::StaticClass() )
+	{
+		for( FArray* Array=(FArray*)Addr; Count-->0; Array++ )
+			DropForeignObjects( ((UArrayProperty*)Property)->Inner, (BYTE*)Array->GetData(), Array->Num() );
+		return;
+	}
 	if( !(Property->GetClass()->ClassFlags & CLASS_IsAUObjectProperty) )
 		return;
 	UObjectProperty* Reference = (UObjectProperty*)Property;
@@ -541,6 +550,7 @@ void UObject::execLocalVariable( FFrame& Stack, RESULT_DECL )
 	GProperty = (UProperty*)Stack.ReadObject();
 	GPropAddr = Stack.Locals + GProperty->Offset;
 	GPropObject = NULL;
+	GPropElement = 0;
 
     if( Result )
         GProperty->CopyCompleteValue( Result, GPropAddr );
@@ -558,6 +568,7 @@ void UObject::execInstanceVariable( FFrame& Stack, RESULT_DECL)
 		return;
 	GPropAddr = (BYTE*)this + GProperty->Offset;
 	GPropObject = this;
+	GPropElement = 0;
 
     if( Result )
 		GProperty->CopyCompleteValue( Result, GPropAddr );
@@ -575,6 +586,7 @@ void UObject::execDefaultVariable( FFrame& Stack, RESULT_DECL )
 		return;
 	GPropAddr = &GetClass()->Defaults(GProperty->Offset);
 	GPropObject = NULL;
+	GPropElement = 0;
 	if( Result )
 		GProperty->CopyCompleteValue( Result, GPropAddr );
 
@@ -650,6 +662,7 @@ void UObject::execArrayElement( FFrame& Stack, RESULT_DECL )
 
 		// Update address.
 		GPropAddr += Index * GProperty->ElementSize;
+		GPropElement = 1;
 		guardSlow(ArrayElementCopySingleValue);
 		if( Result )//!!
 			GProperty->CopySingleValue( Result, GPropAddr );
@@ -895,6 +908,7 @@ void UObject::execStructMember( FFrame& Stack, RESULT_DECL )
 	// Set result.
 	GProperty = Property;
 	GPropObject = this;
+	GPropElement = 0;
 	if( GPropAddr )
 		GPropAddr += Property->Offset;
 	guardSlow(StructMemberCopyComplete);
@@ -923,6 +937,7 @@ void UObject::execStructMember( FFrame& Stack, RESULT_DECL )
 
     GProperty = Property;
     GPropObject = this;
+    GPropElement = 0;
     // Set result if required
     if( Result && GPropAddr )
     {
@@ -965,6 +980,8 @@ void UObject::execNativeParm( FFrame& Stack, RESULT_DECL )
 	if( Result )
 	{
 		GPropAddr = Stack.Locals + Property->Offset;
+		GProperty = Property;
+		GPropElement = 0;
 		GPropObject = NULL;  
 		Property->CopyCompleteValue( Result, Stack.Locals + Property->Offset );
 	}
@@ -1136,9 +1153,8 @@ void UObject::execLet( FFrame& Stack, RESULT_DECL )
 	// Get variable address. Only a length read in this target may mark the assignment as a length set.
 	GPropAddr = NULL;
 	GRuntimeUCFlags &= ~RUC_ArrayLengthSet;
-	// Only a variable named directly can be a whole static array.
-	UBOOL Whole = *Stack.Code==EX_LocalVariable || *Stack.Code==EX_InstanceVariable || *Stack.Code==EX_DefaultVariable;
 	Stack.Step( Stack.Object, NULL ); // Evaluate variable.
+	UBOOL Whole = !GPropElement;
 	UProperty* Target = GPropAddr ? GProperty : NULL;
 	BYTE* Scratch = NULL;
 	if( !GPropAddr )
@@ -5003,10 +5019,10 @@ void UObject::execAllObjects( FFrame& Stack, RESULT_DECL )
 
 	// Get the parms.
 	P_GET_OBJECT(UClass,objClass);
-	P_GET_OBJECT_REF(UObject,obj);
+	P_GET_OBJECT_OUT(UObject,obj,OutClass);
 	P_FINISH;
 
-	objClass = objClass ? objClass : UObject::StaticClass();
+	objClass = GOutClass( objClass, OutClass );
     TObjectIterator<UObject> It;
 
 	PRE_ITERATOR;
@@ -5425,6 +5441,9 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 		}
 		Stack.Code++;
 		Stack.Step( Stack.Object, Result );
+		UProperty* Return = Result && ((UFunction*)Stack.Node)->ReturnValueOffset!=MAXWORD ? ((UFunction*)Stack.Node)->GetReturnProperty() : NULL;
+		if( Return )
+			DropForeignObjects( Return, (BYTE*)Result, 1 );
 
 		//DEBUGGER: Necessary for the call stack. Grab an optional 'PREVSTACK' debug info.
 		if ( *Stack.Code == EX_DebugInfo )
@@ -5493,12 +5512,15 @@ void UObject::ProcessDelegate( FName DelegateName, FScriptDelegate* Delegate, vo
 		Delegate->Object = NULL;
 		Delegate->FunctionName = NAME_None;
 	}
-	UFunction* Signature = FindFunctionChecked( DelegateName );
-	if( !Signature )
-		return;
+	// C++ fills Parms as the delegate property declares, which a function found by name need not match.
+	INT Offset = (BYTE*)Delegate - (BYTE*)this;
+	UFunction* Signature = NULL;
+	for( UProperty* Ref=GetClass()->RefLink; Ref && !Signature; Ref=Ref->NextRef )
+		if( Ref->Offset==Offset && Ref->IsA(UDelegateProperty::StaticClass()) )
+			Signature = ((UDelegateProperty*)Ref)->Function;
 	UObject* Target = Delegate->Object ? Delegate->Object : this;
-	UFunction* Function = Delegate->Object ? Target->FindFunction( Delegate->FunctionName ) : Signature;
-	if( Function && GSameParms(Function,Signature) )
+	UFunction* Function = Target->FindFunction( Delegate->Object ? Delegate->FunctionName : DelegateName );
+	if( Function && Signature && GSameParms(Function,Signature) )
 		Target->ProcessEvent( Function, Parms, UnusedResult );
 	else
 		debugf( NAME_Warning, TEXT("%s.%s does not fit delegate %s"), Target->GetFullName(), *Delegate->FunctionName, *DelegateName );

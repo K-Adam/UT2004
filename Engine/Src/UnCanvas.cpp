@@ -1171,7 +1171,7 @@ void UCanvas::execSetScreenProjector( FFrame& Stack, RESULT_DECL )
 	guard(UCanvas::execSetScreenProjector);
 	P_GET_INT(index);
 	P_GET_VECTOR(position);
-	P_GET_VECTOR(colorVect);
+	P_GET_STRUCT(FColor,color);
 	P_GET_FLOAT(radius);
 	P_GET_OBJECT(UTexture,pTex);
 	P_FINISH;

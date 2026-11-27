@@ -1063,6 +1063,7 @@ void UGUIController::execGetWeaponList(FFrame& Stack, RESULT_DECL )
 	guard(GUIController::execGetWeaponList);
 
 	P_GET_TARRAY_REF(WeaponClass, UClass*);
+	UProperty* WeaponClassProperty = GPropAddr ? GProperty : NULL;
 	P_GET_TARRAY_REF(WeaponDesc, FString);
 	P_FINISH
 
@@ -1090,6 +1091,8 @@ void UGUIController::execGetWeaponList(FFrame& Stack, RESULT_DECL )
 		int k = WeaponDesc->AddZeroed();
 		(*WeaponDesc)(k) = RegList(i).Description;
 	}
+	if( WeaponClassProperty )
+		DropForeignObjects( WeaponClassProperty, (BYTE*)WeaponClass, 1 );
 
 	unguardexec;
 }

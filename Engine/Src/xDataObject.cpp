@@ -195,9 +195,10 @@ void AGameInfo::execAllDataObjects( FFrame& Stack, RESULT_DECL )
 {
 	guard(AGameInfo::execAllDataObjects);
 	P_GET_OBJECT(UClass,objClass);
-    P_GET_OBJECT_REF(UObject, obj);
+    P_GET_OBJECT_OUT(UObject, obj, OutClass);
     P_GET_STR(packageName);
 	P_FINISH;
+	objClass = GOutClass( objClass, OutClass );
 
     checkSlow( packageName.Len() );
 

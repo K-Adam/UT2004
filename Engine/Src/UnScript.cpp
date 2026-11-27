@@ -2272,7 +2272,7 @@ void AActor::execTrace( FFrame& Stack, RESULT_DECL )
 	P_GET_VECTOR_OPTX(TraceStart,Location);
 	P_GET_UBOOL_OPTX(bTraceActors,bCollideActors);
 	P_GET_VECTOR_OPTX(TraceExtent,FVector(0,0,0));
-	P_GET_OBJECT_REF(UMaterial, Material);
+	P_GET_OBJECT_OUT(UMaterial, Material, MaterialClass);
 	P_FINISH;
 
 	// Trace the line.
@@ -2296,7 +2296,7 @@ void AActor::execTrace( FFrame& Stack, RESULT_DECL )
 	*HitLocation      = Hit.Location;
 	*HitNormal        = Hit.Normal;
 	if( Material )
-		*Material = Hit.Material;
+		*Material = Hit.Material && Hit.Material->IsA(MaterialClass) ? Hit.Material : NULL;
 	unguardexecSlow;
 }
 
@@ -2460,11 +2460,11 @@ void AActor::execAllActors( FFrame& Stack, RESULT_DECL )
 
 	// Get the parms.
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_GET_NAME_OPTX(TagName,NAME_None);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iActor=0;
 
 	PRE_ITERATOR;
@@ -2495,11 +2495,11 @@ void AActor::execDynamicActors( FFrame& Stack, RESULT_DECL )
 
 	// Get the parms.
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_GET_NAME_OPTX(TagName,NAME_None);
 	P_FINISH;
 	
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iActor = GetLevel()->iFirstDynamicActor;
 
 	PRE_ITERATOR;
@@ -2529,10 +2529,10 @@ void AActor::execChildActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execChildActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iActor=0;
 
 	PRE_ITERATOR;
@@ -2562,10 +2562,10 @@ void AActor::execBasedActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execBasedActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iBased=0;
 
 	PRE_ITERATOR;
@@ -2594,10 +2594,10 @@ void AActor::execTouchingActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execTouchingActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iTouching=0;
 
 	PRE_ITERATOR;
@@ -2626,7 +2626,7 @@ void AActor::execTraceActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execTraceActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_GET_VECTOR_REF(HitLocation);
 	P_GET_VECTOR_REF(HitNormal);
 	P_GET_VECTOR(End);
@@ -2635,7 +2635,7 @@ void AActor::execTraceActors( FFrame& Stack, RESULT_DECL )
 	P_FINISH;
 
 	FMemMark Mark(GMem);
-	BaseClass         = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass         = GOutClass( BaseClass, OutClass );
 	FCheckResult* Hit = GetLevel()->MultiLineCheck( GMem, End, Start, TraceExtent, Level, TRACE_AllColliding, this );
 
 	PRE_ITERATOR;
@@ -2668,12 +2668,12 @@ void AActor::execRadiusActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execRadiusActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_GET_FLOAT(Radius);
 	P_GET_VECTOR_OPTX(TraceLocation,Location);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iActor=0;
 
 	PRE_ITERATOR;
@@ -2704,12 +2704,12 @@ void AActor::execVisibleActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execVisibleActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_GET_FLOAT_OPTX(Radius,0.0f);
 	P_GET_VECTOR_OPTX(TraceLocation,Location);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iActor=0;
 	FCheckResult Hit(1.f);
 
@@ -2746,13 +2746,13 @@ void AActor::execVisibleCollidingActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execVisibleCollidingActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_GET_FLOAT(Radius);
 	P_GET_VECTOR_OPTX(TraceLocation,Location);
 	P_GET_UBOOL_OPTX(bIgnoreHidden, 0); 
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	FMemMark Mark(GMem);
 	FCheckResult* Link=GetLevel()->Hash->ActorRadiusCheck( GMem, TraceLocation, Radius, 0 );
 	
@@ -2803,12 +2803,12 @@ void AActor::execCollidingActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AActor::execCollidingActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_GET_FLOAT(Radius);
 	P_GET_VECTOR_OPTX(TraceLocation,Location);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	FMemMark Mark(GMem);
 	FCheckResult* Link=GetLevel()->Hash->ActorRadiusCheck( GMem, TraceLocation, Radius, 0 );
 	
@@ -2852,10 +2852,10 @@ void AZoneInfo::execZoneActors( FFrame& Stack, RESULT_DECL )
 	guardSlow(AZoneInfo::execZoneActors);
 
 	P_GET_OBJECT(UClass,BaseClass);
-	P_GET_ACTOR_REF(OutActor);
+	P_GET_ACTOR_OUT(OutActor,OutClass);
 	P_FINISH;
 
-	BaseClass = BaseClass ? BaseClass : AActor::StaticClass();
+	BaseClass = GOutClass( BaseClass, OutClass );
 	INT iActor=0;
 
 	PRE_ITERATOR;

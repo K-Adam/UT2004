@@ -2673,9 +2673,12 @@ void UObject::execGetReferencers( FFrame& Stack, RESULT_DECL )
 
 	P_GET_OBJECT(UObject, Object);
 	P_GET_TARRAY_REF(Refs, UObject*);
+	UProperty* RefsProperty = GPropAddr ? GProperty : NULL;
 	P_FINISH;
 
 	GetReferencers(Object, *Refs);
+	if( RefsProperty )
+		DropForeignObjects( RefsProperty, (BYTE*)Refs, 1 );
 	unguardexec;
 }
 IMPLEMENT_FUNCTION( UObject, INDEX_NONE, execGetReferencers );

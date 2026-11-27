@@ -430,6 +430,34 @@ TEST( Security, ObjectOfAnotherClassIsNotStored )
 	EXPECT_FALSE( S.Value<UObject*>( Parms, Let ) ) << "a class went into a LevelInfo variable";
 	EXPECT_TRUE( S.Value<UObject*>( Parms, Kept )==GTestEngine->GLevel->GetLevelInfo() );
 	EXPECT_FALSE( S.Value<UObject*>( Parms, Out ) ) << "an out parameter brought a class into a LevelInfo variable";
+
+	// C++ reads a return value as the function declares it.
+	FScript Giver( TEXT("SecurityReturnForeign") );
+	UProperty* Returned = Giver.Ref( TEXT("ReturnValue"), CPF_Parm|CPF_OutParm|CPF_ReturnParm, Info );
+	Giver.Link();
+	Giver.Byte( EX_Return ).Byte( EX_ObjectConst ).Object( Foreign ).Byte( EX_EndOfScript );
+	BYTE GiverParms[64] = {};
+	Giver.Run( GiverParms );
+	EXPECT_FALSE( Giver.Value<UObject*>( GiverParms, Returned ) ) << "a class was returned as a LevelInfo";
+
+	// foreach AllActors(class'Actor', Each) with a LevelInfo variable visits only the LevelInfo.
+	FScript Loop( TEXT("SecurityNarrowOut") );
+	UProperty* Count = Loop.Int( TEXT("Count"), CPF_Parm );
+	UProperty* Each = Loop.Ref( TEXT("Each"), 0, Info );
+	Loop.Link();
+	Loop.Byte( EX_Iterator ).AllActors( Each );
+	INT End = Loop.Code.Num();
+	Loop.Word( 0 );
+	// Count = Count + 1, native 146 is the int addition.
+	Loop.Byte( EX_Let ).Local( Count ).Byte( 146 ).Local( Count ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms );
+	Loop.Byte( EX_IteratorNext );
+	Loop.Code(End) = Loop.Code.Num() & 0xFF;
+	Loop.Code(End+1) = Loop.Code.Num() >> 8;
+	Loop.Byte( EX_IteratorPop );
+	Loop.Return();
+	BYTE LoopParms[64] = {};
+	Loop.Run( LoopParms );
+	EXPECT_EQ( 1, Loop.Value<INT>( LoopParms, Count ) ) << "an actor of another class went into a LevelInfo variable";
 }
 
 TEST( Security, MissingFunctionUnderContextIsSkipped )

@@ -81,6 +81,8 @@ void UCacheManager::execGetGameTypeList( FFrame& Stack, RESULT_DECL )
 	guard(UCacheManager::execGetGameTypeList);
 
 	P_GET_TARRAY_REF( GameRecords, FGameRecord );
+	// Unused, but a caller's filter argument must be read or the script runs on inside it.
+	P_GET_STR_OPTX( FilterType, TEXT("") );
 	P_FINISH;
 
 	UCacheManager* C = GetCache();
