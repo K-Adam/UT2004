@@ -720,6 +720,54 @@ static void MatrixScalePosition(MeMatrix4 tm, FVector scale3D)
 	tm[3][2] *= scale3D.Z;
 }
 
+static UBOOL KFiniteMatrix(const FMatrix& M)
+{
+	for(INT i=0; i<4; i++)
+		for(INT j=0; j<4; j++)
+			if(!isfinite(M.M[i][j]))
+				return 0;
+	return 1;
+}
+
+static UBOOL KGoodSize(FLOAT Size)
+{
+	return isfinite(Size) && Size > 0;
+}
+
+// One pass with bitwise swaps, as TArray relocates its elements.
+template<class T, class F> static void KDropElements(UKMeshProps* Props, TArray<T>& Elems, F Keep, const TCHAR* Rule)
+{
+	INT Kept = 0;
+	for(INT i=0; i<Elems.Num(); i++)
+		if(Keep(Elems(i)))
+		{
+			if(i != Kept)
+				appMemswap(&Elems(Kept), &Elems(i), sizeof(T));
+			Kept++;
+		}
+	if(Kept < Elems.Num())
+	{
+		Elems.Remove(Kept, Elems.Num() - Kept);
+		GRepairedAsset(Props, Rule);
+	}
+}
+
+// Bullet shapes from these would have NaN bounds. Hull points are checked where the hull is built.
+void UKMeshProps::RepairLoaded()
+{
+	guard(UKMeshProps::RepairLoaded);
+	KDropElements(this, AggGeom.SphereElems, [](const FKSphereElem& E){ return KFiniteMatrix(E.TM) && KGoodSize(E.Radius); },
+		TEXT("has a Karma sphere with a broken matrix or size"));
+	KDropElements(this, AggGeom.BoxElems, [](const FKBoxElem& E){ return KFiniteMatrix(E.TM) && KGoodSize(E.X) && KGoodSize(E.Y) && KGoodSize(E.Z); },
+		TEXT("has a Karma box with a broken matrix or size"));
+	KDropElements(this, AggGeom.CylinderElems, [](const FKCylinderElem& E){ return KFiniteMatrix(E.TM) && KGoodSize(E.Radius) && KGoodSize(E.Height); },
+		TEXT("has a Karma cylinder with a broken matrix or size"));
+	// Each hull is built again on every vehicle spawn. Retail hulls have at most 60 points.
+	KDropElements(this, AggGeom.ConvexElems, [](const FKConvexElem& E){ return KFiniteMatrix(E.TM) && E.VertexData.Num() <= 4096; },
+		TEXT("has a Karma hull with a broken matrix or too many points"));
+	unguard;
+}
+
 // Create an McdGeometry (at the correct scale) from this static mesh.
 // 'name' is really just for debugging
 // The order of creation MUST be the same in order for KBoneNameFromElementIndex to work!!
@@ -728,7 +776,15 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 	guard(KAggregateGeomInstance);
 
 	int i, j, totalElems;
-	
+
+	// Retail maps mirror thousands of meshes with a negative scale.
+	if(!KGoodSize(Abs(scale3D.X)) || !KGoodSize(Abs(scale3D.Y)) || !KGoodSize(Abs(scale3D.Z)))
+	{
+		debugf(TEXT("(Karma:) KAggregateGeomInstance: (%s) Scale is zero or not finite."), name);
+		return 0;
+	}
+	const FLOAT primScale = Abs(scale3D.X);
+
 	// It's only convex elements that can be used if we have a non-uniform scale factor.
 	if(scale3D.IsUniform())
 		totalElems = uGeom->GetElementCount();
@@ -759,7 +815,7 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 		for(i=0; i<uGeom->SphereElems.Num(); i++)
 		{
 			FKSphereElem* sphereElem = &uGeom->SphereElems(i);
-			tmpGeom = McdSphereCreate(geomMan->fwk, sphereElem->Radius * scale3D.X);
+			tmpGeom = McdSphereCreate(geomMan->fwk, sphereElem->Radius * primScale);
 			if(KGData)
 				(KGData->GeometryCount)++;
 
@@ -771,7 +827,7 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 		for(i=0; i<uGeom->BoxElems.Num(); i++)
 		{
 			FKBoxElem* boxElem = &uGeom->BoxElems(i);
-			tmpGeom = McdBoxCreate(geomMan->fwk, boxElem->X * scale3D.X, boxElem->Y * scale3D.X, boxElem->Z * scale3D.X);
+			tmpGeom = McdBoxCreate(geomMan->fwk, boxElem->X * primScale, boxElem->Y * primScale, boxElem->Z * primScale);
 			if(KGData)
 				(KGData->GeometryCount)++;
 
@@ -783,7 +839,7 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 		for(i=0; i<uGeom->CylinderElems.Num(); i++)
 		{
 			FKCylinderElem* cylElem = &uGeom->CylinderElems(i);
-			tmpGeom = McdCylinderCreate(geomMan->fwk, cylElem->Radius * scale3D.X, cylElem->Height * scale3D.X);
+			tmpGeom = McdCylinderCreate(geomMan->fwk, cylElem->Radius * primScale, cylElem->Height * primScale);
 			if(KGData)
 				(KGData->GeometryCount)++;
 
@@ -819,8 +875,6 @@ McdGeometryID ENGINE_API KAggregateGeomInstance(FKAggregateGeom* uGeom, FVector 
 			MatrixScalePosition(tmpTM, scale3D);
 			McdAggregateAddElement(aggGeom, tmpGeom, tmpTM);
 		}
-
-		MeMemoryFREEA(verts);
 	}
 
 	// Only bother returning this aggregate if it actually has any elements.
@@ -1108,6 +1162,12 @@ void ENGINE_API KUpdateMassProps(UKMeshProps* mp)
 	McdNullRegisterType(frame);
 
 	McdGeometryID tmpg = KAggregateGeomInstance(&mp->AggGeom, FVector(1,1,1), gm, TEXT("UpdateMeshProps"));
+	if(!tmpg)
+	{
+		McdGMDestroy(gm);
+		McdTerm(frame);
+		return;
+	}
 
 	MeMatrix4 comTM;
 	MeMatrix3 I;

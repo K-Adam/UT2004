@@ -234,6 +234,7 @@ class ENGINE_API UKMeshProps : public UObject
 	}
 	
 	void Draw(FRenderInterface* RI, INT ShowFlags);
+	void RepairLoaded();
 
 	virtual void Serialize(FArchive& Ar)
 	{
@@ -243,6 +244,8 @@ class ENGINE_API UKMeshProps : public UObject
 		Ar << InertiaTensor[3] << InertiaTensor[4] << InertiaTensor[5];
 		Ar << COMOffset;
 		Ar << AggGeom;
+		if(Ar.LoadingPackage())
+			RepairLoaded();
 		unguard;
 	}
 };

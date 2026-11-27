@@ -1743,6 +1743,54 @@ TEST( Security, StaticMeshTriangleUVsPastItsArray )
 	GFileManager->Delete( TEXT("SecurityTriangles.u") );
 }
 
+// Karma collision is built only from the elements Bullet can take, the rest is dropped on load or where the hull is built.
+TEST( Security, BrokenKarmaElementsAreDropped )
+{
+	UPackage* Package = UObject::CreatePackage( NULL, TEXT("SecurityKarma") );
+	UStaticMesh* Mesh = ValidStaticMesh( Package, TEXT("Mesh") );
+	Mesh->UseSimpleKarmaCollision = 1;
+	Mesh->KPhysicsProps = ConstructObject<UKMeshProps>( UKMeshProps::StaticClass(), Mesh );
+	FKAggregateGeom& Geom = Mesh->KPhysicsProps->AggGeom;
+	auto AddCube = [&Geom]() -> FKConvexElem&
+	{
+		FKConvexElem* Hull = new(Geom.ConvexElems) FKConvexElem();
+		Hull->TM = FMatrix::Identity;
+		for( INT i=0; i<8; i++ )
+			Hull->VertexData.AddItem( FVector( i&1, i>>1&1, i>>2&1 ) );
+		return *Hull;
+	};
+	const FLOAT Bad[] = { NAN, INFINITY, 1e38f };
+	for( INT i=0; i<ARRAY_COUNT(Bad); i++ )
+		AddCube().VertexData(i).Y = Bad[i];
+	AddCube().VertexData.Remove( 3, 5 );
+	AddCube().TM.M[3][0] = NAN;
+	new(Geom.SphereElems) FKSphereElem( -1.f );
+	Geom.SphereElems(0).TM = FMatrix::Identity;
+	SaveAndLoad( Package, TEXT("SecurityKarma.usx") );
+	EXPECT_EQ( 4, Geom.ConvexElems.Num() );
+	EXPECT_EQ( 0, Geom.SphereElems.Num() );
+
+	UClass* Class = UObject::StaticLoadClass( AActor::StaticClass(), NULL, TEXT("Engine.FileLog"), NULL, LOAD_NoWarn, NULL );
+	ASSERT_TRUE( Class );
+	auto Build = [Mesh, Class]( FLOAT Scale )
+	{
+		AActor* Actor = GTestEngine->GLevel->SpawnActor( Class );
+		Actor->StaticMesh = Mesh;
+		Actor->DrawScale = Scale;
+		Actor->KParams = ConstructObject<UKarmaParamsCollision>( UKarmaParamsCollision::StaticClass(), Actor->GetOuter() );
+		UBOOL Block = 1;
+		Actor->ProcessEvent( Actor->FindFunctionChecked( FName(TEXT("KSetBlockKarma")) ), &Block );
+		GTestEngine->GLevel->DestroyActor( Actor );
+	};
+	Build( 1.f );
+	EXPECT_EQ( 0, Mesh->KCollisionGeom.Num() );
+	AddCube();
+	Build( NAN );
+	EXPECT_EQ( 0, Mesh->KCollisionGeom.Num() );
+	Build( 1.f );
+	EXPECT_EQ( 1, Mesh->KCollisionGeom.Num() );
+}
+
 TEST( Security, ArrayIndicesAreCheckedInRelease )
 {
 	struct FThrowingError : public FOutputDeviceError
