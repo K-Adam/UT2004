@@ -1,0 +1,62 @@
+{
+  "scopeName": "source.unrealscript",
+  "patterns": [
+    { "include": "#cpptext" },
+    { "include": "#defaultproperties" },
+    { "include": "#code" }
+  ],
+  "repository": {
+    "code": {
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "name": "meta.preprocessor.unrealscript", "match": "(?i)^\\s*#(exec|include|error|call|linenumber)\\b.*$" },
+        { "match": "(?i)\\b(function|event|state)\\s+(?:\\w+\\s+)?(\\w+)\\s*(?=\\(|\\{|$)", "captures": { "1": { "name": "storage.type.unrealscript" }, "2": { "name": "entity.name.function.unrealscript" } } },
+        { "name": "storage.type.unrealscript", "match": "(?i)\\b(class|extends|within|dependson|var|local|function|event|delegate|operator|preoperator|postoperator|state|struct|enum|const|replication|ignores)\\b" },
+        { "name": "keyword.control.unrealscript", "match": "(?i)\\b(if|else|for|foreach|while|do|until|switch|case|default|return|break|continue|goto|stop|assert|new)\\b" },
+        { "name": "storage.modifier.unrealscript", "match": "(?i)\\b(native|static|final|simulated|singular|latent|iterator|exec|reliable|unreliable|auto|abstract|placeable|notplaceable|noexport|nativereplication|editinlinenew|noteditinlinenew|hidecategories|showcategories|hidedropdown|cacheexempt|collapsecategories|dontcollapsecategories|safereplace|config|globalconfig|perobjectconfig|localized|transient|travel|input|private|protected|public|editconst|editinline|editinlineuse|export|instanced|automated|deprecated|cache|out|optional|coerce|skip|editconstarray|edfindable)\\b" },
+        { "name": "storage.type.primitive.unrealscript", "match": "(?i)\\b(int|float|bool|byte|string|name|array|pointer|vector|rotator|plane|coords|color)\\b" },
+        { "name": "constant.language.unrealscript", "match": "(?i)\\b(true|false|none|self|super)\\b" },
+        { "name": "support.function.builtin.unrealscript", "match": "(?i)\\b(arraycount|enumcount)\\b" }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.unrealscript", "match": "//.*$" },
+        { "name": "comment.block.unrealscript", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.unrealscript", "begin": "\"", "end": "\"", "patterns": [{ "name": "constant.character.escape.unrealscript", "match": "\\\\." }] },
+        { "name": "string.quoted.single.name.unrealscript", "match": "'[^'\\n]*'" }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.unrealscript",
+      "match": "(?i)\\b(0x[0-9a-f]+|\\d+\\.\\d*(e[+-]?\\d+)?f?|\\.\\d+(e[+-]?\\d+)?f?|\\d+)\\b"
+    },
+    "cpptext": {
+      "begin": "(?i)^\\s*(cpptext)\\b",
+      "beginCaptures": { "1": { "name": "storage.type.unrealscript" } },
+      "end": "(?<=\\})",
+      "patterns": [
+        { "begin": "\\{", "end": "^\\}", "contentName": "meta.embedded.block.cpp", "patterns": [{ "include": "source.cpp" }] }
+      ]
+    },
+    "defaultproperties": {
+      "begin": "(?i)^\\s*(defaultproperties)\\b",
+      "beginCaptures": { "1": { "name": "storage.type.unrealscript" } },
+      "end": "^\\}",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "name": "keyword.other.object.unrealscript", "match": "(?i)\\b(begin|end)\\s+object\\b" },
+        { "match": "(?i)^\\s*(\\w+)(?:\\(\\d+\\)|\\[\\d+\\])?\\s*=", "captures": { "1": { "name": "variable.other.property.unrealscript" } } },
+        { "name": "constant.language.unrealscript", "match": "(?i)\\b(true|false|none)\\b" }
+      ]
+    }
+  }
+}

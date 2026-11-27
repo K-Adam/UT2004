@@ -1,0 +1,39 @@
+{
+  "name": "unrealscript",
+  "displayName": "UnrealScript",
+  "publisher": "local",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.80.0" },
+  "contributes": {
+    "languages": [
+      {
+        "id": "unrealscript",
+        "aliases": ["UnrealScript"],
+        "extensions": [".uc"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "unrealscript",
+        "scopeName": "source.unrealscript",
+        "path": "./syntaxes/unrealscript.tmLanguage.json",
+        "embeddedLanguages": { "meta.embedded.block.cpp": "cpp" }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "ucc",
+        "owner": "unrealscript",
+        "fileLocation": ["autoDetect", "${workspaceFolder}/build/win64/System"],
+        "pattern": {
+          "regexp": "^\\s*(.+?\\.uc)\\((\\d+)\\) : (?:defaultproperties : )?(?:Exec|Script)?(Error|Warning), (.*?)(?: \\[.*\\.vcxproj\\])?$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    ]
+  }
+}

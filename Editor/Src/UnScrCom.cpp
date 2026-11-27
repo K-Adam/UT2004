@@ -134,37 +134,10 @@ void FScriptWriter::Serialize( void* V, INT Length )
 
 FString FScriptCompiler::GetContext()
 {
-	FString Path = appBaseDir(), Filename;
-	if( Path.Right(1)==PATH_SEPARATOR )
-		Path = Path.LeftChop( 1 );
-	while( Path.Len() && Path.Right(1)!=PATH_SEPARATOR )
-		Path = Path.LeftChop( 1 );
-
-	Filename = FString::Printf
-			(
-				TEXT("%s%s%sClasses%s%s.uc"),
-				*Path,
-				Class->GetOuter()->GetName(),
-				PATH_SEPARATOR,
-				PATH_SEPARATOR,
-				Class->GetName()
-			);
-	
-	if ( GFileManager->FileSize(*Filename)< 0  && appStrlen(GModName)>0 )
-	{
-		Filename = FString::Printf
-				(
-					TEXT("%s%s%s%s%sClasses%s%s.uc"),
-					*Path,
-					GModName,
-					PATH_SEPARATOR,
-					Class->GetOuter()->GetName(),
-					PATH_SEPARATOR,
-					PATH_SEPARATOR,
-					Class->GetName()
-				);
-
-	}
+	FString Tail = FString(Class->GetOuter()->GetName()) * TEXT("Classes") * Class->GetName() + TEXT(".uc");
+	FString Filename = FString(GScriptSourceRoot) * Tail;
+	if( GFileManager->FileSize(*Filename)<0 && appStrlen(GModName)>0 )
+		Filename = FString(GScriptSourceRoot) * GModName * Tail;
 	if (InDefaultPropContext)
 		return FString::Printf( TEXT("%s(1) : defaultproperties"), *Filename);
 
