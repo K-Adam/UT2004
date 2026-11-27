@@ -35,6 +35,8 @@ extern CORE_API BYTE GLatentNatives[];
 CORE_API UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override=0, UBOOL Leading=0 );
 // Iterators and skipping natives read bytecode a call by name does not have.
 UBOOL GNeedsFixedCall( UFunction* Function );
+// Counts the functions freed, so a cache that holds one can tell its pointer may now name another.
+extern DWORD GFunctionsFreed;
 // The script function that declares a numbered native.
 UFunction* GNativeFunction( INT iNative );
 // Turns down the package of an object whose layout the loader had to repair.

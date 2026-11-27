@@ -255,7 +255,10 @@ void UField::Serialize( FArchive& Ar )
 	guard(UField::Serialize);
 	Super::Serialize( Ar );
 
-	Ar << SuperField << Next;
+	// Reading Next can link a subclass, which must see the super the linker checked, not the one in the body.
+	UField* Read = SuperField;
+	Ar << Read << Next;
+	SuperField = Read;
 	if( Ar.IsLoading() )
 		HashNext = NULL;
 
@@ -1041,6 +1044,7 @@ void UClass::Destroy()
 	ExitProperties( Defaults.GetTypedData(), this );
 	Defaults.Empty();
 	DefaultPropText=TEXT("");
+	Ancestors.Empty();
 
 	Super::Destroy();
 	unguard;
@@ -1061,6 +1065,13 @@ void UClass::Link( FArchive& Ar, UBOOL Props )
 {
 	guard(UClass::Link);
 	Super::Link( Ar, Props );
+	INT Depth = 0;
+	for( UClass* C=this; C; C=C->GetSuperClass() )
+		Depth++;
+	Ancestors.Empty( Depth );
+	Ancestors.Add( Depth );
+	for( UClass* C=this; C; C=C->GetSuperClass() )
+		Ancestors(--Depth) = C;
 	if( !GIsEditor )
 	{
 		NetFields.Empty();
@@ -1773,6 +1784,8 @@ void UFunction::Serialize( FArchive& Ar )
 			if( Property->PropertyFlags & CPF_ReturnParm )
 				ReturnValueOffset = Property->Offset;
 		}
+		// Link ran inside Super::Serialize, before the flags were read.
+		NeedsFixedCall = GNeedsFixedCall( this );
 	}
 
 	unguard;
@@ -1784,6 +1797,12 @@ void UFunction::PostLoad()
 	if( const TCHAR* Error = SignatureError() )
 		GRefuseScript( this, Error );
 	unguard;
+}
+DWORD GFunctionsFreed = 0;
+void UFunction::Destroy()
+{
+	GFunctionsFreed++;
+	Super::Destroy();
 }
 static UPackage* TopPackage( UObject* Object );
 // C++ only calls by name the functions of packages it was built with, which hold its native classes.
@@ -1867,6 +1886,7 @@ void UFunction::DisableScript()
 	FunctionFlags &= ~(FUNC_Native|FUNC_Net);
 	iNative = 0;
 	Func = &UObject::execNothing;
+	NeedsFixedCall = GNeedsFixedCall( this );
 }
 UProperty* UFunction::GetReturnProperty()
 {
@@ -2020,6 +2040,14 @@ void UFunction::Link( FArchive& Ar, UBOOL Props )
 {
 	guard(UFunction::Link);
 	Super::Link( Ar, Props );
+	AcceptedFor = NULL;
+	NeedsFixedCall = GNeedsFixedCall( this );
+	ObjectReturn = GetReturnProperty();
+	UProperty* Inner = ObjectReturn;
+	while( Inner && Inner->GetClass()==UArrayProperty::StaticClass() )
+		Inner = ((UArrayProperty*)Inner)->Inner;
+	if( Inner && !(Inner->GetClass()->ClassFlags & CLASS_IsAUObjectProperty) )
+		ObjectReturn = NULL;
 	unguard;
 }
 IMPLEMENT_CLASS(UFunction);

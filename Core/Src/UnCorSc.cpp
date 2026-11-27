@@ -1311,6 +1311,18 @@ UBOOL GNeedsFixedCall( UFunction* Function )
 	return 0;
 }
 
+static UBOOL TakesParmsOf( UFunction* Function, UFunction* Checked )
+{
+	// An override almost always meets the same checked base.
+	if( Function->AcceptedFor==Checked && Function->AcceptedEpoch==GFunctionsFreed )
+		return 1;
+	if( !GSameParms(Function,Checked,1) )
+		return 0;
+	Function->AcceptedFor = Checked;
+	Function->AcceptedEpoch = GFunctionsFreed;
+	return 1;
+}
+
 // A call by name runs only a function that takes the parameters the load check found for it, or the first of them
 // as retail did, else it is skipped.
 // The object behind a context may be of a class that lacks it, then the context skips the call as it does for None.
@@ -1326,7 +1338,7 @@ static void CallByName( UObject* Object, FFrame& Stack, RESULT_DECL, UBOOL Globa
 	{
 		UField** Found = Stack.Node->ScriptFields.Find( Call - Stack.Node->Script.GetTypedData() );
 		Checked = Found ? (UFunction*)*Found : NULL;
-		if( Function && !(Checked && GSameParms(Function,Checked,1)) )
+		if( Function && !(Checked && TakesParmsOf(Function,Checked)) )
 		{
 			// A package built against another version of its base may make such a call every tick.
 			static TMap<UFunction*,UBOOL> Warned;
@@ -1352,7 +1364,8 @@ static void CallByName( UObject* Object, FFrame& Stack, RESULT_DECL, UBOOL Globa
 		Stack.Logf( NAME_Critical, TEXT("Failed to find function %s in %s"), *Name, Object->GetFullName() );
 	else
 	{
-		if( GNeedsFixedCall(Function) )
+		checkSlow(Function->NeedsFixedCall==GNeedsFixedCall(Function));
+		if( Function->NeedsFixedCall )
 			Stack.Logf( NAME_Critical, TEXT("%s is called by name"), Function->GetFullName() );
 		Object->CallFunction( Stack, Result, Function );
 	}
@@ -1466,7 +1479,8 @@ void UObject::execDelegateFunction( FFrame& Stack, RESULT_DECL )
 	// Any name can be put into a delegate, so the target has to exist and take what the delegate declares.
 	UObject* Target = Delegate->Object ? Delegate->Object : this;
 	UFunction* Function = Target->FindFunction( Delegate->Object ? Delegate->FunctionName : DelegateName );
-	if( Function && GNeedsFixedCall(Function) )
+	checkSlow(!Function || Function->NeedsFixedCall==GNeedsFixedCall(Function));
+	if( Function && Function->NeedsFixedCall )
 		Stack.Logf( NAME_Critical, TEXT("%s is called through a delegate"), Function->GetFullName() );
 	if( Function && GSameParms(Function,Signature) )
 		Target->CallFunction( Stack, Result, Function );
@@ -5489,8 +5503,8 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 			GStepStatement( Stack, Stack.Object );
 		Stack.Code++;
 		Stack.Step( Stack.Object, Result );
-		UProperty* Return = Result && ((UFunction*)Stack.Node)->ReturnValueOffset!=MAXWORD ? ((UFunction*)Stack.Node)->GetReturnProperty() : NULL;
-		if( Return )
+		UProperty* Return = ((UFunction*)Stack.Node)->ObjectReturn;
+		if( Result && Return )
 			DropForeignObjects( Return, (BYTE*)Result, 1 );
 
 		//DEBUGGER: Necessary for the call stack. Grab an optional 'PREVSTACK' debug info.

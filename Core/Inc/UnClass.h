@@ -382,6 +382,12 @@ class CORE_API UFunction : public UStruct
 	_WORD ParmsSize;
 	_WORD ReturnValueOffset;
 	void (UObject::*Func)( FFrame& TheStack, RESULT_DECL );
+	// The function a call by name last found this one to take the parameters of, while no function was freed.
+	UFunction* AcceptedFor;
+	DWORD AcceptedEpoch;
+	UBOOL NeedsFixedCall;
+	// The return value when it holds object references, which DropForeignObjects checks.
+	UProperty* ObjectReturn;
 
 	// Constructors.
 	UFunction( UFunction* InSuperFunction );
@@ -389,6 +395,7 @@ class CORE_API UFunction : public UStruct
 	// UObject interface.
 	void Serialize( FArchive& Ar );
 	void PostLoad();
+	void Destroy();
 
 	// UField interface.
 	void Bind();
@@ -518,6 +525,8 @@ class CORE_API UClass : public UState
 
 	// In memory only.
 	FString				DefaultPropText;
+	// The super chain from UObject down to this class, so IsA reads one slot.
+	TArray<UClass*>		Ancestors;
 #if TRACK_ISA
     INT IsACount;
 #endif

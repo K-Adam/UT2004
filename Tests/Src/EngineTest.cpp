@@ -64,6 +64,18 @@ TEST( Engine, NativesBound )
 	EXPECT_GT( Count, 0 );
 }
 
+TEST( Engine, LoadedIteratorsNeedFixedCall )
+{
+	INT Count = 0;
+	for( TObjectIterator<UFunction> It; It; ++It )
+		if( It->FunctionFlags & FUNC_Iterator )
+		{
+			Count++;
+			EXPECT_TRUE( It->NeedsFixedCall ) << TCHAR_TO_ANSI( It->GetFullName() );
+		}
+	EXPECT_GT( Count, 0 );
+}
+
 TEST( Engine, CubemapFacesFitFaceZero )
 {
 	UCubemap* Cube = ConstructObject<UCubemap>( UCubemap::StaticClass() );

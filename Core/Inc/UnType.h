@@ -663,14 +663,16 @@ FORCEINLINE UBOOL UObject::IsA( class UClass* SomeBase ) const
         SomeBase->IsACount++;
 #endif
 
+	if( !SomeBase )
+		return 1;
+	// The script compiler and class factory reparent classes after their subclasses were linked.
+	INT Depth = SomeBase->Ancestors.Num() - 1;
+	if( Depth>=0 && Class->Ancestors.Num() && !GIsEditor )
+		return Depth<Class->Ancestors.Num() && Class->Ancestors.GetTypedData()[Depth]==SomeBase;
 	for( UClass* TempClass=Class; TempClass; TempClass=(UClass*)TempClass->SuperField )
-	{
 		if( TempClass==SomeBase )
-		{
 			return 1;
-		}
-	}
-	return SomeBase==NULL;
+	return 0;
 	unguardobjSlow;
 }
 
