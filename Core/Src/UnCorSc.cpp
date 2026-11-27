@@ -431,6 +431,8 @@ static void SkipNullContext( FFrame& Stack, RESULT_DECL )
 // The expression a context is about to run, and whether it was a call by name that the object lacks.
 static BYTE* GContextCall;
 static UBOOL GCallMissed;
+// The function a call by name was checked against, when the one called takes only its first parameters.
+static UFunction* GTrailingParms;
 
 static void StepContext( FFrame& Stack, UObject* Context, RESULT_DECL )
 {
@@ -523,18 +525,27 @@ static void ClearProperty()
 	GPropObject = NULL;
 }
 
-// Evaluates the arguments of a call that is not made.
-static void SkipCall( FFrame& Stack, UFunction* Function )
+// Evaluates the arguments from parameter First on and drops them.
+static void SkipArgs( FFrame& Stack, UFunction* Function, INT First )
 {
 	BYTE* Frame = (BYTE*)appAlloca(Function->PropertiesSize+1);
 	appMemzero( Frame, Function->PropertiesSize );
-	for( UProperty* Property=(UProperty*)Function->Children; *Stack.Code!=EX_EndFunctionParms && IsParm(Stack,Function,Property); Property=(UProperty*)Property->Next )
+	UProperty* Property = (UProperty*)Function->Children;
+	for( INT i=0; i<First && Property; i++ )
+		Property = (UProperty*)Property->Next;
+	for( ; *Stack.Code!=EX_EndFunctionParms && IsParm(Stack,Function,Property); Property=(UProperty*)Property->Next )
 		Stack.Step( Stack.Object, Frame + Property->Offset );
+	for( UProperty* Destruct=Function->ConstructorLink; Destruct; Destruct=Destruct->ConstructorLinkNext )
+		Destruct->DestroyValue( Frame + Destruct->Offset );
+}
+
+// Evaluates the arguments of a call that is not made.
+static void SkipCall( FFrame& Stack, UFunction* Function )
+{
+	SkipArgs( Stack, Function, 0 );
 	Stack.Code++;
 	if( *Stack.Code==EX_DebugInfo )
 		Stack.Step( Stack.Object, NULL );
-	for( UProperty* Destruct=Function->ConstructorLink; Destruct; Destruct=Destruct->ConstructorLinkNext )
-		Destruct->DestroyValue( Frame + Destruct->Offset );
 }
 
 ///////////////
@@ -1300,7 +1311,8 @@ UBOOL GNeedsFixedCall( UFunction* Function )
 	return 0;
 }
 
-// A call by name runs only a function that takes the parameters the load check found for it, else it is skipped.
+// A call by name runs only a function that takes the parameters the load check found for it, or the first of them
+// as retail did, else it is skipped.
 // The object behind a context may be of a class that lacks it, then the context skips the call as it does for None.
 static void CallByName( UObject* Object, FFrame& Stack, RESULT_DECL, UBOOL Global )
 {
@@ -1323,7 +1335,10 @@ static void CallByName( UObject* Object, FFrame& Stack, RESULT_DECL, UBOOL Globa
 				Warned.Set( Function, 1 );
 				Stack.Logf( NAME_Warning, TEXT("%s does not take the parameters of %s"), Function->GetFullName(), Checked ? Checked->GetFullName() : *Name );
 			}
-			Function = NULL;
+			if( Checked && !(Function->FunctionFlags & FUNC_Native) && GSameParms(Function,Checked,1,1) )
+				GTrailingParms = Checked;
+			else
+				Function = NULL;
 		}
 	}
 	if( !Function && UnderContext )
@@ -1402,21 +1417,27 @@ static UBOOL SameType( UProperty* P, UProperty* Q, UBOOL Classes, UBOOL Dims=1 )
 	return 1;
 }
 
-UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override )
+UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override, UBOOL Leading )
 {
 	if( A==B )
 		return 1;
 	UProperty* P = Cast<UProperty>( A->Children );
 	UProperty* Q = Cast<UProperty>( B->Children );
-	for( ; P && Q && ((P->PropertyFlags | Q->PropertyFlags) & CPF_Parm); P=Cast<UProperty>(P->Next), Q=Cast<UProperty>(Q->Next) )
+	for( ; P && Q && ((P->PropertyFlags | (Leading ? 0 : Q->PropertyFlags)) & CPF_Parm); P=Cast<UProperty>(P->Next), Q=Cast<UProperty>(Q->Next) )
 	{
 		// An out that only A has is copied back to a caller who passed a value.
 		DWORD Differ = (P->PropertyFlags ^ Q->PropertyFlags) & (Override ? P->PropertyFlags|~CPF_OutParm : ~0);
 		if( P->Offset!=Q->Offset || (Differ & (CPF_Parm|CPF_ReturnParm|CPF_OutParm)) || !SameType(P,Q,Override) )
 			return 0;
 	}
-	// A list that ended may be followed by locals on the other side, but not by more parameters.
-	return !(P && (P->PropertyFlags & CPF_Parm)) && !(Q && (Q->PropertyFlags & CPF_Parm));
+	// A list that ended may be followed by locals on the other side, but not by more parameters. With Leading B may
+	// go on with parameters but not with a return value A would leave unwritten.
+	if( P && (P->PropertyFlags & CPF_Parm) )
+		return 0;
+	for( ; Q && (Q->PropertyFlags & CPF_Parm); Q=Cast<UProperty>(Q->Next) )
+		if( !Leading || (Q->PropertyFlags & CPF_ReturnParm) )
+			return 0;
+	return 1;
 }
 
 void UObject::execDelegateFunction( FFrame& Stack, RESULT_DECL )
@@ -5319,6 +5340,8 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
 {
 	guardSlow(UObject::CallFunction);
 	FScopedScriptStats ScriptStats( Function );
+	UFunction* Trailing = GTrailingParms;
+	GTrailingParms = NULL;
 	// Found it.
 	UBOOL SkipIt = 0;
 	if( Function->iNative )
@@ -5352,6 +5375,8 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
         {
             FFrame NewStack( this, Function, 0, NULL );
 
+			if( Trailing )
+				SkipArgs( Stack, Trailing, 0 );
             checkSlow (*Stack.Code==EX_EndFunctionParms);
             Stack.Code++;
 
@@ -5369,7 +5394,8 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
 		appMemzero( Frame, Function->PropertiesSize );
 		FFrame NewStack( this, Function, 0, Frame );
 		FOutParmRec Outs[MAX_FUNC_PARMS], *Out = Outs;
-		for( UProperty* Property=(UProperty*)Function->Children; *Stack.Code!=EX_EndFunctionParms && IsParm(Stack,Function,Property); Property=(UProperty*)Property->Next )
+		INT Taken = 0;
+		for( UProperty* Property=(UProperty*)Function->Children; *Stack.Code!=EX_EndFunctionParms && (!Trailing || (Property && (Property->PropertyFlags & CPF_Parm))) && IsParm(Stack,Function,Property); Property=(UProperty*)Property->Next, Taken++ )
 		{
 			GPropAddr = NULL;
 			GPropObject = NULL;
@@ -5388,6 +5414,8 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
 					GPropObject->NetDirty(GProperty);
 			}
 		}
+		if( Trailing )
+			SkipArgs( Stack, Trailing, Taken );
 		Stack.Code++;
 
 		//DEBUGGER
@@ -5417,6 +5445,20 @@ void UObject::CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function )
     }
 
 	unguardSlow;
+}
+
+void GStepStatement( FFrame& Stack, UObject* Context )
+{
+	// Each statement's value lands on what the one before left, the load check keeps it to what an empty string
+	// covers. The statement may change the frame's state, so it is looked up where it started.
+	BYTE Buffer[MAX_STRING_CONST_SIZE];
+	appMemzero( Buffer, sizeof(FString) );
+	UStruct* Node = Stack.Node;
+	INT At = Stack.Code - Node->Script.GetTypedData();
+	Stack.Step( Context, Buffer );
+	if( ((FArray*)Buffer)->GetData() )
+		if( UField** Found = Node->ScriptFields.Find( GStatementKey(At) ) )
+			((UArrayProperty*)*Found)->DestroyValue( Buffer );
 }
 
 //
@@ -5461,20 +5503,6 @@ void UObject::ProcessInternal( FFrame& Stack, RESULT_DECL )
 #endif
 	}
 	unguardSlow;
-}
-
-void GStepStatement( FFrame& Stack, UObject* Context )
-{
-	// Each statement's value lands on what the one before left, the load check keeps it to what an empty string
-	// covers. The statement may change the frame's state, so it is looked up where it started.
-	BYTE Buffer[MAX_STRING_CONST_SIZE];
-	appMemzero( Buffer, sizeof(FString) );
-	UStruct* Node = Stack.Node;
-	INT At = Stack.Code - Node->Script.GetTypedData();
-	Stack.Step( Context, Buffer );
-	if( ((FArray*)Buffer)->GetData() )
-		if( UField** Found = Node->ScriptFields.Find( GStatementKey(At) ) )
-			((UArrayProperty*)*Found)->DestroyValue( Buffer );
 }
 
 //

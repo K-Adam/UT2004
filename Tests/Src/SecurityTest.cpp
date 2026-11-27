@@ -1150,6 +1150,33 @@ TEST( Security, CallByNameKeepsItsParameters )
 	S.Run( Parms, Object );
 	EXPECT_FALSE( S.Value<UObject*>( Parms, Through ) );
 	EXPECT_EQ( Object, S.Value<UObject*>( Parms, Direct ) );
+
+	// A hiding function that takes only the first parameters runs as in retail, the rest are evaluated away.
+	FScript Wide( TEXT("SecurityPoke"), Base ), Narrow( TEXT("SecurityPoke"), Other );
+	Wide.Int( TEXT("X"), CPF_Parm|CPF_OutParm );
+	Wide.Int( TEXT("Y"), CPF_Parm );
+	Wide.Link();
+	Wide.Return();
+	UProperty* X = Narrow.Int( TEXT("X"), CPF_Parm|CPF_OutParm );
+	Narrow.Link();
+	Narrow.Byte( EX_Let ).Local( X ).Byte( EX_IntConst ).Int32( 7 );
+	Narrow.Return();
+	Base->Children = Wide.Function;
+	Wide.Function->Next = Declared.Function;
+	Base->Link( Ar, 1 );
+	Other->Children = Narrow.Function;
+	Narrow.Function->Next = Hiding.Function;
+	Other->Link( Ar, 1 );
+
+	FScript Poke( TEXT("SecurityPoker"), Base );
+	UProperty* Poked = Poke.Int( TEXT("Poked"), CPF_Parm );
+	Poke.Link();
+	Poke.Byte( EX_VirtualFunction ).Name( FName(TEXT("SecurityPoke")) ).Local( Poked ).Byte( EX_IntOne ).Byte( EX_EndFunctionParms );
+	Poke.Return();
+	ASSERT_EQ( "", ScriptRule( Poke.Function ) );
+	BYTE PokeParms[16] = {};
+	Poke.Run( PokeParms, Object );
+	EXPECT_EQ( 7, Poke.Value<INT>( PokeParms, Poked ) );
 }
 
 // An element of a returned array is read from the returned value, the function's own array is gone by then.

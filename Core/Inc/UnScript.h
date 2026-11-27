@@ -31,7 +31,8 @@ extern CORE_API INT GMaxPropertySize;
 extern CORE_API BYTE GLatentNatives[];
 // Whether two functions take and return the same parameter block, so one can be called in place of the other.
 // With Override A is called in place of B by name: it may drop out, and object parameters are of the same class.
-CORE_API UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override=0 );
+// With Leading A takes only the first of B's parameters, the rest are evaluated away.
+CORE_API UBOOL GSameParms( UFunction* A, UFunction* B, UBOOL Override=0, UBOOL Leading=0 );
 // Iterators and skipping natives read bytecode a call by name does not have.
 UBOOL GNeedsFixedCall( UFunction* Function );
 // The script function that declares a numbered native.
