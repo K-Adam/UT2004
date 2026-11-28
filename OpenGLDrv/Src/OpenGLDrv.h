@@ -135,7 +135,7 @@ struct FOpenGLDynamicBuffer
 	FOpenGLDynamicBuffer(GLenum InTarget) : Target(InTarget), Buffer(0), Size(0), Used(0), LockedOffset(0), LockedBytes(0), MapRanges(0) {}
 	// Returns room for Bytes at the next aligned offset, which Offset receives, uploaded by Unlock. NULL for no bytes.
 	BYTE* Lock(INT Bytes,INT Alignment,INT& Offset);
-	void Unlock();
+	void Unlock(INT Bytes=MAXINT);
 	void Release();
 };
 
@@ -220,10 +220,7 @@ struct FOpenGLSceneBlock
 			Ambient,
 			Options,		// X dynamic lights, Y static lighting, Z 2x lighting, W the frame's seed of the foliage fade noise.
 			FogUp;			// World up in camera space, for the volumetric fog's height. W is 1 in the world framebuffer.
-	FPlane	LightPosition[OGL_MAX_LIGHTS],
-			LightDirection[OGL_MAX_LIGHTS],
-			LightColor[OGL_MAX_LIGHTS],
-			LightParams[OGL_MAX_LIGHTS];
+	FOpenGLLight	Lights[OGL_MAX_LIGHTS];	// Interleaved, so only the enabled ones are uploaded.
 };
 
 // What the volumetric fog pass needs from the CPU. Positions and directions are in camera space.
@@ -324,9 +321,9 @@ public:
 	TMap<AActor*,FLOAT>	FogFades;
 	DOUBLE				FogTime;
 
-	TArray<BYTE>		DynamicVertices;
 	INT					DynamicStride,
-						DynamicSize;
+						DynamicSize,
+						DynamicOffset;
 	DWORD				DynamicComponents;
 	FIndexBuffer*		DynamicIndices;		// The last SetDynamicIndexBuffer source, kept to copy deferred draws.
 	INT					DynamicIndicesFirst;
@@ -363,6 +360,7 @@ public:
 	};
 	FBlast				Blasts[16];
 	FName				ProbeMap;
+	FOpenGLProgram*		LastProgram;	// NULL once the programs are freed.
 
 	FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev);
 	void DrawDeferred();

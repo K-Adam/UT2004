@@ -7,6 +7,9 @@
 
 IMPLEMENT_CLASS(UShadowBitmapMaterial);
 
+// Kept outside the class because retail Engine.u fixes its layout.
+static TMap<UShadowBitmapMaterial*,INT> LastRendered;
+
 //
 //	UShadowBitmapMaterial::Destroy
 //
@@ -29,6 +32,8 @@ void UShadowBitmapMaterial::Destroy()
 		delete TempRenderTarget;
 		TempRenderTarget = NULL;
 	}
+
+	LastRendered.Remove(this);
 
 	Super::Destroy();
 
@@ -293,6 +298,16 @@ UBitmapMaterial* UShadowBitmapMaterial::Get(FTime Time,UViewport* Viewport)
 		FVector ShadowLocation = MeshInstance ? MeshInstance->GetBoneCoords(0).Origin : ShadowActor->Location + FVector(0,0,5),
 				FrustumOrigin = ShadowLocation + LightDirection * LightDistance;
 
+		FLOAT DistRatio = 0.f;
+		if( CameraActor && CullDistance > 0.0f )
+			DistRatio = (ShadowLocation - CameraLocation).Size() * FovBias / CullDistance;
+
+		// Script dirties every shadow on every tick. Far ones are mostly faded, a few frames of lag go unseen there.
+		INT Interval = DistRatio < 0.5f ? 1 : DistRatio < 0.75f ? 2 : 4;
+		INT* Last = LastRendered.Find(this);
+		if( ShadowTexture && Last && (DWORD)(Viewport->FrameCount - *Last) < (DWORD)Interval )
+			return this;
+
 		Viewport->Actor->Location = FrustumOrigin;
 		Viewport->Actor->Rotation = (-LightDirection).Rotation();
 		Viewport->ScaleX = Viewport->ScaleY = 1.0f;
@@ -309,15 +324,7 @@ UBitmapMaterial* UShadowBitmapMaterial::Get(FTime Time,UViewport* Viewport)
 		GHackNoDepthTestRenderTarget = 1;
 		if(RI->SetRenderTarget(TempRenderTarget))
 		{
-			// sjs --- distance fade shadows
-            float ShadowAtten = 1.0f;
-            if( CameraActor && CullDistance > 0.0f )
-            {
-                float effectiveDist = (ShadowLocation - CameraLocation).Size() * FovBias;
-                float distRatio = effectiveDist / CullDistance;
-                ShadowAtten = 1.0f-Clamp<FLOAT>(appPow(distRatio,2.0f), 0.f, 1.f);
-            }
-            // --- sjs
+			FLOAT ShadowAtten = 1.0f - Clamp<FLOAT>(appPow(DistRatio,2.0f), 0.f, 1.f);
 
 			// Render the actor into the shadow texture (without worrying about lights and projectors).
 
@@ -426,6 +433,7 @@ UBitmapMaterial* UShadowBitmapMaterial::Get(FTime Time,UViewport* Viewport)
 		Viewport->Actor->ShowFlags = SavedShowFlags;
 
 		Dirty = 0;
+		LastRendered.Set(this,Viewport->FrameCount);
 
     	ShadowActor->LastRenderTime = LastRenderTimeBackup; // gam
 	}

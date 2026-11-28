@@ -4,7 +4,7 @@
 #include "OpenGLDrv.h"
 
 FOpenGLRenderInterface::FOpenGLRenderInterface(UOpenGLRenderDevice* InRenDev)
-:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), ViewFog(0,0,0,0), FogUp(0,0,1), FogTime(0.0), DynamicStride(0), DynamicSize(0), DynamicComponents(0), DynamicIndices(NULL), DynamicIndicesFirst(0), ProbeMap(NAME_None)
+:	RenDev(InRenDev), Viewport(NULL), SavedStateIndex(0), PrecacheMode(PRECACHE_All), FocusDiopters(0.f), FocusTime(0.0), ViewFog(0,0,0,0), FogUp(0,0,1), FogTime(0.0), DynamicStride(0), DynamicSize(0), DynamicOffset(0), DynamicComponents(0), DynamicIndices(NULL), DynamicIndicesFirst(0), ProbeMap(NAME_None), LastProgram(NULL)
 {
 	CurrentState = &SavedStates[0];
 	FSavedState& S = *CurrentState;
@@ -449,12 +449,11 @@ int FOpenGLRenderInterface::LockDynBuffer(BYTE** OutBuffer,int NumVerts,int Stri
 		return 0;
 	}
 	NumVerts = Min(NumVerts,OGL_MAX_QUADS * 4 - 1);
-	if( DynamicVertices.Num() < NumVerts * Stride )
-		DynamicVertices.Add(NumVerts * Stride - DynamicVertices.Num());
 	DynamicStride		= Stride;
 	DynamicSize			= NumVerts * Stride;
 	DynamicComponents	= ComponentFlags;
-	*OutBuffer = DynamicVertices.GetTypedData();
+	// The emitters write straight into the buffer. Until DrawDynQuads they only set transforms and lights, which make no GL calls.
+	*OutBuffer = RenDev->DynamicVertexBuffer.Lock(DynamicSize,Stride,DynamicOffset);
 	return NumVerts;
 }
 
@@ -468,11 +467,8 @@ int FOpenGLRenderInterface::UnlockDynBuffer()
 	if( DynamicComponents & VF_Specular )	Components[NumComponents++] = FVertexComponent(CT_Color,FVF_Specular);
 	if( DynamicComponents & VF_Tex1 )		Components[NumComponents++] = FVertexComponent(CT_Float2,FVF_TexCoord0);
 	if( DynamicComponents & VF_Tex2 )		Components[NumComponents++] = FVertexComponent(CT_Float2,FVF_TexCoord1);
-	INT Offset;
-	if( BYTE* Dest = RenDev->DynamicVertexBuffer.Lock(DynamicSize,DynamicStride,Offset) )
-		appMemcpy(Dest,DynamicVertices.GetTypedData(),DynamicSize);
-	RenDev->DynamicVertexBuffer.Unlock();
-	return UseDynamicVertices(Offset,DynamicStride,Components,NumComponents);
+	RenDev->DynamicVertexBuffer.Unlock(DynamicSize);
+	return UseDynamicVertices(DynamicOffset,DynamicStride,Components,NumComponents);
 }
 
 void FOpenGLRenderInterface::SetQuadIndexBuffer(INT BaseVertexIndex)
@@ -498,6 +494,7 @@ void FOpenGLRenderInterface::SetQuadIndexBuffer(INT BaseVertexIndex)
 
 void FOpenGLRenderInterface::DrawDynQuads(INT NumPrimitives)
 {
+	DynamicSize = Min(DynamicSize,NumPrimitives * 4 * DynamicStride);
 	DrawQuads(UnlockDynBuffer(),NumPrimitives);
 }
 
@@ -626,6 +623,13 @@ void FOpenGLRenderInterface::Commit()
 	FOpenGLMaterialState&				M = S->Material;
 	FOpenGLProgram*					Program = M.Program;
 
+	// An emitter that locked and drew nothing must not leave the buffer mapped for this draw.
+	if( RenDev->DynamicVertexBuffer.LockedBytes > 0 )
+	{
+		glBindBuffer(GL_ARRAY_BUFFER,RenDev->DynamicVertexBuffer.Buffer);
+		RenDev->DynamicVertexBuffer.Unlock(0);
+	}
+
 	// The first 2D draw after the weapon ends the world.
 	UBOOL Perspective = S->CameraToScreen.M[2][3] == 1.f;
 	if( InWorld && !S->RenderTarget )
@@ -645,7 +649,6 @@ void FOpenGLRenderInterface::Commit()
 
 	FOpenGLSceneBlock	Scene;
 	FLOAT			Flip = S->RenderTarget ? -1.f : 1.f;
-	appMemzero(&Scene,sizeof(Scene));
 	Scene.WorldToCamera		= S->WorldToCamera;
 	Scene.CameraToScreen	= S->CameraToScreen;
 	Scene.ClipAdjust		= FPlane(Flip,0.f,1.f / Max(GL.Viewport[2],1),-Flip / Max(GL.Viewport[3],1));
@@ -663,19 +666,17 @@ void FOpenGLRenderInterface::Commit()
 	{
 		if( !S->LightEnabled[i] )
 			continue;
-		Scene.LightPosition[NumLights]	= S->Lights[i].Position;
-		Scene.LightDirection[NumLights]	= S->Lights[i].Direction;
-		Scene.LightColor[NumLights]		= S->Lights[i].Color;
-		Scene.LightParams[NumLights]	= S->Lights[i].Params;
-		NumLights++;
+		Scene.Lights[NumLights++] = S->Lights[i];
 	}
 	FPlane Ambient = S->AmbientLightColor.Plane();
 	Scene.Ambient = FPlane(Ambient.X,Ambient.Y,Ambient.Z,NumLights);
-	if( !GL.Valid || appMemcmp(&Scene,&GL.Scene,sizeof(Scene)) != 0 )
+	// The shaders stop at Ambient.w, the slots past it keep whatever they had.
+	INT SceneBytes = STRUCT_OFFSET(FOpenGLSceneBlock,Lights) + NumLights * sizeof(FOpenGLLight);
+	if( !GL.Valid || appMemcmp(&Scene,&GL.Scene,SceneBytes) != 0 )
 	{
 		glBindBuffer(GL_UNIFORM_BUFFER,RenDev->SceneBuffer);
-		glBufferSubData(GL_UNIFORM_BUFFER,0,sizeof(Scene),&Scene);
-		GL.Scene = Scene;
+		glBufferSubData(GL_UNIFORM_BUFFER,0,SceneBytes,&Scene);
+		appMemcpy(&GL.Scene,&Scene,SceneBytes);
 		GL.Valid = 1;
 	}
 

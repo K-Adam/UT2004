@@ -6,6 +6,13 @@
 #include "OpenGLDrv.h"
 
 #define OGL_SCENE_BLOCK \
+	"struct SceneLight\n" \
+	"{\n" \
+	"	vec4 Position;\n" \
+	"	vec4 Direction;\n" \
+	"	vec4 Color;\n" \
+	"	vec4 Params;\n" \
+	"};\n" \
 	"layout(std140) uniform Scene\n" \
 	"{\n" \
 	"	mat4 WorldToCamera;\n" \
@@ -16,10 +23,7 @@
 	"	vec4 Ambient;\n" \
 	"	vec4 Options;\n" \
 	"	vec4 FogUp;\n" \
-	"	vec4 LightPosition[8];\n" \
-	"	vec4 LightDirection[8];\n" \
-	"	vec4 LightColor[8];\n" \
-	"	vec4 LightParams[8];\n" \
+	"	SceneLight Lights[8];\n" \
 	"};\n"
 
 // Compiled behind a header with the version line, and INSTANCED for the variant DrawInstanced uses.
@@ -161,14 +165,14 @@ const ANSICHAR* OpenGLFragmentPrologue =
 	// 2 non incidence, 3 quadratic non incidence, 4 point, 5 spot.
 	"float SampleIntensity(int i, vec3 P, vec3 N)\n"
 	"{\n"
-	"	float Type = LightParams[i].x;\n"
+	"	float Type = Lights[i].Params.x;\n"
 	"	if (Type < 0.5)\n"
 	"	{\n"
-	"		float D = dot(LightDirection[i].xyz, N);\n"
+	"		float D = dot(Lights[i].Direction.xyz, N);\n"
 	"		return D < 0.0 ? -2.0 * D : 0.0;\n"
 	"	}\n"
-	"	vec3 V = LightPosition[i].xyz - P;\n"
-	"	float R = LightPosition[i].w;\n"
+	"	vec3 V = Lights[i].Position.xyz - P;\n"
+	"	float R = Lights[i].Position.w;\n"
 	"	float D2 = dot(V, V);\n"
 	"	float D = sqrt(D2);\n"
 	"	if (Type < 1.5)\n"
@@ -187,9 +191,9 @@ const ANSICHAR* OpenGLFragmentPrologue =
 	"	float Attenuation = (2.0 * A * A * A - 3.0 * A * A + 1.0) * VN / max(D, 0.0001) * 2.0;\n"
 	"	if (Type < 4.5)\n"
 	"		return Attenuation;\n"
-	"	float Sine = LightParams[i].y;\n"
+	"	float Sine = Lights[i].Params.y;\n"
 	"	float RSine = 1.0 / max(1.0 - Sine, 0.0001);\n"
-	"	float VDotV = -dot(V, LightDirection[i].xyz);\n"
+	"	float VDotV = -dot(V, Lights[i].Direction.xyz);\n"
 	"	if (VDotV > 0.0 && VDotV * VDotV > Sine * Sine * D2)\n"
 	"	{\n"
 	"		float S = VDotV * RSine / D - Sine * RSine;\n"
@@ -213,7 +217,7 @@ const ANSICHAR* OpenGLFragmentPrologue =
 	"	{\n"
 	"		if (i >= Count)\n"
 	"			break;\n"
-	"		Light += LightColor[i].rgb * SampleIntensity(i, vWorldPos, N);\n"
+	"		Light += Lights[i].Color.rgb * SampleIntensity(i, vWorldPos, N);\n"
 	"	}\n"
 	"	vec3 Emissive = Options.y > 0.5 ? vDiffuse.rgb : vec3(0.0);\n"
 	"	return clamp(vec4(Emissive + Light * Material.rgb, Material.a), 0.0, 1.0);\n"

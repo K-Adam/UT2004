@@ -55,11 +55,16 @@ static const TCHAR* LightBeams[][2] =
 	{ TEXT("LightBox"),					TEXT("Bastien.Effects.LightBox") },
 };
 
-// Runs for every draw, so the path is only built when the name matches.
+// Runs for every draw, so the path is only built when the name matches. The names are added, not
+// looked up, as a level loaded later may bring them.
 static UBOOL IsLightBeam(UMaterial* Material)
 {
+	static FName Names[ARRAY_COUNT(LightBeams)];
+	if( Names[0] == NAME_None )
+		for( INT i=0; i<ARRAY_COUNT(LightBeams); i++ )
+			Names[i] = FName(LightBeams[i][0]);
 	for( INT i=0; i<ARRAY_COUNT(LightBeams); i++ )
-		if( appStricmp(Material->GetName(),LightBeams[i][0]) == 0 && appStricmp(Material->GetPathName(),LightBeams[i][1]) == 0 )
+		if( Material->GetFName() == Names[i] && appStricmp(Material->GetPathName(),LightBeams[i][1]) == 0 )
 			return 1;
 	return 0;
 }
@@ -1295,13 +1300,19 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	Compiler.K(CurrentState->Instanced);
 
 	INT KeyNum = Compiler.KeyNum;
+	// Consecutive draws, a HUD's tiles or a mesh's sections, mostly share a program.
+	if( LastProgram && LastProgram->Key.Num() == KeyNum && appMemcmp(LastProgram->Key.GetTypedData(),Key.GetTypedData(),KeyNum) == 0 )
+	{
+		State.Program = LastProgram;
+		return 1;
+	}
 	DWORD Hash = appMemCrc(Key.GetTypedData(),KeyNum);
 	FOpenGLProgram** Same = RenDev->Programs.Find(Hash);
 	for( FOpenGLProgram* Candidate = Same ? *Same : NULL; Candidate; Candidate = Candidate->NextSameHash )
 	{
 		if( Candidate->Key.Num() == KeyNum && appMemcmp(Candidate->Key.GetTypedData(),Key.GetTypedData(),KeyNum) == 0 )
 		{
-			State.Program = Candidate;
+			State.Program = LastProgram = Candidate;
 			return 1;
 		}
 	}
@@ -1354,7 +1365,7 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	Program->Pending = 1;
 	Program->NextSameHash = Same ? *Same : NULL;
 	RenDev->Programs.Set(Hash,Program);
-	State.Program = Program;
+	State.Program = LastProgram = Program;
 	return 1;
 
 	unguard;

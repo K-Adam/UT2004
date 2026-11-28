@@ -372,6 +372,9 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 	if( !Buffer )
 		glGenBuffers(1,&Buffer);
 	glBindBuffer(Target,Buffer);
+	// Emitters may lock and then draw nothing.
+	if( LockedBytes > 0 )
+		Unlock(0);
 	if( Offset + Bytes > Size )
 	{
 		// Orphaning gives a fresh store, the GPU may still read the old one.
@@ -399,7 +402,7 @@ BYTE* FOpenGLDynamicBuffer::Lock(INT Bytes,INT Alignment,INT& Offset)
 	return Bytes > 0 ? Scratch.GetTypedData() : NULL;
 }
 
-void FOpenGLDynamicBuffer::Unlock()
+void FOpenGLDynamicBuffer::Unlock(INT Bytes)
 {
 	// Lock left the buffer bound.
 	if( LockedBytes > 0 )
@@ -409,7 +412,8 @@ void FOpenGLDynamicBuffer::Unlock()
 			glUnmapBuffer(Target);
 		else
 #endif
-		glBufferSubData(Target,LockedOffset,LockedBytes,Scratch.GetTypedData());
+		if( Bytes > 0 )
+			glBufferSubData(Target,LockedOffset,Min(Bytes,LockedBytes),Scratch.GetTypedData());
 	}
 	LockedBytes = 0;
 }

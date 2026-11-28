@@ -604,6 +604,7 @@ void UOpenGLRenderDevice::Flush(UViewport* Viewport)
 		}
 	}
 	Programs.Empty();
+	RenderInterface.LastProgram = NULL;
 	GL.Program = (GLuint)-1;
 	GL.NumStreams = INDEX_NONE;
 
