@@ -193,10 +193,10 @@ jobs:
           mkdir out
           case ${{ matrix.name }} in
             win64)
-              cpack --preset win64 -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE
+              cpack --preset win64 -B "${{ github.workspace }}/out/pack" -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE
               cmake --build --preset win64-release --target msi
               cp build/win64/UT2004.msi out/$ARCHIVE.msi ;;
-            linux*) cpack --preset linux64 -B out/pack -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE ;;
+            linux*) cpack --preset linux64 -B "${{ github.workspace }}/out/pack" -D CPACK_PACKAGE_FILE_NAME=$ARCHIVE ;;
             web) (cd build/web/site && zip -r ../../../out/$ARCHIVE.zip .) ;;
             android) cp build/android-arm64/UT2004.apk out/$ARCHIVE.apk ;;
           esac
