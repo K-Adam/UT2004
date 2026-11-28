@@ -10,7 +10,8 @@ struct FOpenGLModifierInfo
 	FMatrix	Matrix;
 	BYTE	TexCoordSource,
 			TexCoordCount;
-	UBOOL	TexCoordProjected;
+	UBOOL	TexCoordProjected,
+			Animated;	// A modifier supplied the matrix, which can change per frame, so the program must not depend on its value.
 
 	BYTE	FrameBufferBlending;
 	UBOOL	ZWrite,
@@ -27,7 +28,7 @@ struct FOpenGLModifierInfo
 
 	FOpenGLModifierInfo()
 	:	ModifyTextureTransforms(0), ModifyFramebufferBlending(0), ModifyColor(0), ModifyOpacity(0)
-	,	Matrix(FMatrix::Identity), TexCoordSource(TCS_Stream0), TexCoordCount(TCN_2DCoords), TexCoordProjected(0)
+	,	Matrix(FMatrix::Identity), TexCoordSource(TCS_Stream0), TexCoordCount(TCN_2DCoords), TexCoordProjected(0), Animated(0)
 	,	FrameBufferBlending(FB_Overwrite), ZWrite(1), ZTest(1), AlphaTest(0), TwoSided(0), AlphaRef(0)
 	,	Color(0,0,0,0), AlphaBlend(0), Opacity(NULL), OpacityOverrideTexModifier(0)
 	{}
@@ -141,6 +142,7 @@ template<class T,DWORD Type> static T* CheckMaterial(FLOAT Time,UMaterial* InMat
 				if( FMatrix* TexMatrix = TexModifier->GetMatrix(Time) )
 				{
 					Info->ModifyTextureTransforms = 1;
+					Info->Animated = 1;
 					Info->Matrix *= *TexMatrix;
 				}
 				if( NeedSource && TexModifier->TexCoordSource != TCS_NoChange )
@@ -284,7 +286,7 @@ public:
 	INT TexCoord(const FOpenGLModifierInfo& Mod,UBOOL CubeTarget)
 	{
 		BYTE Source = Mod.ModifyTextureTransforms ? Mod.TexCoordSource : TCS_Stream0;
-		UBOOL UseMatrix = Mod.ModifyTextureTransforms && (Mod.Matrix != FMatrix::Identity || Mod.TexCoordProjected);
+		UBOOL UseMatrix = Mod.ModifyTextureTransforms && (Mod.Matrix != FMatrix::Identity || Mod.TexCoordProjected || Mod.Animated);
 		FMatrix Matrix = Mod.Matrix;
 		INT T = NewTemp();
 		K(Source);
@@ -300,7 +302,7 @@ public:
 		else if( Source == TCS_WorldCoords || Source == TCS_ProjectorCoords )
 		{
 			Emit(TEXT("\tvec4 r%i = vec4(vRestPos, 1.0);\n"),T);
-			UseMatrix = Mod.Matrix != FMatrix::Identity || Mod.TexCoordProjected;
+			UseMatrix = Mod.Matrix != FMatrix::Identity || Mod.TexCoordProjected || Mod.Animated;
 		}
 		else if( Source == TCS_CameraCoords )
 			Emit(TEXT("\tvec4 r%i = vec4(vCameraPos, 1.0);\n"),T);
@@ -1288,8 +1290,13 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	guard(FOpenGLRenderInterface::CompileMaterial);
 
 	FOpenGLMaterialState& State = CurrentState->Material;
-	// Kept across calls, this runs for every draw.
-	static TArray<BYTE> Key;
+	// Kept across calls, this runs for every draw. A shadow renders its bitmap when the walk samples
+	// it, which sets materials of its own, so each nesting level has a key.
+	static TArray<BYTE>	Keys[4];
+	static INT			Depth = 0;
+	check(Depth < ARRAY_COUNT(Keys));
+	TArray<BYTE>& Key = Keys[Depth];
+	struct FNest { FNest() { Depth++; } ~FNest() { Depth--; } } Nest;
 	State.Reset();
 	FOpenGLCompiler Compiler(this,State,Key,NULL,ErrorString,ErrorMaterial);
 	if( !Compiler.Compile(Material) )
@@ -1323,6 +1330,10 @@ UBOOL FOpenGLRenderInterface::CompileMaterial(UMaterial* Material,FString* Error
 	State.Reset();
 	FOpenGLCompiler Writer(this,State,Unused,&Body,ErrorString,ErrorMaterial);
 	Writer.Compile(Material);
+	// Browsers without parallel compiles stall the frame on this.
+	if( InWorld && !Viewport->Precaching )
+		debugf(TEXT("OpenGLDrv: Compiled %s during play, lit %i, lightmap %i, instanced %i"),Material->GetFullName(),
+			CurrentState->UseStaticLighting || CurrentState->UseDynamicLighting,CurrentState->Lightmap != NULL,CurrentState->Instanced);
 
 	// Two detail levels that hand over keep exactly one of them per sample. Each multisample gets its own
 	// threshold, which the resolve averages into a smooth fade. With a single sample the noise is new
